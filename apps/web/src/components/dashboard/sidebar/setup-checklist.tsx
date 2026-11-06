@@ -59,10 +59,13 @@ export function SetupChecklist({ onNavigate }: { onNavigate?: () => void }) {
   const next = steps.find((step) => !step.done);
 
   return (
-    <div className="rise rounded-lg border border-line bg-fill p-3">
+    <div className="rise rounded-xl bg-fill p-3">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary/90">
-          Setup · {completed}/{steps.length}
+        <span className="text-[13px] font-medium text-fg-2">
+          Get set up{" "}
+          <span className="font-normal text-fg-4">
+            {completed} of {steps.length}
+          </span>
         </span>
         <button
           type="button"
@@ -71,20 +74,20 @@ export function SetupChecklist({ onNavigate }: { onNavigate?: () => void }) {
             localStorage.setItem(DISMISSED_KEY, "1");
             setDismissed(true);
           }}
-          className="rounded p-0.5 text-fg-4 transition-colors hover:text-fg-2"
+          className="-m-1 rounded-md p-1 text-fg-4 transition-colors hover:bg-fill-2 hover:text-fg-2"
         >
-          <X className="size-3" />
+          <X className="size-3.5" />
         </button>
       </div>
       <div className="mt-2 flex gap-1" aria-hidden="true">
         {steps.map((step) => (
           <span
             key={step.label}
-            className={cn("h-0.5 flex-1 rounded-full", step.done ? "bg-primary" : "bg-fill-2")}
+            className={cn("h-1 flex-1 rounded-full", step.done ? "bg-primary" : "bg-fill-2")}
           />
         ))}
       </div>
-      <ul className="mt-2.5 space-y-1">
+      <ul className="mt-2.5 space-y-0.5">
         {steps.map((step) => {
           const isNext = step === next;
           return (
@@ -93,13 +96,13 @@ export function SetupChecklist({ onNavigate }: { onNavigate?: () => void }) {
                 href={step.href as Route}
                 onClick={onNavigate}
                 className={cn(
-                  "group flex items-center gap-2 rounded px-1 py-0.5 text-xs transition-colors",
+                  "group flex items-center gap-2 rounded-md px-1 py-1 text-[13px] transition-colors",
                   step.done ? "text-fg-4" : isNext ? "text-fg" : "text-fg-3 hover:text-fg-2",
                 )}
               >
                 <span
                   className={cn(
-                    "flex size-3.5 shrink-0 items-center justify-center rounded-full border",
+                    "flex size-4 shrink-0 items-center justify-center rounded-full border",
                     step.done
                       ? "border-primary/40 bg-primary/15 text-primary"
                       : isNext

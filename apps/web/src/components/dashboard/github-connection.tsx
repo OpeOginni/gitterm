@@ -59,11 +59,10 @@ function StatusIndicator({ suspended }: { suspended: boolean }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.16em]",
-        suspended ? "text-red-300" : "text-emerald-300",
+        "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[12.5px] font-medium",
+        suspended ? "bg-red-500/10 text-red-300" : "bg-[#6bd586]/10 text-[#6bd586]",
       )}
     >
-      <span className={cn("size-1.5 rounded-full", suspended ? "bg-red-400" : "bg-emerald-400")} />
       {suspended ? "Suspended" : "Connected"}
     </span>
   );
@@ -80,11 +79,11 @@ function ProfileDetail({
 }) {
   return (
     <div className="min-w-0 space-y-1.5">
-      <span className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.19em] text-fg-4">
-        <Icon className="size-3" />
+      <span className="flex items-center gap-1.5 text-[12.5px] text-fg-4">
+        <Icon className="size-3.5" />
         {label}
       </span>
-      <div className="truncate text-[13px] text-fg-2">{children}</div>
+      <div className="truncate text-sm text-fg-2">{children}</div>
     </div>
   );
 }
@@ -119,7 +118,7 @@ function GitHubProfileCard({
   }
 
   return (
-    <article className="rounded-xl border border-line bg-settings p-4 transition-colors hover:border-line-2 sm:p-5">
+    <article className="rounded-2xl border border-line bg-card p-4 sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-center gap-3.5">
           <Image
@@ -130,15 +129,13 @@ function GitHubProfileCard({
             className="size-11 shrink-0 rounded-full object-cover"
           />
           <div className="min-w-0">
-            <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
               <h3 className="truncate text-base font-semibold tracking-tight text-fg">
                 @{installation.accountLogin}
               </h3>
               <StatusIndicator suspended={installation.suspended} />
             </div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-fg-4">
-              GitHub {installation.accountType}
-            </p>
+            <p className="text-[13px] text-fg-3">GitHub {installation.accountType.toLowerCase()}</p>
           </div>
         </div>
 
@@ -146,17 +143,17 @@ function GitHubProfileCard({
           href={`https://github.com/settings/installations/${installation.id}`}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.13em] text-fg-3 transition-colors hover:text-fg"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-md px-2 text-[13px] font-medium text-fg-3 transition-colors hover:bg-fill-2 hover:text-fg"
         >
-          Manage
-          <ExternalLink className="size-3" />
+          Manage on GitHub
+          <ExternalLink className="size-3.5" />
         </a>
       </div>
 
       {installation.suspended ? (
         <div className="mt-4 flex items-start gap-2.5 text-red-300">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-300" />
-          <p className="text-xs leading-relaxed">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-300" />
+          <p className="text-[13px] leading-relaxed">
             Git operations are paused. Resolve this installation on GitHub to reconnect it.
           </p>
         </div>
@@ -181,12 +178,12 @@ function GitHubProfileCard({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between">
+      <div className="mt-4 flex items-center justify-between gap-2">
         <button
           type="button"
           onClick={handleCopy}
           aria-label={copied ? "Integration ID copied" : "Copy integration ID"}
-          className="inline-flex h-8 items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.13em] text-fg-3 transition-colors hover:text-fg"
+          className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-fg-3 transition-colors hover:bg-fill-2 hover:text-fg"
         >
           <span className="relative size-3.5" aria-hidden="true">
             <Copy
@@ -197,7 +194,7 @@ function GitHubProfileCard({
             />
             <Check
               className={cn(
-                "absolute inset-0 size-3.5 text-emerald-300 transition-all duration-200 motion-reduce:transition-none",
+                "absolute inset-0 size-3.5 text-[#6bd586] transition-all duration-200 motion-reduce:transition-none",
                 copied ? "scale-100 rotate-0 opacity-100" : "scale-50 -rotate-12 opacity-0",
               )}
             />
@@ -214,7 +211,7 @@ function GitHubProfileCard({
             <span
               aria-live="polite"
               className={cn(
-                "col-start-1 row-start-1 text-emerald-300 transition-all duration-200 motion-reduce:transition-none",
+                "col-start-1 row-start-1 text-[#6bd586] transition-all duration-200 motion-reduce:transition-none",
                 copied ? "translate-y-0 opacity-100" : "translate-y-full opacity-0",
               )}
             >
@@ -228,7 +225,7 @@ function GitHubProfileCard({
           size="sm"
           onClick={() => onDisconnect(installation.integrationId)}
           disabled={isDisconnecting}
-          className="ml-auto h-8 gap-1.5 px-0 font-mono text-[10px] uppercase tracking-[0.13em] text-fg-4 hover:bg-transparent hover:text-red-300"
+          className="ml-auto text-fg-3 hover:bg-red-500/10 hover:text-red-300"
         >
           {isDisconnecting ? (
             <Loader2 className="size-3.5 animate-spin" />
@@ -268,7 +265,7 @@ function SharedGitHubWelcome({
   }
 
   return (
-    <article className="rounded-xl border border-line bg-settings p-4 sm:p-5">
+    <article className="rounded-2xl border border-line bg-card p-4 sm:p-5">
       <div className="flex items-center gap-3">
         <Image
           src={`https://github.com/${accountLogin}.png`}
@@ -280,25 +277,25 @@ function SharedGitHubWelcome({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-fg">@{accountLogin}</h3>
-            <span className="rounded-md border border-line px-1.5 py-0.5 font-mono text-[10px] text-fg-3">
+            <span className="rounded-md bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
               Admin{patSuffix ? ` · ••••${patSuffix}` : ""}
             </span>
           </div>
-          <p className="mt-0.5 text-xs text-fg-3">Shared GitHub access for your workspaces.</p>
+          <p className="mt-0.5 text-[13px] text-fg-3">Shared GitHub access for your workspaces.</p>
         </div>
       </div>
-      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-3">
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-3">
         <span>Connection ID for the SDK</span>
         <button
           type="button"
           onClick={handleCopy}
           aria-label="Copy connection ID github:shared"
-          className="inline-flex items-center gap-1.5 rounded-md border border-line bg-fill px-2 py-1 font-mono text-[11px] text-fg transition-colors hover:border-line-2 hover:bg-fill-2"
+          className="inline-flex items-center gap-1.5 rounded-md bg-fill px-2 py-1 font-mono text-[12.5px] text-fg transition-colors hover:bg-fill-2"
         >
           github:shared
-          {copied ? <Check className="size-3 text-emerald-300" /> : <Copy className="size-3" />}
+          {copied ? <Check className="size-3.5 text-[#6bd586]" /> : <Copy className="size-3.5" />}
         </button>
-        <span aria-live="polite" className="text-[11px] text-emerald-300">
+        <span aria-live="polite" className="text-[12.5px] text-[#6bd586]">
           {copied ? "Copied" : ""}
         </span>
       </div>
@@ -360,14 +357,12 @@ export function GitHubConnection() {
             <div className="flex items-center gap-2.5">
               <h2 className="text-base font-semibold tracking-tight text-fg">GitHub</h2>
               {installations.length > 0 ? (
-                <span className="font-mono text-[10px] text-fg-4">
+                <span className="text-[12.5px] text-fg-4">
                   {installations.length} {installations.length === 1 ? "account" : "accounts"}
                 </span>
               ) : null}
             </div>
-            <p className="mt-0.5 text-[12.5px] text-fg-3">
-              Secure repository access for your workspaces.
-            </p>
+            <p className="mt-0.5 text-sm text-fg-3">Repository access for your workspaces.</p>
           </div>
         </div>
 
@@ -378,23 +373,22 @@ export function GitHubConnection() {
               onClick={handleRefresh}
               disabled={isRefreshing}
               aria-label="Refresh GitHub connections"
-              className="inline-flex size-9 items-center justify-center rounded-lg text-fg-4 transition-colors hover:bg-fill-2 hover:text-fg disabled:opacity-50"
+              className="inline-flex size-9 items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-fill-2 hover:text-fg disabled:opacity-50"
             >
-              <RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin")} />
+              <RefreshCw className={cn("size-4", isRefreshing && "animate-spin")} />
             </button>
           ) : null}
           {appAvailability?.configured ? (
             <Button
               type="button"
-              size="sm"
               onClick={handleConnect}
               disabled={isConnecting || !isEnabled}
-              className="h-9 gap-1.5 bg-primary px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-primary-foreground hover:bg-primary/90"
+              className="h-9"
             >
               {isConnecting ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
               ) : (
-                <Plus className="size-3.5" />
+                <Plus className="size-4" />
               )}
               {installations.length > 0 ? "Add account" : "Connect"}
             </Button>
@@ -408,7 +402,7 @@ export function GitHubConnection() {
         />
       ) : null}
       {isEnabled && appAvailability && !appAvailability.mode ? (
-        <p className="rounded-lg border border-line bg-fill p-4 text-xs text-fg-3">
+        <p className="rounded-xl bg-fill px-4 py-3.5 text-[13px] text-fg-3">
           Your admin has not configured repository access yet.
         </p>
       ) : null}
@@ -419,7 +413,7 @@ export function GitHubConnection() {
             <Loader2 className="size-5 animate-spin text-fg-4" />
           </div>
         ) : installations.length > 0 ? (
-          <div className="grid gap-4">
+          <div className="grid max-h-[44rem] gap-3 overflow-y-auto overscroll-contain">
             {installations.map((installation) => (
               <GitHubProfileCard
                 key={installation.integrationId}
@@ -431,9 +425,9 @@ export function GitHubConnection() {
             ))}
           </div>
         ) : appAvailability?.configured ? (
-          <p className="rounded-lg border border-dashed border-line px-4 py-3 text-[13px] text-fg-3">
-            <span className="text-fg-2">No GitHub account yet.</span> Connect a personal or
-            organization account; you choose which repositories GitTerm can access.
+          <p className="rounded-xl bg-fill px-4 py-3.5 text-[13px] leading-relaxed text-fg-3">
+            <span className="font-medium text-fg-2">No GitHub account yet.</span> Connect a personal
+            or organization account, then choose which repositories Gitterm can reach.
           </p>
         ) : null}
       </div>

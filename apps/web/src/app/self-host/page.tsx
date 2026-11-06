@@ -1,5 +1,4 @@
-import { LandingHeader } from "@/components/landing/header";
-import { Footer } from "@/components/landing/footer";
+import { SiteShell } from "@/components/site/site-shell";
 import { SelfHostContent } from "@/components/landing/self-host/content";
 import type { Metadata } from "next";
 
@@ -11,10 +10,8 @@ export const metadata: Metadata = {
 
 export default function SelfHostPage() {
   return (
-    <main className="min-h-screen bg-background text-white dark landing-grid grain">
-      <LandingHeader />
+    <SiteShell>
       <SelfHostContent />
-      <Footer />
-    </main>
+    </SiteShell>
   );
 }

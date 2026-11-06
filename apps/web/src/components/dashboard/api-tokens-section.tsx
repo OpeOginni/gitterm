@@ -32,6 +32,12 @@ import { API_TOKEN_SCOPE_DETAILS, API_TOKEN_SCOPES, type ApiTokenScope } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { BOT_TOKEN_SCOPES } from "@gitterm/schema";
 import { cn } from "@/lib/utils";
+import { Seg } from "@/components/site/seg";
+import {
+  SettingsEmpty,
+  SettingsGroup,
+  settingsLabel,
+} from "@/components/dashboard/settings/settings-page";
 
 /** Most tokens are one of these; Custom keeps per-permission control for the rest. */
 const TOKEN_PRESETS = [
@@ -156,43 +162,45 @@ export function ApiTokensSection() {
 
   const tokens = data?.tokens ?? [];
 
-  const eyebrow = "font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4";
-
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between gap-4">
-        <p className={eyebrow}>
-          {tokens.length ? `${tokens.length} token${tokens.length === 1 ? "" : "s"}` : "Tokens"}
-        </p>
-        <Button size="sm" className="h-9 gap-1.5 text-xs" onClick={() => handleOpenChange(true)}>
-          <Plus className="size-3.5" />
-          New token
-        </Button>
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-line bg-card">
+    <section>
+      <SettingsGroup
+        title={
+          <>
+            Tokens
+            {tokens.length ? (
+              <span className="ml-2 font-normal text-fg-3 tabular-nums">{tokens.length}</span>
+            ) : null}
+          </>
+        }
+        action={
+          <Button className="gap-1.5" onClick={() => handleOpenChange(true)}>
+            <Plus className="size-4" />
+            New token
+          </Button>
+        }
+        bodyClassName="pt-2"
+      >
         {isLoading ? (
-          <div className="space-y-2 p-5">
-            <Skeleton className="h-10 w-full bg-fill" />
-            <Skeleton className="h-10 w-full bg-fill" />
+          <div className="space-y-2 pt-2">
+            <Skeleton className="h-12 w-full bg-fill" />
+            <Skeleton className="h-12 w-full bg-fill" />
           </div>
         ) : tokens.length === 0 ? (
-          <div className="flex items-center gap-3 px-5 py-4">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
-              <Braces className="size-4 text-fg-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-fg">No tokens yet</p>
-              <p className="text-xs text-fg-4">
+          <SettingsEmpty
+            icon={<Braces />}
+            title="No tokens yet"
+            description={
+              <>
                 Create one for the CLI, SDK, or CI, or run{" "}
-                <span className="font-mono text-fg-3">gitterm login</span>.
-              </p>
-            </div>
-          </div>
+                <span className="font-mono text-fg-2">gitterm login</span>.
+              </>
+            }
+          />
         ) : (
-          <div className="divide-y divide-line">
+          <div className="-mx-5 max-h-[640px] divide-y divide-line overflow-y-auto sm:-mx-6">
             {tokens.map((token) => (
-              <div key={token.id} className="flex items-start gap-3 px-5 py-4">
+              <div key={token.id} className="flex items-start gap-3 px-5 py-4 sm:px-6">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
                   {token.bot ? (
                     <Image src={`/${token.bot.platform}.svg`} alt="" width={16} height={16} />
@@ -202,10 +210,10 @@ export function ApiTokensSection() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-semibold text-fg">{token.name}</span>
-                    <span className="font-mono text-[11px] text-fg-4">{token.tokenPrefix}…</span>
+                    <span className="truncate text-[14px] font-medium text-fg">{token.name}</span>
+                    <span className="font-mono text-[12.5px] text-fg-4">{token.tokenPrefix}…</span>
                   </div>
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-4">
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-fg-3">
                     <span className="flex items-center gap-1.5">
                       <Clock className="size-3.5" />
                       {token.lastUsedAt ? `Used ${formatDate(token.lastUsedAt)}` : "Never used"}
@@ -218,7 +226,7 @@ export function ApiTokensSection() {
                       type="button"
                       aria-expanded={scopesOpenId === token.id}
                       onClick={() => setScopesOpenId((id) => (id === token.id ? null : token.id))}
-                      className="group flex items-center gap-1.5 transition-colors hover:text-fg-2"
+                      className="group flex items-center gap-1.5 transition-colors hover:text-fg"
                     >
                       <ShieldCheck className="size-3.5" />
                       {accessSummary(token.scopes)}
@@ -227,7 +235,7 @@ export function ApiTokensSection() {
                     {token.bot ? (
                       <Link
                         href={`/dashboard/bots/${token.bot.id}` as Route}
-                        className="flex items-center gap-1 text-fg-3 transition-colors hover:text-fg"
+                        className="flex items-center gap-1 text-fg-2 transition-colors hover:text-fg"
                       >
                         Open bot
                         <ArrowRight className="size-3" />
@@ -236,7 +244,7 @@ export function ApiTokensSection() {
                   </div>
                   {/* Under the whole line, so nothing beside the toggle moves. */}
                   {scopesOpenId === token.id ? (
-                    <p className="mt-1.5 font-mono text-[11px] leading-relaxed text-fg-3">
+                    <p className="mt-1.5 font-mono text-[12.5px] leading-relaxed text-fg-3">
                       {token.scopes.join(" · ")}
                       <span className="text-fg-4"> · created {formatDate(token.createdAt)}</span>
                     </p>
@@ -249,27 +257,22 @@ export function ApiTokensSection() {
                       variant="destructive"
                       disabled={revokeMutation.isPending}
                       onClick={() => revokeMutation.mutate({ tokenId: token.id })}
-                      className="h-8 gap-1.5 text-xs"
+                      className="gap-1.5"
                     >
                       {revokeMutation.isPending ? (
                         <Loader2 className="size-3.5 animate-spin" />
                       ) : null}
                       Revoke
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 text-xs"
-                      onClick={() => setConfirmingId(null)}
-                    >
+                    <Button size="sm" variant="secondary" onClick={() => setConfirmingId(null)}>
                       Keep
                     </Button>
                   </div>
                 ) : (
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="h-8 shrink-0 border-line text-xs text-fg-3 hover:text-fg"
+                    variant="secondary"
+                    className="shrink-0"
                     onClick={() => setConfirmingId(token.id)}
                   >
                     Revoke
@@ -279,7 +282,7 @@ export function ApiTokensSection() {
             ))}
           </div>
         )}
-      </div>
+      </SettingsGroup>
 
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto border-line bg-card p-0 sm:max-w-[560px]">
@@ -293,7 +296,7 @@ export function ApiTokensSection() {
                 <button
                   type="button"
                   onClick={handleCopyToken}
-                  className="group relative w-full rounded-xl border border-line bg-fill px-3.5 py-3 text-left transition-colors hover:border-line-2"
+                  className="group relative w-full rounded-xl bg-fill px-3.5 py-3 text-left transition-colors hover:bg-fill-2"
                 >
                   <code
                     className="block truncate pr-7 font-mono text-sm text-fg selection:bg-primary selection:text-primary-foreground"
@@ -305,7 +308,11 @@ export function ApiTokensSection() {
                 </button>
               </div>
               <div className="flex gap-2 border-t border-line p-4">
-                <Button variant="outline" className="h-10 flex-1 text-sm" onClick={handleCopyToken}>
+                <Button
+                  variant="secondary"
+                  className="h-10 flex-1 text-sm"
+                  onClick={handleCopyToken}
+                >
                   <Copy className="size-3.5" />
                   Copy
                 </Button>
@@ -325,7 +332,7 @@ export function ApiTokensSection() {
 
               <div className="space-y-5 px-5 pb-5">
                 <div className="space-y-2">
-                  <label htmlFor="api-token-name" className={eyebrow}>
+                  <label htmlFor="api-token-name" className={settingsLabel}>
                     Name
                   </label>
                   <Input
@@ -340,11 +347,8 @@ export function ApiTokensSection() {
                 </div>
 
                 <div className="space-y-2">
-                  <p className={eyebrow}>Access</p>
-                  <div
-                    role="radiogroup"
-                    className="divide-y divide-line rounded-xl border border-line"
-                  >
+                  <p className={settingsLabel}>Access</p>
+                  <div role="radiogroup" className="divide-y divide-line rounded-xl bg-fill">
                     {TOKEN_PRESETS.map((entry) => {
                       const selected = preset === entry.id;
                       return (
@@ -354,7 +358,7 @@ export function ApiTokensSection() {
                             role="radio"
                             aria-checked={selected}
                             onClick={() => setPreset(entry.id)}
-                            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-fill"
+                            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-fill"
                           >
                             <span
                               aria-hidden="true"
@@ -380,7 +384,7 @@ export function ApiTokensSection() {
                                 <label
                                   key={detail.scope}
                                   title={detail.description}
-                                  className="flex cursor-pointer items-center gap-2 py-1 text-xs text-fg-3 hover:text-fg"
+                                  className="flex cursor-pointer items-center gap-2 py-1 text-[13px] text-fg-3 hover:text-fg"
                                 >
                                   <Checkbox
                                     className="size-3.5"
@@ -402,38 +406,29 @@ export function ApiTokensSection() {
                       );
                     })}
                   </div>
-                  <p className="font-mono text-xs leading-relaxed text-fg-4">
+                  <p className="font-mono text-[12.5px] leading-relaxed text-fg-3">
                     {scopes.length ? scopes.join(" · ") : "No permissions selected"}
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
-                  <p className={eyebrow}>Expires</p>
-                  <div role="radiogroup" className="flex gap-1">
-                    {EXPIRY_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={expiry === option.value}
-                        onClick={() => setExpiry(option.value)}
-                        className={cn(
-                          "rounded-md px-3 py-1.5 text-sm transition-colors",
-                          expiry === option.value
-                            ? "bg-fill-2 text-fg"
-                            : "text-fg-4 hover:text-fg-2",
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
+                <div className="space-y-2">
+                  <p className={settingsLabel}>Expires</p>
+                  <Seg
+                    ariaLabel="Expires"
+                    fill
+                    value={expiry}
+                    onChange={setExpiry}
+                    options={EXPIRY_OPTIONS.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                  />
                 </div>
               </div>
 
               <div className="flex gap-2 border-t border-line p-4">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   className="h-10 text-sm"
                   onClick={() => handleOpenChange(false)}
                 >

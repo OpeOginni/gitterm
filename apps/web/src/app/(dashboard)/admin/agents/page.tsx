@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
@@ -27,12 +27,18 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Container, Plus, Trash2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import { getIcon } from "@/components/dashboard/create-instance/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { SettingsEmpty, SettingsGroup } from "@/components/dashboard/settings/settings-page";
+
+function Chip({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">{children}</span>
+  );
+}
 
 const PROVIDER_LABELS: Record<string, string> = {
   aws: "AWS",
@@ -148,21 +154,21 @@ export default function AgentTypesPage() {
         <div className="flex gap-2">
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Agent Type
+              <Button className="gap-1.5">
+                <Plus className="size-4" />
+                Add agent type
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Agent Type</DialogTitle>
+                <DialogTitle>Add agent type</DialogTitle>
                 <DialogDescription>
                   Create a new agent type that users can deploy.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Agent Name</Label>
+                  <Label htmlFor="name">Agent name</Label>
                   <Input
                     id="name"
                     value={newAgent.name}
@@ -220,7 +226,7 @@ export default function AgentTypesPage() {
                 <div className="space-y-2">
                   <Label htmlFor="description">
                     Description{" "}
-                    <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                    <span className="text-[12.5px] font-normal text-fg-4">(optional)</span>
                   </Label>
                   <Input
                     id="description"
@@ -243,7 +249,7 @@ export default function AgentTypesPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                <Button variant="secondary" onClick={() => setIsCreateOpen(false)}>
                   Cancel
                 </Button>
                 <Button
@@ -266,184 +272,151 @@ export default function AgentTypesPage() {
         </div>
       </DashboardHeader>
 
-      <div className="pt-2 space-y-6">
-        {isLoading || isImagesLoading ? (
-          <div className="space-y-2">
-            {[...Array(3)].map((_, i) => (
-              <Skeleton key={i} className="h-20 w-full" />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {agentTypes?.map((agent) => {
-              const runtimeImages = images?.filter((image) => image.agentTypeId === agent.id) ?? [];
-              const hasEnabledRuntimeImage = runtimeImages.some((image) => image.isEnabled);
-              const isSeeded = ["opencode-ttyd", "opencode", "t3code"].includes(agent.key);
+      {isLoading || isImagesLoading ? (
+        <div className="space-y-2 rounded-2xl bg-card p-5">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full bg-fill" />
+          ))}
+        </div>
+      ) : agentTypes?.length === 0 ? (
+        <SettingsGroup>
+          <SettingsEmpty
+            icon={<Container />}
+            title="No agent types configured yet"
+            description="Add one to get started."
+          />
+        </SettingsGroup>
+      ) : (
+        <div className="divide-y divide-line rounded-2xl bg-card">
+          {agentTypes?.map((agent) => {
+            const runtimeImages = images?.filter((image) => image.agentTypeId === agent.id) ?? [];
+            const hasEnabledRuntimeImage = runtimeImages.some((image) => image.isEnabled);
+            const isSeeded = ["opencode-ttyd", "opencode", "t3code"].includes(agent.key);
 
-              return (
+            return (
+              <div
+                key={agent.id}
+                className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-start sm:px-6"
+              >
                 <div
-                  key={agent.id}
-                  className={`group relative overflow-hidden rounded-2xl border border-border bg-card p-5 transition-colors hover:border-amber-400/20 ${!agent.isEnabled ? "opacity-60" : ""}`}
+                  className={`flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill ${!agent.isEnabled ? "opacity-60" : ""}`}
                 >
-                  <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-amber-500/[0.04] opacity-0 blur-3xl transition-opacity group-hover:opacity-100" />
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                    <div className="rounded-xl border border-border bg-foreground/[0.02] p-2.5">
-                      <Image
-                        src={getIcon(agent.key)}
-                        alt=""
-                        width={20}
-                        height={20}
-                        className="h-5 w-5 object-contain"
-                      />
+                  <Image
+                    src={getIcon(agent.key)}
+                    alt=""
+                    width={20}
+                    height={20}
+                    className="size-5 object-contain"
+                  />
+                </div>
+                <div className={`min-w-0 flex-1 space-y-3 ${!agent.isEnabled ? "opacity-60" : ""}`}>
+                  <div>
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <h3 className="text-[15px] font-medium text-fg">{agent.name}</h3>
+                      <span className="font-mono text-[12.5px] text-fg-3">{agent.key}</span>
+                      {agent.serverOnly ? <Chip>Server only</Chip> : null}
+                      {!agent.isEnabled ? <Chip>Disabled</Chip> : null}
                     </div>
-                    <div className="min-w-0 flex-1 space-y-3">
-                      <div>
-                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                          <h3 className="font-semibold text-foreground/90">{agent.name}</h3>
-                          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                            {agent.key}
-                          </span>
-                          {agent.serverOnly ? (
-                            <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                              Server only
-                            </span>
-                          ) : null}
-                          {!agent.isEnabled ? (
-                            <Badge
-                              variant="outline"
-                              className="border-foreground/[0.08] bg-foreground/[0.04] text-[10px] text-muted-foreground"
-                            >
-                              Disabled
-                            </Badge>
-                          ) : null}
-                        </div>
-                        {agent.description ? (
-                          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-                            {agent.description}
-                          </p>
-                        ) : null}
-                      </div>
+                    {agent.description ? (
+                      <p className="mt-1 max-w-3xl text-[13.5px] leading-relaxed text-fg-3">
+                        {agent.description}
+                      </p>
+                    ) : null}
+                  </div>
 
-                      <div
-                        className={`rounded-xl border px-3 py-3 ${
-                          runtimeImages.length > 0
-                            ? "border-border/70 bg-foreground/[0.015]"
-                            : "border-amber-500/20 bg-amber-500/[0.04]"
-                        }`}
-                      >
-                        <div className="mb-2 flex items-center gap-2">
-                          <Container
-                            className={`h-4 w-4 shrink-0 ${runtimeImages.length > 0 ? "text-muted-foreground" : "text-amber-400"}`}
-                          />
-                          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                            Runtime images{" "}
-                            {runtimeImages.length > 0 ? `· ${runtimeImages.length}` : ""}
-                          </span>
-                        </div>
-                        {runtimeImages.length > 0 ? (
-                          <div className="divide-y divide-border/60">
-                            {runtimeImages.map((runtimeImage) => {
-                              const providers = runtimeImage.supportedProviders.map(
-                                (provider) => PROVIDER_LABELS[provider] ?? provider,
-                              );
-                              const scope =
-                                providers.length === 1
-                                  ? `${providers[0]} only`
-                                  : providers.join(" · ") || "Local only";
-
-                              return (
-                                <div
-                                  key={runtimeImage.id}
-                                  className="flex min-w-0 flex-col gap-1 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-                                >
-                                  <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <span className="text-sm font-medium text-foreground/85">
-                                        {runtimeImage.name}
-                                      </span>
-                                      {!runtimeImage.isEnabled ? (
-                                        <Badge
-                                          variant="outline"
-                                          className="border-foreground/[0.08] text-[10px] text-muted-foreground"
-                                        >
-                                          Disabled
-                                        </Badge>
-                                      ) : null}
-                                    </div>
-                                    <code className="block truncate font-mono text-[11px] text-muted-foreground">
-                                      {runtimeImage.imageId}
-                                    </code>
-                                  </div>
-                                  <Badge
-                                    variant="outline"
-                                    className="w-fit shrink-0 border-amber-400/20 bg-amber-400/[0.04] text-[10px] text-amber-200/80"
-                                  >
-                                    {scope}
-                                  </Badge>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="ml-6">
-                            <div>
-                              <p className="text-sm font-medium text-amber-300">
-                                Runtime image missing
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Connect an image before enabling this agent.
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex shrink-0 items-center justify-end gap-2 sm:self-center">
-                      <Switch
-                        checked={agent.isEnabled}
-                        disabled={!hasEnabledRuntimeImage && !agent.isEnabled}
-                        onCheckedChange={(checked) =>
-                          toggleAgentType.mutate({ id: agent.id, isEnabled: checked })
-                        }
-                        aria-label={`${agent.isEnabled ? "Disable" : "Enable"} ${agent.name}`}
+                  <div className="rounded-xl bg-fill px-4 py-3">
+                    <p className="mb-2 flex items-center gap-2 text-[13px] text-fg-3">
+                      <Container
+                        className={`size-4 shrink-0 ${runtimeImages.length > 0 ? "text-fg-4" : "text-[#fb923c]"}`}
                       />
-                      {!isSeeded ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-fg-4 hover:text-red-400"
-                          onClick={() => setDeleteAgentId(agent.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      Runtime images
+                      {runtimeImages.length > 0 ? (
+                        <span className="tabular-nums text-fg-4">{runtimeImages.length}</span>
                       ) : null}
-                    </div>
+                    </p>
+                    {runtimeImages.length > 0 ? (
+                      <div className="divide-y divide-line">
+                        {runtimeImages.map((runtimeImage) => {
+                          const providers = runtimeImage.supportedProviders.map(
+                            (provider) => PROVIDER_LABELS[provider] ?? provider,
+                          );
+                          const scope =
+                            providers.length === 1
+                              ? `${providers[0]} only`
+                              : providers.join(" · ") || "Local only";
+
+                          return (
+                            <div
+                              key={runtimeImage.id}
+                              className="flex min-w-0 flex-col gap-1 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[14px] font-medium text-fg-2">
+                                    {runtimeImage.name}
+                                  </span>
+                                  {!runtimeImage.isEnabled ? <Chip>Disabled</Chip> : null}
+                                </div>
+                                <code className="block truncate font-mono text-[12.5px] text-fg-3">
+                                  {runtimeImage.imageId}
+                                </code>
+                              </div>
+                              <span className="w-fit shrink-0 text-[13px] text-fg-3">{scope}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="pl-6">
+                        <p className="text-[14px] font-medium text-[#fb923c]">
+                          Runtime image missing
+                        </p>
+                        <p className="text-[13px] text-fg-3">
+                          Connect an image before enabling this agent.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
-              );
-            })}
 
-            {agentTypes?.length === 0 && (
-              <div className="py-12 text-center text-fg-4">
-                No agent types configured yet. Add one to get started.
+                <div className="flex shrink-0 items-center justify-end gap-2 sm:self-center">
+                  <Switch
+                    checked={agent.isEnabled}
+                    disabled={!hasEnabledRuntimeImage && !agent.isEnabled}
+                    onCheckedChange={(checked) =>
+                      toggleAgentType.mutate({ id: agent.id, isEnabled: checked })
+                    }
+                    aria-label={`${agent.isEnabled ? "Disable" : "Enable"} ${agent.name}`}
+                  />
+                  {!isSeeded ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete ${agent.name}`}
+                      className="size-9 text-fg-3 hover:text-red-400"
+                      onClick={() => setDeleteAgentId(agent.id)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       <Dialog open={!!deleteAgentId} onOpenChange={() => setDeleteAgentId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Agent Type</DialogTitle>
+            <DialogTitle>Delete agent type</DialogTitle>
             <DialogDescription>
               Custom agent types can only be deleted after their images are removed. Seeded agent
               types cannot be deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteAgentId(null)}>
+            <Button variant="secondary" onClick={() => setDeleteAgentId(null)}>
               Cancel
             </Button>
             <Button

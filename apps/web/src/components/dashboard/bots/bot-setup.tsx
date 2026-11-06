@@ -260,7 +260,7 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
         );
         if (result.failed)
           toast.warning(
-            `${sandboxes(result.failed)} still need cleanup. GitTerm will retry automatically.`,
+            `${sandboxes(result.failed)} still need cleanup. Gitterm will retry automatically.`,
           );
         refreshBots();
         void queryClient.invalidateQueries({ queryKey: trpc.workspace.listWorkspaces.queryKey() });
@@ -350,7 +350,7 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
     "Enter a valid model ID."
   ) : (
     <>
-      Runs <span className="font-mono text-[12px] text-fg-2">{model.trim()}</span> with{" "}
+      Runs <span className="font-mono text-[13px] text-fg-2">{model.trim()}</span> with{" "}
       {credential.providerDisplayName}.
     </>
   );
@@ -370,10 +370,9 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
       <Button
         variant={changed ? "default" : "secondary"}
         className={cn(
-          "h-9 w-full gap-2",
-          // Nothing to save: still a raised button, just neutral, rather than faded into the card.
-          !changed &&
-            "border border-line bg-fill-2 text-fg-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_1px_2px_rgba(0,0,0,0.3)] disabled:opacity-100",
+          "h-10 w-full gap-2",
+          // Nothing to save: still a button, just neutral, rather than faded into the card.
+          !changed && "text-fg-3 disabled:opacity-100",
         )}
         disabled={!changed || update.isPending}
         onClick={() => settings && update.mutate({ id: savedId, ...settings })}
@@ -388,9 +387,9 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
       <button
         type="button"
         onClick={() => setConfirmDelete(true)}
-        className="flex w-full items-center justify-center gap-1.5 text-xs text-fg-4 transition-colors hover:text-destructive"
+        className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg text-[13px] text-fg-3 transition-colors hover:bg-red-500/10 hover:text-red-300"
       >
-        <Trash2 className="size-3.5" />
+        <Trash2 className="size-4" />
         Delete bot
       </button>
       <Dialog
@@ -514,18 +513,18 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
               </p>
             ) : (
               <div className="space-y-3">
-                <div className="divide-y divide-line">
+                <div className="max-h-72 space-y-1 overflow-y-auto">
                   {tools.map((tool) => (
                     <label
                       key={tool.id}
-                      className="flex cursor-pointer items-center gap-3 py-2.5 text-[13px]"
+                      className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl bg-fill px-3.5 text-sm transition-colors hover:bg-fill-2"
                     >
                       <Checkbox
                         checked={selectedTools.some((entry) => entry.id === tool.id)}
                         onCheckedChange={(checked) => toggleTool(tool.id, checked === true)}
                       />
                       <span className="min-w-0 flex-1 truncate text-fg">{tool.name}</span>
-                      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4">
+                      <span className="rounded-md bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
                         {tool.integration === "executor" ? "Executor" : "MCP"}
                       </span>
                     </label>
@@ -533,7 +532,7 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
                 </div>
                 <Link
                   href={"/dashboard/integrations" as Route}
-                  className="inline-block text-xs text-fg-3 underline underline-offset-2 hover:text-fg"
+                  className="inline-block text-[13px] text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg"
                 >
                   Manage connections
                 </Link>
@@ -562,13 +561,13 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
                   setPlatform(option.value);
                 }}
                 className={cn(
-                  "flex items-center gap-3.5 rounded-xl border px-4 py-3.5 text-left transition-colors",
+                  "flex items-center gap-3.5 rounded-xl bg-fill px-4 py-3.5 text-left transition-[background-color,box-shadow]",
                   platform === option.value
-                    ? "border-primary/60 bg-fill"
-                    : "border-line hover:border-fg-4 hover:bg-fill",
+                    ? "bg-fill-2 shadow-[inset_0_0_0_1px_rgba(211,173,85,0.5)]"
+                    : "hover:bg-fill-2",
                 )}
               >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-line bg-fill-2">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-fill-2">
                   <Image src={option.logo} alt="" width={20} height={20} />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -615,11 +614,8 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
         >
           <div className="space-y-8">
             <div className="space-y-2">
-              <label
-                htmlFor="bot-display-name"
-                className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4"
-              >
-                Name in GitTerm
+              <label htmlFor="bot-display-name" className="text-[13px] font-medium text-fg-2">
+                Name in Gitterm
               </label>
               <div className="flex flex-wrap gap-3">
                 <Input
@@ -642,8 +638,8 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
                 )}
               </div>
               {savedId ? null : (
-                <p className="text-xs text-fg-4">
-                  Saves the bot and creates its GitTerm token, shown once.
+                <p className="text-[12.5px] text-fg-4">
+                  Saves the bot and creates its Gitterm token, shown once.
                 </p>
               )}
             </div>

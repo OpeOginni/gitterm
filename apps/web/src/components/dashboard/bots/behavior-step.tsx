@@ -18,7 +18,7 @@ export type BotBehavior = {
   setup: string;
 };
 
-const labelClass = "font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4";
+const labelClass = "text-[13px] font-medium text-fg-2";
 
 /** Real choices as tiles with a radio dot, like Platform and Compute. */
 function OptionTiles<T extends string>({
@@ -42,10 +42,10 @@ function OptionTiles<T extends string>({
             aria-checked={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              "flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors",
+              "flex items-start gap-3 rounded-xl bg-fill px-3.5 py-3 text-left transition-[background-color,box-shadow]",
               selected
-                ? "border-primary/60 bg-fill"
-                : "border-line hover:border-fg-4 hover:bg-fill",
+                ? "bg-fill-2 shadow-[inset_0_0_0_1px_rgba(211,173,85,0.5)]"
+                : "hover:bg-fill-2",
             )}
           >
             <span
@@ -117,13 +117,13 @@ function IdList({
         onClick={() => inputRef.current?.focus()}
         className={cn(
           "flex min-h-10 w-full cursor-text flex-wrap items-center gap-1.5 rounded-lg bg-input/70 px-2 py-1.5 transition-shadow focus-within:ring-2 focus-within:ring-ring/40",
-          error && "ring-1 ring-amber-400/40",
+          error && "ring-1 ring-[#fb923c]/40",
         )}
       >
         {ids.map((id) => (
           <span
             key={id}
-            className="flex max-w-full items-center gap-1 rounded-md bg-fill-2 py-0.5 pr-0.5 pl-2 font-mono text-xs text-fg"
+            className="flex max-w-full items-center gap-1 rounded-md bg-fill-2 py-0.5 pr-0.5 pl-2 font-mono text-[12.5px] text-fg"
           >
             <span className="truncate">{id}</span>
             <button
@@ -163,7 +163,7 @@ function IdList({
           className="h-7 min-w-36 flex-1 bg-transparent px-1.5 font-mono text-[13px] text-fg outline-none placeholder:font-sans placeholder:text-fg-4"
         />
       </div>
-      {error ? <p className="text-xs text-amber-300">{error}</p> : null}
+      {error ? <p className="text-[12.5px] text-[#fb923c]">{error}</p> : null}
     </div>
   );
 }
@@ -186,8 +186,8 @@ export function BehaviorStepBody({
   const aside = () => (setAside.current[platform ?? "none"] ??= { channels: [], allowedUsers: [] });
 
   return (
-    <div className="divide-y divide-line">
-      <section className="space-y-3 pb-5">
+    <div className="space-y-7">
+      <section className="space-y-3">
         <p className={labelClass}>Where it answers</p>
         <OptionTiles
           value={someChannels ? "some" : "every"}
@@ -220,7 +220,7 @@ export function BehaviorStepBody({
               placeholder="Paste channel IDs"
               check={idCheck(platform, "channel")}
             />
-            <p className="text-xs text-fg-4">
+            <p className="text-[12.5px] text-fg-4">
               {platform === "discord"
                 ? "Right-click a channel → Copy Channel ID (Developer Mode)."
                 : "A channel's ID is at the bottom of its details (C0…)."}
@@ -229,7 +229,7 @@ export function BehaviorStepBody({
         ) : null}
       </section>
 
-      <section className="space-y-3 py-5">
+      <section className="space-y-3">
         <p className={labelClass}>Who can use it</p>
         <OptionTiles
           value={somePeople ? "some" : "everyone"}
@@ -259,7 +259,7 @@ export function BehaviorStepBody({
               placeholder={platform === "discord" ? "Paste user IDs" : "Paste member IDs"}
               check={idCheck(platform, "user")}
             />
-            <p className="text-xs text-fg-4">
+            <p className="text-[12.5px] text-fg-4">
               {platform === "discord"
                 ? "Right-click a person → Copy User ID (Developer Mode)."
                 : "A person's profile → ⋯ → Copy member ID."}
@@ -282,7 +282,7 @@ export function BehaviorStepBody({
         ) : null}
       </section>
 
-      <section className="space-y-2 py-5">
+      <section className="space-y-2">
         <p className={labelClass}>Instructions</p>
         <Textarea
           value={behavior.instructions}
@@ -293,7 +293,7 @@ export function BehaviorStepBody({
         />
       </section>
 
-      <section className="space-y-2 pt-5">
+      <section className="space-y-2">
         <p className={labelClass}>Setup command</p>
         <Input
           value={behavior.setup}
@@ -301,7 +301,7 @@ export function BehaviorStepBody({
           placeholder="pnpm install"
           className="font-mono text-sm"
         />
-        <p className="text-xs text-fg-4">
+        <p className="text-[12.5px] text-fg-4">
           Runs in the checkout before the agent starts in a new sandbox.
         </p>
       </section>

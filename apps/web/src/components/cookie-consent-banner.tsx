@@ -3,25 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { Cookie, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { acceptAll, rejectAll, setConsent, hasConsentDecision } from "@/lib/consent";
+import { acceptAll, rejectAll, hasConsentDecision } from "@/lib/consent";
 import { ANALYTICS_ENABLED } from "@/lib/analytics";
-import { cn } from "@/lib/utils";
 
 /**
- * First-load cookie consent banner. Renders only when:
- *   1. analytics is wired up (`ANALYTICS_ENABLED`), and
- *   2. the user has not yet made a choice.
- *
- * If analytics keys are not configured (e.g. self-hosted) the banner
- * never appears because there's nothing to consent to.
+ * First-load cookie notice: a small card in the bottom-left corner. It shows only when analytics
+ * is configured (`ANALYTICS_ENABLED`) and the visitor has not chosen yet, so self-hosted
+ * deployments without analytics keys never see it. Analytics is the only optional category,
+ * so two buttons cover every choice.
  */
 export function CookieConsentBanner() {
   const [visible, setVisible] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
-  const [analyticsOn, setAnalyticsOn] = useState(true);
 
   useEffect(() => {
     if (!ANALYTICS_ENABLED) return;
@@ -33,18 +25,9 @@ export function CookieConsentBanner() {
 
   if (!visible) return null;
 
-  const handleAcceptAll = () => {
-    acceptAll();
-    setVisible(false);
-  };
-
-  const handleRejectAll = () => {
-    rejectAll();
-    setVisible(false);
-  };
-
-  const handleSavePrefs = () => {
-    setConsent({ analytics: analyticsOn ? "granted" : "denied" });
+  const choose = (accept: boolean) => {
+    if (accept) acceptAll();
+    else rejectAll();
     setVisible(false);
   };
 
@@ -53,106 +36,33 @@ export function CookieConsentBanner() {
       role="dialog"
       aria-live="polite"
       aria-label="Cookie consent"
-      className={cn(
-        "fixed inset-x-3 bottom-3 z-[60] mx-auto max-w-[680px]",
-        "rounded-xl border border-line bg-background/95 p-4 shadow-2xl backdrop-blur-xl sm:p-5",
-      )}
+      className="fixed inset-x-4 bottom-4 z-[60] rounded-xl border border-line bg-card p-4 shadow-[0_16px_40px_rgba(0,0,0,0.45)] sm:right-auto sm:w-[360px]"
     >
-      <div className="flex items-start gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line bg-fill">
-          <Cookie className="h-4 w-4 text-primary" />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">Privacy</p>
-            <button
-              type="button"
-              aria-label="Dismiss"
-              onClick={handleRejectAll}
-              className="rounded-md p-1 text-fg-4 transition-colors hover:bg-fill hover:text-fg-2"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          <p className="mt-1.5 text-sm text-fg-2">
-            We use cookies to keep you signed in and, with your permission, anonymous product
-            analytics to improve GitTerm. We don't sell your data or run ads.
-          </p>
-
-          {showDetails ? (
-            <div className="mt-4 space-y-3 rounded-lg border border-line bg-fill p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-fg">Necessary</p>
-                  <p className="text-xs text-fg-3">
-                    Sign-in session, workspace access, and UI preferences. Required.
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-md border border-line bg-fill px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-fg-3">
-                  Always on
-                </span>
-              </div>
-
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-fg">Analytics</p>
-                  <p className="text-xs text-fg-3">
-                    Anonymous, aggregate usage data so we know which features matter.
-                  </p>
-                </div>
-                <Switch
-                  checked={analyticsOn}
-                  onCheckedChange={setAnalyticsOn}
-                  aria-label="Toggle analytics"
-                />
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              onClick={handleAcceptAll}
-              className="h-8 bg-primary px-3.5 font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
-            >
-              Accept all
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleRejectAll}
-              className="h-8 border-line bg-transparent px-3.5 font-mono text-xs uppercase tracking-wider text-fg-2 hover:border-line-2 hover:text-fg"
-            >
-              Reject optional
-            </Button>
-            {showDetails ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleSavePrefs}
-                className="h-8 px-3.5 font-mono text-xs uppercase tracking-wider text-fg-2 hover:text-fg"
-              >
-                Save preferences
-              </Button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowDetails(true)}
-                className="ml-1 font-mono text-[11px] uppercase tracking-wider text-fg-3 underline-offset-2 transition-colors hover:text-fg-2 hover:underline"
-              >
-                Customize
-              </button>
-            )}
-            <Link
-              href={"/privacy" as Route}
-              className="ml-auto font-mono text-[11px] uppercase tracking-wider text-fg-4 underline-offset-2 transition-colors hover:text-fg-2 hover:underline"
-            >
-              Privacy policy
-            </Link>
-          </div>
-        </div>
+      <p className="m-0 text-[14px] leading-[1.55] text-fg-2">
+        We use cookies to keep you signed in. With your OK, we also use anonymous analytics to
+        improve Gitterm.{" "}
+        <Link
+          href={"/privacy" as Route}
+          className="text-fg underline decoration-line-2 underline-offset-[3px] hover:decoration-fg-3"
+        >
+          Privacy policy
+        </Link>
+      </p>
+      <div className="mt-3.5 flex gap-2">
+        <button
+          type="button"
+          onClick={() => choose(true)}
+          className="h-8 rounded-md bg-primary px-3.5 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-[#c09a45]"
+        >
+          Accept
+        </button>
+        <button
+          type="button"
+          onClick={() => choose(false)}
+          className="h-8 rounded-md bg-fill-2 px-3.5 text-[13px] font-medium text-fg-2 transition-colors hover:bg-line-2 hover:text-fg"
+        >
+          Only necessary
+        </button>
       </div>
     </div>
   );

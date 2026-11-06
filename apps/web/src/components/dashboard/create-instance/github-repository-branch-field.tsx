@@ -39,11 +39,11 @@ interface GitHubRepositoryBranchFieldProps {
 
 /** Shared styling for both dropdown surfaces. Sized to the anchor, capped to the viewport. */
 const DROPDOWN_CONTENT_CLASS =
-  "flex w-(--radix-popover-trigger-width) max-h-[min(22rem,var(--radix-popover-content-available-height))] flex-col overflow-hidden rounded-md border border-border/60 bg-popover p-0 shadow-md";
+  "flex w-(--radix-popover-trigger-width) max-h-[min(22rem,var(--radix-popover-content-available-height))] flex-col overflow-hidden rounded-xl border border-line bg-popover p-0 shadow-md";
 
 /** Row styling: taller on touch screens so rows are comfortable to tap. */
 const ROW_CLASS =
-  "flex w-full items-center gap-2 rounded-sm px-3 py-2.5 text-sm transition-colors hover:bg-secondary/60 sm:py-1.5";
+  "flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm transition-colors hover:bg-fill-2 sm:py-1.5";
 
 /** Programmatic focus doesn't open the keyboard on touch devices, so only autofocus with a mouse. */
 function hasFinePointer(): boolean {
@@ -272,7 +272,7 @@ export function GitHubRepositoryBranchField({
     <div className="grid gap-4">
       {/* ── Repository (search or paste URL) ── */}
       <div className="grid gap-1.5" ref={repoFieldRef}>
-        <Label htmlFor="repo" className="text-sm font-medium">
+        <Label htmlFor="repo" className="text-[13px] font-medium text-fg-2">
           GitHub repository
         </Label>
         <Popover open={isRepoDropdownOpen} onOpenChange={setIsRepoListOpen}>
@@ -349,7 +349,7 @@ export function GitHubRepositoryBranchField({
           >
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
               {reposQuery.isLoading ? (
-                <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-fg-3">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading repositories...
                 </div>
@@ -362,25 +362,23 @@ export function GitHubRepositoryBranchField({
                       onClick={() => handleRepoSelect(repo)}
                       className={ROW_CLASS}
                     >
-                      <Github className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <Github className="h-3.5 w-3.5 shrink-0 text-fg-3" />
                       <span className="min-w-0 flex-1 truncate text-left font-medium">
                         {repo.fullName}
                       </span>
-                      {repo.private && (
-                        <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      )}
+                      {repo.private && <Lock className="h-3.5 w-3.5 shrink-0 text-fg-3" />}
                     </button>
                   ))}
                   {!repoUrl.trim() && accessibleRepos.length > 20 && (
-                    <div className="border-t border-border/30 px-3 py-2 text-center text-[11px] text-muted-foreground">
+                    <div className="border-t border-line px-3 py-2 text-center text-[12.5px] text-fg-4">
                       Type to search {accessibleRepos.length} repositories
                     </div>
                   )}
                 </div>
               ) : (
-                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                <p className="px-3 py-6 text-center text-sm text-fg-3">
                   {repoUrl.trim()
-                    ? "No repos match — paste a URL to use any repository"
+                    ? "No repos match. Paste a URL to use any repository."
                     : "No repositories available"}
                 </p>
               )}
@@ -389,12 +387,12 @@ export function GitHubRepositoryBranchField({
         </Popover>
         {/* inline hint; a recognised repo needs none, the chip shows it */}
         {!parsedRepository && hasGitHubUrl ? (
-          <span className="inline-flex items-center gap-1 text-xs text-amber-400/80">
-            <AlertCircle className="h-3 w-3 text-amber-400 opacity-80" />
+          <span className="inline-flex items-center gap-1.5 text-[12.5px] text-[#fb923c]">
+            <AlertCircle className="size-3.5" />
             Enter a valid GitHub URL
           </span>
         ) : !parsedRepository && integration ? (
-          <span className="text-xs text-muted-foreground/60">
+          <span className="text-[12.5px] text-fg-4">
             Search your connected repos, or paste any GitHub URL
           </span>
         ) : null}
@@ -403,27 +401,27 @@ export function GitHubRepositoryBranchField({
       {/* ── Branch ── */}
       {showBranchPicker ? (
         <div className="grid gap-1.5">
-          <Label className="text-sm font-medium">Branch</Label>
+          <Label className="text-[13px] font-medium text-fg-2">Branch</Label>
 
           {branchFromUrl ? (
             /* branch pinned from URL */
-            <div className="flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm">
-              <GitBranch className="h-4 w-4 text-emerald-400" />
-              <span className="font-medium text-emerald-200">{branchFromUrl}</span>
-              <span className="text-xs text-emerald-200/60">from URL</span>
+            <div className="flex h-10 items-center gap-2 rounded-lg bg-fill px-3.5 text-sm">
+              <GitBranch className="size-4 text-[#6bd586]" />
+              <span className="font-medium text-fg">{branchFromUrl}</span>
+              <span className="text-[12.5px] text-fg-4">from URL</span>
             </div>
           ) : isResolvingRepo ? (
             /* loading default branch */
-            <div className="flex items-center gap-2 rounded-md border border-border/40 bg-secondary/20 px-3 py-2 text-sm text-muted-foreground">
+            <div className="flex h-10 items-center gap-2 rounded-lg bg-fill px-3.5 text-sm text-fg-3">
               <Loader2 className="h-4 w-4 animate-spin" />
               Resolving default branch...
             </div>
           ) : resolveError ? (
             /* could not resolve -- fall back to manual input */
             <div className="grid gap-2">
-              <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
-                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>Repo not found — enter the branch manually</span>
+              <div className="flex items-start gap-2 rounded-lg bg-[#fb923c]/10 px-3 py-2 text-[13px] text-[#fb923c]">
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                <span>Repo not found. Enter the branch manually.</span>
               </div>
               <Input
                 placeholder="main"
@@ -439,18 +437,18 @@ export function GitHubRepositoryBranchField({
                 <button
                   type="button"
                   disabled={disabled}
-                  className="flex w-full items-center justify-between rounded-md border border-border/40 bg-secondary/20 px-3 py-2 text-sm transition-colors hover:bg-secondary/40"
+                  className="flex h-10 w-full items-center justify-between rounded-lg bg-input/70 px-3.5 text-sm transition-colors hover:bg-input"
                 >
                   <span className="flex min-w-0 items-center gap-2">
-                    <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate font-medium text-foreground">{activeBranch}</span>
+                    <GitBranch className="h-4 w-4 shrink-0 text-fg-3" />
+                    <span className="truncate font-medium text-fg">{activeBranch}</span>
                     {(!branch || branch === resolvedRepository?.defaultBranch) && (
-                      <span className="shrink-0 text-xs text-muted-foreground">default</span>
+                      <span className="shrink-0 text-[12.5px] text-fg-4">default</span>
                     )}
                   </span>
                   <ChevronDown
                     className={cn(
-                      "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                      "h-4 w-4 shrink-0 text-fg-3 transition-transform",
                       isBranchListOpen && "rotate-180",
                     )}
                   />
@@ -468,9 +466,9 @@ export function GitHubRepositoryBranchField({
                   if (hasFinePointer()) branchSearchRef.current?.focus();
                 }}
               >
-                <div className="shrink-0 border-b border-border/30 p-2">
+                <div className="shrink-0 border-b border-line p-2">
                   <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-3" />
                     <Input
                       ref={branchSearchRef}
                       value={branchQuery}
@@ -494,7 +492,7 @@ export function GitHubRepositoryBranchField({
 
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
                   {branchesQuery.isLoading ? (
-                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-fg-3">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Loading branches...
                     </div>
@@ -507,16 +505,14 @@ export function GitHubRepositoryBranchField({
                             key={item.name}
                             type="button"
                             onClick={() => handleBranchSelect(item.name)}
-                            className={cn(ROW_CLASS, isSelected && "bg-secondary/50")}
+                            className={cn(ROW_CLASS, isSelected && "bg-fill-2")}
                           >
-                            <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <GitBranch className="h-3.5 w-3.5 shrink-0 text-fg-3" />
                             <span className="min-w-0 flex-1 truncate text-left font-medium">
                               {item.name}
                             </span>
                             {item.name === resolvedRepository?.defaultBranch ? (
-                              <span className="shrink-0 text-[11px] text-muted-foreground">
-                                default
-                              </span>
+                              <span className="shrink-0 text-[12.5px] text-fg-4">default</span>
                             ) : null}
                             {isSelected ? (
                               <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -526,9 +522,7 @@ export function GitHubRepositoryBranchField({
                       })}
 
                       {filteredBranches.length === 0 && !showUseTypedBranch ? (
-                        <p className="py-6 text-center text-sm text-muted-foreground">
-                          No branches found
-                        </p>
+                        <p className="py-6 text-center text-sm text-fg-3">No branches found</p>
                       ) : null}
 
                       {showUseTypedBranch ? (
@@ -537,17 +531,14 @@ export function GitHubRepositoryBranchField({
                           onClick={() => handleBranchSelect(trimmedBranchQuery)}
                           className={cn(
                             ROW_CLASS,
-                            "text-muted-foreground",
-                            filteredBranches.length > 0 && "mt-1 border-t border-border/30",
+                            "text-fg-3",
+                            filteredBranches.length > 0 && "mt-1 border-t border-line",
                           )}
                         >
                           <Plus className="h-3.5 w-3.5 shrink-0" />
                           <span className="min-w-0 flex-1 truncate text-left">
-                            Use{" "}
-                            <span className="font-medium text-foreground">
-                              {trimmedBranchQuery}
-                            </span>
-                            {filteredBranches.length === 0 ? " — no matching branches" : ""}
+                            Use <span className="font-medium text-fg">{trimmedBranchQuery}</span>
+                            {filteredBranches.length === 0 ? " (no matching branches)" : ""}
                           </span>
                         </button>
                       ) : null}

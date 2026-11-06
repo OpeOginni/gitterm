@@ -13,15 +13,8 @@ import { McpConnections } from "./mcp-connections";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
 
-function SectionEyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
-        {children}
-      </span>
-      <span className="h-px flex-1 bg-line" />
-    </div>
-  );
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return <h2 className="text-[13px] font-medium text-fg-3">{children}</h2>;
 }
 
 /**
@@ -48,22 +41,21 @@ function IntegrationRow({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="group flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-fill"
+        className="group flex w-full items-center gap-3.5 px-4 py-4 text-left transition-colors hover:bg-fill"
       >
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-fill-2">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill-2">
           {icon}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium text-fg">{name}</span>
-          <span className="block truncate text-xs text-fg-4">{description}</span>
+          <span className="block text-[14.5px] font-medium text-fg">{name}</span>
+          <span className="block truncate text-[13px] text-fg-3">{description}</span>
         </span>
         {connected > 0 ? (
-          <span className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-fg-3">
-            <span className="size-1.5 rounded-full bg-primary" />
+          <span className="shrink-0 rounded-md bg-[#6bd586]/10 px-2 py-0.5 text-[12.5px] font-medium text-[#6bd586]">
             {connected} connected
           </span>
         ) : (
-          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4 transition-colors group-hover:text-primary">
+          <span className="shrink-0 text-[13px] font-medium text-fg-3 transition-colors group-hover:text-[#e2c47c]">
             Add
           </span>
         )}
@@ -74,7 +66,7 @@ function IntegrationRow({
           )}
         />
       </button>
-      {open ? <div className="border-t border-line px-4 py-5">{children}</div> : null}
+      {open ? <div className="px-4 pt-1 pb-5">{children}</div> : null}
     </div>
   );
 }
@@ -89,7 +81,7 @@ function IntegrationsSkeleton() {
           <Skeleton className="h-3 w-56 bg-fill" />
         </div>
       </div>
-      <div className="rounded-xl border border-line bg-settings p-5">
+      <div className="rounded-2xl border border-line bg-card p-5">
         <div className="flex items-center gap-3.5">
           <Skeleton className="size-11 rounded-full bg-fill-2" />
           <div className="space-y-2">
@@ -111,7 +103,7 @@ function EmptyState() {
     <SettingsEmptyState
       icon={Plug}
       title="No integrations available"
-      description="This deployment has not turned on any integrations yet. Your workspaces can still clone public repositories."
+      description="Ask your admin to turn some on. Workspaces can still clone public repositories."
     />
   );
 }
@@ -144,16 +136,16 @@ export function IntegrationsList() {
   return (
     <>
       {showGitHub ? (
-        <section className="space-y-4">
-          <SectionEyebrow>Repository</SectionEyebrow>
+        <section className="space-y-3">
+          <SectionHeading>Repository</SectionHeading>
           <GitHubConnection />
         </section>
       ) : null}
 
       {showGoogle || showExecutor || showMcp ? (
-        <section className="space-y-4">
-          <SectionEyebrow>Identity and tools</SectionEyebrow>
-          <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-settings">
+        <section className="space-y-3">
+          <SectionHeading>Identity and tools</SectionHeading>
+          <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-card">
             {showGoogle ? (
               <IntegrationRow
                 icon={<Image src="/google-cloud.svg" alt="" width={18} height={18} />}

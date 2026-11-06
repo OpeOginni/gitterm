@@ -33,12 +33,12 @@ function PermissionRow({
   control: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-line bg-fill p-3">
+    <div className="flex items-start justify-between gap-3 rounded-xl bg-fill p-3.5">
       <div className="space-y-1">
-        <Label htmlFor={id} className="text-sm font-medium text-fg">
+        <Label htmlFor={id} className="text-[14px] font-medium text-fg">
           {title}
         </Label>
-        <p className="text-xs leading-relaxed text-fg-3">{detail}</p>
+        <p className="text-[13px] leading-relaxed text-fg-3">{detail}</p>
       </div>
       <div className="shrink-0 pt-0.5">{control}</div>
     </div>
@@ -67,7 +67,7 @@ export function AwsRolePolicyDialog({ roleArn, trigger }: { roleArn: string; tri
           </DialogDescription>
         </DialogHeader>
 
-        <p className="break-all font-mono text-xs text-fg-3">{roleArn}</p>
+        <p className="break-all font-mono text-[13px] text-fg-3">{roleArn}</p>
 
         <div className="grid gap-3 md:grid-cols-2">
           <PermissionRow
@@ -97,7 +97,7 @@ export function AwsRolePolicyDialog({ roleArn, trigger }: { roleArn: string; tri
 
         <PolicyJsonViewer value={policy} fileName={`${roleName}-policy.json`} height="280px" />
 
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs leading-relaxed text-fg-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] leading-relaxed text-fg-3">
           <p className="md:max-w-md">
             Need S3, Lambda or a database? Add those statements in IAM after attaching this one.
             {isPlaceholder && ` Replace ${ACCOUNT_PLACEHOLDER} with your account ID.`}

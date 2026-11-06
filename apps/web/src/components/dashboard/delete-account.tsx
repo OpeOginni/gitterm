@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/utils/trpc";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
+import { SettingsGroup, SettingsPart } from "@/components/dashboard/settings/settings-page";
 
 export function DeleteAccountSection() {
   const [isOpen, setIsOpen] = useState(false);
@@ -50,42 +51,28 @@ export function DeleteAccountSection() {
   const isConfirmValid = confirmText === "delete my account";
 
   return (
-    <section className="pt-12">
-      {/* Editorial divider */}
-      <div className="mb-6 flex items-center gap-3">
-        <span className="h-px flex-1 bg-fill-2" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-destructive/70">
-          Danger zone
-        </span>
-        <span className="h-px flex-1 bg-fill-2" />
-      </div>
-
-      <div className="relative overflow-hidden rounded-2xl border border-destructive/20 bg-destructive/[0.04]">
-        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="font-medium text-foreground">Delete account</h3>
-              <p className="text-[13px] leading-relaxed text-fg-3">
-                Permanently delete your profile, workspaces, integrations, and usage history. This
-                cannot be undone.
-              </p>
-            </div>
-          </div>
+    <SettingsPart id="delete" label="Delete account">
+      <SettingsGroup>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-xl text-[14px] leading-relaxed text-fg-3">
+            Permanently delete your profile, workspaces, integrations, and usage history. This
+            cannot be undone.
+          </p>
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="shrink-0 gap-2">
-                <Trash2 className="h-4 w-4" />
+              <Button
+                variant="secondary"
+                className="shrink-0 gap-2 text-red-300 hover:text-red-200"
+              >
+                <Trash2 className="size-4" />
                 Delete account
               </Button>
             </DialogTrigger>
             <DialogContent className="border-line bg-settings-dialog sm:max-w-md">
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-5 w-5" />
-                  Delete Account
+                <DialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="size-5 text-red-400" />
+                  Delete account
                 </DialogTitle>
                 <DialogDescription className="text-left">
                   This action is permanent and cannot be undone.
@@ -93,11 +80,11 @@ export function DeleteAccountSection() {
               </DialogHeader>
 
               <div className="space-y-4 py-2">
-                <div className="rounded-lg bg-destructive/5 p-4 space-y-3">
-                  <p className="text-sm font-medium text-foreground">
+                <div className="space-y-3 rounded-xl bg-destructive/[0.07] p-4">
+                  <p className="text-[14px] font-medium text-fg">
                     The following will be permanently deleted:
                   </p>
-                  <ul className="text-sm text-muted-foreground space-y-1.5 ml-1">
+                  <ul className="ml-1 space-y-1.5 text-[14px] text-fg-3">
                     <li className="flex items-center gap-2">
                       <span className="h-1 w-1 rounded-full bg-destructive/70" />
                       Your profile and account settings
@@ -118,19 +105,17 @@ export function DeleteAccountSection() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="confirm" className="text-sm text-muted-foreground">
+                  <Label htmlFor="confirm" className="text-[13.5px] font-normal text-fg-3">
                     Type{" "}
-                    <span className="font-mono text-destructive font-medium">
-                      delete my account
-                    </span>{" "}
-                    to confirm
+                    <span className="font-mono font-medium text-red-300">delete my account</span> to
+                    confirm
                   </Label>
                   <Input
                     id="confirm"
                     value={confirmText}
                     onChange={(e) => setConfirmText(e.target.value)}
                     placeholder="delete my account"
-                    className="font-mono border-border/50"
+                    className="font-mono"
                     autoComplete="off"
                   />
                 </div>
@@ -138,7 +123,7 @@ export function DeleteAccountSection() {
 
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="ghost" onClick={() => setConfirmText("")}>
+                  <Button variant="secondary" onClick={() => setConfirmText("")}>
                     Cancel
                   </Button>
                 </DialogClose>
@@ -155,8 +140,8 @@ export function DeleteAccountSection() {
                     </>
                   ) : (
                     <>
-                      <Trash2 className="h-4 w-4" />
-                      Delete Account
+                      <Trash2 className="size-4" />
+                      Delete account
                     </>
                   )}
                 </Button>
@@ -164,7 +149,7 @@ export function DeleteAccountSection() {
             </DialogContent>
           </Dialog>
         </div>
-      </div>
-    </section>
+      </SettingsGroup>
+    </SettingsPart>
   );
 }

@@ -4,25 +4,17 @@ import { useState } from "react";
 import Image from "next/image";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { BarChart3, Clock, FolderGit2, GitBranch, Infinity as InfinityIcon } from "lucide-react";
+import { FolderGit2, GitBranch, Infinity as InfinityIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  SettingsEmptyState,
-  SettingsSection,
-  SettingsSectionBody,
-} from "@/components/ui/form-card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Seg } from "@/components/site/seg";
 import { trpc } from "@/utils/trpc";
 import { useBillingAccount } from "@/lib/billing";
 import { getIcon } from "@/components/dashboard/create-instance/types";
 import { ComputeUsageCard } from "@/components/dashboard/billing-section";
+import { SettingsEmpty, SettingsGroup } from "./settings-page";
 
 const TERMINATED_PAGE_SIZE = 10;
-const historyTabsListClassName =
-  "inline-flex h-auto w-auto items-center justify-start gap-5 rounded-none border-b border-border/60 bg-transparent p-0";
-const historyTabsTriggerClassName =
-  "group h-auto flex-none rounded-none border-x-0 border-t-0 border-b-2 border-transparent px-0 py-2 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none";
 
 /* ─────────────────────────── Usage Quota ────────────────────────────── */
 
@@ -39,56 +31,54 @@ function UsageQuota() {
       : Math.min(100, (usage.minutesUsed / usage.dailyLimit) * 100);
   const isExhausted = !isUnlimited && minutesRemaining === 0;
   const isLow = !isUnlimited && !isExhausted && minutesRemaining < 15;
-  const barColor = isExhausted ? "bg-destructive" : isLow ? "bg-amber-500" : "bg-primary";
+  const barColor = isExhausted ? "bg-destructive" : isLow ? "bg-[#fb923c]" : "bg-primary";
 
   return (
-    <SettingsSection
-      icon={Clock}
+    <SettingsGroup
       title="Runtime today"
       description="Cloud compute minutes left today. Resets daily at midnight UTC."
+      bodyClassName="space-y-4"
     >
-      <SettingsSectionBody className="space-y-5">
-        {isLoading ? (
-          <Skeleton className="h-16 w-full bg-fill" />
-        ) : isUnlimited ? (
-          <div className="flex items-center justify-between">
-            <p className="text-3xl font-semibold tracking-tight text-white tabular-nums">
-              {usage.minutesUsed}
-              <span className="text-base font-normal text-fg-4"> min</span>
-            </p>
-            <div className="flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm text-primary">
-              <InfinityIcon className="h-4 w-4" />
-              Unlimited
-            </div>
+      {isLoading ? (
+        <Skeleton className="h-16 w-full bg-fill" />
+      ) : isUnlimited ? (
+        <div className="flex items-center justify-between">
+          <p className="text-3xl font-medium tracking-tight text-fg tabular-nums">
+            {usage.minutesUsed}
+            <span className="text-base font-normal text-fg-3"> min</span>
+          </p>
+          <div className="flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1.5 text-[13.5px] text-[#e2c47c]">
+            <InfinityIcon className="h-4 w-4" />
+            Unlimited
           </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-4">
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-fill-2">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-              <p className="shrink-0 font-mono text-[12px] tabular-nums text-fg-3">
-                {usage.minutesRemaining} min left
-              </p>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-4">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-fill-2">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                style={{ width: `${percent}%` }}
+              />
             </div>
+            <p className="shrink-0 text-[13.5px] tabular-nums text-fg-2">
+              {usage.minutesRemaining} min left
+            </p>
+          </div>
 
-            {isExhausted && (
-              <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                Daily limit reached. Your quota will reset at midnight UTC.
-              </div>
-            )}
-            {isLow && (
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-                Running low on runtime. Consider wrapping up idle workspaces.
-              </div>
-            )}
-          </>
-        )}
-      </SettingsSectionBody>
-    </SettingsSection>
+          {isExhausted && (
+            <div className="rounded-xl bg-destructive/10 px-4 py-3 text-[13.5px] text-red-300">
+              Daily limit reached. Your quota will reset at midnight UTC.
+            </div>
+          )}
+          {isLow && (
+            <div className="rounded-xl bg-[#fb923c]/10 px-4 py-3 text-[13.5px] text-[#fb923c]">
+              Running low on runtime. Consider wrapping up idle workspaces.
+            </div>
+          )}
+        </>
+      )}
+    </SettingsGroup>
   );
 }
 
@@ -138,12 +128,12 @@ function RuntimeStat({
 }) {
   return (
     <div className="min-w-0">
-      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4">{label}</p>
-      <p className="mt-1.5 flex items-baseline gap-1.5">
-        <span className="text-2xl font-semibold tracking-tight text-fg tabular-nums">{value}</span>
-        {suffix && <span className="text-xs text-fg-4">{suffix}</span>}
+      <p className="text-[13px] text-fg-3">{label}</p>
+      <p className="mt-1 flex items-baseline gap-1.5">
+        <span className="text-2xl font-medium tracking-tight text-fg tabular-nums">{value}</span>
+        {suffix && <span className="text-[13px] text-fg-3">{suffix}</span>}
       </p>
-      {detail && <p className="mt-0.5 truncate text-xs text-fg-4">{detail}</p>}
+      {detail && <p className="mt-0.5 truncate text-[12.5px] text-fg-4">{detail}</p>}
     </div>
   );
 }
@@ -154,7 +144,7 @@ function RuntimeChart({ days }: { days: UsageHistory["days"] }) {
   const hasData = days.some((day) => day.minutes > 0);
   return (
     <div>
-      <div className="flex items-baseline justify-between text-[11px] text-fg-4">
+      <div className="flex items-baseline justify-between text-[12.5px] text-fg-4">
         <span className="font-mono tabular-nums">{hasData ? formatRuntime(max) : ""}</span>
         <span>per day, UTC</span>
       </div>
@@ -177,7 +167,7 @@ function RuntimeChart({ days }: { days: UsageHistory["days"] }) {
                 <div className="h-[2px] w-full bg-fill-2" />
               )}
               <div
-                className={`pointer-events-none absolute bottom-full z-10 mb-1.5 hidden whitespace-nowrap rounded-md border border-line bg-popover px-2 py-1 text-[11px] shadow-sm group-hover:block ${edge}`}
+                className={`pointer-events-none absolute bottom-full z-10 mb-1.5 hidden whitespace-nowrap rounded-md bg-popover px-2 py-1 text-[12.5px] shadow-[0_6px_18px_rgba(0,0,0,0.35)] group-hover:block ${edge}`}
               >
                 <span className="text-fg-3">{formatDay(day.day, "long")}</span>{" "}
                 <span className="font-mono text-fg tabular-nums">{formatRuntime(day.minutes)}</span>
@@ -186,7 +176,7 @@ function RuntimeChart({ days }: { days: UsageHistory["days"] }) {
           );
         })}
       </div>
-      <div className="mt-1.5 flex justify-between text-[11px] text-fg-4">
+      <div className="mt-1.5 flex justify-between text-[12.5px] text-fg-4">
         <span>{formatDay(days[0]!.day)}</span>
         <span>Today</span>
       </div>
@@ -217,7 +207,7 @@ function RuntimeByWorkspace({ usage, total }: { usage: UsageHistory; total: numb
 
   return (
     <div>
-      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4">By workspace</p>
+      <p className="text-[13px] text-fg-3">By workspace</p>
       <ul className="mt-3 space-y-2.5">
         {top.map((entry) => (
           <li
@@ -243,7 +233,7 @@ function RuntimeByWorkspace({ usage, total }: { usage: UsageHistory; total: numb
                 style={{ width: `${Math.max(3, (entry.recentMinutes / largest) * 100)}%` }}
               />
             </span>
-            <span className="text-right font-mono text-xs tabular-nums text-fg-2">
+            <span className="text-right font-mono text-[12.5px] tabular-nums text-fg-2">
               {formatRuntime(entry.recentMinutes)}
               <span className="ml-1.5 text-fg-4">
                 {Math.round((entry.recentMinutes / Math.max(total, 1)) * 100)}%
@@ -253,7 +243,9 @@ function RuntimeByWorkspace({ usage, total }: { usage: UsageHistory; total: numb
         ))}
       </ul>
       {rest > 0 && (
-        <p className="mt-2.5 text-xs text-fg-4">+ {formatRuntime(rest)} across other workspaces</p>
+        <p className="mt-2.5 text-[12.5px] text-fg-4">
+          + {formatRuntime(rest)} across other workspaces
+        </p>
       )}
     </div>
   );
@@ -266,36 +258,34 @@ function RuntimeOverview({ usage }: { usage: UsageHistory | undefined }) {
   const busiest = usage.days.reduce((top, day) => (day.minutes > top.minutes ? day : top));
 
   return (
-    <SettingsSection
-      icon={BarChart3}
+    <SettingsGroup
       title="Runtime"
       description={`Time your cloud workspaces spent running over the last ${usage.days.length} days.`}
+      bodyClassName="space-y-6 pt-5"
     >
-      <SettingsSectionBody className="space-y-6">
-        <div className="grid grid-cols-3 gap-4">
-          <RuntimeStat label="Total" value={formatRuntime(total)} />
-          <RuntimeStat
-            label="Active days"
-            value={`${activeDays}`}
-            suffix={`of ${usage.days.length}`}
-          />
-          <RuntimeStat
-            label="Busiest day"
-            value={busiest.minutes > 0 ? formatRuntime(busiest.minutes) : "—"}
-            detail={busiest.minutes > 0 ? formatDay(busiest.day, "long") : undefined}
-          />
-        </div>
-        <RuntimeChart days={usage.days} />
-        <RuntimeByWorkspace usage={usage} total={total} />
-      </SettingsSectionBody>
-    </SettingsSection>
+      <div className="grid grid-cols-3 gap-4">
+        <RuntimeStat label="Total" value={formatRuntime(total)} />
+        <RuntimeStat
+          label="Active days"
+          value={`${activeDays}`}
+          suffix={`of ${usage.days.length}`}
+        />
+        <RuntimeStat
+          label="Busiest day"
+          value={busiest.minutes > 0 ? formatRuntime(busiest.minutes) : "—"}
+          detail={busiest.minutes > 0 ? formatDay(busiest.day, "long") : undefined}
+        />
+      </div>
+      <RuntimeChart days={usage.days} />
+      <RuntimeByWorkspace usage={usage} total={total} />
+    </SettingsGroup>
   );
 }
 
 /* ─────────────────────────── Workspace History ─────────────────────── */
 
 export function WorkspaceHistory() {
-  const [tab, setTab] = useState("active");
+  const [tab, setTab] = useState<"active" | "terminated">("active");
   const [terminatedPage, setTerminatedPage] = useState(0);
 
   const { data: activeData, isLoading: isLoadingActive } = useQuery(
@@ -333,70 +323,70 @@ export function WorkspaceHistory() {
           <Skeleton className="h-16 w-full bg-fill" />
         </div>
       ) : (
-        <Tabs value={tab} onValueChange={setTab} className="w-full">
-          <TabsList className={historyTabsListClassName}>
-            <TabsTrigger value="active" className={historyTabsTriggerClassName}>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
-                  Active
-                </span>
-                <span className="rounded-full border border-border/70 bg-background/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors group-data-[state=active]:border-foreground/15 group-data-[state=active]:text-foreground/80">
-                  {activeData?.pagination.total ?? activeWorkspaces.length}
-                </span>
-              </div>
-            </TabsTrigger>
-            <TabsTrigger value="terminated" className={historyTabsTriggerClassName}>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground/90 transition-colors group-data-[state=active]:text-foreground">
-                  Terminated
-                </span>
-              </div>
-            </TabsTrigger>
-          </TabsList>
+        <div className="space-y-4">
+          <Seg
+            ariaLabel="Workspace status"
+            value={tab}
+            onChange={setTab}
+            options={[
+              {
+                value: "active",
+                label: (
+                  <>
+                    Active
+                    <span className="font-mono text-[12.5px] tabular-nums text-fg-3">
+                      {activeData?.pagination.total ?? activeWorkspaces.length}
+                    </span>
+                  </>
+                ),
+              },
+              { value: "terminated", label: "Terminated" },
+            ]}
+          />
 
-          <TabsContent value="active" className="mt-4">
+          {tab === "active" ? (
             <WorkspaceList
               workspaces={activeWorkspaces as any[]}
               usage={usageByWorkspace}
               emptyMessage="No active workspaces"
             />
-          </TabsContent>
+          ) : (
+            <div className="space-y-3">
+              <WorkspaceList
+                workspaces={terminatedWorkspaces as any[]}
+                usage={usageByWorkspace}
+                emptyMessage="No terminated workspaces"
+                muted={isFetchingTerminated}
+              />
 
-          <TabsContent value="terminated" className="mt-4 space-y-3">
-            <WorkspaceList
-              workspaces={terminatedWorkspaces as any[]}
-              usage={usageByWorkspace}
-              emptyMessage="No terminated workspaces"
-              muted={isFetchingTerminated}
-            />
-
-            {terminatedTotal > TERMINATED_PAGE_SIZE && (
-              <div className="flex items-center justify-between pt-1">
-                <p className="text-xs text-muted-foreground">
-                  Page {terminatedPage + 1} of {Math.ceil(terminatedTotal / TERMINATED_PAGE_SIZE)}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={terminatedPage === 0 || isFetchingTerminated}
-                    onClick={() => setTerminatedPage((p) => Math.max(0, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!terminatedHasMore || isFetchingTerminated}
-                    onClick={() => setTerminatedPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
+              {terminatedTotal > TERMINATED_PAGE_SIZE && (
+                <div className="flex items-center justify-between pt-1">
+                  <p className="text-[13px] text-fg-3">
+                    Page {terminatedPage + 1} of {Math.ceil(terminatedTotal / TERMINATED_PAGE_SIZE)}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={terminatedPage === 0 || isFetchingTerminated}
+                      onClick={() => setTerminatedPage((p) => Math.max(0, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={!terminatedHasMore || isFetchingTerminated}
+                      onClick={() => setTerminatedPage((p) => p + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -420,7 +410,11 @@ function WorkspaceList({
   muted?: boolean;
 }) {
   if (workspaces.length === 0) {
-    return <SettingsEmptyState icon={FolderGit2} title={emptyMessage} />;
+    return (
+      <SettingsGroup>
+        <SettingsEmpty icon={<FolderGit2 />} title={emptyMessage} />
+      </SettingsGroup>
+    );
   }
 
   // Bars compare workspaces on this page, so the busiest one fills its track.
@@ -428,17 +422,17 @@ function WorkspaceList({
 
   return (
     <div
-      className={`overflow-hidden rounded-2xl border border-line bg-card ${muted ? "opacity-60 transition-opacity" : ""}`}
+      className={`overflow-hidden rounded-2xl bg-card ${muted ? "opacity-60 transition-opacity" : ""}`}
     >
       <div
-        className={`hidden gap-4 border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4 sm:grid ${LIST_COLUMNS}`}
+        className={`hidden gap-4 border-b border-line px-5 py-3 text-[13px] font-medium text-fg-3 sm:grid ${LIST_COLUMNS}`}
       >
         <span>Workspace</span>
         <span>Runtime</span>
         <span className="text-right">Sessions</span>
         <span className="text-right">Last active</span>
       </div>
-      <ul className="divide-y divide-line">
+      <ul className="max-h-[640px] divide-y divide-line overflow-y-auto">
         {workspaces.map((ws) => (
           <WorkspaceRow key={ws.id} ws={ws} runtime={usage.get(ws.id)} maxMinutes={maxMinutes} />
         ))}
@@ -470,10 +464,10 @@ function WorkspaceRow({
 
   return (
     <li
-      className={`grid grid-cols-1 items-center gap-x-4 gap-y-2 px-4 py-3.5 transition-colors hover:bg-fill ${LIST_COLUMNS}`}
+      className={`grid grid-cols-1 items-center gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-fill ${LIST_COLUMNS}`}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-line bg-fill">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-fill">
           {ws.cloudProvider?.name ? (
             <Image
               src={getIcon(ws.cloudProvider.name)}
@@ -489,10 +483,10 @@ function WorkspaceRow({
         </span>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-medium text-fg">{ws.name ?? ws.subdomain}</p>
+            <p className="truncate text-[14px] font-medium text-fg">{ws.name ?? ws.subdomain}</p>
             {ws.status !== "terminated" && <StatusDot status={ws.status} />}
           </div>
-          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-fg-4">
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12.5px] text-fg-3">
             {repoLabel ? (
               <a
                 href={ws.repositoryUrl}
@@ -507,7 +501,7 @@ function WorkspaceRow({
               <span>{ws.cloudProvider?.name ?? "No repository"}</span>
             )}
             {ws.repositoryBranch && (
-              <span className="inline-flex shrink-0 items-center gap-1 text-fg-3">
+              <span className="inline-flex shrink-0 items-center gap-1 text-fg-4">
                 <GitBranch className="size-3" />
                 <span className="font-mono">{ws.repositoryBranch}</span>
               </span>
@@ -520,7 +514,7 @@ function WorkspaceRow({
         {minutes > 0 ? (
           <p className="font-mono text-sm tabular-nums text-fg">{formatRuntime(minutes)}</p>
         ) : (
-          <p className="text-xs text-fg-4">{live ? "Starting…" : "Never ran"}</p>
+          <p className="text-[12.5px] text-fg-4">{live ? "Starting…" : "Never ran"}</p>
         )}
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-fill-2">
           {minutes > 0 && (
@@ -535,12 +529,12 @@ function WorkspaceRow({
         {runtime?.sessions ?? 0}
       </p>
       <div className="hidden text-right sm:block">
-        <p className={`text-xs ${live ? "text-emerald-400" : "text-fg-2"}`}>{lastActive}</p>
-        <p className="mt-0.5 text-[11px] text-fg-4">{started}</p>
+        <p className={`text-[13px] ${live ? "text-[#6bd586]" : "text-fg-2"}`}>{lastActive}</p>
+        <p className="mt-0.5 text-[12.5px] text-fg-4">{started}</p>
       </div>
 
       {/* Phones: one compact meta line instead of columns. */}
-      <p className="flex flex-wrap gap-x-2 pl-11 text-xs text-fg-4 sm:hidden">
+      <p className="flex flex-wrap gap-x-2 pl-11 text-[12.5px] text-fg-3 sm:hidden">
         {minutes > 0 && <span className="font-mono text-fg-2">{formatRuntime(minutes)}</span>}
         {runtime && (
           <span>
@@ -556,9 +550,9 @@ function WorkspaceRow({
 function StatusDot({ status }: { status: string }) {
   const label = status === "running" ? "Running" : status === "pending" ? "Starting" : "Paused";
   const color =
-    status === "running" ? "bg-emerald-400" : status === "pending" ? "bg-amber-400" : "bg-fg-4";
+    status === "running" ? "bg-[#6bd586]" : status === "pending" ? "bg-[#fb923c]" : "bg-fg-4";
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-fg-3">
+    <span className="inline-flex shrink-0 items-center gap-1.5 text-[12.5px] text-fg-3">
       <span className={`size-1.5 rounded-full ${color}`} aria-hidden />
       {label}
     </span>

@@ -553,8 +553,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
         {/* ── 2. Subdomain ── */}
         <div className="grid gap-1.5">
-          <Label htmlFor="cloud-subdomain" className="text-xs font-medium text-muted-foreground">
-            Subdomain <span className="font-normal text-muted-foreground/50">(optional)</span>
+          <Label htmlFor="cloud-subdomain" className="text-[13px] font-medium text-fg-2">
+            Subdomain <span className="font-normal text-fg-4">(optional)</span>
           </Label>
           <Input
             id="cloud-subdomain"
@@ -564,12 +564,12 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             disabled={!subdomainPermissions?.canUseCustomCloudSubdomain}
             className="h-9"
           />
-          <p className="text-[11px] text-muted-foreground/60">
+          <p className="text-[12.5px] text-fg-4">
             {subdomainPermissions?.canUseCustomCloudSubdomain ? (
               subdomain ? (
                 <>
                   Available at{" "}
-                  <span className="font-mono text-primary">
+                  <span className="font-mono text-[#e2c47c]">
                     {getWorkspaceDisplayUrl(subdomain)}
                   </span>
                 </>
@@ -582,9 +582,9 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 {isBillingEnabled() && (
                   <Link
                     href={"/pricing" as Route}
-                    className="inline-flex items-center gap-0.5 text-primary hover:underline"
+                    className="inline-flex items-center gap-1 text-[#e2c47c] hover:underline underline-offset-2"
                   >
-                    <Sparkles className="h-2.5 w-2.5" />
+                    <Sparkles className="size-3" />
                     Upgrade to Pro
                   </Link>
                 )}
@@ -596,7 +596,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         {/* ── 3. Agent + Cloud (+ Region) ── */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Agent</Label>
+            <Label className="text-[13px] font-medium text-fg-2">Agent</Label>
             <Select value={selectedAgentTypeId} onValueChange={setUserAgentTypeId}>
               <SelectTrigger className="h-9 w-full">
                 {selectedAgent ? (
@@ -648,7 +648,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           </div>
 
           <div className="grid gap-1.5 min-w-0">
-            <Label className="text-xs font-medium text-muted-foreground">Cloud</Label>
+            <Label className="text-[13px] font-medium text-fg-2">Cloud</Label>
             <div className="flex gap-2 min-w-0">
               <Select
                 value={selectedCloudGroupKey}
@@ -670,14 +670,14 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                       <SelectItem value="aws">
                         <div className="flex items-center">
                           <Image
-                            src="/ECS.svg"
+                            src="/aws.svg"
                             alt="AWS"
                             width={16}
                             height={16}
                             className="mr-2 h-4 w-4"
                           />
                           AWS
-                          <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">
+                          <span className="ml-1.5 font-mono text-[12.5px] text-fg-4">
                             ×{awsProviders.length}
                           </span>
                         </div>
@@ -696,7 +696,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                               />
                               {cloud.name}
                               {cloud.location && (
-                                <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">
+                                <span className="ml-1.5 font-mono text-[12.5px] text-fg-4">
                                   {cloud.location}
                                 </span>
                               )}
@@ -711,10 +711,10 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               {hasNoProviders && isAdmin ? (
                 <Link
                   href={"/admin/providers" as Route}
-                  className="inline-flex items-center gap-1 self-center text-[11px] font-medium text-primary hover:underline"
+                  className="inline-flex shrink-0 items-center gap-1 self-center text-[13px] font-medium text-[#e2c47c] hover:underline underline-offset-2"
                 >
                   Add a provider
-                  <ArrowUpRight className="h-3 w-3" />
+                  <ArrowUpRight className="size-3.5" />
                 </Link>
               ) : null}
             </div>
@@ -724,7 +724,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             <div
               className={cn("grid content-start gap-1.5", wideCell === "region" && "sm:col-span-2")}
             >
-              <Label className="text-xs font-medium text-muted-foreground">Region</Label>
+              <Label className="text-[13px] font-medium text-fg-2">Region</Label>
               <Select
                 value={selectedRegion}
                 onValueChange={handleRegionChange}
@@ -753,7 +753,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 wideCell === "machine" && "sm:col-span-2",
               )}
             >
-              <Label className="text-xs font-medium text-muted-foreground">Machine</Label>
+              <Label className="text-[13px] font-medium text-fg-2">Machine</Label>
               <Select value={selectedMachineProfileId} onValueChange={setUserMachineProfileId}>
                 <SelectTrigger className="h-9 w-full">
                   <SelectValue placeholder="Select machine size" />
@@ -771,36 +771,34 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                         disabled={profile.available === false}
                       >
                         {/* Fixed columns so name, size and price line up across rows. */}
-                        <span className="grid grid-cols-[4.25rem_6rem_3.75rem] items-baseline gap-x-2">
+                        <span className="grid grid-cols-[4.5rem_6.5rem_4.25rem] items-baseline gap-x-2">
                           <span className="truncate">{profile.name}</span>
-                          <span className="font-mono text-[10px] text-muted-foreground">
+                          <span className="font-mono text-[12.5px] text-fg-4">
                             {formatMachineSize(profile) ?? profile.key}
                           </span>
-                          <span className="text-right font-mono text-[10px] text-muted-foreground">
+                          <span className="text-right font-mono text-[12.5px] text-fg-4">
                             {profile.priceMicrosPerHour != null
                               ? formatHourlyPrice(profile.priceMicrosPerHour)
                               : ""}
                           </span>
                         </span>
                         {profile.available === false && (
-                          <span className="ml-3 text-[10px] text-primary">Paid plans</span>
+                          <span className="ml-3 text-[12.5px] text-[#e2c47c]">Paid plans</span>
                         )}
                       </SelectItem>
                     ))}
                 </SelectContent>
               </Select>
               {selectedMachineProfile?.description && (
-                <p className="text-[11px] text-muted-foreground/70">
-                  {selectedMachineProfile.description}
-                </p>
+                <p className="text-[12.5px] text-fg-4">{selectedMachineProfile.description}</p>
               )}
               {isBillingEnabled() &&
                 usableMachineProfiles.length < availableMachineProfiles.length && (
                   <Link
                     href={"/pricing" as Route}
-                    className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:underline"
+                    className="inline-flex items-center gap-1 text-[12.5px] text-[#e2c47c] hover:underline underline-offset-2"
                   >
-                    <Sparkles className="h-2.5 w-2.5" />
+                    <Sparkles className="size-3" />
                     Upgrade for larger machines
                   </Link>
                 )}
@@ -808,15 +806,15 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
           )}
 
           {canKeepAlwaysOn ? (
-            <label className="flex items-start gap-2 text-xs sm:col-span-2">
+            <label className="flex items-start gap-2.5 text-[13px] sm:col-span-2">
               <Checkbox
                 className="mt-0.5"
                 checked={alwaysOn}
                 onCheckedChange={(checked) => setAlwaysOn(checked === true)}
               />
               <span>
-                <span className="font-medium text-foreground/90">Keep running when idle</span>
-                <span className="block text-muted-foreground">
+                <span className="font-medium text-fg-2">Keep running when idle</span>
+                <span className="mt-0.5 block leading-relaxed text-fg-3">
                   {isBillingEnabled()
                     ? "Always-on workspaces aren't paused for inactivity, so compute keeps accruing while idle."
                     : "Always-on workspaces aren't paused for inactivity."}
@@ -830,10 +828,14 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             <div
               className={cn("grid content-start gap-1.5", wideCell === "github" && "sm:col-span-2")}
             >
-              <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              <Label className="flex items-center gap-1.5 text-[13px] font-medium text-fg-2">
                 GitHub repository access
-                <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
-                  <ArrowUpRight className="h-3 w-3" />
+                <Link
+                  href="/dashboard/integrations"
+                  aria-label="Manage integrations"
+                  className="text-fg-4 transition-colors hover:text-fg-2"
+                >
+                  <ArrowUpRight className="size-3.5" />
                 </Link>
               </Label>
               <div className="flex items-center gap-2">
@@ -883,10 +885,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
           {isAwsGroup && (
             <div className="grid gap-1.5 sm:col-span-2">
-              <Label
-                htmlFor="aws-access-profile"
-                className="text-xs font-medium text-muted-foreground"
-              >
+              <Label htmlFor="aws-access-profile" className="text-[13px] font-medium text-fg-2">
                 AWS access
               </Label>
               <Select
@@ -909,7 +908,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[12.5px] leading-relaxed text-fg-3">
                 {awsAccessProfiles.find((profile) => profile.id === selectedAwsProfileId)
                   ?.description ||
                   "Use an administrator-added task role with temporary AWS credentials. All listed roles are available to all users."}{" "}
@@ -934,38 +933,42 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
         {/* ── 4b. Optional integrations, folded away until someone wants one ── */}
         {isGoogleCloudAvailable || mcpConnections.length > 0 || canSetUpIntegration ? (
-          <div className="min-w-0 rounded-xl border border-dashed border-line">
+          <div className="min-w-0 rounded-xl bg-fill">
             <button
               type="button"
               aria-expanded={showIntegrations}
               onClick={() => setShowIntegrations((value) => !value)}
-              className="flex w-full min-w-0 items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-fill"
+              className="flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left transition-colors hover:bg-fill-2"
             >
-              <Plus className="size-3.5 shrink-0 text-fg-4" />
-              <span className="text-xs text-fg-2">Add integrations</span>
-              <span className="truncate text-xs text-fg-4">{integrationTypes.join(", ")}</span>
+              <Plus className="size-4 shrink-0 text-fg-3" />
+              <span className="shrink-0 text-[13px] font-medium text-fg-2">Add integrations</span>
+              <span className="truncate text-[13px] text-fg-4">{integrationTypes.join(", ")}</span>
               <span className="ml-auto flex shrink-0 items-center gap-2">
                 {selectedIntegrations > 0 ? (
-                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary">
+                  <span className="rounded-md bg-primary/12 px-1.5 py-0.5 text-[12.5px] font-medium text-[#e2c47c]">
                     {selectedIntegrations} selected
                   </span>
                 ) : null}
                 <ChevronDown
                   className={cn(
-                    "size-3.5 text-fg-4 transition-transform",
+                    "size-4 text-fg-4 transition-transform",
                     showIntegrations && "rotate-180",
                   )}
                 />
               </span>
             </button>
             {showIntegrations ? (
-              <div className="space-y-4 border-t border-line px-3.5 py-3.5">
+              <div className="space-y-4 px-3.5 pt-1 pb-3.5">
                 {isGoogleCloudAvailable ? (
                   <div className="grid gap-1.5">
-                    <Label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                      Google Cloud Identity
-                      <Link href="/dashboard/integrations" className="text-primary hover:text-fg-2">
-                        <ArrowUpRight className="h-3 w-3" />
+                    <Label className="flex items-center gap-1.5 text-[13px] font-medium text-fg-2">
+                      Google Cloud identity
+                      <Link
+                        href="/dashboard/integrations"
+                        aria-label="Manage integrations"
+                        className="text-fg-4 transition-colors hover:text-fg-2"
+                      >
+                        <ArrowUpRight className="size-3.5" />
                       </Link>
                     </Label>
                     <div className="flex items-center gap-2">
@@ -986,7 +989,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                         </SelectContent>
                       </Select>
                       <HelpHint label="How is Google Cloud authenticated?">
-                        GitTerm exchanges a five-minute workspace identity through Google Workload
+                        Gitterm exchanges a five-minute workspace identity through Google Workload
                         Identity Federation. No service-account JSON key is stored.
                       </HelpHint>
                     </div>
@@ -995,21 +998,24 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
 
                 {mcpConnections.length > 0 ? (
                   <div className="space-y-3">
-                    <Label className="text-xs font-medium text-muted-foreground">
+                    <Label className="text-[13px] font-medium text-fg-2">
                       MCP servers and Executor
                     </Label>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
+                    <p className="text-[13px] leading-relaxed text-fg-3">
                       {supportsMcp
                         ? "The agent in this workspace gets access to the connections you select."
-                        : "GitTerm MCP connections require an OpenCode workspace. T3Code is not supported yet."}
+                        : "MCP connections need an OpenCode workspace. T3 Code isn't supported yet."}
                     </p>
                     {connectionsError ? (
-                      <p role="alert" className="text-xs text-red-400">
+                      <p role="alert" className="text-[13px] text-red-300">
                         Couldn't load connections. You can create a workspace without MCP tools.
                       </p>
                     ) : null}
                     {mcpConnections.map((connection) => (
-                      <label key={connection.id} className="flex items-center gap-2 text-xs">
+                      <label
+                        key={connection.id}
+                        className="flex items-center gap-2.5 text-[13px] text-fg-2"
+                      >
                         <Checkbox
                           disabled={
                             !supportsMcp ||
@@ -1031,7 +1037,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                           }
                         />
                         <span className="min-w-0 flex-1 truncate">{connection.name}</span>
-                        <span className="shrink-0 text-muted-foreground">
+                        <span className="shrink-0 text-[12.5px] text-fg-4">
                           {connection.status === "connected"
                             ? connection.integration === "executor"
                               ? "Executor"
@@ -1046,13 +1052,13 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                 {/* One link, not a row per integration, so new connectors don't grow the dialog. */}
                 <Link
                   href={"/dashboard/integrations" as Route}
-                  className="flex items-center gap-1.5 text-xs text-primary hover:underline underline-offset-2"
+                  className="flex items-center gap-1.5 text-[13px] text-[#e2c47c] hover:underline underline-offset-2"
                 >
-                  <Plus className="size-3" />
+                  <Plus className="size-3.5" />
                   {isGoogleCloudAvailable || mcpConnections.length > 0
                     ? "Add more integrations"
                     : "Set up an integration"}
-                  <ArrowUpRight className="size-3" />
+                  <ArrowUpRight className="size-3.5" />
                 </Link>
               </div>
             ) : null}
@@ -1067,13 +1073,13 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
         <Button onClick={handleSubmit} disabled={isSubmitting || !isValid} className="gap-2">
           {isSubmitting ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
               Creating...
             </>
           ) : (
             <>
-              <Plus className="h-4 w-4" />
-              Create Instance
+              <Plus className="size-4" />
+              Create workspace
             </>
           )}
         </Button>

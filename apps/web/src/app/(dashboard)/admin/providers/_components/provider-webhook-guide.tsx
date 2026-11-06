@@ -49,8 +49,8 @@ const WEBHOOK_SETUPS: Record<string, WebhookSetup> = {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid gap-1.5 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-baseline sm:gap-4">
-      <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-fg-4">{label}</dt>
-      <dd className="min-w-0 space-y-1.5 text-xs text-fg-3">{children}</dd>
+      <dt className="text-[13px] font-medium text-fg-2">{label}</dt>
+      <dd className="min-w-0 space-y-1.5 text-[13px] text-fg-3">{children}</dd>
     </div>
   );
 }
@@ -78,10 +78,10 @@ function CopyField({ value, placeholder }: { value: string; placeholder: boolean
   }
 
   return (
-    <div className="flex items-stretch overflow-hidden rounded-lg border border-line bg-fill">
+    <div className="flex items-stretch overflow-hidden rounded-lg bg-fill-2">
       <code
         className={cn(
-          "min-w-0 flex-1 overflow-x-auto px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-nowrap",
+          "min-w-0 flex-1 overflow-x-auto px-3 py-2 font-mono text-[12.5px] leading-relaxed whitespace-nowrap",
           placeholder ? "text-fg-4" : "text-fg-2",
         )}
       >
@@ -91,7 +91,7 @@ function CopyField({ value, placeholder }: { value: string; placeholder: boolean
         type="button"
         onClick={handleCopy}
         aria-label={copied ? "Webhook URL copied" : "Copy webhook URL"}
-        className="flex w-9 shrink-0 items-center justify-center border-l border-line text-fg-4 transition-colors hover:bg-fill-2 hover:text-fg"
+        className="flex w-10 shrink-0 items-center justify-center text-fg-3 transition-colors hover:bg-fill-2 hover:text-fg"
       >
         {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
       </button>
@@ -113,14 +113,14 @@ export function ProviderWebhookGuide({
   const webhookUrl = `${listenerUrl || "https://<your-listener-url>"}/trpc/${setup.route}`;
 
   return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-line">
-      <div className="flex flex-wrap items-center gap-3 border-b border-line bg-fill px-4 py-3">
+    <div className="mt-4 overflow-hidden rounded-xl bg-fill">
+      <div className="flex flex-wrap items-center gap-3 px-4 pt-4">
         <Radio className="size-4 shrink-0 text-primary" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-fg">Status webhook</p>
-          <p className="text-xs text-fg-4">Keeps {providerName} workspace status in sync.</p>
+          <p className="text-[14px] font-medium text-fg">Status webhook</p>
+          <p className="text-[13px] text-fg-3">Keeps {providerName} workspace status in sync.</p>
         </div>
-        <p className="text-xs text-fg-3">
+        <p className="text-[13px] text-fg-3">
           Add in <span className="text-fg-2">{setup.where}</span>
         </p>
       </div>
@@ -129,7 +129,7 @@ export function ProviderWebhookGuide({
         <Field label="URL">
           <CopyField value={webhookUrl} placeholder={!listenerUrl} />
           {!listenerUrl && (
-            <p className="text-amber-400">
+            <p className="text-[#fb923c]">
               Set <code className="font-mono">NEXT_PUBLIC_LISTENER_URL</code> to your
               listener&apos;s public URL.
             </p>
@@ -140,7 +140,7 @@ export function ProviderWebhookGuide({
             {setup.events.map((event) => (
               <span
                 key={event}
-                className="rounded-md border border-line bg-fill px-2 py-0.5 font-mono text-[10.5px] text-fg-2"
+                className="rounded-md bg-fill-2 px-2 py-0.5 font-mono text-[12.5px] text-fg-2"
               >
                 {event}
               </span>

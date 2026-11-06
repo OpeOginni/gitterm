@@ -8,7 +8,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const signedIn = !!session.data?.user;
 
   return (
-    <div className="min-h-screen bg-background text-white dark landing-grid">
+    <div className="min-h-screen bg-background font-sans text-fg dark landing-grid">
       {signedIn && <AppSidebar />}
       <main className={signedIn ? "pt-14 md:pt-0 md:pl-60" : undefined}>{children}</main>
     </div>

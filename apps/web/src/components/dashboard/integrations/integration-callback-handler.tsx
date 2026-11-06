@@ -33,8 +33,8 @@ export function IntegrationCallbackHandler() {
 
     if (success === "github_connected") {
       trackIntegrationAdded("github");
-      toast.success("GitHub App connected successfully!", {
-        description: "You can now use git operations in your workspaces",
+      toast.success("GitHub connected", {
+        description: "Your workspaces can now use git with these repositories.",
       });
       leave();
     } else if (error) {
@@ -45,7 +45,7 @@ export function IntegrationCallbackHandler() {
         callback_failed: "GitHub callback failed",
       };
       toast.error(errorMessages[error] || "Failed to connect GitHub App", {
-        description: "Please try again or contact support if the issue persists",
+        description: "Try again, or contact support if it keeps happening.",
       });
       leave();
     }

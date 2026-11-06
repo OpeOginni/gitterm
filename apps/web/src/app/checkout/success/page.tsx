@@ -3,11 +3,12 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Terminal, Check, ArrowRight } from "lucide-react";
+import { Check, ArrowRight } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useCurrentPlan } from "@/lib/billing";
 import { cn } from "@/lib/utils";
 import { track, useAnalyticsReady } from "@/lib/analytics";
+import { SiteShell } from "@/components/site/site-shell";
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams();
@@ -47,114 +48,91 @@ function CheckoutSuccessContent() {
   const isPaidPlan = userPlan !== "free";
 
   return (
-    <div className="flex min-h-screen flex-col bg-background landing-grid dark">
-      {/* Header */}
-      <header className="border-b border-line bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-[1120px] items-center px-6">
-          <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
-            <Terminal className="h-5 w-5 text-primary" />
-            <span className="font-mono text-sm font-bold uppercase tracking-wider text-fg">
-              GitTerm
-            </span>
-          </Link>
-        </div>
-      </header>
-
-      {/* Center content */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md space-y-8 text-center">
-          {/* Success icon */}
-          <div className="relative mx-auto h-20 w-20">
+    <SiteShell footer={false}>
+      <div className="flex min-h-[calc(100svh-65px)] flex-col items-center justify-center px-4 py-16 sm:px-6">
+        <div className="w-full max-w-[26rem]">
+          <div className="relative mx-auto size-14">
             {showPing && (
-              <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
+              <div className="absolute inset-0 rounded-full bg-primary/20 motion-safe:animate-ping motion-reduce:hidden" />
             )}
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
-              <Check className="h-9 w-9 text-primary" />
+            <div className="relative flex size-14 items-center justify-center rounded-full bg-primary/12">
+              <Check className="size-6 text-[#e2c47c]" />
             </div>
           </div>
 
-          {/* Message */}
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white">Payment successful.</h1>
-            <p className="mt-2 text-fg-3">Your account has been upgraded. You're ready to build.</p>
+          <div className="mt-7 text-center">
+            <h1 className="m-0 text-[clamp(2rem,4vw,2.5rem)] leading-[1.05] font-display font-semibold tracking-[-0.03em] text-fg">
+              Payment successful.
+            </h1>
+            <p className="mt-3 text-[16px] leading-[1.6] text-fg-3">
+              Your account has been upgraded. You're ready to build.
+            </p>
           </div>
 
-          {/* Plan card */}
-          <div className="rounded-2xl border border-line bg-fill p-5 text-left">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-fg-4">
-                Your plan
-              </span>
+          <div className="mt-9 border-y border-line py-4">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[15px] text-fg-3">Your plan</span>
               <span
                 className={cn(
-                  "rounded-full border px-3 py-0.5 font-mono text-xs font-bold uppercase tracking-wider",
-                  isPaidPlan
-                    ? "border-primary/30 bg-primary/10 text-primary"
-                    : "border-line text-fg-3",
+                  "text-[15px] font-medium",
+                  isPaidPlan ? "text-[#e2c47c]" : "text-fg-2",
                 )}
               >
                 {isPending && !checkoutPlan ? "..." : planName}
               </span>
             </div>
             {checkoutId && (
-              <div className="mt-4 border-t border-line pt-3">
-                <span className="font-mono text-[10px] text-fg-4">ID: {checkoutId}</span>
-              </div>
+              <p className="mt-2 truncate font-mono text-[12.5px] text-fg-4">ID: {checkoutId}</p>
             )}
           </div>
 
-          {/* What's next */}
-          <div className="space-y-3 text-left">
-            <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-primary/70">
-              What's next
-            </p>
-            {[
-              "Your plan benefits are now active",
-              ...(userPlan === "pro"
-                ? ["480 min/day runtime + all providers", "Custom subdomains for all workspaces"]
-                : userPlan === "starter"
-                  ? ["180 min/day runtime + all providers", "Persistent workspaces unlocked"]
-                  : []),
-              "Manage your subscription anytime from Settings",
-            ].map((item) => (
-              <div key={item} className="flex items-start gap-2.5 text-sm text-fg-3">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                {item}
-              </div>
-            ))}
+          <div className="mt-7">
+            <h2 className="m-0 text-[15px] font-medium text-fg-2">What's next</h2>
+            <ul className="mt-3 space-y-2.5">
+              {[
+                "Your plan benefits are now active",
+                ...(userPlan === "pro"
+                  ? ["480 min/day runtime + all providers", "Custom subdomains for all workspaces"]
+                  : userPlan === "starter"
+                    ? ["180 min/day runtime + all providers", "Persistent workspaces unlocked"]
+                    : []),
+                "Manage your subscription anytime from Settings",
+              ].map((item) => (
+                <li
+                  key={item}
+                  className="flex items-start gap-3 text-[15px] leading-[1.5] text-fg-3"
+                >
+                  <Check className="mt-[3px] size-4 shrink-0 text-[#e2c47c]" />
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-col gap-3 pt-2">
+          <div className="mt-9 flex flex-col gap-3">
             <Link
               href="/dashboard"
-              className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-2.5 font-mono text-sm font-bold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/85"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-[14.5px] font-medium text-primary-foreground transition-colors hover:bg-[#c09a45]"
             >
-              Go to Dashboard
-              <ArrowRight className="ml-2 h-4 w-4" />
+              Go to dashboard
+              <ArrowRight className="size-4" />
             </Link>
             <Link
               href="/dashboard/settings/account#billing"
-              className="inline-flex items-center justify-center rounded-lg border border-line bg-fill px-6 py-2.5 font-mono text-sm text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
+              className="inline-flex h-11 items-center justify-center rounded-lg bg-white/[0.04] px-4 text-[14.5px] font-medium text-fg-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-colors hover:bg-white/[0.07] hover:text-fg"
             >
-              Manage Subscription
+              Manage subscription
             </Link>
           </div>
         </div>
       </div>
-    </div>
+    </SiteShell>
   );
 }
 
 export default function CheckoutSuccessPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <Terminal className="h-8 w-8 animate-pulse text-primary" />
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="dark min-h-screen bg-background" />}>
       <CheckoutSuccessContent />
     </Suspense>
   );

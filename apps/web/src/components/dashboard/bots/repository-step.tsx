@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import { GitHub as Github } from "@/components/logos/Github";
 import { Button } from "@/components/ui/button";
+import { Seg } from "@/components/site/seg";
 import { GITHUB_RETURN_TO_KEY, githubInstallUrl } from "../github-connection";
 import {
   GitHubRepositoryBranchField,
@@ -25,7 +26,7 @@ type Installation = GitInstallation & {
 };
 
 const tileClass =
-  "flex min-w-0 items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors";
+  "flex min-w-0 items-center gap-3 rounded-xl px-3.5 py-3 text-left transition-[background-color,box-shadow]";
 
 function Radio({ selected }: { selected: boolean }) {
   return (
@@ -40,7 +41,7 @@ function Radio({ selected }: { selected: boolean }) {
   );
 }
 
-/** How the bot reaches GitHub. Small, because the chosen method below is what matters. */
+/** How the bot reaches GitHub. */
 function AccessSwitch({
   access,
   onChange,
@@ -49,28 +50,15 @@ function AccessSwitch({
   onChange: (access: GitHubAccess) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-line bg-fill p-0.5" role="radiogroup">
-      {(
-        [
-          ["connection", "Connection"],
-          ["token", "Own token"],
-        ] as const
-      ).map(([value, label]) => (
-        <button
-          key={value}
-          type="button"
-          role="radio"
-          aria-checked={access === value}
-          onClick={() => onChange(value)}
-          className={cn(
-            "rounded-md px-2.5 py-1 text-xs transition-colors",
-            access === value ? "bg-fill-2 text-fg" : "text-fg-4 hover:text-fg-2",
-          )}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <Seg
+      ariaLabel="GitHub access"
+      value={access}
+      onChange={onChange}
+      options={[
+        { value: "connection", label: "Connection" },
+        { value: "token", label: "Own token" },
+      ]}
+    />
   );
 }
 
@@ -100,8 +88,8 @@ function AccountTiles({
               className={cn(
                 tileClass,
                 selected
-                  ? "border-primary/60 bg-fill"
-                  : "border-line hover:border-fg-4 hover:bg-fill",
+                  ? "bg-fill-2 shadow-[inset_0_0_0_1px_rgba(211,173,85,0.5)]"
+                  : "bg-fill hover:bg-fill-2",
               )}
             >
               <span className="relative shrink-0">
@@ -110,7 +98,7 @@ function AccountTiles({
                   alt=""
                   width={36}
                   height={36}
-                  className="size-9 rounded-full border border-line object-cover"
+                  className="size-9 rounded-full object-cover"
                 />
                 <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full border-2 border-card bg-fg">
                   <Github className="size-2.5 text-background" fill="currentColor" />
@@ -130,12 +118,9 @@ function AccountTiles({
         })}
         <Link
           href={"/dashboard/integrations" as Route}
-          className={cn(
-            tileClass,
-            "border-dashed border-line text-fg-3 hover:border-fg-4 hover:bg-fill hover:text-fg-2",
-          )}
+          className={cn(tileClass, "text-fg-3 hover:bg-fill hover:text-fg-2")}
         >
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed border-line">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fill-2">
             <Plus className="size-4" />
           </span>
           <span className="min-w-0 flex-1">
@@ -144,7 +129,7 @@ function AccountTiles({
           </span>
         </Link>
       </div>
-      <p className="text-xs text-fg-4">
+      <p className="text-[12.5px] text-fg-4">
         Pick whose repositories to browse. The bot uses the account that owns the repo.
       </p>
     </div>
@@ -166,7 +151,7 @@ function AccessRow({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3.5">
       <div className="flex min-w-0 flex-1 items-center gap-3.5">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-fill-2 text-fg">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill-2 text-fg">
           {icon}
         </span>
         <div className="min-w-0 flex-1">
@@ -236,7 +221,7 @@ export function RepositoryStepBody({
         detail={
           <>
             Paste it into <span className="font-mono text-fg-2">GITTERM_BOT_GITHUB_TOKEN</span> in
-            the .env. GitTerm doesn't save it.
+            the .env. Gitterm doesn't save it.
           </>
         }
       />
@@ -257,11 +242,7 @@ export function RepositoryStepBody({
       <AccessRow
         icon={githubIcon}
         title="Connect GitHub"
-        detail={
-          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-fg-4">
-            Private repos · Push branches · Pull requests
-          </span>
-        }
+        detail="Private repositories, pushing branches and opening pull requests."
         action={
           <Button className="h-9 gap-2" onClick={connect} disabled={connecting}>
             {connecting ? <Loader2 className="size-3.5 animate-spin" /> : null}
@@ -280,10 +261,8 @@ export function RepositoryStepBody({
   return (
     <div className="space-y-5">
       <div className="space-y-3.5 border-b border-line pb-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-4">
-            GitHub access
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[13px] font-medium text-fg-2">GitHub access</p>
           <AccessSwitch access={access} onChange={onAccessChange} />
         </div>
         {accessBody}

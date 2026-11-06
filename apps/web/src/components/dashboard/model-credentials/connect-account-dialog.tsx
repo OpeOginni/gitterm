@@ -53,7 +53,7 @@ export function ConnectAccountDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 border-line bg-card p-0 sm:max-w-[560px]">
+      <DialogContent className="gap-0 bg-card p-0 sm:max-w-[560px]">
         {/* Mounted per open: closing the dialog also stops any polling. */}
         <ConnectAccountFlow {...props} onClose={() => onOpenChange(false)} />
       </DialogContent>
@@ -175,7 +175,7 @@ function ConnectAccountFlow({
 
   return (
     <>
-      <DialogHeader className="px-5 pt-5 pb-4">
+      <DialogHeader className="px-5 pt-5 pb-4 sm:px-6">
         <DialogTitle>
           {selected ? `Connect ${selected.displayName}` : "Connect an account"}
         </DialogTitle>
@@ -186,8 +186,8 @@ function ConnectAccountFlow({
       </DialogHeader>
 
       {!selected ? (
-        <div className="px-5 pb-5">
-          <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+        <div className="px-3 pb-4 sm:px-4">
+          <div className="max-h-[26rem] space-y-0.5 overflow-y-auto">
             {accounts.map((provider) => {
               const connected = credentials.filter(
                 (credential) => credential.providerId === provider.id && credential.isActive,
@@ -197,9 +197,9 @@ function ConnectAccountFlow({
                   key={provider.id}
                   type="button"
                   onClick={() => choose(provider)}
-                  className="group flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-fill focus-visible:bg-fill focus-visible:outline-none"
+                  className="group flex w-full items-center gap-3.5 rounded-xl px-2 py-3 text-left transition-colors hover:bg-fill focus-visible:bg-fill focus-visible:outline-none sm:px-2.5"
                 >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill-2">
                     <ProviderLogo
                       name={provider.name}
                       displayName={provider.displayName}
@@ -217,25 +217,25 @@ function ConnectAccountFlow({
                     ) : null}
                   </span>
                   {connected > 0 ? (
-                    <span className="flex shrink-0 items-center gap-1 text-xs text-primary">
-                      <Check className="size-3" />
-                      {connected}
+                    <span className="flex shrink-0 items-center gap-1 rounded-md bg-[#6bd586]/10 px-2 py-0.5 text-[12.5px] font-medium text-[#6bd586]">
+                      <Check className="size-3.5" />
+                      {connected} connected
                     </span>
                   ) : null}
-                  <ChevronRight className="size-3.5 shrink-0 text-fg-4 transition-transform group-hover:translate-x-0.5" />
+                  <ChevronRight className="size-4 shrink-0 text-fg-4 transition-transform group-hover:translate-x-0.5" />
                 </button>
               );
             })}
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 px-5 pb-5">
+        <div className="grid gap-4 px-5 pb-5 sm:px-6">
           <button
             type="button"
             onClick={() => choose(null)}
             className="inline-flex w-fit items-center gap-1.5 text-sm text-fg-3 transition-colors hover:text-fg"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft className="size-4" />
             All accounts
           </button>
 
@@ -250,7 +250,9 @@ function ConnectAccountFlow({
               }}
             >
               <div className="grid gap-2">
-                <Label htmlFor="account-label">Label</Label>
+                <Label htmlFor="account-label" className="text-[13px] text-fg-2">
+                  Label
+                </Label>
                 <Input
                   id="account-label"
                   value={label}
@@ -259,7 +261,7 @@ function ConnectAccountFlow({
                   disabled={step.kind === "starting"}
                   aria-invalid={labelTaken}
                 />
-                <p className={cn("text-[11px] text-fg-4", labelTaken && "text-destructive")}>
+                <p className={cn("text-[12.5px] text-fg-4", labelTaken && "text-red-300")}>
                   {labelTaken
                     ? `You already have a ${selected.displayName} account called "${label.trim()}".`
                     : "Tells accounts for the same provider apart in workspaces and the SDK."}
@@ -267,7 +269,7 @@ function ConnectAccountFlow({
               </div>
 
               {step.kind === "failed" && (
-                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive">
+                <p className="rounded-xl bg-red-500/10 px-3 py-2.5 text-[13px] text-red-300">
                   {step.message}
                 </p>
               )}
@@ -275,11 +277,10 @@ function ConnectAccountFlow({
               <Button
                 type="submit"
                 disabled={!label.trim() || labelTaken || step.kind === "starting"}
-                className="h-10 gap-2 text-sm"
               >
                 {step.kind === "starting" ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="size-4 animate-spin" />
                     Getting a code...
                   </>
                 ) : step.kind === "failed" ? (
@@ -321,25 +322,22 @@ function DeviceCodePanel({ device, providerName }: { device: DeviceCode; provide
       <ol className="grid gap-4">
         <li className="grid gap-2">
           <p className="text-[13px] text-fg-2">
-            <span className="mr-2 font-mono text-fg-4">1</span>
+            <span className="mr-2 text-fg-4">1.</span>
             Open {host} and sign in.
           </p>
-          <Button
-            asChild
-            className="h-10 w-full gap-2 font-mono text-[11px] uppercase tracking-[0.14em]"
-          >
+          <Button asChild className="w-full">
             <a href={device.verificationUri} target="_blank" rel="noopener noreferrer">
               Open {host}
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="size-4" />
             </a>
           </Button>
         </li>
         <li className="grid gap-2">
           <p className="text-[13px] text-fg-2">
-            <span className="mr-2 font-mono text-fg-4">2</span>
+            <span className="mr-2 text-fg-4">2.</span>
             Confirm this code when asked.
           </p>
-          <div className="flex h-12 items-center rounded-lg bg-input px-4">
+          <div className="flex h-12 items-center rounded-xl bg-fill-2 pr-1.5 pl-4">
             <code className="min-w-0 flex-1 truncate font-mono text-lg font-semibold tracking-[0.22em] text-fg">
               {device.userCode}
             </code>
@@ -347,15 +345,15 @@ function DeviceCodePanel({ device, providerName }: { device: DeviceCode; provide
               type="button"
               onClick={copy}
               aria-label="Copy code"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-fg-4 transition-colors hover:text-fg"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-fill-2 hover:text-fg"
             >
-              <Copy className="h-4 w-4" />
+              <Copy className="size-4" />
             </button>
           </div>
         </li>
       </ol>
       <div className="flex items-center gap-2 text-[12.5px] text-fg-3" role="status">
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+        <Loader2 className="size-4 animate-spin text-primary" />
         Waiting for approval. This finishes on its own.
       </div>
     </div>

@@ -5,10 +5,9 @@ import { useRouter } from "next/navigation";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { authClient } from "@/lib/auth-client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, Save } from "lucide-react";
+import { SettingsGroup, SettingsSaveBar } from "@/components/dashboard/settings/settings-page";
 import { trpcClient } from "@/utils/trpc";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -111,52 +110,39 @@ export default function SettingsPage() {
   return (
     <DashboardShell>
       <DashboardHeader
-        heading="System Settings"
+        heading="System settings"
         text="Configure system-wide settings for workspaces and quotas."
-      >
-        <div className="flex gap-2">
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || updateSettings.isPending}
-            className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
-          >
-            <Save className="h-4 w-4 mr-2" />
-            {updateSettings.isPending ? "Saving..." : "Save Changes"}
-          </Button>
-        </div>
-      </DashboardHeader>
+      />
 
-      <div className="pt-2 space-y-6">
-        {isLoading ? (
-          <div className="space-y-4">
-            {[...Array(2)].map((_, i) => (
-              <div key={i} className="rounded-2xl border border-border bg-card p-6 space-y-3">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-4 w-64" />
-                <Skeleton className="h-10 w-32" />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4">
+      {isLoading ? (
+        <div className="space-y-3 rounded-2xl bg-card p-6">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="space-y-2 py-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-72" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <SettingsGroup bodyClassName="py-1">
+          <div className="divide-y divide-line">
             {data?.settings.map((setting: SettingValue) => (
               <div
                 key={setting.key}
-                className="rounded-2xl border border-border bg-card p-6 space-y-4"
+                className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="flex items-start gap-4">
-                  <div className="rounded-xl bg-fill p-2.5">
-                    <Settings className="h-5 w-5 text-fg-4" />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <Label htmlFor={setting.key} className="text-base font-medium text-fg">
-                      {setting.label}
-                    </Label>
-                    <p className="text-sm text-fg-4">{setting.description}</p>
-                  </div>
+                <div className="min-w-0 space-y-1">
+                  <Label htmlFor={setting.key} className="text-[15px] font-medium text-fg">
+                    {setting.label}
+                  </Label>
+                  <p className="max-w-xl text-[13.5px] leading-relaxed text-fg-3">
+                    {setting.description}
+                  </p>
+                  <p className="text-[12.5px] text-fg-4">
+                    Range: {setting.min} - {setting.max}
+                  </p>
                 </div>
-
-                <div className="flex items-center gap-4 pl-14">
+                <div className="flex shrink-0 items-center gap-3">
                   <Input
                     id={setting.key}
                     type="number"
@@ -164,36 +150,24 @@ export default function SettingsPage() {
                     max={setting.max}
                     value={formValues[setting.key] ?? setting.value}
                     onChange={(e) => handleValueChange(setting.key, e.target.value)}
-                    className="w-32"
+                    className="w-28"
                   />
-                  <span className="text-sm text-fg-4">
+                  <span className="w-28 text-[13.5px] text-fg-3">
                     {setting.key === "idle_timeout_minutes" ? "minutes" : "minutes per day"}
-                  </span>
-                  <span className="text-xs text-fg-4 ml-auto">
-                    Range: {setting.min} - {setting.max}
                   </span>
                 </div>
               </div>
             ))}
-
-            {hasChanges && (
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-line">
-                <Button variant="outline" onClick={handleReset}>
-                  Reset
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={updateSettings.isPending}
-                  className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {updateSettings.isPending ? "Saving..." : "Save Changes"}
-                </Button>
-              </div>
-            )}
           </div>
-        )}
-      </div>
+        </SettingsGroup>
+      )}
+
+      <SettingsSaveBar
+        visible={hasChanges}
+        saving={updateSettings.isPending}
+        onSave={handleSave}
+        onCancel={handleReset}
+      />
     </DashboardShell>
   );
 }

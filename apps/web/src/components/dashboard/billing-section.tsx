@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
+import { SettingsGroup, SettingsSaveBar } from "@/components/dashboard/settings/settings-page";
 
 type CheckoutPlan = "pro" | "growth";
 
@@ -37,16 +38,20 @@ function PlanRow({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-card px-5 py-4">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
-        <Sparkles className="size-4 text-primary opacity-80" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-fg">{name}</p>
-        {detail ? <p className="mt-0.5 text-xs text-fg-4">{detail}</p> : null}
+    <SettingsGroup>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
+          <Sparkles className="size-4 text-primary opacity-80" />
+        </span>
+        <div className="min-w-[12rem] flex-1">
+          <p className="text-[15px] font-medium text-fg">{name}</p>
+          {detail ? (
+            <p className="mt-0.5 max-w-2xl text-[13.5px] leading-relaxed text-fg-3">{detail}</p>
+          ) : null}
+        </div>
+        {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </div>
-      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -101,18 +106,16 @@ export function BillingSection() {
               {account.plan !== "growth" ? (
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="h-8 text-xs text-primary"
                   disabled={isCheckoutLoading}
                   onClick={() => handleUpgrade("growth")}
+                  className="text-[#e2c47c] hover:text-[#e2c47c]"
                 >
                   Upgrade to Growth
                 </Button>
               ) : null}
               <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1.5 border-line text-xs"
+                variant="secondary"
+                className="gap-1.5"
                 onClick={handleOpenPortal}
                 disabled={isPortalLoading}
               >
@@ -131,9 +134,9 @@ export function BillingSection() {
   return (
     <PlanRow
       name="Free"
-      detail="Small E2B or boat sandboxes and 60 minutes a day. Upgrade for every provider and machine size, always-on workspaces, and a monthly compute balance."
+      detail="Small E2B or Boat sandboxes and 60 minutes a day. Upgrade for every provider and machine size, always-on workspaces, and a monthly compute balance."
       action={
-        <Button asChild size="sm" className="h-8 gap-1.5 text-xs">
+        <Button asChild className="gap-1.5">
           <Link href={"/pricing" as Route}>
             Upgrade
             <ArrowRight className="size-3" />
@@ -153,7 +156,7 @@ function UsageBar({ percent }: { percent: number }) {
   return (
     <div className="h-2 overflow-hidden rounded-full bg-fill-2">
       <div
-        className={`h-full rounded-full ${percent >= 100 ? "bg-destructive" : percent >= 75 ? "bg-amber-500" : "bg-primary"}`}
+        className={`h-full rounded-full ${percent >= 100 ? "bg-destructive" : percent >= 75 ? "bg-[#fb923c]" : "bg-primary"}`}
         style={{ width: `${Math.min(100, percent)}%` }}
       />
     </div>
@@ -175,40 +178,40 @@ export function ComputeUsageCard() {
   const recommendGrowth = account.plan === "pro" && proBill > GROWTH_PRICE_CENTS;
 
   return (
-    <div className="space-y-4 rounded-2xl border border-line bg-card px-5 py-4">
+    <SettingsGroup bodyClassName="space-y-5">
       <div className="space-y-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="text-sm font-semibold text-fg">Included compute</p>
-          <p className="font-mono text-[12px] tabular-nums text-fg-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <h3 className="text-[15px] font-medium text-fg">Included compute</h3>
+          <p className="text-[13.5px] tabular-nums text-fg-2">
             {dollars(compute.usedCents)} of {dollars(compute.includedCents)} · resets {resets}
           </p>
         </div>
         <UsageBar percent={(compute.usedCents / Math.max(compute.includedCents, 1)) * 100} />
         {compute.runningCentsPerHour > 0 ? (
-          <p className="text-xs text-fg-4">
+          <p className="text-[13px] text-fg-3">
             Running workspaces cost {dollars(compute.runningCentsPerHour)}/hour right now.
           </p>
         ) : null}
       </div>
 
-      <div className="space-y-3 border-t border-line pt-4">
-        <div className={`space-y-3 ${compute.payAsYouGo ? "" : "opacity-50"}`}>
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-sm font-semibold text-fg">
+      <div className="space-y-3 border-t border-line pt-5">
+        <div className={`space-y-3 ${compute.payAsYouGo ? "" : "opacity-60"}`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h3 className="text-[15px] font-medium text-fg">
               Pay-as-you-go
               {compute.payAsYouGo ? (
                 compute.overageDiscountPercent ? (
-                  <span className="ml-2 font-normal text-fg-4">
+                  <span className="ml-2 font-normal text-fg-3">
                     {compute.overageDiscountPercent}% off
                   </span>
                 ) : null
               ) : (
-                <span className="ml-2 rounded-full border border-line px-2 py-0.5 font-mono text-[10px] font-normal uppercase tracking-[0.16em] text-fg-4">
+                <span className="ml-2 rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] font-normal text-fg-3">
                   Off
                 </span>
               )}
-            </p>
-            <p className="font-mono text-[12px] tabular-nums text-fg-3">
+            </h3>
+            <p className="text-[13.5px] tabular-nums text-fg-2">
               {dollars(compute.overageCents)}
               {compute.spendCapCents !== null ? ` of ${dollars(compute.spendCapCents)} limit` : ""}
             </p>
@@ -220,7 +223,7 @@ export function ComputeUsageCard() {
           )}
         </div>
         {compute.payAsYouGo ? null : (
-          <p className="text-xs text-fg-4">
+          <p className="text-[13px] text-fg-3">
             Workspaces pause when the included compute runs out.{" "}
             <Link href={"#billing" as Route} className="text-primary hover:underline">
               Turn on pay-as-you-go
@@ -231,16 +234,14 @@ export function ComputeUsageCard() {
       </div>
 
       {recommendGrowth ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
-          <p className="min-w-0 flex-1 text-xs text-fg-2">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl bg-primary/10 px-4 py-3">
+          <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-fg-2">
             At your current pace you&apos;ll use about {dollars(compute.projectedCents)} of compute
             this period: about {dollars(proBill)} on Pro. Growth covers up to{" "}
             {dollars(GROWTH_INCLUDED_CENTS)} for {dollars(GROWTH_PRICE_CENTS)}.
           </p>
           <Button
             size="sm"
-            variant="outline"
-            className="h-8 text-xs"
             onClick={() => {
               track("checkout_started", { plan: "growth", source: "settings_usage" });
               void initiateCheckout("growth");
@@ -250,7 +251,7 @@ export function ComputeUsageCard() {
           </Button>
         </div>
       ) : null}
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -275,43 +276,52 @@ function PayAsYouGoSettings({ compute }: { compute: ComputeUsage }) {
   const dirty =
     payAsYouGo !== compute.payAsYouGo || (payAsYouGo && capCents !== (compute.spendCapCents ?? 0));
 
+  const reset = () => {
+    setPayAsYouGo(compute.payAsYouGo);
+    setCapDollars(compute.spendCapCents === null ? "50" : String(compute.spendCapCents / 100));
+  };
+
   return (
-    <div className="space-y-3 rounded-2xl border border-line bg-card px-5 py-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-fg-2">
-          <Switch checked={payAsYouGo} onCheckedChange={setPayAsYouGo} />
+    <>
+      <SettingsGroup
+        title="Pay-as-you-go"
+        description={
+          payAsYouGo
+            ? "Extra compute is billed at each size's hourly price. Workspaces pause when your limit is reached."
+            : "Workspaces pause when the included compute runs out. Your work is kept."
+        }
+        bodyClassName="space-y-4"
+      >
+        <label className="flex items-center justify-between gap-4 text-[14px] text-fg-2">
           Keep running past the included compute
+          <Switch checked={payAsYouGo} onCheckedChange={setPayAsYouGo} />
         </label>
         {payAsYouGo ? (
-          <label className="flex items-center gap-1.5 text-xs text-fg-3">
-            up to $
-            <Input
-              type="number"
-              min={1}
-              className="h-8 w-24"
-              value={capDollars}
-              onChange={(event) => setCapDollars(event.target.value)}
-            />
-            per period
+          <label className="flex flex-wrap items-center gap-2 text-[14px] text-fg-2">
+            Spend limit
+            <span className="ml-auto flex items-center gap-2 text-fg-3">
+              $
+              <Input
+                type="number"
+                min={1}
+                className="h-9 w-24"
+                value={capDollars}
+                onChange={(event) => setCapDollars(event.target.value)}
+              />
+              per period
+            </span>
           </label>
         ) : null}
-        <Button
-          size="sm"
-          className="ml-auto h-8 text-xs"
-          disabled={!dirty || saveSettings.isPending}
-          onClick={() =>
-            saveSettings.mutate({ payAsYouGo, spendCapCents: payAsYouGo ? capCents : null })
-          }
-        >
-          Save
-        </Button>
-      </div>
-      <p className="text-xs text-fg-4">
-        {payAsYouGo
-          ? "Extra compute is billed at each size's hourly price. Workspaces pause when your limit is reached."
-          : "Workspaces pause when the included compute runs out. Your work is kept."}
-      </p>
-    </div>
+      </SettingsGroup>
+      <SettingsSaveBar
+        visible={dirty}
+        saving={saveSettings.isPending}
+        onCancel={reset}
+        onSave={() =>
+          saveSettings.mutate({ payAsYouGo, spendCapCents: payAsYouGo ? capCents : null })
+        }
+      />
+    </>
   );
 }
 

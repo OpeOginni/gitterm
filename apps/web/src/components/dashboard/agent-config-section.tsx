@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import { queryClient, trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import {
-  SettingsEmptyState,
-  SettingsSection,
-  SettingsSectionBody,
-} from "@/components/ui/form-card";
+  SettingsEmpty,
+  SettingsGroup,
+  settingsLabel,
+} from "@/components/dashboard/settings/settings-page";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,6 @@ import {
   Loader2,
   MoreHorizontal,
   Plus,
-  Settings,
   Terminal,
   Trash2,
 } from "lucide-react";
@@ -240,8 +239,8 @@ export function AgentConfigSection() {
   const addConfigDialog = (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="gap-2 font-mono text-[11px] uppercase tracking-[0.18em]">
-          <Plus className="h-3.5 w-3.5" />
+        <Button className="gap-1.5">
+          <Plus className="size-4" />
           Add configuration
         </Button>
       </DialogTrigger>
@@ -271,10 +270,8 @@ export function AgentConfigSection() {
         </DialogHeader>
 
         <div className="grid min-h-0 overflow-y-auto sm:grid-cols-[220px_minmax(0,1fr)] sm:overflow-hidden">
-          <aside className="min-w-0 border-b border-border bg-fill p-4 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-5">
-            <Label className="mb-3 block font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
-              Agent
-            </Label>
+          <aside className="min-w-0 border-b border-line bg-fill p-4 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-5">
+            <Label className={`mb-3 block ${settingsLabel}`}>Agent</Label>
             <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-1 sm:overflow-visible sm:px-0 sm:pb-0">
               {AGENT_CONFIG_KINDS.map((kind) => {
                 const meta = AGENT_CONFIG_KIND_META[kind];
@@ -301,8 +298,8 @@ export function AgentConfigSection() {
                       className="h-[18px] w-[18px] shrink-0"
                     />
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{meta.label}</span>
-                      <span className="mt-0.5 hidden truncate text-[10px] text-fg-4 sm:block">
+                      <span className="block truncate text-[14px] font-medium">{meta.label}</span>
+                      <span className="mt-0.5 hidden truncate text-[12.5px] text-fg-4 sm:block">
                         {kindAppliesTo(kind)}
                       </span>
                     </span>
@@ -314,9 +311,7 @@ export function AgentConfigSection() {
 
           <div className="grid content-start gap-5 p-4 sm:overflow-y-auto sm:p-6">
             <div className="grid gap-2">
-              <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
-                Name
-              </Label>
+              <Label className={settingsLabel}>Name</Label>
               <Input
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
@@ -325,8 +320,8 @@ export function AgentConfigSection() {
             </div>
 
             {!isEditing && (
-              <div className="flex items-start gap-2.5 border-l border-amber-400/35 pl-3 text-[11px] leading-relaxed text-fg-4">
-                <Terminal className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400 opacity-70" />
+              <div className="flex items-start gap-2.5 rounded-xl bg-fill px-3.5 py-2.5 text-[13px] leading-relaxed text-fg-3">
+                <Terminal className="mt-0.5 size-3.5 shrink-0 text-fg-4" />
                 <span>
                   Validate locally at{" "}
                   <code className="font-mono text-fg-2">{selectedMeta.testHint}</code> before
@@ -337,14 +332,14 @@ export function AgentConfigSection() {
 
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <Label className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4">
+                <Label className={settingsLabel}>
                   Configuration{" "}
                   {selectedMeta.docsUrl && (
                     <a
                       href={selectedMeta.docsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="ml-1 normal-case text-primary/70 hover:text-primary hover:underline"
+                      className="ml-1 font-normal text-[#e2c47c] hover:underline"
                     >
                       docs
                     </a>
@@ -354,14 +349,14 @@ export function AgentConfigSection() {
                   <button
                     type="button"
                     onClick={handleLoadExample}
-                    className="text-xs text-fg-4 transition-colors hover:text-fg-2"
+                    className="text-[13px] text-fg-3 transition-colors hover:text-fg"
                   >
                     Load example
                   </button>
                 )}
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-border bg-input/40">
+              <div className="overflow-hidden rounded-xl border border-line bg-input/40">
                 <CodeMirror
                   value={formData.configJson}
                   height="260px"
@@ -383,12 +378,12 @@ export function AgentConfigSection() {
               </div>
 
               {jsonError ? (
-                <div className="flex items-center gap-1.5 text-xs text-red-500">
+                <div className="flex items-center gap-1.5 text-[13px] text-red-400">
                   <AlertCircle className="h-3.5 w-3.5" />
                   {jsonError}
                 </div>
               ) : formData.configJson.trim() ? (
-                <div className="flex items-center gap-1.5 text-xs text-green-500">
+                <div className="flex items-center gap-1.5 text-[13px] text-[#6bd586]">
                   <Check className="h-3.5 w-3.5" />
                   Valid JSON
                 </div>
@@ -398,7 +393,7 @@ export function AgentConfigSection() {
         </div>
 
         <DialogFooter className="m-0">
-          <Button variant="outline" onClick={() => setDialogOpen(false)}>
+          <Button variant="secondary" onClick={() => setDialogOpen(false)}>
             Cancel
           </Button>
           <Button
@@ -426,106 +421,108 @@ export function AgentConfigSection() {
 
   return (
     <>
-      <SettingsSection
-        icon={Settings}
+      <SettingsGroup
         title="Agent configurations"
         description="Save OpenCode, Claude Code, and Codex configs. Each is applied to the related workspaces on create."
         action={addConfigDialog}
+        bodyClassName="pt-2"
       >
-        <SettingsSectionBody>
-          {isLoadingConfigs ? (
-            <div className="divide-y divide-line border-y border-line">
-              <Skeleton className="h-14 w-full bg-fill" />
-              <Skeleton className="h-14 w-full bg-fill" />
-            </div>
-          ) : configurations.length === 0 ? (
-            <SettingsEmptyState
-              icon={Code2}
-              title="No configurations yet"
-              description="Save OpenCode, Claude Code, or Codex configs to reuse across workspaces."
-            />
-          ) : (
-            <div className="space-y-2">
-              {configurations.map((config) => (
-                <div
-                  key={config.id}
-                  className="flex items-center justify-between gap-3 px-1 py-3.5"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <Image
-                        src={kindIcon(config.kind)}
-                        alt={kindLabel(config.kind)}
-                        width={20}
-                        height={20}
-                      />
-                    </div>
-                    <div>
-                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <p className="font-medium">{config.name}</p>
-                        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-fg-4">
-                          · {kindLabel(config.kind)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {kindAppliesTo(config.kind)
-                          ? `For ${kindAppliesTo(config.kind)} agents · `
-                          : ""}
-                        Updated{" "}
-                        {new Date(config.updatedAt).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </div>
+        {isLoadingConfigs ? (
+          <div className="space-y-2 pt-2">
+            <Skeleton className="h-14 w-full bg-fill" />
+            <Skeleton className="h-14 w-full bg-fill" />
+          </div>
+        ) : configurations.length === 0 ? (
+          <SettingsEmpty
+            icon={<Code2 />}
+            title="No configurations yet"
+            description="Save OpenCode, Claude Code, or Codex configs to reuse across workspaces."
+          />
+        ) : (
+          <div className="-mx-5 max-h-[560px] divide-y divide-line overflow-y-auto sm:-mx-6">
+            {configurations.map((config) => (
+              <div
+                key={config.id}
+                className="flex items-center justify-between gap-3 px-5 py-3.5 sm:px-6"
+              >
+                <div className="flex min-w-0 items-center gap-3.5">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
+                    <Image
+                      src={kindIcon(config.kind)}
+                      alt={kindLabel(config.kind)}
+                      width={18}
+                      height={18}
+                      className="size-[18px]"
+                    />
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() =>
-                          handleEdit({
-                            id: config.id,
-                            name: config.name,
-                            kind: config.kind as AgentConfigKind,
-                            config: config.config,
-                          })
-                        }
-                      >
-                        <Edit3 className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={() => handleDeleteClick(config.id)}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <p className="truncate text-[14px] font-medium text-fg">{config.name}</p>
+                      <span className="text-[12.5px] text-fg-3">{kindLabel(config.kind)}</span>
+                    </div>
+                    <p className="mt-0.5 text-[12.5px] text-fg-3">
+                      {kindAppliesTo(config.kind)
+                        ? `For ${kindAppliesTo(config.kind)} agents · `
+                        : ""}
+                      Updated{" "}
+                      {new Date(config.updatedAt).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </SettingsSectionBody>
-      </SettingsSection>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-9 shrink-0"
+                      aria-label={`Actions for ${config.name}`}
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() =>
+                        handleEdit({
+                          id: config.id,
+                          name: config.name,
+                          kind: config.kind as AgentConfigKind,
+                          config: config.config,
+                        })
+                      }
+                    >
+                      <Edit3 className="mr-2 size-4" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => handleDeleteClick(config.id)}
+                    >
+                      <Trash2 className="mr-2 size-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ))}
+          </div>
+        )}
+      </SettingsGroup>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="border-line bg-settings-dialog sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Delete Configuration</DialogTitle>
+            <DialogTitle>Delete configuration</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete this configuration? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button variant="secondary" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
             <Button

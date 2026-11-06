@@ -34,9 +34,9 @@ function StepMark({
   return (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-full border font-mono",
-        small ? "size-5 text-[10px]" : "size-6 text-[11px]",
-        state === "done" ? "border-primary/40 bg-primary/10 text-primary" : "border-line text-fg-3",
+        "flex shrink-0 items-center justify-center rounded-full font-medium tabular-nums",
+        small ? "size-6 text-[12.5px]" : "size-7 text-[13px]",
+        state === "done" ? "bg-primary/12 text-[#e2c47c]" : "bg-fill-2 text-fg-3",
       )}
     >
       {state === "done" && !numbered ? <Check className={small ? "size-3" : "size-3.5"} /> : number}
@@ -65,17 +65,13 @@ export function SetupSummary({ steps, footer }: { steps: StepInfo[]; footer?: Re
     <div className="overflow-hidden rounded-2xl border border-line bg-card">
       <div className="space-y-3.5 px-5 pt-5 pb-4">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
-            Your bot
-          </span>
+          <span className="text-[15px] font-semibold text-fg">Your bot</span>
           {next ? (
-            <span className="font-mono text-[11px] tabular-nums text-fg-4">
-              {done}/{required.length} required
+            <span className="text-[12.5px] tabular-nums text-fg-4">
+              {done} of {required.length} required
             </span>
           ) : (
-            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
-              Ready
-            </span>
+            <span className="text-[12.5px] font-medium text-[#e2c47c]">Ready</span>
           )}
         </div>
         <div className="flex gap-1">
@@ -109,24 +105,21 @@ export function SetupSummary({ steps, footer }: { steps: StepInfo[]; footer?: Re
             "Every required step is done"
           )}
         </span>
-        <span className="flex shrink-0 items-center gap-1 text-xs text-fg-4">
+        <span className="flex shrink-0 items-center gap-1 text-[12.5px] text-fg-4">
           {open ? "Hide steps" : "All steps"}
           <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
         </span>
       </button>
-      <ol className={cn("border-t border-line", !open && "hidden lg:block")}>
+      <ol className={cn("px-2 pb-2 lg:pt-0", open && "pt-2", !open && "hidden lg:block")}>
         {steps.map((step, index) => (
           <li key={step.id}>
             <a
               href={`#${step.id}`}
               className={cn(
-                "relative flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-fill",
+                "flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-fill",
                 step === next && "bg-fill",
               )}
             >
-              {step === next ? (
-                <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary" />
-              ) : null}
               <StepMark number={index + 1} state={step.state} small />
               <span className="min-w-0 flex-1">
                 <span
@@ -141,7 +134,7 @@ export function SetupSummary({ steps, footer }: { steps: StepInfo[]; footer?: Re
                   <span
                     className={cn(
                       "block truncate text-[13px]",
-                      step.state === "done" ? "font-mono text-fg-3" : "text-fg-4",
+                      step.state === "done" ? "text-fg-3" : "text-fg-4",
                     )}
                   >
                     {step.summary}
@@ -186,19 +179,17 @@ export function Step({
           <span
             role="img"
             aria-label="Done"
-            className="flex size-6 items-center justify-center rounded-full bg-primary/15 text-primary"
+            className="flex size-6 items-center justify-center rounded-full bg-primary/12 text-[#e2c47c]"
           >
             <Check className="size-3.5" />
           </span>
         ) : (
-          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4">
-            {STATE_LABEL[step.state]}
-          </span>
+          <span className="text-[12.5px] text-fg-4">{STATE_LABEL[step.state]}</span>
         )
       }
     >
       {children ? (
-        <SettingsSectionBody className="px-5 py-4">{children}</SettingsSectionBody>
+        <SettingsSectionBody className="px-5 pt-4 pb-5">{children}</SettingsSectionBody>
       ) : null}
     </SettingsSection>
   );
@@ -225,14 +216,9 @@ export function CodeBlock({
     }
   };
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-fill">
-      <div
-        className={cn(
-          "flex items-center justify-between py-1 pr-1 pl-4",
-          open && "border-b border-line",
-        )}
-      >
-        <span className="font-mono text-[11px] text-fg-4">{copyLabel}</span>
+    <div className="overflow-hidden rounded-xl bg-[#0b0b0e]">
+      <div className="flex items-center justify-between py-1.5 pr-1.5 pl-4">
+        <span className="text-[12.5px] text-fg-3">{copyLabel}</span>
         <div className="flex items-center">
           {collapsible ? (
             <Button
@@ -241,7 +227,7 @@ export function CodeBlock({
               variant="ghost"
               aria-expanded={open}
               onClick={() => setOpen((value) => !value)}
-              className="h-7 gap-1.5 text-xs text-fg-3"
+              className="h-8 gap-1.5 text-fg-3"
             >
               {open ? "Hide" : "Show"}
               <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
@@ -252,7 +238,7 @@ export function CodeBlock({
             size="sm"
             variant="ghost"
             onClick={copy}
-            className="h-7 gap-1.5 text-xs text-fg-3"
+            className="h-8 gap-1.5 text-fg-3"
           >
             <Copy className="size-3.5" />
             Copy
@@ -260,7 +246,7 @@ export function CodeBlock({
         </div>
       </div>
       {open ? (
-        <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed text-fg-2">
+        <pre className="overflow-x-auto px-4 pt-1 pb-4 font-mono text-[13px] leading-[1.7] text-fg-2 [scrollbar-width:thin]">
           {highlight(code, language)}
         </pre>
       ) : null}
