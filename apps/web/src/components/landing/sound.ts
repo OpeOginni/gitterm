@@ -85,14 +85,15 @@ const r = (a: number, b: number) => a + Math.random() * (b - a);
 // Where the windows sit: the sandbox on the left of the terminal, the preview and phone on the right
 const SBX = -0.45;
 const PV = 0.45;
-// The dev server's beat, in seconds. The sandbox status dot pulses at the same rate (landing.css).
+// The session's beat, in seconds. The sandbox status dot pulses at the same rate (landing.css).
 const BEAT = 0.5;
+// Sandbox sounds land on eighth notes of that beat, so they keep time with each other and the server
+const STEP = BEAT / 2;
 // Everything is in A major pentatonic, so sounds that overlap still agree
 const SCALE = [
   220, 246.94, 277.18, 329.63, 369.99, 440, 493.88, 554.37, 659.26, 739.99, 880, 987.77, 1108.73,
   1318.51, 1479.98, 1760,
 ];
-const HIGH = SCALE.slice(10).map((f) => f * 2);
 const G = (v = 0) => {
   const g = ctx!.createGain();
   g.gain.value = v;
@@ -134,7 +135,7 @@ export function createSfx(visible: () => boolean) {
     connected = false;
     verb?.disconnect();
     playing.delete(stop);
-    lastKey = keyGap = 0;
+    lastKey = keyGap = slot = 0;
   }
   function now() {
     if (disposed || !visible() || !on || !ctx || ctx.state !== "running" || document.hidden)
@@ -201,17 +202,35 @@ export function createSfx(visible: () => boolean) {
     }
     return g;
   }
-  /** Struck wood: a sine with a bright, quick overtone and a tap of noise. */
-  function marimba(t: number, f: number, peak: number, dest: AudioNode) {
+  /** The one instrument the session plays: a soft mallet. `dull` damps it (something went wrong). */
+  function mallet(t: number, f: number, peak: number, pan: number, dull = false) {
+    const v = voice(pan, 0.35);
     const g = G();
-    chain(O("sine", f, t, 0.7), g, dest);
-    hit(g.gain, t, peak, 0.002, 0.5);
+    chain(O(dull ? "triangle" : "sine", f, t, 0.9), dull ? F("lowpass", 500, 0.7) : G(1), g, v);
+    hit(g.gain, t, peak, 0.004, dull ? 0.3 : 0.7);
+    if (dull) return;
     const g2 = G();
-    chain(O("sine", f * 3.93, t, 0.15), g2, dest);
-    hit(g2.gain, t, peak * 0.22, 0.001, 0.06);
-    const c = G();
-    chain(N(t, 0.02), F("bandpass", f * 2, 1.2), c, dest);
-    hit(c.gain, t, peak * 0.5, 0.001, 0.006);
+    chain(O("sine", f * 4, t, 0.12), g2, v);
+    hit(g2.gain, t, peak * 0.12, 0.002, 0.05);
+  }
+
+  // The last grid slot taken. Notes never share a slot, and a note that would wait too long is dropped.
+  let slot = 0;
+  function onGrid(t: number) {
+    let s = Math.ceil(t / STEP) * STEP;
+    if (s <= slot) s = slot + STEP;
+    if (s - t > 0.6) return null;
+    slot = s;
+    return s;
+  }
+  /** A short motif: one note per eighth, starting on the next free slot. */
+  function phrase(notes: number[], pan: number, peak = 0.045, dull = false) {
+    const t = now();
+    if (t === null) return;
+    const s = onGrid(t);
+    if (s === null) return;
+    notes.forEach((f, i) => mallet(s + i * STEP, f, peak, pan, dull));
+    slot = s + (notes.length - 1) * STEP;
   }
 
   let lastKey = 0;
@@ -425,145 +444,64 @@ export function createSfx(visible: () => boolean) {
     },
 
     // ---------- The session at work ----------
-    // Each kind of work has its own voice, and sits on the side of the window it belongs to:
-    // the sandbox on the left, the preview and the phone on the right, your laptop in the middle.
+    // One instrument, one key, one grid. Each kind of work is a short motif instead of its own
+    // effect, placed on the side of the window it belongs to: the sandbox on the left, the preview
+    // and the phone on the right.
 
-    /** A tool call came back: one soft tick. */
-    ok() {
-      const t = now();
-      if (t === null) return;
-      const g = G();
-      chain(O("sine", 1318.51, t, 0.2), g, voice(SBX * 0.6, 0.3));
-      hit(g.gain, t, 0.014, 0.004, 0.16);
+    /** A sandbox is ready: the home chord, rising. */
+    boot() {
+      phrase([220, 277.18, 329.63], SBX);
     },
 
-    /** A sandbox boots somewhere else: a clean rising sweep that blooms into a chord. */
-    boot(dur: number) {
-      const t = now();
-      if (t === null) return;
-      const v = voice(SBX, 0.5);
-      const o = O("sawtooth", 110, t, dur + 0.1);
-      const lp = F("lowpass", 250, 4);
-      const g = G();
-      o.frequency.exponentialRampToValueAtTime(440, t + dur);
-      lp.frequency.exponentialRampToValueAtTime(2600, t + dur);
-      chain(o, lp, g, v);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.02, t + dur * 0.9);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
-      const a = G();
-      const bp = F("bandpass", 400, 1.4);
-      bp.frequency.exponentialRampToValueAtTime(4000, t + dur);
-      chain(N(t, dur + 0.1), bp, a, v);
-      a.gain.setValueAtTime(0.0001, t);
-      a.gain.exponentialRampToValueAtTime(0.018, t + dur);
-      a.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.1);
-      const b = t + dur;
-      [220, 329.63, 440, 554.37].forEach((f, i) => bell(b + i * 0.09, f, 0.018, 1.8, v));
+    /** Files synced to the sandbox (up) or applied back to your checkout (down). */
+    transfer(dir: "up" | "down") {
+      phrase(dir === "up" ? [329.63, 440] : [440, 329.63], SBX, 0.035);
     },
 
-    /** Files streaming over: sparkles that speed up as they go, from your laptop to the sandbox. */
-    transfer(dur: number, dir: "up" | "down") {
-      const t = now();
-      if (t === null) return;
-      const n = Math.round(dur * 9);
-      const [p0, p1] = dir === "up" ? [0, SBX] : [SBX, 0];
-      for (let i = 0; i < n; i++) {
-        const u = i / n;
-        const x = t + dur * Math.sqrt(u);
-        const w = dir === "up" ? u : 1 - u;
-        const f = HIGH[Math.min(HIGH.length - 1, Math.floor(w * 5 + r(0, 4)))]!;
-        const g = G();
-        chain(O("sine", f / 2, x, 0.2), g, P(p0 + (p1 - p0) * u), out);
-        hit(g.gain, x, r(0.008, 0.014), 0.005, 0.16);
-      }
-      const a = G();
-      const bp = F("bandpass", dir === "up" ? 1500 : 5000, 2);
-      bp.frequency.exponentialRampToValueAtTime(dir === "up" ? 5000 : 1500, t + dur);
-      chain(N(t, dur), bp, a, P(p1), out);
-      a.gain.setValueAtTime(0.0001, t);
-      a.gain.exponentialRampToValueAtTime(0.006, t + dur * 0.7);
-      a.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    },
-
-    /** One plain line of terminal output. */
-    tick(pan = SBX) {
-      const t = now();
-      if (t === null) return;
-      const g = G();
-      chain(N(t, 0.02), F("highpass", 3200, 0.7), g, P(pan), out);
-      hit(g.gain, t, 0.018, 0.001, 0.008);
-    },
-
-    /** A passing test file: each next one (n) a step higher, so a test run plays a melody. */
+    /** A passing test file: each next one (n) a step higher, so a test run plays a scale. */
     pass(n: number) {
-      const t = now();
-      if (t === null) return;
-      marimba(t, SCALE[Math.min(n + 7, SCALE.length - 1)]!, 0.055, voice(SBX, 0.35));
+      phrase([SCALE[Math.min(n + 7, SCALE.length - 1)]!], SBX, 0.04);
     },
 
-    /** A failing test: a low, sour bonk. */
+    /** A failing test: the same mallet, low and damped. */
     fail() {
-      const t = now();
-      if (t === null) return;
-      const v = voice(SBX, 0.25);
-      const lp = F("lowpass", 700, 1.5);
-      const g = G();
-      chain(lp, g, v);
-      for (const f of [110, 116.54]) {
-        const o = O("square", f, t, 0.4);
-        o.frequency.exponentialRampToValueAtTime(f * 0.82, t + 0.3);
-        o.connect(lp);
-      }
-      hit(g.gain, t, 0.06, 0.004, 0.32);
+      phrase([174.61], SBX, 0.08, true);
     },
 
-    /** The suite's summary line: a phrase that resolves when everything passes. */
+    /** The suite's summary: home when everything passes, falling short when it doesn't. */
     verdict(passed: boolean) {
-      const t = now();
-      if (t === null) return;
-      const v = voice(SBX * 0.7, 0.5);
-      const notes = passed ? [880, 1108.73, 1318.51] : [659.26, 523.25];
-      notes.forEach((f, i) => marimba(t + i * (passed ? 0.14 : 0.2), f, 0.05, v));
+      if (passed) phrase([659.26, 880], SBX, 0.05);
+      else phrase([329.63, 261.63], SBX, 0.07, true);
     },
 
-    /** A dev server compiling: a soft zip, a little higher each time. */
+    /** A dev server compiling. */
     compile(n: number) {
-      const t = now();
-      if (t === null) return;
-      const g = G();
-      const o = O("sine", 330 + n * 110, t, 0.3);
-      o.frequency.exponentialRampToValueAtTime(660 + n * 220, t + 0.18);
-      chain(o, g, voice(SBX, 0.3));
-      hit(g.gain, t, 0.02, 0.02, 0.24);
+      phrase([n ? 369.99 : 329.63], SBX, 0.03);
     },
 
     /** The dev server is up. */
     ready() {
-      const t = now();
-      if (t === null) return;
-      const v = voice(SBX, 0.6);
-      bell(t, 1318.51, 0.022, 1, v);
-      bell(t + 0.16, 1760, 0.018, 1.2, v);
+      phrase([440, 659.26], SBX, 0.045);
     },
 
     /**
-     * A dev server running in the sandbox: a quiet beat, as if through a wall. `open()` lets
-     * it through (the preview is on screen now); `stop()` fades it out.
+     * A dev server running in the sandbox: a quiet beat, as if through a wall, starting on the
+     * grid so the motifs above keep time with it. `open()` lets it through (the preview is on
+     * screen now); `stop()` fades it out.
      */
     server() {
-      const t = now();
+      const now0 = now();
       const none = { open() {}, stop() {} };
-      if (t === null) return none;
+      if (now0 === null) return none;
+      const t = Math.ceil(now0 / BEAT) * BEAT;
       const bus = G();
       const lp = F("lowpass", 520, 0.8);
       const p = P(SBX);
       chain(bus, lp, p, out);
       bus.gain.setValueAtTime(0.0001, t);
       bus.gain.exponentialRampToValueAtTime(1, t + 1);
-      const half = BEAT / 2;
-      for (let k = 0; k * half < 24; k++) {
-        const x = t + k * half;
+      for (let k = 0; k * STEP < 24; k++) {
+        const x = t + k * STEP;
         if (k % 2 === 0) {
           const o = O("sine", 120, x, 0.25);
           const g = G();
@@ -594,82 +532,32 @@ export function createSfx(visible: () => boolean) {
       };
     },
 
-    /** A preview URL goes live: a sonar ping out to the right, where its window opens. */
+    /** A preview URL goes live: one high note on the right, echoing in time. */
     ping() {
       const t = now();
       if (t === null) return;
-      const v = voice(PV, 0.6);
+      const s = onGrid(t);
+      if (s === null) return;
+      const v = voice(PV, 0.4);
       const d = ctx!.createDelay(1);
-      d.delayTime.value = 0.21;
-      const fb = G(0.25);
-      const wet = G(0.6);
+      d.delayTime.value = STEP;
+      const fb = G(0.3);
       chain(d, fb, d);
-      chain(d, F("lowpass", 2400, 0.7), wet, v);
-      const o = O("sine", 1318.51, t, 0.5);
+      chain(d, F("lowpass", 2000, 0.7), G(0.5), v);
       const g = G();
-      o.connect(g);
-      g.connect(v);
+      chain(O("sine", 1318.51, s, 0.6), g, v);
       g.connect(d);
-      hit(g.gain, t, 0.035, 0.004, 0.5);
+      hit(g.gain, s, 0.035, 0.004, 0.45);
     },
 
-    /** The agent reading a file on your laptop: a page turning. */
-    page() {
-      const t = now();
-      if (t === null) return;
-      const g = G();
-      const bp = F("bandpass", 2200, 1);
-      bp.frequency.exponentialRampToValueAtTime(5200, t + 0.12);
-      chain(N(t, 0.16), bp, g, out);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.04, t + 0.04);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-    },
-
-    /** The agent editing a file on your laptop: a quick, light flurry of keys. */
-    scribble(dur: number) {
-      const t = now();
-      if (t === null) return;
-      for (let x = t; x < t + dur; x += r(0.1, 0.18)) {
-        const g = G();
-        chain(N(x, 0.03), F("bandpass", r(1800, 3000), 1), g, P(r(-0.1, 0.1)), out);
-        hit(g.gain, x, r(0.015, 0.025), 0.002, 0.018);
-      }
-    },
-
-    /** The agent says something: a soft two-note bloop. */
+    /** The agent says something: one soft note in the middle. */
     say() {
-      const t = now();
-      if (t === null) return;
-      const v = voice(0, 0.4);
-      for (const [d, f] of [
-        [0, 440],
-        [0.07, 659.26],
-      ] as const) {
-        const o = O("sine", f * 0.9, t + d, 0.15);
-        const g = G();
-        o.frequency.exponentialRampToValueAtTime(f, t + d + 0.03);
-        chain(o, g, v);
-        hit(g.gain, t + d, 0.035, 0.004, 0.09);
-      }
+      phrase([440], 0, 0.03);
     },
 
-    /** One part of the session packed for the cloud: each a step higher, drifting right. */
+    /** One part of the session packed for the cloud: each a step higher, out to the right. */
     beam(n: number) {
-      const t = now();
-      if (t === null) return;
-      const f = SCALE[Math.min(n * 2 + 2, SCALE.length - 1)]!;
-      const p = P(-0.1);
-      p.pan.linearRampToValueAtTime(PV, t + 0.5);
-      p.connect(out);
-      const o = O("sine", f * 0.5, t, 0.6);
-      const g = G();
-      o.frequency.exponentialRampToValueAtTime(f, t + 0.25);
-      chain(o, g, p);
-      hit(g.gain, t, 0.025, 0.04, 0.45);
-      const s = G();
-      chain(o, s, verb);
-      hit(s.gain, t, 0.02, 0.04, 0.45);
+      phrase([SCALE[Math.min(n * 2 + 5, SCALE.length - 1)]!], PV, 0.035);
     },
 
     /** The session leaves for the cloud: a slow, soft swell of air drifting right. */

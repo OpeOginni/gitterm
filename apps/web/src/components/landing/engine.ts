@@ -752,8 +752,8 @@ export function startLanding(root: HTMLElement): () => void {
       else if (/^\d+ passed/.test(l)) sfx.verdict(true);
       else if (l.startsWith("Ready")) sfx.ready();
       else if (l.startsWith("compil")) sfx.compile(compiles++);
-      else sfx.tick();
-      if (!(await wait(260, id))) return false;
+      // One line per eighth note, in time with the sounds
+      if (!(await wait(250, id))) return false;
     }
     return true;
   }
@@ -840,7 +840,6 @@ export function startLanding(root: HTMLElement): () => void {
           `<div class="t-inline"><span>→</span><span>Read ${esc(st.sub ?? "")}</span></div>`,
           "inline",
         );
-        sfx.page();
         if (!(await wait(500, id))) return;
         continue;
       }
@@ -848,7 +847,6 @@ export function startLanding(root: HTMLElement): () => void {
         addEl(
           `<div class="t-block"><div class="hd">← Edit src/api/checkout.ts</div>${diffHtml()}</div>`,
         );
-        sfx.scribble((st.dur ?? 0) / 1000);
         setLaptop(st.laptop);
         if (!(await wait(st.dur ?? 0, id))) return;
         continue;
@@ -862,7 +860,6 @@ export function startLanding(root: HTMLElement): () => void {
         const out = st.out ?? [];
         for (const line of out) {
           addLine(o, esc(line));
-          sfx.tick(0);
           if (!(await wait((st.dur ?? 0) / out.length, id))) return;
         }
         if (st.error) {
@@ -877,12 +874,6 @@ export function startLanding(root: HTMLElement): () => void {
           `<div class="t-inline"><span class="g"><span class="spin-t">${SPIN[spinI]}</span></span><span class="args"><span class="n">${st.name}</span> ${st.argsHtml ?? esc(st.args ?? "")}</span></div>`,
           "inline",
         );
-        // Each tool sounds like the work it does
-        const secs = (st.dur ?? 0) / 1000;
-        if (st.name === "sandbox_create") sfx.boot(secs);
-        else if (st.name === "sandbox_sync") sfx.transfer(secs, "up");
-        else if (st.name === "sandbox_apply") sfx.transfer(secs, "down");
-        else if (st.name === "sandbox_preview") sfx.ping();
         if (st.term && st.stream) {
           if (!(await streamTerm(st.term, id, true))) return;
         } else {
@@ -890,7 +881,11 @@ export function startLanding(root: HTMLElement): () => void {
           if (st.term) await streamTerm(st.term, id, false);
         }
         need(".g", el).textContent = "✓";
-        sfx.ok();
+        // Each finished tool plays its own short motif
+        if (st.name === "sandbox_create") sfx.boot();
+        else if (st.name === "sandbox_sync") sfx.transfer("up");
+        else if (st.name === "sandbox_apply") sfx.transfer("down");
+        else if (st.name === "sandbox_preview") sfx.ping();
         if (st.name === "sandbox_job") {
           server = sfx.server();
           items.sandbox.classList.add("live");
