@@ -6,8 +6,8 @@
  * components mounted on the same page can react instantly without a reload.
  *
  * Categories:
- *   - "necessary": always allowed. Sign-in session, anonymous workspace
- *      token, sidebar layout. Required for the app to function.
+ *   - "necessary": always allowed. Sign-in session and sidebar layout.
+ *      Required for the app to function.
  *   - "analytics": optional. Product analytics (PostHog) used to understand
  *      feature usage and improve the product. No data is sold or shared
  *      with advertisers.

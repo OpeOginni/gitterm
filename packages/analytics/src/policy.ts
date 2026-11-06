@@ -2,9 +2,6 @@
 export interface AnalyticsEvents {
   auth_started: { method: "email" | "github" };
   auth_completed: { method: "email" | "github" };
-  trial_started: { uses_default_repo: boolean };
-  trial_succeeded: { duration_ms: number };
-  trial_failed: { duration_ms: number; error_code: string };
   workspace_create_started: WorkspaceProperties;
   /** API request accepted; provisioning may still be pending. */
   workspace_create_succeeded: WorkspaceProperties & { duration_ms: number };
@@ -51,9 +48,6 @@ const workspaceKeys = [
 export const EVENT_PROPERTIES: Record<keyof AnalyticsEvents, readonly string[]> = {
   auth_started: ["method"],
   auth_completed: ["method"],
-  trial_started: ["uses_default_repo"],
-  trial_succeeded: ["duration_ms"],
-  trial_failed: ["duration_ms", "error_code"],
   workspace_create_started: workspaceKeys,
   workspace_create_succeeded: [...workspaceKeys, "duration_ms"],
   workspace_create_failed: [...workspaceKeys, "duration_ms", "error_code"],

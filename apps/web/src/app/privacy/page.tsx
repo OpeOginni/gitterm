@@ -113,11 +113,6 @@ export default function PrivacyPage() {
                     category="Necessary"
                   />
                   <Row
-                    name="Anonymous workspace token"
-                    purpose="Short-lived (10 minutes). Lets visitors try a workspace without signing up."
-                    category="Necessary"
-                  />
-                  <Row
                     name="UI preferences"
                     purpose="Remembers small UI state such as sidebar open/closed."
                     category="Necessary"

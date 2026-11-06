@@ -38,16 +38,15 @@ const api = Bun.serve({
 });
 afterAll(() => api.stop(true));
 
-async function startReaper(app: "anon-reaper" | "worker", mode = "managed", idle = true) {
-  const name = app === "anon-reaper" ? "anon-reaper" : "idle-reaper";
+async function startReaper(idle = true) {
   const entry = process.env.GITTERM_REAPER_TEST_BUNDLED
-    ? `apps/${app}/dist/${name}.mjs`
-    : `apps/${app}/src/${name}.ts`;
+    ? "apps/worker/dist/idle-reaper.mjs"
+    : "apps/worker/src/idle-reaper.ts";
   const child = Bun.spawn([process.execPath, "--no-env-file", resolve(root, entry)], {
     cwd: root,
     env: {
       NODE_ENV: "production",
-      DEPLOYMENT_MODE: mode,
+      DEPLOYMENT_MODE: "managed",
       SERVER_URL: api.url.origin,
       INTERNAL_API_KEY: "reaper-test-key",
       REAP_INTERVAL_MINUTES: "0",
@@ -67,20 +66,8 @@ async function startReaper(app: "anon-reaper" | "worker", mode = "managed", idle
   return stdout;
 }
 
-test("managed anonymous reaper starts without API server or Polar credentials", async () => {
-  const stdout = await startReaper("anon-reaper");
-  expect(stdout).toContain("Completed. Found 0 expired workspace(s)");
-  expect(requests).toContain("internal.getAnonStragglerWorkspaces");
-});
-
-test("self-hosted anonymous reaper skips without contacting the API", async () => {
-  const before = requests.length;
-  expect(await startReaper("anon-reaper", "self-hosted")).toContain("Skipping outside managed");
-  expect(requests.length).toBe(before);
-});
-
 test("managed idle reaper starts without API server or Polar credentials", async () => {
-  const stdout = await startReaper("worker");
+  const stdout = await startReaper();
   expect(stdout).toContain("Pass completed. Lifecycle transitions: 0");
   expect(requests).toContain("internal.getIdleWorkspaces");
   expect(requests).toContain("internal.runBillingTasks");
@@ -89,7 +76,7 @@ test("managed idle reaper starts without API server or Polar credentials", async
 
 test("idle reaping can be disabled without disabling billing and cleanup", async () => {
   const before = requests.length;
-  expect(await startReaper("worker", "managed", false)).toContain("Idle reaping disabled");
+  expect(await startReaper(false)).toContain("Idle reaping disabled");
   const called = requests.slice(before);
   expect(called).not.toContain("internal.getIdleWorkspaces");
   expect(called).not.toContain("internal.getLongTermInactiveWorkspaces");

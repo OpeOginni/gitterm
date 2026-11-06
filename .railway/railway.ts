@@ -112,7 +112,6 @@ export default defineRailway((ctx) => {
       NEXT_PUBLIC_BASE_DOMAIN: preserve(),
       // This project hosts the managed product, not the email-only self-hosted image.
       NEXT_PUBLIC_DEPLOYMENT_MODE: "managed",
-      NEXT_PUBLIC_ENABLE_ANON_TRY: preserve(),
       NEXT_PUBLIC_ENABLE_BILLING: preserve(),
       NEXT_PUBLIC_ENABLE_EMAIL_AUTH: preserve(),
       NEXT_PUBLIC_ENABLE_GITHUB_AUTH: preserve(),
@@ -183,7 +182,6 @@ export default defineRailway((ctx) => {
       DEVICE_CODE_VERIFICATION_URI: preserve(),
       DISCORD_DM_CHANNEL_ID: preserve(),
       DISCORD_TOKEN: preserve(),
-      ENABLE_ANON_TRY: preserve(),
       ENABLE_GITHUB_AUTH: preserve(),
       ENCRYPTION_MASTER_KEY: preserve(),
       ENCRYPTION_MASTER_KEY_ID: preserve(),
@@ -212,34 +210,6 @@ export default defineRailway((ctx) => {
       WORKLOAD_IDENTITY_KEY_ID: preserve(),
       WORKLOAD_IDENTITY_PRIVATE_KEY: preserve(),
       WORKSPACE_API_URL: preserve(),
-      WORKSPACE_JWT_SECRET: preserve(),
-    },
-  });
-  const AnonInstanceReaper = service("Anon Instance Reaper", {
-    source: gitterm,
-    build: {
-      builder: "RAILPACK",
-      buildCommand: "turbo build --filter=anon-reaper",
-      watchPatterns: [
-        "apps/anon-reaper/**/*",
-        "packages/api/**/*",
-        "packages/config/**/*",
-        ...rootWatch,
-      ],
-    },
-    deploy: {
-      startCommand: "cd apps/anon-reaper && bun run dist/anon-reaper.mjs",
-      cronSchedule: "*/5 * * * *",
-      restartPolicyType: "NEVER",
-    },
-    replicas: { "europe-west4-drams3a": 1 },
-    networking: { privateNetworkEndpoint: "anon-instance-reaper" },
-    env: {
-      DEPLOYMENT_MODE: preserve(),
-      ENABLE_IDLE_REAPING: preserve(),
-      ENABLE_QUOTA_ENFORCEMENT: preserve(),
-      INTERNAL_API_KEY: preserve(),
-      SERVER_URL: preserve(),
       WORKSPACE_JWT_SECRET: preserve(),
     },
   });
@@ -298,7 +268,6 @@ export default defineRailway((ctx) => {
   return project("Gitterm", {
     resources: [
       Server,
-      AnonInstanceReaper,
       Listener,
       postgresVolume,
       drizzleGatewayVolume,

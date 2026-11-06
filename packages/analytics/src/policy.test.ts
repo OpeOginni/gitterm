@@ -51,7 +51,7 @@ describe("analytics privacy policy", () => {
 
   test("rejects content, non-scalar properties, and invalid durations", () => {
     expect(
-      eventProperties("trial_failed", {
+      eventProperties("workspace_create_failed", {
         duration_ms: Infinity,
         error_code: "TIMEOUT",
         prompt: "secret",

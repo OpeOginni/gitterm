@@ -309,6 +309,13 @@
       "when": 1792405120533,
       "tag": "0043_boat_provider_branding",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793798018620,
+      "tag": "0044_remove_anonymous_trials",
+      "breakpoints": true
     }
   ]
 }

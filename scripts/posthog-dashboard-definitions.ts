@@ -72,11 +72,6 @@ export const dashboardDefinitions = [
         ),
       ),
       insight(
-        "Trial outcomes",
-        "Anonymous trial attempts, successful responses and failures per day. Success is a trial launch response, not verified agent use.",
-        trends([event("trial_started"), event("trial_succeeded"), event("trial_failed")]),
-      ),
-      insight(
         "Daily workspace handoff users",
         "Distinct consenting people requesting a browser/desktop/CLI/editor handoff each day. This is an engagement proxy, not actual connected-agent DAU.",
         trends([event("workspace_connection_requested", "dau")]),

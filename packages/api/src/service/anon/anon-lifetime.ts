@@ -1,1 +1,0 @@
-export const ANON_WORKSPACE_TTL_SECONDS = 10 * 60;
