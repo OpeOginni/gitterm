@@ -173,6 +173,13 @@ export function createBoatSandboxTransport(config: {
       } catch (error) {
         throw failure(error, "stop the sandbox");
       }
+      // Boat replies before it has archived the box, and resuming until then fails.
+      const deadline = Date.now() + 120_000;
+      while ((await get(id)).state !== "archived") {
+        if (Date.now() > deadline)
+          throw new SandboxProviderError("timeout", "Boat did not finish pausing the sandbox.");
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+      }
     },
 
     async resume(id) {

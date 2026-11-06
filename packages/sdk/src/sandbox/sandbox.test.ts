@@ -158,6 +158,17 @@ describe("sandbox account isolation", () => {
     expect((await work.list()).map((item) => item.id)).not.toContain(mine.id);
   });
 
+  test("using a sandbox that no longer exists fails as not_found, so job watchers stop", async () => {
+    const personal = await clientFor("personal");
+    const mine = await personal.create({ name: "gone", lifetimeMinutes: 10 });
+    sandboxes.delete(mine.id);
+    expect((await personal.get(mine)).state).toBe("terminated");
+    await expect(personal.exec(mine, { command: "true" })).rejects.toMatchObject({
+      name: "SandboxProviderError",
+      code: "not_found",
+    });
+  });
+
   test("a different account name on the same provider key is still a different account", async () => {
     const personal = await clientFor("personal");
     const alias = await clientFor("alias");

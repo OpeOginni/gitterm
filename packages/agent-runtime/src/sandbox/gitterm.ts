@@ -72,13 +72,17 @@ export function createGittermComputeTransport(config: {
     const error = (await response.json().catch(() => ({}))) as {
       error?: { code?: string; message?: string };
     };
-    // The service rejecting our token is this deployment's configuration problem.
+    // Nothing here is a key an admin can fix under Providers: a rejected service token is the
+    // deployment's COMPUTE_SERVICE_TOKEN, and a provider key Compute uses is Gitterm's own.
+    if (response.status === 401)
+      throw new SandboxProviderError(
+        "provider",
+        `Gitterm Compute rejected this server's COMPUTE_SERVICE_TOKEN while trying to ${action}; it must match Compute's.`,
+      );
     const code: SandboxFailureCode =
-      response.status === 401
-        ? "auth"
-        : ((["auth", "not_found", "rate_limited", "timeout"] as const).find(
-            (known) => known === error.error?.code,
-          ) ?? "provider");
+      (["not_found", "rate_limited", "timeout"] as const).find(
+        (known) => known === error.error?.code,
+      ) ?? "provider";
     throw new SandboxProviderError(
       code,
       error.error?.message ?? `Gitterm failed to ${action} (${response.status}).`,

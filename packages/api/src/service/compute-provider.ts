@@ -1,6 +1,7 @@
 import { db, eq, inArray } from "@gitterm/db";
 import { cloudProvider, image, machineProfile } from "@gitterm/db/schema/cloud";
 import env, { isComputeEnabled } from "@gitterm/env/server";
+import { getBilling } from "../billing";
 
 /** The provider key of gitterm.dev's own sandboxes. */
 export const COMPUTE_PROVIDER_KEY = "gitterm";
@@ -56,7 +57,24 @@ export async function ensureComputeProvider(): Promise<void> {
         isDefault: size.isDefault,
       })
       .onConflictDoNothing({ target: [machineProfile.cloudProviderId, machineProfile.key] });
+  await warnUnpricedSizes(provider!.id);
   await markComputeImages();
+}
+
+/** Prices are set in admin; until then a size runs free, which is easy to miss. */
+async function warnUnpricedSizes(cloudProviderId: string): Promise<void> {
+  const billing = await getBilling();
+  if (!billing.enabled) return;
+  const profiles = await db
+    .select({ id: machineProfile.id, key: machineProfile.key })
+    .from(machineProfile)
+    .where(eq(machineProfile.cloudProviderId, cloudProviderId));
+  const prices = await billing.getMachinePrices(profiles.map((profile) => profile.id));
+  const unpriced = profiles.filter((profile) => !prices.get(profile.id));
+  if (unpriced.length)
+    console.warn(
+      `Gitterm sizes without a price run free: ${unpriced.map((profile) => profile.key).join(", ")}. Set them in Admin → Providers → Gitterm.`,
+    );
 }
 
 /** Images the sandbox service can run become available on Gitterm, under the same name. */

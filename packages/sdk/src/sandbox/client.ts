@@ -1,4 +1,5 @@
 import path from "node:path";
+import { SandboxProviderError } from "@gitterm/agent-runtime/sandbox/types";
 import {
   SandboxAccountError,
   type SandboxBackend,
@@ -204,7 +205,10 @@ export function createSandboxClient(options: {
         );
     }
     if (record.state === "terminated")
-      throw new Error(`Sandbox ${ref.id} no longer exists (deleted or expired).`);
+      throw new SandboxProviderError(
+        "not_found",
+        `Sandbox ${ref.id} no longer exists (deleted or expired).`,
+      );
     if (record.state !== "running") throw new Error(`Sandbox ${ref.id} is ${record.state}.`);
     return record;
   }

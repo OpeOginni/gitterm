@@ -63,7 +63,11 @@ All optional:
 | `persistent`  | Keep storage between restarts, where the provider allows                   |
 
 Self-hosting GitTerm? Sign in with `gitterm login --server https://gitterm.example.com`.
-Running a standalone OpenCode server? Set `localServerUrl` (and `localServerPassword`).
+`/cloud` talks to the OpenCode server that holds your session. It finds OpenCode's background
+service by itself. `opencode --standalone` uses a private server on a random port that `/cloud`
+can't reach; instead run `opencode serve --port 4096`, open it with
+`opencode --server http://127.0.0.1:4096`, and set `localServerUrl` to that address (and
+`localServerPassword` to its password).
 
 ## Good to know
 

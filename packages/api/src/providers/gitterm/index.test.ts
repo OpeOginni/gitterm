@@ -115,10 +115,16 @@ test("a Gitterm workspace is set up through sandbox calls and keeps a sandbox ha
   });
 });
 
-test("a failed setup step removes the sandbox", async () => {
+test("a failed clone says why and removes the sandbox", async () => {
   failOn = "git clone";
   try {
-    await expect(new GittermProvider().createWorkspace(config())).rejects.toThrow("exit 1");
+    await expect(new GittermProvider().createWorkspace(config())).rejects.toMatchObject({
+      name: "WorkspaceProvisionError",
+      code: "BAD_REQUEST",
+      message: expect.stringContaining(
+        "Couldn't clone https://github.com/acme/app (branch main): nope",
+      ),
+    });
     expect(destroyed).toEqual(["sbx1"]);
   } finally {
     failOn = undefined;

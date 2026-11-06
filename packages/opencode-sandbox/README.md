@@ -14,7 +14,9 @@ opencode plugin add @gitterm/opencode-sandbox
 
 ## 2. Add your provider key
 
-In `opencode.json` (project) or `~/.config/opencode/opencode.json` (global):
+In `~/.config/opencode/opencode.json` (global), or a project's `opencode.json`. OpenCode's
+background service doesn't load plugins from a project's config, so with a project config start
+OpenCode with `opencode --standalone`.
 
 ```jsonc
 {

@@ -31,6 +31,7 @@ import {
 import {
   BeforeAgentSetupError,
   isReservedWorkspaceEnvKey,
+  WorkspaceProvisionError,
   type ComputeProvider,
   type WorkspaceResumeResult,
 } from "../../providers/compute";
@@ -3314,6 +3315,12 @@ export const workspaceRouter = router({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: redactSensitiveText(safeError.message),
+          });
+        }
+        if (error instanceof WorkspaceProvisionError) {
+          throw new TRPCError({
+            code: error.code,
+            message: `${redactSensitiveText(workspaceCreateLogger.redact(error).message)} Reference: ${workspaceId}`,
           });
         }
 

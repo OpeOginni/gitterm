@@ -1,7 +1,7 @@
 import env from "@gitterm/env/server";
 import type { SandboxTransport } from "@gitterm/agent-runtime/sandbox/types";
 import { captureAgentAccessCredential } from "../access-credential";
-import { BeforeAgentSetupError } from "../compute";
+import { BeforeAgentSetupError, WorkspaceProvisionError } from "../compute";
 import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
@@ -38,13 +38,23 @@ const WORKSPACE_ROOT = "/home/user/workspace";
 
 const quote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
 
+/** The end of a failed command's output: git and friends put the reason last. */
+const lastLines = (error: unknown) =>
+  (error instanceof Error ? error.message : String(error))
+    .replace(/^Command failed \(exit \d+\): /, "")
+    .trim()
+    .split("\n")
+    .slice(-3)
+    .join(" ")
+    .slice(-500);
+
 /** Starts the agent server once: a resume runs it again, so skip it when the port answers. */
 function startAgentCommand(serve: { command: string; port: number }, repoDir: string) {
-  return [
-    `cd ${quote(repoDir)}`,
-    `(bash -c ${quote(`exec 3<>/dev/tcp/127.0.0.1/${serve.port}`)} 2>/dev/null ||`,
-    `nohup setsid bash -lc ${quote(serve.command)} > /tmp/agent-server.log 2>&1 </dev/null &)`,
-  ].join(" && ");
+  const answers = `bash -c ${quote(`exec 3<>/dev/tcp/127.0.0.1/${serve.port}`)} 2>/dev/null`;
+  const start = `nohup setsid bash -lc ${quote(serve.command)} > /tmp/agent-server.log 2>&1 </dev/null &`;
+  // Running means the agent answers, so wait for its port (resume runs this as well).
+  const wait = `i=0; until ${answers}; do i=$((i+1)); [ $i -lt 50 ] || { echo "The agent did not open port ${serve.port}; see /tmp/agent-server.log" >&2; exit 1; }; sleep 1; done`;
+  return `cd ${quote(repoDir)} && { ${answers} || { ${start} }; } && { ${wait}; }`;
 }
 
 /**
@@ -134,16 +144,24 @@ export class GittermProvider implements ComputeProvider {
       ),
     ) as Record<string, string>;
 
+    const size = metadata.size ?? "medium";
     const created = await logger.step("create-sandbox", async () =>
-      transport.create({
-        labels: { gitterm_workspace: config.workspaceId },
-        timeoutMs: await getWorkspaceIdleTimeoutMs(config.userId),
-        onTimeout: "pause",
-        template: metadata.image,
-        machine: { size: metadata.size ?? "medium" },
-        env: environment,
-        resumeCommand: startAgentCommand(serve, repoDir),
-      }),
+      transport
+        .create({
+          labels: { gitterm_workspace: config.workspaceId },
+          timeoutMs: await getWorkspaceIdleTimeoutMs(config.userId),
+          onTimeout: "pause",
+          template: metadata.image,
+          machine: { size },
+          env: environment,
+          resumeCommand: startAgentCommand(serve, repoDir),
+        })
+        .catch((error: unknown) => {
+          throw new WorkspaceProvisionError(
+            "SERVICE_UNAVAILABLE",
+            `Gitterm couldn't start a ${size} machine. ${error instanceof Error ? error.message : ""}`.trim(),
+          );
+        }),
     );
     const id = created.id;
 
@@ -175,7 +193,12 @@ export class GittermProvider implements ComputeProvider {
             `GIT_TERMINAL_PROMPT=0 git clone ${ref ? `--branch ${quote(ref)}` : ""} ${quote(repoUrl)} .`,
             repoDir,
             600_000,
-          ),
+          ).catch((error: unknown) => {
+            throw new WorkspaceProvisionError(
+              "BAD_REQUEST",
+              `Couldn't clone ${spec.repo!.url}${ref ? ` (branch ${ref})` : ""}: ${lastLines(error)} Check the URL and branch, and that Gitterm can access the repository.`,
+            );
+          }),
         );
         if (spec.repo.baseCommit) {
           await logger.step("checkout-base-commit", () =>
@@ -212,7 +235,16 @@ export class GittermProvider implements ComputeProvider {
         ),
       );
       await logger.step("start-agent-server", () =>
-        this.run(transport, id, startAgentCommand(serve, repoDir)),
+        this.run(transport, id, startAgentCommand(serve, repoDir)).catch(async () => {
+          const log = await transport
+            .run(id, "tail -c 1500 /tmp/agent-server.log", { timeoutMs: 10_000 })
+            .then((result) => result.stdout.trim())
+            .catch(() => "");
+          throw new WorkspaceProvisionError(
+            "INTERNAL_SERVER_ERROR",
+            `The agent didn't start on port ${serve.port}.${log ? ` Its log ends with:\n${log}` : ""}`,
+          );
+        }),
       );
       const postStartCommand = spec?.agent.serve?.postStartCommand;
       if (postStartCommand) {
