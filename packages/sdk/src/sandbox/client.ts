@@ -184,7 +184,8 @@ export function createSandboxClient(options: {
     resume: (id: string) => Promise<void>,
   ): Promise<{ record: SandboxRecord; filesLost: boolean }> {
     await resume(ref.id);
-    const record = await load(ref);
+    // Resuming joins a restart already under way, so it may still be starting.
+    const record = await settled(ref);
     if (record.state !== "running" || backend.capabilities.pause !== "state-losing")
       return { record, filesLost: false };
     const cleared = await store.update(ref, (stored) => {
@@ -193,9 +194,20 @@ export function createSandboxClient(options: {
     return { record: cleared ?? record, filesLost: true };
   }
 
+  /** Loads the sandbox, waiting while it starts: e.g. a parallel call is resuming it. */
+  async function settled(ref: SandboxRef): Promise<SandboxRecord> {
+    const deadline = Date.now() + 120_000;
+    let record = await load(ref);
+    while (record.state === "pending" && Date.now() < deadline) {
+      await sleep(1_000);
+      record = await load(ref);
+    }
+    return record;
+  }
+
   /** A sandbox paused for inactivity is resumed on use. `sync` restores files itself. */
   async function running(ref: SandboxRef, use: "sync" | "other" = "other"): Promise<SandboxRecord> {
-    let record = await load(ref);
+    let record = await settled(ref);
     if (record.state === "paused" && backend.resume) {
       const resumed = await resumeSandbox(ref, backend.resume);
       record = resumed.record;

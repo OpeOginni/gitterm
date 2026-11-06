@@ -1,6 +1,7 @@
 import { Daytona, Image, type Sandbox } from "@daytonaio/sdk";
 import {
   classifyFailure,
+  discardFailedCreate,
   SANDBOX_PROVIDER_PROFILES,
   SandboxProviderError,
   terminated,
@@ -109,8 +110,11 @@ export function createDaytonaSandboxTransport(config: {
         if (check.exitCode !== 0) throw new Error("sandbox did not run a command");
         return infoFrom(sandbox);
       } catch (error) {
-        await sandbox.delete().catch(() => {});
-        throw failure(error, "prepare the sandbox");
+        return discardFailedCreate(
+          () => sandbox.delete(),
+          sandbox.id,
+          failure(error, "prepare the sandbox"),
+        );
       }
     },
 

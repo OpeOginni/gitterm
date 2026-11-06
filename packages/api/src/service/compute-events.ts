@@ -53,6 +53,7 @@ export async function followComputeEvents(options: {
   let after = "latest";
   let delay = 1_000;
   while (!options.signal?.aborted) {
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
       const response = await fetch(`${options.url.replace(/\/$/, "")}/v1/events?after=${after}`, {
         headers: { authorization: `Bearer ${options.serviceToken}` },
@@ -62,7 +63,7 @@ export async function followComputeEvents(options: {
       delay = 1_000;
       let buffer = "";
       const decoder = new TextDecoder();
-      const reader = response.body.getReader();
+      reader = response.body.getReader();
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -77,14 +78,21 @@ export async function followComputeEvents(options: {
               return [line.slice(0, colon), line.slice(colon + 1).trimStart()];
             }),
           );
-          if (fields.id) after = fields.id;
+          // Events are numbered in order, so the first one fixes a position to replay from:
+          // after=latest would skip it if handling it fails.
+          if (fields.id && after === "latest") after = String(Number(fields.id) - 1);
           if (fields.event === "job.finished")
             await options.onJobFinished(JSON.parse(fields.data ?? "{}") as ComputeEvent);
+          // Only once handled: a failed delivery ends the stream and is read again on reconnect.
+          if (fields.id) after = fields.id;
         }
       }
     } catch (error) {
       if (options.signal?.aborted) return;
       console.error("[compute] event stream interrupted:", error);
+    } finally {
+      // Close this connection before opening the next one.
+      await reader?.cancel().catch(() => {});
     }
     await new Promise((resolve) => setTimeout(resolve, delay));
     delay = Math.min(delay * 2, 30_000);

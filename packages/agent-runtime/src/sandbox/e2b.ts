@@ -8,6 +8,7 @@ import {
 } from "e2b";
 import {
   classifyFailure,
+  discardFailedCreate,
   SANDBOX_PROVIDER_PROFILES,
   SandboxProviderError,
   terminated,
@@ -121,8 +122,11 @@ export function createE2BSandboxTransport(config: {
         return infoFrom(await Sandbox.getInfo(sandbox.sandboxId, opts));
       } catch (error) {
         // Never leave a billable sandbox behind when setup after creation fails.
-        await Sandbox.kill(sandbox.sandboxId, opts).catch(() => {});
-        throw failure(error, "prepare the sandbox");
+        return discardFailedCreate(
+          (id) => Sandbox.kill(id, opts),
+          sandbox.sandboxId,
+          failure(error, "prepare the sandbox"),
+        );
       }
     },
 

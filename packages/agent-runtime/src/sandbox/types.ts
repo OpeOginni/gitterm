@@ -25,11 +25,39 @@ export type SandboxFailureCode = "auth" | "not_found" | "rate_limited" | "timeou
 /** The provider or its API failed. Distinct from a command that ran and exited non-zero. */
 export class SandboxProviderError extends Error {
   readonly code: SandboxFailureCode;
+  /** A sandbox the failed call created but could not delete. The caller must delete it. */
+  leftoverId?: string;
   constructor(code: SandboxFailureCode, message: string) {
     super(message);
     this.name = "SandboxProviderError";
     this.code = code;
   }
+}
+
+/**
+ * Deletes a sandbox whose setup failed after the provider created it, then throws `error`.
+ * If the delete fails too, the thrown error's `leftoverId` names the sandbox so the caller
+ * can record it and retry.
+ */
+export async function discardFailedCreate(
+  destroy: (id: string) => Promise<unknown>,
+  id: string,
+  error: unknown,
+): Promise<never> {
+  const deleted = await destroy(id).then(
+    () => true,
+    () => false,
+  );
+  if (deleted) throw error;
+  const failed =
+    error instanceof SandboxProviderError
+      ? error
+      : new SandboxProviderError(
+          "provider",
+          error instanceof Error ? error.message : String(error),
+        );
+  failed.leftoverId = id;
+  throw failed;
 }
 
 export type SandboxProviderState = "pending" | "running" | "paused" | "terminated";

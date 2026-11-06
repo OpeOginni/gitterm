@@ -54,6 +54,25 @@ export function isResumableWorkspaceStatus(status: string): boolean {
 }
 
 /**
+ * Whether reconciling with the provider may move a workspace out of `pending`. A create or
+ * restart holds `pending` while it works and settles the row itself; reconciling meanwhile
+ * would undo that, publishing it `running` before its agent is, or `paused` before a resume
+ * lands so a second restart gets in. Its operation lease says whether it is still working.
+ */
+export function mayReconcilePending(
+  row: { status: string; upstreamUrl: string | null; operationLeaseUntil: Date | null },
+  liveStatus: string,
+  now = Date.now(),
+): boolean {
+  if (row.status !== "pending" || liveStatus === "terminated") return true;
+  if (row.operationLeaseUntil && row.operationLeaseUntil.getTime() > now) return false;
+  // A create that never finished (it sets the upstream when it settles) has nothing to publish.
+  if (!row.upstreamUrl) return false;
+  // A restart whose owner is gone, or one the provider settles: take the provider's word.
+  return true;
+}
+
+/**
  * Resolve the project directory inside a sandbox for a given provider.
  * E2B and Gitterm use `/home/user/workspace`, Vercel uses `/vercel/sandbox`, Boat uses
  * `/home/user`, exe.dev uses `/home/exedev`, and most other providers use

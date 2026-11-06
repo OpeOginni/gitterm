@@ -3,6 +3,7 @@ import { BoxApi, Configuration, waitUntilReady, type Box } from "@asciidev/box-s
 import {
   accountHash,
   classifyFailure,
+  discardFailedCreate,
   SANDBOX_PROVIDER_PROFILES,
   SandboxProviderError,
   shellQuote,
@@ -129,8 +130,7 @@ export function createBoatSandboxTransport(config: {
         await client.update({ boxId: id, updateBoxRequest: { name } });
         return infoFrom(await get(id));
       } catch (error) {
-        await destroy(id).catch(() => {});
-        throw failure(error, "prepare the sandbox");
+        return discardFailedCreate(destroy, id, failure(error, "prepare the sandbox"));
       }
     },
 

@@ -61,3 +61,48 @@ test("the sandbox event stream is parsed across chunks and resumed after a drop"
   // Starts from new events, then resumes after the last one it saw.
   expect(requests).toEqual(["?after=latest Bearer secret", "?after=8 Bearer secret"]);
 }, 15_000);
+
+test("a first event whose delivery fails is delivered again, and the old stream is closed", async () => {
+  const requests: string[] = [];
+  let firstClosed = false;
+  const encoder = new TextEncoder();
+  const event =
+    'id: 7\nevent: job.finished\ndata: {"sandboxId":"sbx_a","data":{"jobId":"job_1","status":"failed","exitCode":2}}\n\n';
+  const server = Bun.serve({
+    port: 0,
+    idleTimeout: 0,
+    fetch(request) {
+      const after = new URL(request.url).searchParams.get("after")!;
+      requests.push(after);
+      const stream = new ReadableStream({
+        start(controller) {
+          // Only events after `after`, like Compute; then stay open, as a live stream does.
+          if (after === "latest" || Number(after) < 7) controller.enqueue(encoder.encode(event));
+        },
+        cancel() {
+          if (requests.length === 1) firstClosed = true;
+        },
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    },
+  });
+  const seen: string[] = [];
+  let failures = 1;
+  const controller = new AbortController();
+  const following = followComputeEvents({
+    url: `http://127.0.0.1:${server.port}`,
+    serviceToken: "secret",
+    onJobFinished: (received) => {
+      if (failures-- > 0) throw new Error("database unavailable");
+      seen.push(received.data!.jobId!);
+    },
+    signal: controller.signal,
+  });
+  for (let i = 0; i < 100 && seen.length < 1; i++) await Bun.sleep(30);
+  controller.abort();
+  await following;
+  server.stop(true);
+  expect(seen).toEqual(["job_1"]);
+  expect(requests.slice(0, 2)).toEqual(["latest", "6"]);
+  expect(firstClosed).toBe(true);
+}, 15_000);

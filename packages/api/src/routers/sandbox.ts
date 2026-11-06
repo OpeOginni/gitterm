@@ -362,10 +362,31 @@ export const sandboxRouter = router({
         });
         externalId = sandboxHandle(input.provider, created.id);
       } catch (error) {
-        await updateWorkspaceByIdAndInvalidate(id, {
-          status: "terminated",
+        const failed = {
+          status: "terminated" as const,
           terminatedAt: new Date(),
           updatedAt: new Date(),
+        };
+        const leftover = error instanceof SandboxProviderError ? error.leftoverId : undefined;
+        if (!leftover) {
+          await updateWorkspaceByIdAndInvalidate(id, failed);
+          toTRPCError(error);
+        }
+        // The provider made a sandbox it then couldn't delete. Publish it with a new cleanup
+        // generation, in one transaction: a cleanup already running saw no handle, and must not
+        // finish this one's queue entry.
+        await db.transaction(async (tx) => {
+          await tx
+            .update(workspace)
+            .set({ ...failed, externalInstanceId: sandboxHandle(input.provider, leftover) })
+            .where(eq(workspace.id, id));
+          await tx
+            .insert(workspaceTermination)
+            .values({ workspaceId: id })
+            .onConflictDoUpdate({
+              target: workspaceTermination.workspaceId,
+              set: { generation: randomUUID(), createdAt: new Date() },
+            });
         });
         toTRPCError(error);
       }

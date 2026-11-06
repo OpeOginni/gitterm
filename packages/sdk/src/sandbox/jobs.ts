@@ -188,6 +188,8 @@ export async function startJob(
       `[ ! -e started ] || { echo "job already started" >&2; exit 17; }`,
       `${NOW} > started`,
       `nohup setsid sh runner.sh ${q(dir)} ${seconds} ${q(input.cwd)} > /dev/null 2>&1 < /dev/null &`,
+      // Until the runner writes its pid, a read would take the job for lost; wait for it.
+      `i=0; until [ -s runner.pid ]; do i=$((i+1)); [ $i -le 100 ] || { echo "the job runner did not start" >&2; exit 1; }; sleep 0.1; done`,
       `echo started`,
     ].join("\n"),
     { timeoutMs: 30_000 },

@@ -166,6 +166,8 @@ export class GittermProvider implements ComputeProvider {
     const id = created.id;
 
     try {
+      // Recorded first, so a sandbox whose setup fails is still deleted if the cleanup below fails.
+      await config.onProvisioned?.({ externalServiceId: sandboxHandle("gitterm", id) });
       await logger.step("create-workspace-directory", () =>
         this.run(transport, id, `mkdir -p ${quote(repoDir)}`),
       );
@@ -264,6 +266,7 @@ export class GittermProvider implements ComputeProvider {
         accessCredential,
       };
     } catch (error) {
+      // Failed provisioning also queues this handle for cleanup, which retries a failed delete.
       await transport.destroy(id).catch(() => undefined);
       throw error;
     }

@@ -8,6 +8,7 @@ import {
 } from "./exec-server";
 import {
   classifyFailure,
+  discardFailedCreate,
   SANDBOX_PROVIDER_PROFILES,
   SandboxProviderError,
   terminated,
@@ -223,8 +224,7 @@ export function createRailwaySandboxTransport(config: {
         return infoFrom(id, await snapshot(id));
       } catch (error) {
         // Never leave a billable service behind when setup after creation fails.
-        await destroy(id).catch(() => {});
-        throw error;
+        return discardFailedCreate(destroy, id, error);
       }
     },
 

@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import {
   accountHash,
   classifyFailure,
+  discardFailedCreate,
   SANDBOX_PROVIDER_PROFILES,
   SandboxProviderError,
   shellQuote,
@@ -153,8 +154,7 @@ export function createExeDevSandboxTransport(config: {
         if (check.exitCode !== 0) throw new Error("VM did not run a command");
         return info(name);
       } catch (error) {
-        await exec(`rm ${name}`, "delete the sandbox").catch(() => {});
-        throw error;
+        return discardFailedCreate(() => exec(`rm ${name}`, "delete the sandbox"), name, error);
       }
     },
 

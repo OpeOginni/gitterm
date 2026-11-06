@@ -145,6 +145,11 @@ export const workspace = pgTable(
     metadata: jsonb("metadata").$type<Record<string, string>>().notNull().default({}),
     /** When set, the reaper terminates the workspace at this time regardless of activity. */
     autoTerminateAt: timestamp("auto_terminate_at"),
+    /**
+     * Held by the create or restart working on a `pending` workspace, renewed while it runs.
+     * Reconciling with the provider leaves the workspace to it until this passes.
+     */
+    operationLeaseUntil: timestamp("operation_lease_until"),
     /** Caller-supplied public image (registry reference or E2B template) used instead of the catalog image. */
     customImage: text("custom_image"),
     reservedSubdomain: text("reserved_subdomain"), // paid feature for custom subdomains
