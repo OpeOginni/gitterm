@@ -26,6 +26,8 @@ export type JobRecord = {
   timeoutMs: number;
   /** Names (never values) of variables passed to the job. */
   secretNames: string[];
+  /** The conversation that started the job, told when it finishes. */
+  sessionId?: string | null;
 };
 
 /** A downloaded file and the job (and therefore snapshot) that produced it. */

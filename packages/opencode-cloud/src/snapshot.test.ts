@@ -215,5 +215,7 @@ describe("checkout identity and origin", () => {
     expect(safeRelativePath("a/normal.txt")).toBe(true);
     expect(sensitivePath(".env.production")).toBe(true);
     expect(sensitivePath(".env.example")).toBe(false);
+    expect(sensitivePath(".env.selfhost.example")).toBe(false);
+    expect(sensitivePath(".env.production.local")).toBe(true);
   });
 });

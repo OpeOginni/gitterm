@@ -3,6 +3,7 @@ import { BoxApi, Configuration, waitUntilReady, type Box } from "@asciidev/box-s
 import {
   accountHash,
   classifyFailure,
+  discardFailedCreate,
   SANDBOX_PROVIDER_PROFILES,
   SandboxProviderError,
   shellQuote,
@@ -117,6 +118,7 @@ export function createBoatSandboxTransport(config: {
               type: (input.machine?.size as typeof config.size) ?? config.size,
               ttlSeconds: Math.ceil(input.timeoutMs / 1000),
               noEnv: true,
+              ...(input.env ? { env: input.env } : {}),
             },
           })
         ).box.id;
@@ -128,8 +130,7 @@ export function createBoatSandboxTransport(config: {
         await client.update({ boxId: id, updateBoxRequest: { name } });
         return infoFrom(await get(id));
       } catch (error) {
-        await destroy(id).catch(() => {});
-        throw failure(error, "prepare the sandbox");
+        return discardFailedCreate(destroy, id, failure(error, "prepare the sandbox"));
       }
     },
 
@@ -171,6 +172,13 @@ export function createBoatSandboxTransport(config: {
         await client.stop({ boxId: id });
       } catch (error) {
         throw failure(error, "stop the sandbox");
+      }
+      // Boat replies before it has archived the box, and resuming until then fails.
+      const deadline = Date.now() + 120_000;
+      while ((await get(id)).state !== "archived") {
+        if (Date.now() > deadline)
+          throw new SandboxProviderError("timeout", "Boat did not finish pausing the sandbox.");
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
       }
     },
 

@@ -9,6 +9,7 @@ import { DeviceCodeService } from "@gitterm/api/service/auth/cli/device-code";
 import { getGitHubAppService } from "@gitterm/api/service/github";
 import { workspaceJWT } from "@gitterm/api/service/auth/workspace-jwt";
 import { startRunWatcherSweep } from "@gitterm/api/service/agent-run";
+import { ensureComputeProvider } from "@gitterm/api/service/compute-provider";
 import { and, db, eq } from "@gitterm/db";
 import { workspace } from "@gitterm/db/schema/workspace";
 import { googleCloudIntegration, googleIssuerConfig } from "@gitterm/db/schema/integrations";
@@ -288,6 +289,11 @@ app.get("/api/health", (c) => {
 // Active runs are advanced only by a watcher; this re-attaches after a restart
 // and keeps ownership balanced across replicas.
 startRunWatcherSweep();
+
+// gitterm.dev only: Gitterm's own sandbox provider and its sizes. A no-op when self-hosted.
+ensureComputeProvider().catch((error: unknown) =>
+  console.error("Gitterm sandbox provider setup failed", error),
+);
 
 export default {
   fetch: app.fetch,

@@ -15,6 +15,8 @@ export const SANDBOX_PROVIDERS = [
   "exedev",
   "railway",
   "aws",
+  /** Gitterm's own sandboxes: gitterm.dev only. Sizes, not providers; see ./gitterm.ts. */
+  "gitterm",
 ] as const;
 export type SandboxProviderKey = (typeof SANDBOX_PROVIDERS)[number];
 
@@ -23,11 +25,39 @@ export type SandboxFailureCode = "auth" | "not_found" | "rate_limited" | "timeou
 /** The provider or its API failed. Distinct from a command that ran and exited non-zero. */
 export class SandboxProviderError extends Error {
   readonly code: SandboxFailureCode;
+  /** A sandbox the failed call created but could not delete. The caller must delete it. */
+  leftoverId?: string;
   constructor(code: SandboxFailureCode, message: string) {
     super(message);
     this.name = "SandboxProviderError";
     this.code = code;
   }
+}
+
+/**
+ * Deletes a sandbox whose setup failed after the provider created it, then throws `error`.
+ * If the delete fails too, the thrown error's `leftoverId` names the sandbox so the caller
+ * can record it and retry.
+ */
+export async function discardFailedCreate(
+  destroy: (id: string) => Promise<unknown>,
+  id: string,
+  error: unknown,
+): Promise<never> {
+  const deleted = await destroy(id).then(
+    () => true,
+    () => false,
+  );
+  if (deleted) throw error;
+  const failed =
+    error instanceof SandboxProviderError
+      ? error
+      : new SandboxProviderError(
+          "provider",
+          error instanceof Error ? error.message : String(error),
+        );
+  failed.leftoverId = id;
+  throw failed;
 }
 
 export type SandboxProviderState = "pending" | "running" | "paused" | "terminated";
@@ -83,6 +113,13 @@ export type SandboxCreateInput = {
    * use (`templateSuffix`, `resources`, `vcpus`, `size`, `cpu`/`memory`/`disk`). Managed only.
    */
   machine?: Record<string, unknown>;
+  /**
+   * Environment for every process in the sandbox, set at creation. E2B and Boat support it;
+   * other providers ignore it, so pass per-command env there.
+   */
+  env?: Record<string, string>;
+  /** Run after every resume, to restart services a pause stopped. Gitterm only. */
+  resumeCommand?: string;
 };
 
 export interface SandboxTransport {
@@ -121,6 +158,7 @@ export const GITTERM_PREVIEW_PROVIDERS: readonly SandboxProviderKey[] = [
   "daytona",
   "boat",
   "exedev",
+  "gitterm",
 ];
 
 const DAY = 24 * 60 * 60_000;
@@ -167,6 +205,11 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       pause: "state-losing",
       maxLifetimeMs: DAY,
     },
+  },
+  // The Gitterm server enforces lifetimes and serves previews.
+  gitterm: {
+    home: "/home/user",
+    capabilities: { expiry: "hard", previews: "private", pause: "stateful", maxLifetimeMs: DAY },
   },
 };
 

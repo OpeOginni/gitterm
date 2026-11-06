@@ -59,6 +59,8 @@ export function imageSupportsProvider(
       return Boolean(metadata?.boat?.setupCommands?.length);
     case "exedev":
       return Boolean(metadata?.exedev);
+    case "gitterm":
+      return Boolean((metadata?.gitterm as { image?: string } | undefined)?.image);
     case "railway":
       return Boolean(metadata?.railway);
     case "local":

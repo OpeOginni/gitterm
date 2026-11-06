@@ -1,6 +1,7 @@
 import { Daytona, Image, type Sandbox } from "@daytonaio/sdk";
 import {
   classifyFailure,
+  discardFailedCreate,
   SANDBOX_PROVIDER_PROFILES,
   SandboxProviderError,
   terminated,
@@ -40,6 +41,8 @@ export function createDaytonaSandboxTransport(config: {
   apiKey: string;
   target?: "us" | "eu";
   snapshot?: string;
+  /** Used when no machine profile is given. A snapshot carries its own size instead. */
+  resources?: { cpu?: number; memory?: number; disk?: number };
 }): SandboxTransport {
   if (!config.apiKey?.trim()) throw new SandboxProviderError("auth", "Daytona apiKey is empty.");
   const client = new Daytona({
@@ -69,6 +72,8 @@ export function createDaytonaSandboxTransport(config: {
       validateLifetime(input.timeoutMs, profile.capabilities.maxLifetimeMs);
       const minutes = Math.ceil(input.timeoutMs / 60_000);
       const kill = (input.onTimeout ?? "kill") === "kill";
+      const resources =
+        (input.machine?.resources as typeof config.resources | undefined) ?? config.resources;
       let sandbox: Sandbox;
       try {
         sandbox = await client.create(
@@ -80,9 +85,7 @@ export function createDaytonaSandboxTransport(config: {
                     "sleep",
                     "infinity",
                   ]),
-                  ...(input.machine?.resources
-                    ? { resources: input.machine.resources as { cpu?: number; memory?: number } }
-                    : {}),
+                  ...(resources ? { resources } : {}),
                 }),
             labels: {
               ...input.labels,
@@ -107,8 +110,11 @@ export function createDaytonaSandboxTransport(config: {
         if (check.exitCode !== 0) throw new Error("sandbox did not run a command");
         return infoFrom(sandbox);
       } catch (error) {
-        await sandbox.delete().catch(() => {});
-        throw failure(error, "prepare the sandbox");
+        return discardFailedCreate(
+          () => sandbox.delete(),
+          sandbox.id,
+          failure(error, "prepare the sandbox"),
+        );
       }
     },
 

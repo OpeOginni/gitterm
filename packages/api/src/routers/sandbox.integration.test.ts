@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { Context } from "../context";
+import { SandboxProviderError } from "@gitterm/agent-runtime/sandbox/types";
 
 /**
  * Managed sandboxes against a disposable local database, with the E2B transport faked.
@@ -37,6 +38,7 @@ const { getWorkspacePortUrl } = await import("../utils/routing");
 const { Hono } = await import("hono");
 const { auth } = await import("@gitterm/auth");
 const { getWorkspaceRouteAccess } = await import("../service/workspace-route-access");
+const { holdWorkspaceOperation } = await import("../service/workspace-operation");
 /** Providers this suite enabled, disabled again afterwards. */
 let enabledForTest: string[] = [];
 
@@ -60,6 +62,14 @@ const WEBHOOK_SECRET = "test-webhook-secret";
 const mocks: { mockRestore(): void }[] = [];
 /** Runs inside the fake provider's resume call. */
 let duringResume: ((id: string) => Promise<void>) | undefined;
+/** The fake provider rejects pauses, as for a sandbox it no longer has. */
+let failPauses = false;
+/** Runs inside the fake provider's status read. */
+let duringInfo: (() => Promise<void>) | undefined;
+/** The fake provider creates this sandbox, fails to set it up, and can't delete it. */
+let leftoverOnCreate: string | undefined;
+/** Runs inside a create that is about to fail with `leftoverOnCreate`. */
+let beforeLeftover: ((workspaceId: string) => Promise<void>) | undefined;
 /** What the fake provider asked for, and the access headers its previews return. */
 const providerPublic: boolean[] = [];
 let previewHeaders: Record<string, string> = { "e2b-traffic-access-token": "t" };
@@ -75,6 +85,12 @@ beforeAll(async () => {
       machine?: Record<string, unknown>;
       publicPreviews?: boolean;
     }) {
+      if (leftoverOnCreate) {
+        await beforeLeftover?.(input.labels.gitterm_workspace!);
+        const error = new SandboxProviderError("provider", "E2B failed to prepare the sandbox.");
+        error.leftoverId = leftoverOnCreate;
+        throw error;
+      }
       const id = `fake-${randomUUID()}`;
       providerPublic.push(input.publicPreviews === true);
       created.set(id, { ...input.labels, template: input.template ?? "" });
@@ -96,7 +112,9 @@ beforeAll(async () => {
     async readFile() {
       return new Uint8Array([1, 2, 3]);
     },
-    async pause() {},
+    async pause() {
+      if (failPauses) throw new Error("The sandbox was not found.");
+    },
     async resume(id: string) {
       await duringResume?.(id);
     },
@@ -110,6 +128,7 @@ beforeAll(async () => {
       if (!acceptOnlyDestroys) providerStates.set(id, "terminated");
     },
     async info(id: string) {
+      await duringInfo?.();
       return {
         id,
         state: providerStates.get(id) ?? "running",
@@ -462,6 +481,87 @@ integration("a sandbox is provisioned at the machine profile it is billed at", a
 });
 
 integration(
+  "a Gitterm sandbox runs at the chosen size, and Gitterm is offered for workspaces",
+  async () => {
+    await terminateAll(userId);
+    // What ensureComputeProvider creates on gitterm.dev.
+    const [compute] = await db
+      .insert(cloudProvider)
+      .values({
+        name: `Gitterm ${randomUUID()}`,
+        providerKey: "gitterm",
+        isSandbox: true,
+        supportsRegions: false,
+        machineSelectionPolicy: { mode: "profiles" },
+      })
+      .returning();
+    try {
+      for (const [key, vcpus, isDefault] of [
+        ["small", 2, false],
+        ["medium", 4, true],
+        ["large", 8, false],
+      ] as const)
+        await db.insert(machineProfile).values({
+          cloudProviderId: compute!.id,
+          key,
+          name: key,
+          vcpus,
+          memoryGb: vcpus * 2,
+          providerOptions: { size: key },
+          isDefault,
+        });
+      const sandbox = await caller(userId).create({
+        provider: "gitterm",
+        name: "compute",
+        lifetimeMinutes: 5,
+        machine: "large",
+      });
+      const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+      expect(row!.externalInstanceId).toStartWith("sandbox:gitterm:");
+      expect(requested.get(row!.externalInstanceId.split(":").at(-1)!)).toEqual({
+        template: undefined,
+        machine: { size: "large" },
+      });
+      const providers = workspaceRouter.createCaller({
+        session: { user: { id: userId } },
+      } as unknown as Context);
+      const forWorkspaces = (await providers.listCloudProviders({ cloudOnly: true }))
+        .cloudProviders;
+      expect(forWorkspaces.some((provider) => provider.id === compute!.id)).toBe(true);
+    } finally {
+      await terminateAll(userId);
+      await db.delete(cloudProvider).where(eq(cloudProvider.id, compute!.id));
+    }
+  },
+);
+
+integration("the caller chooses a machine profile within the plan", async () => {
+  await terminateAll(userId);
+  const sandbox = await caller(userId).create({
+    name: "large",
+    lifetimeMinutes: 5,
+    machine: "large",
+  });
+  const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  expect(requested.get(row!.externalInstanceId.split(":").at(-1)!)?.machine).toEqual({
+    templateSuffix: "-lg",
+  });
+  await terminateAll(userId);
+
+  machineAccess = "smallest";
+  try {
+    await expect(
+      caller(userId).create({ name: "denied", lifetimeMinutes: 5, machine: "large" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("small") });
+  } finally {
+    machineAccess = "any";
+  }
+  await expect(
+    caller(userId).create({ name: "unknown", lifetimeMinutes: 5, machine: "huge" }),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+});
+
+integration(
   "a resume webhook that arrives during the resume leaves the sandbox running",
   async () => {
     await terminateAll(userId);
@@ -488,6 +588,188 @@ integration(
     expect(open.filter((session) => !session.stoppedAt)).toHaveLength(1);
   },
 );
+
+integration("parallel resumes of a paused sandbox join one restart", async () => {
+  await terminateAll(userId);
+  const sandbox = await caller(userId).create({ name: "parallel-resume", lifetimeMinutes: 5 });
+  const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  const providerId = row!.externalInstanceId.split(":").at(-1)!;
+  await e2bWebhook(providerId, "paused");
+  let resumes = 0;
+  duringResume = async () => {
+    resumes++;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  };
+  try {
+    const workspaces = workspaceRouter.createCaller({
+      session: { user: { id: userId } },
+    } as unknown as Context);
+    const results = await Promise.all(
+      [1, 2, 3].map(() => workspaces.restartWorkspace({ workspaceId: sandbox.id })),
+    );
+    for (const result of results) expect(["running", "pending"]).toContain(result.status);
+  } finally {
+    duringResume = undefined;
+  }
+  expect(resumes).toBe(1);
+  // E2B reports the resume by webhook.
+  await e2bWebhook(providerId, "resumed");
+  expect((await caller(userId).get({ sandboxId: sandbox.id })).status).toBe("running");
+});
+
+integration("a sandbox the provider made but couldn't delete is queued for cleanup", async () => {
+  await terminateAll(userId);
+  const leftover = `fake-${randomUUID()}`;
+  leftoverOnCreate = leftover;
+  try {
+    await expect(caller(userId).create({ name: "leftover", lifetimeMinutes: 5 })).rejects.toThrow();
+  } finally {
+    leftoverOnCreate = undefined;
+  }
+  const [row] = await db
+    .select()
+    .from(workspace)
+    .where(eq(workspace.externalInstanceId, `sandbox:e2b:${leftover}`));
+  expect(row!.status).toBe("terminated");
+  await internal().retryWorkspaceTerminations();
+  expect(destroyed).toContain(leftover);
+  const [after] = await db.select().from(workspace).where(eq(workspace.id, row!.id));
+  expect(after!.externalInstanceId).toBe("");
+});
+
+integration(
+  "a leftover from a failed create outlives a cleanup that started before it",
+  async () => {
+    await terminateAll(userId);
+    const leftover = `fake-${randomUUID()}`;
+    let workspaceId = "";
+    let earlierGeneration = "";
+    leftoverOnCreate = leftover;
+    // A cleanup claims the queue entry while the handle is still empty.
+    beforeLeftover = async (id) => {
+      workspaceId = id;
+      const [claimed] = await db
+        .insert(workspaceTermination)
+        .values({ workspaceId: id })
+        .returning();
+      earlierGeneration = claimed!.generation;
+    };
+    try {
+      await expect(caller(userId).create({ name: "late", lifetimeMinutes: 5 })).rejects.toThrow();
+    } finally {
+      leftoverOnCreate = undefined;
+      beforeLeftover = undefined;
+    }
+    // That cleanup finishes: it had no handle to delete, and removes only its own generation.
+    await db
+      .delete(workspaceTermination)
+      .where(
+        and(
+          eq(workspaceTermination.workspaceId, workspaceId),
+          eq(workspaceTermination.generation, earlierGeneration),
+        ),
+      );
+    const queued = await db
+      .select()
+      .from(workspaceTermination)
+      .where(eq(workspaceTermination.workspaceId, workspaceId));
+    expect(queued).toHaveLength(1);
+    await internal().retryWorkspaceTerminations();
+    expect(destroyed).toContain(leftover);
+  },
+);
+
+integration(
+  "a pending restart is its owner's while the lease is held, then the provider's",
+  async () => {
+    await terminateAll(userId);
+    const sandbox = await caller(userId).create({ name: "leased", lifetimeMinutes: 5 });
+    const restarting = (operationLeaseUntil: Date) =>
+      db
+        .update(workspace)
+        .set({ status: "pending", upstreamUrl: "https://agent.test", operationLeaseUntil })
+        .where(eq(workspace.id, sandbox.id));
+    const access = () =>
+      workspaceRouter
+        .createCaller({ session: { user: { id: userId } } } as unknown as Context)
+        .getRuntimeAccess({ workspaceId: sandbox.id });
+    const status = async () =>
+      (await db.select().from(workspace).where(eq(workspace.id, sandbox.id)))[0]!.status;
+
+    // The provider already reports the machine running; the restart hasn't settled yet.
+    await restarting(new Date(Date.now() + 60_000));
+    await access();
+    expect(await status()).toBe("pending");
+    // Its owner died: the lease lapsed without renewal.
+    await restarting(new Date(Date.now() - 1_000));
+    await access();
+    expect(await status()).toBe("running");
+  },
+);
+
+integration("an operation releases its lease, but never one a later owner holds", async () => {
+  await terminateAll(userId);
+  const sandbox = await caller(userId).create({ name: "lease", lifetimeMinutes: 5 });
+  const lease = async () =>
+    (await db.select().from(workspace).where(eq(workspace.id, sandbox.id)))[0]!.operationLeaseUntil;
+  await holdWorkspaceOperation(sandbox.id, async () => {
+    expect((await lease())!.getTime()).toBeGreaterThan(Date.now());
+  });
+  expect(await lease()).toBeNull();
+  const later = new Date(Date.now() + 90_000);
+  await holdWorkspaceOperation(sandbox.id, async () => {
+    await db
+      .update(workspace)
+      .set({ operationLeaseUntil: later })
+      .where(eq(workspace.id, sandbox.id));
+  });
+  expect(await lease()).toEqual(later);
+});
+
+integration("runtime access never publishes a restart another call has claimed", async () => {
+  await terminateAll(userId);
+  const sandbox = await caller(userId).create({ name: "claimed", lifetimeMinutes: 5 });
+  const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  await e2bWebhook(row!.externalInstanceId.split(":").at(-1)!, "paused");
+  // A restart claims it while runtime access asks the provider, which already says running.
+  duringInfo = async () => {
+    await db
+      .update(workspace)
+      .set({ status: "pending", updatedAt: new Date() })
+      .where(eq(workspace.id, sandbox.id));
+  };
+  try {
+    await workspaceRouter
+      .createCaller({ session: { user: { id: userId } } } as unknown as Context)
+      .getRuntimeAccess({ workspaceId: sandbox.id });
+  } finally {
+    duringInfo = undefined;
+  }
+  const [after] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  expect(after!.status).toBe("pending");
+});
+
+integration("an idle pause of a sandbox the provider lost terminates it", async () => {
+  await terminateAll(userId);
+  const sandbox = await caller(userId).create({ name: "lost", lifetimeMinutes: 5 });
+  const [row] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  const providerId = row!.externalInstanceId.split(":").at(-1)!;
+  providerStates.set(providerId, "terminated");
+  failPauses = true;
+  try {
+    await internal().pauseWorkspaceInternal({ workspaceId: sandbox.id, stopSource: "idle" });
+  } finally {
+    failPauses = false;
+  }
+  const [after] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+  expect(after!.status).toBe("terminated");
+  expect(after!.externalInstanceId).toBe("");
+  const sessions = await db
+    .select()
+    .from(usageSession)
+    .where(eq(usageSession.workspaceId, sandbox.id));
+  expect(sessions.filter((session) => !session.stoppedAt)).toHaveLength(0);
+});
 
 integration("#5 a signed Boat archive webhook pauses a Boat sandbox", async () => {
   await terminateAll(userId);

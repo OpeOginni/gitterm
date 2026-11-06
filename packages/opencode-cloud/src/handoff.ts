@@ -3,10 +3,11 @@ import { realpath } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { OpenCode, type OpenCodeClient } from "@opencode/client";
-import type {
-  GittermClient,
-  WorkspaceProviderSelection,
-  WorkspaceRuntimeAccess,
+import {
+  GittermError,
+  type GittermClient,
+  type WorkspaceProviderSelection,
+  type WorkspaceRuntimeAccess,
 } from "@gitterm/sdk";
 import { captureSnapshot, checkoutRoot, repositoryUrl, sharedCheckoutSessions } from "./snapshot";
 import { RESTORE_SCRIPT, shellQuote } from "./restore";
@@ -42,6 +43,14 @@ export type HandoffDependencies = {
   signal: AbortSignal;
   save(record: HandoffRecord): Promise<void>;
   progress(text: string): Promise<void>;
+};
+
+const STEPS: Record<HandoffRecord["phase"], string> = {
+  creating: "creating the cloud workspace",
+  restoring: "restoring your checkout in the cloud",
+  importing: "importing this session into the cloud",
+  ready: "finishing",
+  failed: "finishing",
 };
 
 export class HandoffCancelled extends Error {
@@ -352,12 +361,16 @@ export async function handoffSession(
     record.phase = "ready";
     await deps.save(record);
     return record;
-  } catch {
+  } catch (error) {
+    const step = STEPS[record.phase];
     record.phase = "failed";
     await deps.save(record);
-    // Keep recovery metadata, but never retain snapshots, passwords, or upstream error bodies.
+    // The full error goes to OpenCode's local log. The message keeps only GitTerm's own
+    // (already redacted) reason: workspace responses could echo snapshots or credentials.
+    console.error("GitTerm cloud handoff failed while", step, error);
+    const reason = error instanceof GittermError ? ` ${error.message}` : "";
     throw new Error(
-      `Cloud handoff failed${record.workspaceID ? ` for workspace ${record.workspaceID}` : ` (attempt ${record.attemptID})`}. Check GitTerm before retrying; a workspace may still be running and incurring charges. Local files and sessions are unchanged.`,
+      `Cloud handoff failed while ${step}${record.workspaceID ? ` for workspace ${record.workspaceID}` : ` (attempt ${record.attemptID})`}.${reason} Check GitTerm before retrying; a workspace may still be running and incurring charges. Local files and sessions are unchanged.`,
     );
   }
 }

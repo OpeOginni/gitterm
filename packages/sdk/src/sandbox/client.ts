@@ -1,4 +1,5 @@
 import path from "node:path";
+import { SandboxProviderError } from "@gitterm/agent-runtime/sandbox/types";
 import {
   SandboxAccountError,
   type SandboxBackend,
@@ -59,6 +60,8 @@ export type SandboxExecOptions = {
   env?: Record<string, string>;
   /** Wait up to this long for completion before returning a running job. */
   waitMs?: number;
+  /** The conversation that started the job; saved so it can be told when the job finishes. */
+  sessionId?: string;
 };
 
 export type JobLog = {
@@ -181,7 +184,8 @@ export function createSandboxClient(options: {
     resume: (id: string) => Promise<void>,
   ): Promise<{ record: SandboxRecord; filesLost: boolean }> {
     await resume(ref.id);
-    const record = await load(ref);
+    // Resuming joins a restart already under way, so it may still be starting.
+    const record = await settled(ref);
     if (record.state !== "running" || backend.capabilities.pause !== "state-losing")
       return { record, filesLost: false };
     const cleared = await store.update(ref, (stored) => {
@@ -190,9 +194,20 @@ export function createSandboxClient(options: {
     return { record: cleared ?? record, filesLost: true };
   }
 
+  /** Loads the sandbox, waiting while it starts: e.g. a parallel call is resuming it. */
+  async function settled(ref: SandboxRef): Promise<SandboxRecord> {
+    const deadline = Date.now() + 120_000;
+    let record = await load(ref);
+    while (record.state === "pending" && Date.now() < deadline) {
+      await sleep(1_000);
+      record = await load(ref);
+    }
+    return record;
+  }
+
   /** A sandbox paused for inactivity is resumed on use. `sync` restores files itself. */
   async function running(ref: SandboxRef, use: "sync" | "other" = "other"): Promise<SandboxRecord> {
-    let record = await load(ref);
+    let record = await settled(ref);
     if (record.state === "paused" && backend.resume) {
       const resumed = await resumeSandbox(ref, backend.resume);
       record = resumed.record;
@@ -202,7 +217,10 @@ export function createSandboxClient(options: {
         );
     }
     if (record.state === "terminated")
-      throw new Error(`Sandbox ${ref.id} no longer exists (deleted or expired).`);
+      throw new SandboxProviderError(
+        "not_found",
+        `Sandbox ${ref.id} no longer exists (deleted or expired).`,
+      );
     if (record.state !== "running") throw new Error(`Sandbox ${ref.id} is ${record.state}.`);
     return record;
   }
@@ -273,6 +291,7 @@ export function createSandboxClient(options: {
       finishedAt: null,
       timeoutMs: Math.round(timeoutMinutes * 60_000),
       secretNames: Object.keys(input.env ?? {}),
+      sessionId: input.sessionId ?? null,
     };
     // Persist first so a crash after launch still leaves a reattachable record.
     await store.update(record, (stored) => {
@@ -294,6 +313,8 @@ export function createSandboxClient(options: {
     capabilities: backend.capabilities,
     limits,
     store,
+    /** Present when the backend pushes job completions; see `SandboxBackend.onJobFinished`. */
+    onJobFinished: backend.onJobFinished?.bind(backend),
 
     async create(input: SandboxCreateOptions): Promise<SandboxRecord> {
       const lifetimeMinutes = input.lifetimeMinutes ?? limits.defaultLifetimeMinutes;

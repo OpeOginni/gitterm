@@ -71,6 +71,11 @@ export interface SandboxBackend {
     port: number,
     options?: { public?: boolean },
   ): Promise<SandboxPreviewAccess & { gittermUrl?: string }>;
+  /**
+   * Pushes job completions as they happen, where the backend can (Gitterm sandboxes on
+   * gitterm.dev). Without it, callers learn a job finished by reading it. Returns a stop function.
+   */
+  onJobFinished?(listener: (event: { sandboxId: string; jobId: string }) => void): () => void;
 }
 
 /** What a managed account offers: Gitterm serves previews of some providers itself. */
@@ -206,6 +211,8 @@ export function createManagedSandboxBackend(options: {
   account: string;
   provider: SandboxProvider;
   client: GittermClient;
+  /** Machine profile key; the server checks it against the plan. */
+  machine?: string;
 }): SandboxBackend {
   const account = validateAccountName(options.account);
   const { client, provider } = options;
@@ -235,6 +242,7 @@ export function createManagedSandboxBackend(options: {
         await client.sandboxes.create({
           provider,
           name: input.name.slice(0, 120),
+          machine: options.machine,
           lifetimeMinutes: Math.ceil(input.lifetimeMs / 60_000),
           publicPreviews: input.publicPreviews,
           metadata: input.labels,
@@ -265,6 +273,10 @@ export function createManagedSandboxBackend(options: {
     },
     destroy: (id) => client.sandboxes.terminate(id),
     resume: (id) => client.sandboxes.resume(id),
+    // Only Gitterm's own sandboxes report finished jobs.
+    ...(provider === "gitterm"
+      ? { onJobFinished: (listener) => client.sandboxes.onJobFinished(listener) }
+      : {}),
     run: (id, command, runOptions) => client.sandboxes.run(id, command, runOptions),
     async writeFile(id, path, data) {
       if (data.byteLength <= MANAGED_CHUNK_BYTES) return client.sandboxes.writeFile(id, path, data);

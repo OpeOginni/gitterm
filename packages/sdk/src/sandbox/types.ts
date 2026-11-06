@@ -12,7 +12,8 @@ export type SandboxProviderKey =
   | "boat"
   | "exedev"
   | "railway"
-  | "aws";
+  | "aws"
+  | "gitterm";
 
 export type SandboxCapabilities = {
   /**

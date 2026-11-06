@@ -4,6 +4,14 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## Unreleased
+
+### Fixed
+
+- Parallel calls on a paused sandbox no longer fail each other: a call that finds the sandbox
+  already resuming waits for it instead of erroring. Needs the API redeployed.
+- A background job read right after launch is no longer reported `lost` before its runner starts.
+
 ## 0.11.0
 
 ### Added

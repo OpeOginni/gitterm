@@ -14,7 +14,9 @@ opencode plugin add @gitterm/opencode-sandbox
 
 ## 2. Add your provider key
 
-In `opencode.json` (project) or `~/.config/opencode/opencode.json` (global):
+In `~/.config/opencode/opencode.json` (global), or a project's `opencode.json`. OpenCode's
+background service doesn't load plugins from a project's config, so with a project config start
+OpenCode with `opencode --standalone`.
 
 ```jsonc
 {
@@ -64,7 +66,7 @@ gitterm login
 ```
 
 ```jsonc
-"gitterm": { "mode": "managed" },
+"gitterm": { "mode": "managed", "size": "medium" },
 ```
 
 ## 3. Use it
@@ -74,12 +76,15 @@ sandbox, upload your checkout (uncommitted changes included, secret-like files s
 and run the command there. OpenCode asks before anything is created, uploaded, run, or
 written back to your files.
 
+Long builds and tests run in the background: you can keep talking to the agent, and it
+gets a message when each job finishes.
+
 | Tool               | What it does                                                         |
 | ------------------ | -------------------------------------------------------------------- |
 | `sandbox_create`   | Create a sandbox                                                     |
 | `sandbox_list`     | Show your account, who is charged, and your sandboxes                |
 | `sandbox_sync`     | Upload your checkout                                                 |
-| `sandbox_exec`     | Run a command                                                        |
+| `sandbox_exec`     | Run a command; with `background`, get a message when it finishes     |
 | `sandbox_job`      | Check a command's output, or cancel it                               |
 | `sandbox_preview`  | Open a port, for example a dev server                                |
 | `sandbox_artifact` | Download a file the command produced                                 |
@@ -104,6 +109,24 @@ The right sidebar lists this checkout's sandboxes, with what each is running.
   "publicPreviews": true
 }
 ```
+
+### Machine size
+
+You choose the size per account; the agent can't change it. If a build runs out of memory,
+pick a bigger size:
+
+```jsonc
+"gitterm": { "mode": "managed", "size": "large" },
+"e2b":     { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "template": "my-8gb-template" },
+"daytona": { "mode": "direct", "provider": "daytona", "apiKey": "{env:DAYTONA_API_KEY}", "resources": { "cpu": 4, "memory": 8 } },
+"vercel":  { "mode": "direct", "provider": "vercel", "apiKey": "{env:VERCEL_TOKEN}", "teamId": "team_…", "projectId": "prj_…", "vcpus": 4 },
+"boat":    { "mode": "direct", "provider": "boat", "apiKey": "{env:BOAT_API_KEY}", "size": "large" },
+"exedev":  { "mode": "direct", "provider": "exedev", "apiKey": "{env:EXEDEV_API_KEY}", "cpu": 4, "memory": "8GB", "allowUnboundedLifetime": true },
+```
+
+E2B's default `base` template has 512 MB of memory, too little for most builds. E2B sets
+memory when a template is built, so build your own once
+(`e2b template build --cpu-count 4 --memory-mb 8192`) and put its name in `template`.
 
 `publicPreviews: true` makes every preview URL open to anyone who has it, with no
 prompt. With your own key it works on E2B and Daytona. Boat, exe.dev, and Railway are

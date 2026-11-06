@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OpenCodeClient } from "@opencode/client";
-import type { GittermClient } from "@gitterm/sdk";
+import { GittermError, type GittermClient } from "@gitterm/sdk";
 import {
   changePrompt,
   handoffSession,
@@ -199,6 +199,22 @@ test("restores before importing, records ready state, and never stores credentia
   expect(f.terminates()).toBe(0);
 });
 
+test("a failed create says which step failed and GitTerm's reason", async () => {
+  const f = fixture([{ changes: false }, { create: true }]);
+  f.gitterm.workspaces.create = async () => {
+    throw new GittermError(
+      "SERVER_ERROR",
+      "Gitterm couldn't start a small machine. Reference: ws1",
+    );
+  };
+  const failure = handoffSession("ses_test", f.deps);
+  await expect(failure).rejects.toThrow(
+    "Cloud handoff failed while creating the cloud workspace (attempt",
+  );
+  await expect(failure).rejects.toThrow("Gitterm couldn't start a small machine. Reference: ws1");
+  expect(f.records.at(-1)?.phase).toBe("failed");
+});
+
 test("failed transfer retains recovery metadata without terminating the cloud or touching local work", async () => {
   server = Bun.serve({
     hostname: "127.0.0.1",
@@ -206,7 +222,11 @@ test("failed transfer retains recovery metadata without terminating the cloud or
     fetch: () => new Response("secret upstream body", { status: 500 }),
   });
   const f = fixture([{ changes: false }, { create: true }]);
-  await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("workspace-test");
+  const failure = handoffSession("ses_test", f.deps);
+  await expect(failure).rejects.toThrow(
+    "while restoring your checkout in the cloud for workspace workspace-test",
+  );
+  await expect(failure).rejects.not.toThrow("secret upstream body");
   expect(f.records.at(-1)?.phase).toBe("failed");
   expect(f.records.at(-1)?.workspaceID).toBe("workspace-test");
   expect(JSON.stringify(f.records)).not.toContain("secret upstream body");

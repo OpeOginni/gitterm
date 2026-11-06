@@ -16,6 +16,12 @@ includes an `opencode` binary, which is never started.
 | `managed`                 | The Gitterm deployment        | Your Gitterm plan (usage sessions, plan limits) | Yes                     |
 | `direct` (bring your own) | You                           | Your provider account                           | No                      |
 
+On gitterm.dev, managed sandboxes are Gitterm's own: the account sets `"size": "small" |
+"medium" | "large"` instead of a provider, and finished jobs are reported as they happen, so
+the plugin doesn't poll for them. The server offers them only in managed mode with
+`COMPUTE_URL` and `COMPUTE_SERVICE_TOKEN` set; a self-hosted deployment uses the providers
+below.
+
 Each sandbox reference carries its mode, provider, and account name
 (`{ mode, provider, account, id }`). A reference from another mode or account fails with
 `SandboxAccountError`. A rejected or missing credential is an error too. Gitterm never
@@ -101,6 +107,8 @@ also keeps the snapshot id and digest the job ran on.
 - **Secrets in output:** values passed through `env` are replaced with `[redacted]` inside the sandbox, line by line, before output is stored. Every reader sees only redacted text: a restarted plugin, another CLI process, or a paged read that would otherwise cut a value in half. Local records keep only the variable names. Because redaction works per line, values with line breaks (for example PEM keys) and values shorter than 4 characters are refused before anything is sent; base64-encode multi-line values and decode them in the command.
 - **Output sanitizing:** control characters and terminal escapes are stripped before output is returned.
 - **Plugin output** is wrapped in an `untrusted` block that tells the model to treat it as data.
+- **Background jobs in the plugin:** `sandbox_exec` returns when the job finishes, after `waitSeconds`, or at once with `background: true`. A job still running then is watched every 5 seconds. When it finishes, the plugin posts a `<sandbox-job>` message to the session with `session.synthetic`, the way OpenCode's background shell reports, so the agent is woken (or sees it at its next step) without polling, and the user can keep talking meanwhile. The TUI shows it as a notice. A job already seen finished through `sandbox_job`, or a destroyed sandbox, sends nothing. Watches live in the OpenCode process: after a restart, `sandbox_job` still reattaches but no message is sent.
+- **Code mode:** the plugin's tools sit under the `gitterm` namespace (`tools.gitterm.sandbox_exec(...)`), with create, list, sync, exec, and job always listed. Create, sync, exec, job, and preview return structured values (ids, status, exit code, log tail), so a script can start several jobs with `Promise.allSettled` and branch on results without parsing text.
 
 ### Source snapshots
 
@@ -260,6 +268,22 @@ Options for the `@gitterm/opencode-sandbox` OpenCode plugin:
 
 The CLI reads the same shape from `~/.config/gitterm/sandbox.json` (or
 `GITTERM_SANDBOX_CONFIG`), with `apiKeyEnv` instead of `apiKey`.
+
+### Machine size
+
+The size is set per account, so only the user chooses it; the agent can't. `sandbox_list`
+reports the selected account's size, so an agent that runs out of memory can tell the user
+which setting to change. To keep a small and a large option, configure two accounts.
+
+| Account          | Setting                                                                                                                                                 | Default                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `managed`        | gitterm.dev: `"size": "small" \| "medium" \| "large"`. Self-hosted: `"machine"`, one of the deployment's machine profile keys. Both limited by the plan | The plan's default profile |
+| `direct` E2B     | `"template": "<template ID or name>"`. E2B fixes CPU and memory when the template is built (`e2b template build --cpu-count 4 --memory-mb 8192`).       | `base`: 2 vCPU, 512 MB     |
+| `direct` Daytona | `"resources": { "cpu": 4, "memory": 8, "disk": 10 }` (GiB), or `"snapshot"`, which carries its own size                                                 | 1 vCPU, 1 GiB, 3 GiB disk  |
+| `direct` Vercel  | `"vcpus": 4` (1 to 8, 2 GB of memory each)                                                                                                              | 2 vCPU                     |
+| `direct` Boat    | `"size": "small" \| "default" \| "large"`                                                                                                               | `default`                  |
+| `direct` exe.dev | `"cpu": 4, "memory": "8GB", "disk": "20GB"`                                                                                                             | exe.dev's default          |
+| `direct` Railway | None: Railway applies your plan's limits                                                                                                                |                            |
 
 ### Plugin permissions
 

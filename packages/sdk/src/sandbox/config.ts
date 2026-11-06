@@ -10,7 +10,11 @@ import {
   type SandboxMode,
 } from "./backend.js";
 import type { SandboxLimits } from "./client.js";
-import type { SandboxCapabilities, SandboxProviderKey } from "./types.js";
+import {
+  isSandboxProviderError,
+  type SandboxCapabilities,
+  type SandboxProviderKey,
+} from "./types.js";
 
 type DirectCredential = {
   /** The resolved credential (plugin options, after `{env:...}`/`{file:...}` substitution). */
@@ -33,13 +37,20 @@ export type SandboxAccountConfig =
   | ({
       mode: "direct";
       provider: "e2b";
-      /** Defaults to `base` (no agent). */ template?: string;
+      /**
+       * Template ID or name. E2B fixes CPU and memory when a template is built, so this is
+       * also the machine size. Defaults to `base` (2 vCPU, 512 MB, no agent).
+       */
+      template?: string;
     } & DirectCredential)
   | ({
       mode: "direct";
       provider: "daytona";
       target?: "us" | "eu";
-      /** Daytona snapshot name. */ snapshot?: string;
+      /** Daytona snapshot name. A snapshot carries its own size, so it excludes `resources`. */
+      snapshot?: string;
+      /** vCPUs and GiB of memory and disk. Defaults to Daytona's 1 vCPU, 1 GiB, 3 GiB. */
+      resources?: { cpu?: number; memory?: number; disk?: number };
     } & DirectCredential)
   | ({
       mode: "direct";
@@ -47,12 +58,18 @@ export type SandboxAccountConfig =
       teamId: string;
       projectId: string;
       runtime?: "node24" | "node22" | "python3.13";
+      /** 1 to 8; Vercel gives 2 GB of memory per vCPU. Defaults to 2. */
+      vcpus?: number;
     } & DirectCredential)
   | ({ mode: "direct"; provider: "boat"; size?: "small" | "default" | "large" } & DirectCredential)
   | ({
       mode: "direct";
       provider: "exedev";
       /** Container image; defaults to a plain Node image. */ image?: string;
+      /** VM size, as exe.dev's `new` flags take it, e.g. `4`, `"8GB"`, `"20GB"`. */
+      cpu?: number;
+      memory?: string;
+      disk?: string;
     } & DirectCredential)
   | ({
       mode: "direct";
@@ -64,8 +81,15 @@ export type SandboxAccountConfig =
     } & DirectCredential)
   | {
       mode: "managed";
-      /** Defaults to e2b. The deployment must enable sandboxes on it. */
+      /** Defaults to e2b, or to Gitterm when `size` is set. The deployment must enable it. */
       provider?: SandboxProviderKey;
+      /**
+       * On gitterm.dev: `small`, `medium`, or `large`. Same as `provider: "gitterm"` with that
+       * machine.
+       */
+      size?: "small" | "medium" | "large";
+      /** Machine profile key, e.g. `small` or `large`. Defaults to your plan's default size. */
+      machine?: string;
       /** Defaults to the CLI login's server. */
       serverUrl?: string;
       /** Defaults to the CLI login or GITTERM_API_TOKEN. */
@@ -94,6 +118,8 @@ export type SandboxAccountSummary = {
   credentialSource: string;
   credentialPresent: boolean;
   chargedTo: string;
+  /** The machine size and who sets it: the user, in the account settings, never the agent. */
+  machine: string;
   capabilities: SandboxCapabilities;
   /** Plain-language limits of this provider for sandboxes. */
   limitations: string[];
@@ -108,6 +134,7 @@ const PROVIDER_NAMES: Record<SandboxProviderKey, string> = {
   exedev: "exe.dev",
   railway: "Railway",
   aws: "AWS",
+  gitterm: "Gitterm",
 };
 
 function selected(settings: SandboxSettings, accountName?: string) {
@@ -126,7 +153,13 @@ function selected(settings: SandboxSettings, accountName?: string) {
   const mode: string = config.mode;
   if (mode !== "direct" && mode !== "managed")
     throw new Error(`Sandbox account ${name} has an unknown mode.`);
-  const provider: string = config.provider ?? "e2b";
+  // A managed `size` means Gitterm's own sandboxes (gitterm.dev): sizes, not providers.
+  const provider: string =
+    config.provider ?? (config.mode === "managed" && config.size ? "gitterm" : "e2b");
+  if (config.mode === "managed" && config.size && provider !== "gitterm")
+    throw new Error(
+      `Sandbox account ${name}: "size" picks a Gitterm size; drop "provider" or use "machine".`,
+    );
   if (!Object.hasOwn(SANDBOX_PROVIDER_PROFILES, provider))
     throw new Error(
       `Sandbox account ${name} uses provider ${JSON.stringify(provider)}, which does not support sandboxes.`,
@@ -179,6 +212,38 @@ export function describeLimitations(provider: SandboxProviderKey, mode: SandboxM
   ];
 }
 
+function describeMachine(config: SandboxAccountConfig): string {
+  if (config.mode === "managed") {
+    const machine = config.size ?? config.machine;
+    return machine
+      ? `Gitterm machine profile "${machine}".`
+      : "Your Gitterm plan's default machine profile.";
+  }
+  switch (config.provider) {
+    case "e2b":
+      return config.template
+        ? `E2B template "${config.template}" (its size is fixed when the template is built).`
+        : "E2B base template: 2 vCPU, 512 MB memory.";
+    case "daytona": {
+      if (config.snapshot) return `Daytona snapshot "${config.snapshot}" (sized by the snapshot).`;
+      const { cpu = 1, memory = 1, disk = 3 } = config.resources ?? {};
+      return `${cpu} vCPU, ${memory} GiB memory, ${disk} GiB disk.`;
+    }
+    case "vercel": {
+      const vcpus = config.vcpus ?? 2;
+      return `${vcpus} vCPU, ${vcpus * 2} GB memory.`;
+    }
+    case "boat":
+      return `Boat size "${config.size ?? "default"}".`;
+    case "exedev":
+      return config.cpu || config.memory || config.disk
+        ? `${[config.cpu && `${config.cpu} vCPU`, config.memory && `${config.memory} memory`, config.disk && `${config.disk} disk`].filter(Boolean).join(", ")}.`
+        : "exe.dev's default VM size.";
+    case "railway":
+      return "Railway's per-service limits for your Railway plan.";
+  }
+}
+
 export function describeSandboxAccount(
   settings: SandboxSettings,
   accountName?: string,
@@ -192,6 +257,7 @@ export function describeSandboxAccount(
         ? managedCapabilities(provider)
         : SANDBOX_PROVIDER_PROFILES[provider].capabilities,
     limitations: describeLimitations(provider, config.mode),
+    machine: `${describeMachine(config)} Only the user can change this, in the settings of sandbox account "${name}".`,
   };
   if (config.mode === "direct") {
     const credential = directCredential(config);
@@ -223,16 +289,43 @@ export function createSandboxBackend(
       account: name,
       provider,
       client: createGittermClient({ serverUrl: config.serverUrl, token: config.token }),
+      machine: config.size ?? config.machine,
     });
   const credential = directCredential(config);
   if (!credential.value)
     throw new Error(
       `Sandbox account ${name} has no ${PROVIDER_NAMES[provider]} credential (${credential.source}). In OpenCode use "apiKey": "{env:YOUR_VARIABLE}" and make sure the variable is set.`,
     );
+  if (config.provider === "daytona" && config.snapshot && config.resources)
+    throw new Error(
+      `Sandbox account ${name}: a Daytona snapshot carries its own size, so set "snapshot" or "resources", not both.`,
+    );
   const { apiKey: _apiKey, apiKeyEnv: _apiKeyEnv, allowUnboundedLifetime, ...options } = config;
-  return createDirectSandboxBackend({
-    account: name,
-    allowUnboundedLifetime,
-    transport: createSandboxTransport({ ...options, apiKey: credential.value }),
+  return withAuthHint(
+    createDirectSandboxBackend({
+      account: name,
+      allowUnboundedLifetime,
+      transport: createSandboxTransport({ ...options, apiKey: credential.value }),
+    }),
+    `This is your own ${PROVIDER_NAMES[provider]} key, not Gitterm's: check sandbox account "${name}" in your settings.`,
+  );
+}
+
+/** A rejected key on a direct account is the caller's own key, so say which account to fix. */
+function withAuthHint(backend: SandboxBackend, hint: string): SandboxBackend {
+  return new Proxy(backend, {
+    get(target, key, receiver) {
+      const value = Reflect.get(target, key, receiver);
+      if (typeof value !== "function") return value;
+      return async (...args: unknown[]) => {
+        try {
+          return await value.apply(target, args);
+        } catch (error) {
+          if (isSandboxProviderError(error) && error.code === "auth")
+            error.message = `${error.message} ${hint}`;
+          throw error;
+        }
+      };
+    },
   });
 }

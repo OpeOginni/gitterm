@@ -1345,12 +1345,7 @@ export class AwsProvider implements ComputeProvider {
         workspaceHost,
       };
 
-      await config.onProvisioned?.({
-        externalServiceId: serializeExternalServiceId(externalId),
-        upstreamUrl: trimTrailingSlash(providerConfig.albBaseUrl),
-        domain: buildDomain(config.subdomain),
-        serviceCreatedAt: new Date(),
-      });
+      await config.onProvisioned?.({ externalServiceId: serializeExternalServiceId(externalId) });
 
       logger.info("AWS wait for target group healthy started", {
         workspaceId: config.workspaceId,
