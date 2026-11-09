@@ -86,6 +86,7 @@ function normalizeRepoUrl(input: string): string | null {
 
 const RESERVED = new Set([
   "api",
+  "compute",
   "www",
   "app",
   "admin",
