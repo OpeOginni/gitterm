@@ -18,6 +18,7 @@ import {
   type GitIntegrationSelection,
 } from "../create-instance/github-repository-branch-field";
 import type { GitInstallation } from "../create-instance/types";
+import { Radio, choiceTile } from "./step";
 
 export type GitHubAccess = "connection" | "token";
 
@@ -25,21 +26,7 @@ type Installation = GitInstallation & {
   github_app_installation?: { accountType?: string | null } | null;
 };
 
-const tileClass =
-  "flex min-w-0 items-center gap-3 rounded-xl px-3.5 py-3 text-left transition-[background-color,box-shadow]";
-
-function Radio({ selected }: { selected: boolean }) {
-  return (
-    <span
-      className={cn(
-        "flex size-4 shrink-0 items-center justify-center rounded-full border",
-        selected ? "border-primary" : "border-fg-4",
-      )}
-    >
-      {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
-    </span>
-  );
-}
+const tileClass = "flex min-w-0 items-center gap-3 px-3.5 py-3";
 
 /** How the bot reaches GitHub. */
 function AccessSwitch({
@@ -85,12 +72,7 @@ function AccountTiles({
               role="radio"
               aria-checked={selected}
               onClick={() => onSelect(id)}
-              className={cn(
-                tileClass,
-                selected
-                  ? "bg-fill-2 shadow-[inset_0_0_0_1px_rgba(211,173,85,0.5)]"
-                  : "bg-fill hover:bg-fill-2",
-              )}
+              className={cn(choiceTile(selected), tileClass)}
             >
               <span className="relative shrink-0">
                 <Image
@@ -118,9 +100,12 @@ function AccountTiles({
         })}
         <Link
           href={"/dashboard/integrations" as Route}
-          className={cn(tileClass, "text-fg-3 hover:bg-fill hover:text-fg-2")}
+          className={cn(
+            tileClass,
+            "rounded-xl border border-dashed border-line-2 text-fg-3 transition-colors hover:bg-fill hover:text-fg-2",
+          )}
         >
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fill-2">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fill">
             <Plus className="size-4" />
           </span>
           <span className="min-w-0 flex-1">
@@ -151,7 +136,7 @@ function AccessRow({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3.5">
       <div className="flex min-w-0 flex-1 items-center gap-3.5">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill-2 text-fg">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill text-fg">
           {icon}
         </span>
         <div className="min-w-0 flex-1">

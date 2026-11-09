@@ -70,8 +70,8 @@ export function ModelStepBody({
       {isLoading ? (
         <Skeleton className="h-16 w-full bg-fill" />
       ) : active.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 rounded-xl bg-fill px-4 py-6 text-center">
-          <p className="max-w-md text-sm leading-relaxed text-fg-2">
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-line-2 px-4 py-7 text-center">
+          <p className="max-w-md text-[13.5px] leading-relaxed text-fg-2">
             Add an API key or connect a subscription you already pay for. The agent runs on it.
           </p>
           {addButtons}
@@ -121,7 +121,7 @@ export function ModelStepBody({
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {modelProblem ? <p className="text-[13px] text-red-300">{modelProblem}</p> : null}
+            {modelProblem ? <p className="text-[13px] text-destructive">{modelProblem}</p> : null}
             <Button
               size="sm"
               variant="ghost"

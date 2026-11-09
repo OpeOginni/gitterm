@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { Platform } from "./config";
+import { Radio, choiceTile } from "./step";
 
 export type BotBehavior = {
   /** Channel ids it answers in; empty answers in every channel it's in. */
@@ -41,23 +42,11 @@ function OptionTiles<T extends string>({
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(option.value)}
-            className={cn(
-              "flex items-start gap-3 rounded-xl bg-fill px-3.5 py-3 text-left transition-[background-color,box-shadow]",
-              selected
-                ? "bg-fill-2 shadow-[inset_0_0_0_1px_rgba(211,173,85,0.5)]"
-                : "hover:bg-fill-2",
-            )}
+            className={cn(choiceTile(selected), "flex items-start gap-3 px-3.5 py-3")}
           >
-            <span
-              className={cn(
-                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
-                selected ? "border-primary" : "border-fg-4",
-              )}
-            >
-              {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
-            </span>
+            <Radio selected={selected} className="mt-0.5" />
             <span className="min-w-0">
-              <span className="block text-sm font-medium text-fg">{option.title}</span>
+              <span className="block text-[14px] font-medium text-fg">{option.title}</span>
               <span className="block text-[13px] text-fg-3">{option.description}</span>
             </span>
           </button>
@@ -117,7 +106,7 @@ function IdList({
         onClick={() => inputRef.current?.focus()}
         className={cn(
           "flex min-h-10 w-full cursor-text flex-wrap items-center gap-1.5 rounded-lg bg-input/70 px-2 py-1.5 transition-shadow focus-within:ring-2 focus-within:ring-ring/40",
-          error && "ring-1 ring-[#fb923c]/40",
+          error && "ring-1 ring-destructive/50",
         )}
       >
         {ids.map((id) => (
@@ -163,7 +152,7 @@ function IdList({
           className="h-7 min-w-36 flex-1 bg-transparent px-1.5 font-mono text-[13px] text-fg outline-none placeholder:font-sans placeholder:text-fg-4"
         />
       </div>
-      {error ? <p className="text-[12.5px] text-[#fb923c]">{error}</p> : null}
+      {error ? <p className="text-[12.5px] text-destructive">{error}</p> : null}
     </div>
   );
 }
@@ -186,7 +175,7 @@ export function BehaviorStepBody({
   const aside = () => (setAside.current[platform ?? "none"] ??= { channels: [], allowedUsers: [] });
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-8">
       <section className="space-y-3">
         <p className={labelClass}>Where it answers</p>
         <OptionTiles
@@ -269,7 +258,7 @@ export function BehaviorStepBody({
         {platform !== "discord" ? (
           <label className="flex cursor-pointer items-center justify-between gap-4 pt-2">
             <span>
-              <span className="block text-sm text-fg">Let guests use it</span>
+              <span className="block text-[14px] text-fg">Let guests use it</span>
               <span className="block text-[13px] text-fg-3">
                 Slack guests, and people from other organisations in shared channels.
               </span>
