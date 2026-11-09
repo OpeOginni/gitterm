@@ -89,6 +89,7 @@ gets a message when each job finishes.
 | `sandbox_preview`  | Open a port, for example a dev server                                |
 | `sandbox_artifact` | Download a file the command produced                                 |
 | `sandbox_apply`    | Copy that file into your checkout, if your copy did not change since |
+| `sandbox_snapshot` | Save or delete the project's setup snapshot (with `snapshots: true`) |
 | `sandbox_destroy`  | Delete a sandbox                                                     |
 
 The right sidebar lists this checkout's sandboxes, with what each is running.
@@ -116,7 +117,7 @@ You choose the size per account; the agent can't change it. If a build runs out 
 pick a bigger size:
 
 ```jsonc
-"gitterm": { "mode": "managed", "size": "large" },
+"gitterm": { "mode": "managed", "size": "medium" },
 "e2b":     { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "template": "my-8gb-template" },
 "daytona": { "mode": "direct", "provider": "daytona", "apiKey": "{env:DAYTONA_API_KEY}", "resources": { "cpu": 4, "memory": 8 } },
 "vercel":  { "mode": "direct", "provider": "vercel", "apiKey": "{env:VERCEL_TOKEN}", "teamId": "team_…", "projectId": "prj_…", "vcpus": 4 },
@@ -141,6 +142,30 @@ To stop being asked every time, allow actions in your OpenCode `permissions`:
 "permissions": [
   { "action": "gitterm.sandbox.exec", "resource": "direct:e2b:*", "effect": "allow" }
 ]
+```
+
+### Setup snapshots
+
+For a project with a slow setup, let the agent save a sandbox once dependencies are
+installed, so the project's next sandboxes start ready:
+
+```jsonc
+"options": { "account": "e2b", "accounts": { … }, "snapshots": true }
+```
+
+Works with E2B, Daytona, Vercel, or Boat, with your own key or a GitTerm plan (Pro keeps 20 snapshots, Growth 100). The agent gets a `sandbox_snapshot`
+tool and OpenCode asks before each save or delete. A project can have several snapshots
+(say `deps` and `deps + postgres`), or the agent can save a general one for any project.
+New sandboxes start from the project's newest one unless the agent picks another, and the
+agent is told when a lockfile changed since a snapshot so it can replace it (the old one is
+deleted). Snapshots are kept in your provider account until deleted. To let it save without asking, allow
+`gitterm.sandbox.snapshot` in `permissions` as above.
+
+To start every sandbox from a snapshot you made yourself, set it on the account instead;
+the agent then doesn't manage snapshots for that account:
+
+```jsonc
+"e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "snapshot": "my-snapshot:latest" },
 ```
 
 More detail on costs, cleanup, and permissions:

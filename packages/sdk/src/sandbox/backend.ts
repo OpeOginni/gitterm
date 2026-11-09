@@ -40,6 +40,17 @@ export type SandboxCreateRequest = {
   lifetimeMs: number;
   labels: Record<string, string>;
   publicPreviews: boolean;
+  /** Start from this snapshot instead of the account's image. */
+  snapshot?: string;
+};
+
+/** Provider snapshots of a sandbox's disk. Stored in, and billed to, the provider account. */
+export type SandboxSnapshotSupport = {
+  /** What saving does to the sandbox: `pauses` it briefly, or `stops` it for good (Vercel). */
+  effect: "pauses" | "stops";
+  /** Returns the id new sandboxes start from. */
+  create(id: string, name: string): Promise<string>;
+  delete(snapshotId: string): Promise<void>;
 };
 
 /** The primitives a provider account offers. Jobs, sync, and artifacts are built on these. */
@@ -76,6 +87,8 @@ export interface SandboxBackend {
    * gitterm.dev). Without it, callers learn a job finished by reading it. Returns a stop function.
    */
   onJobFinished?(listener: (event: { sandboxId: string; jobId: string }) => void): () => void;
+  /** Present on direct accounts whose provider can snapshot a sandbox. */
+  snapshots?: SandboxSnapshotSupport;
 }
 
 /** What a managed account offers: Gitterm serves previews of some providers itself. */
@@ -167,6 +180,7 @@ export function createDirectSandboxBackend(options: {
           timeoutMs: input.lifetimeMs,
           onTimeout: "kill",
           publicPreviews: input.publicPreviews,
+          ...(input.snapshot ? { snapshot: input.snapshot } : {}),
         }),
       );
     },
@@ -198,6 +212,18 @@ export function createDirectSandboxBackend(options: {
       await running(id);
       return transport.preview(id, port);
     },
+    ...(transport.snapshots
+      ? {
+          snapshots: {
+            effect: transport.capabilities.snapshots as "pauses" | "stops",
+            async create(id, name) {
+              await running(id);
+              return transport.snapshots!.create(id, name);
+            },
+            delete: (snapshotId) => transport.snapshots!.delete(snapshotId),
+          } satisfies SandboxSnapshotSupport,
+        }
+      : {}),
   };
 }
 
@@ -246,6 +272,7 @@ export function createManagedSandboxBackend(options: {
           lifetimeMinutes: Math.ceil(input.lifetimeMs / 60_000),
           publicPreviews: input.publicPreviews,
           metadata: input.labels,
+          ...(input.snapshot ? { snapshotId: input.snapshot } : {}),
         }),
       );
     },
@@ -299,5 +326,17 @@ export function createManagedSandboxBackend(options: {
     },
     readFile: (id, path) => client.sandboxes.readFile(id, path),
     preview: (id, port, previewOptions) => client.sandboxes.preview(id, port, previewOptions),
+    // Saved in the deployment's provider account and counted against your plan's limit.
+    ...(SANDBOX_PROVIDER_PROFILES[provider].capabilities.snapshots !== "none"
+      ? {
+          snapshots: {
+            effect: SANDBOX_PROVIDER_PROFILES[provider].capabilities.snapshots as
+              | "pauses"
+              | "stops",
+            create: async (id, name) => (await client.sandboxes.saveSnapshot(id, name)).id,
+            delete: (snapshotId) => client.sandboxes.deleteSnapshot(snapshotId),
+          } satisfies SandboxSnapshotSupport,
+        }
+      : {}),
   };
 }

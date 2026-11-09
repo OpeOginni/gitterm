@@ -46,6 +46,8 @@ function infoFrom(box: Box): SandboxProviderInfo {
 export function createBoatSandboxTransport(config: {
   apiKey: string;
   size?: "small" | "default" | "large";
+  /** A named snapshot every box starts from, unless the create call names another. */
+  snapshot?: string;
 }): SandboxTransport {
   if (!config.apiKey?.trim()) throw new SandboxProviderError("auth", "Boat apiKey is empty.");
   const client = new BoxApi(new Configuration({ basePath: BASE_URL, accessToken: config.apiKey }));
@@ -118,6 +120,9 @@ export function createBoatSandboxTransport(config: {
               type: (input.machine?.size as typeof config.size) ?? config.size,
               ttlSeconds: Math.ceil(input.timeoutMs / 1000),
               noEnv: true,
+              ...((input.snapshot ?? config.snapshot)
+                ? { from: input.snapshot ?? config.snapshot }
+                : {}),
               ...(input.env ? { env: input.env } : {}),
             },
           })
@@ -270,6 +275,38 @@ export function createBoatSandboxTransport(config: {
       parsed.searchParams.delete("_token");
       const headers: Record<string, string> = token ? { cookie: `_port_auth=${token}` } : {};
       return { url: parsed.toString(), headers };
+    },
+
+    snapshots: {
+      async create(id, name) {
+        try {
+          await client.saveNamedSnapshot({ namedSnapshotSaveRequest: { boxId: id, name } });
+          // Saving runs in the background; the name is usable once it is ready.
+          const deadline = Date.now() + 30 * 60_000;
+          while (true) {
+            const { snapshot } = await client.getNamedSnapshot({ name });
+            if (snapshot.status === "ready") return name;
+            if (snapshot.status === "failed")
+              throw new SandboxProviderError(
+                "provider",
+                `Boat could not save the snapshot${snapshot.error ? `: ${snapshot.error}` : "."}`,
+              );
+            if (Date.now() > deadline)
+              throw new SandboxProviderError("timeout", "Boat did not finish saving the snapshot.");
+            await new Promise((resolve) => setTimeout(resolve, 2_000));
+          }
+        } catch (error) {
+          throw failure(error, "snapshot the sandbox");
+        }
+      },
+      async delete(snapshotId) {
+        try {
+          await client.deleteNamedSnapshot({ name: snapshotId });
+        } catch (error) {
+          const classified = failure(error, "delete the snapshot");
+          if (classified.code !== "not_found") throw classified;
+        }
+      },
     },
   };
 }

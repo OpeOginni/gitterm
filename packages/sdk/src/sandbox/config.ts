@@ -42,6 +42,8 @@ export type SandboxAccountConfig =
        * also the machine size. Defaults to `base` (2 vCPU, 512 MB, no agent).
        */
       template?: string;
+      /** A snapshot every sandbox starts from; it keeps the size it was saved at. */
+      snapshot?: string;
     } & DirectCredential)
   | ({
       mode: "direct";
@@ -60,8 +62,16 @@ export type SandboxAccountConfig =
       runtime?: "node24" | "node22" | "python3.13";
       /** 1 to 8; Vercel gives 2 GB of memory per vCPU. Defaults to 2. */
       vcpus?: number;
+      /** A snapshot id every sandbox starts from instead of `runtime`. */
+      snapshot?: string;
     } & DirectCredential)
-  | ({ mode: "direct"; provider: "boat"; size?: "small" | "default" | "large" } & DirectCredential)
+  | ({
+      mode: "direct";
+      provider: "boat";
+      size?: "small" | "default" | "large";
+      /** A named snapshot every box starts from. */
+      snapshot?: string;
+    } & DirectCredential)
   | ({
       mode: "direct";
       provider: "exedev";
@@ -84,10 +94,9 @@ export type SandboxAccountConfig =
       /** Defaults to e2b, or to Gitterm when `size` is set. The deployment must enable it. */
       provider?: SandboxProviderKey;
       /**
-       * On gitterm.dev: `small`, `medium`, or `large`. Same as `provider: "gitterm"` with that
-       * machine.
+       * On gitterm.dev: `small` or `medium`. Same as `provider: "gitterm"` with that machine.
        */
-      size?: "small" | "medium" | "large";
+      size?: "small" | "medium";
       /** Machine profile key, e.g. `small` or `large`. Defaults to your plan's default size. */
       machine?: string;
       /** Defaults to the CLI login's server. */
@@ -108,6 +117,13 @@ export type SandboxSettings = {
    * Setting this is the approval, so nobody is asked per sandbox.
    */
   publicPreviews?: boolean;
+  /**
+   * Let the agent save a setup snapshot of a sandbox once a checkout's dependencies are
+   * installed, and start that checkout's next sandboxes from it. Direct E2B, Daytona, Vercel,
+   * and Boat accounts only. Snapshots are stored in your provider account until deleted.
+   * Off by default. An account's own `snapshot` setting always wins.
+   */
+  snapshots?: boolean;
 };
 
 export type SandboxAccountSummary = {
@@ -120,6 +136,8 @@ export type SandboxAccountSummary = {
   chargedTo: string;
   /** The machine size and who sets it: the user, in the account settings, never the agent. */
   machine: string;
+  /** A snapshot the user set for every sandbox of this account. */
+  pinnedSnapshot: string | null;
   capabilities: SandboxCapabilities;
   /** Plain-language limits of this provider for sandboxes. */
   limitations: string[];
@@ -221,6 +239,7 @@ function describeMachine(config: SandboxAccountConfig): string {
   }
   switch (config.provider) {
     case "e2b":
+      if (config.snapshot) return `E2B snapshot "${config.snapshot}" (sized as when it was saved).`;
       return config.template
         ? `E2B template "${config.template}" (its size is fixed when the template is built).`
         : "E2B base template: 2 vCPU, 512 MB memory.";
@@ -231,10 +250,10 @@ function describeMachine(config: SandboxAccountConfig): string {
     }
     case "vercel": {
       const vcpus = config.vcpus ?? 2;
-      return `${vcpus} vCPU, ${vcpus * 2} GB memory.`;
+      return `${vcpus} vCPU, ${vcpus * 2} GB memory${config.snapshot ? `, from snapshot "${config.snapshot}"` : ""}.`;
     }
     case "boat":
-      return `Boat size "${config.size ?? "default"}".`;
+      return `Boat size "${config.size ?? "default"}"${config.snapshot ? `, from snapshot "${config.snapshot}"` : ""}.`;
     case "exedev":
       return config.cpu || config.memory || config.disk
         ? `${[config.cpu && `${config.cpu} vCPU`, config.memory && `${config.memory} memory`, config.disk && `${config.disk} disk`].filter(Boolean).join(", ")}.`
@@ -257,6 +276,8 @@ export function describeSandboxAccount(
         ? managedCapabilities(provider)
         : SANDBOX_PROVIDER_PROFILES[provider].capabilities,
     limitations: describeLimitations(provider, config.mode),
+    pinnedSnapshot:
+      config.mode === "direct" && "snapshot" in config ? (config.snapshot ?? null) : null,
     machine: `${describeMachine(config)} Only the user can change this, in the settings of sandbox account "${name}".`,
   };
   if (config.mode === "direct") {

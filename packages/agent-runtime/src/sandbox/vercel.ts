@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { Sandbox } from "@vercel/sandbox";
+import { Sandbox, Snapshot } from "@vercel/sandbox";
 import {
   classifyFailure,
   discardFailedCreate,
@@ -74,6 +74,8 @@ export function createVercelSandboxTransport(config: {
   runtime?: "node24" | "node22" | "python3.13";
   /** Used when no machine profile is given. */
   vcpus?: number;
+  /** A snapshot every sandbox starts from, unless the create call names another. */
+  snapshot?: string;
 }): SandboxTransport {
   if (!config.apiKey?.trim()) throw new SandboxProviderError("auth", "Vercel token is empty.");
   if (!config.teamId?.trim() || !config.projectId?.trim())
@@ -111,13 +113,16 @@ export function createVercelSandboxTransport(config: {
       validateLifetime(input.timeoutMs, profile.capabilities.maxLifetimeMs);
       const kill = (input.onTimeout ?? "kill") === "kill";
       const name = `gitterm-sbx-${randomBytes(6).toString("hex")}`;
+      const snapshot = input.snapshot ?? config.snapshot;
       const vcpus = input.machine?.vcpus ? Number(input.machine.vcpus) : config.vcpus;
       let sandbox: VercelSandbox;
       try {
         sandbox = await Sandbox.create({
           ...credentials,
           name,
-          runtime: config.runtime ?? "node24",
+          ...(snapshot
+            ? { source: { type: "snapshot" as const, snapshotId: snapshot } }
+            : { runtime: config.runtime ?? "node24" }),
           timeout: input.timeoutMs,
           // Managed sandboxes pause (stop with a snapshot) when idle; direct ones are discarded.
           persistent: !kill,
@@ -259,6 +264,26 @@ export function createVercelSandboxTransport(config: {
       } catch (error) {
         throw failure(error, "expose the port");
       }
+    },
+
+    snapshots: {
+      // Vercel stops the sandbox to snapshot it (capabilities.snapshots is `stops`).
+      async create(id) {
+        try {
+          // Kept until deleted, like the other providers' snapshots.
+          return (await (await running(id)).snapshot({ expiration: 0 })).snapshotId;
+        } catch (error) {
+          throw failure(error, "snapshot the sandbox");
+        }
+      },
+      async delete(snapshotId) {
+        try {
+          await (await Snapshot.get({ ...credentials, snapshotId })).delete();
+        } catch (error) {
+          const classified = failure(error, "delete the snapshot");
+          if (classified.code !== "not_found") throw classified;
+        }
+      },
     },
   };
 }

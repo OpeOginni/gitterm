@@ -13,6 +13,7 @@ import {
   type SandboxRecord,
   type SandboxRef,
   type SandboxSettings,
+  type SetupSnapshotStatus,
 } from "@gitterm/sdk/sandbox";
 
 /**
@@ -165,6 +166,42 @@ export async function registerSandboxTools(
     return realpath(session.location.directory);
   }
 
+  /**
+   * Setup snapshots are on when the user turned them on, the account's provider can snapshot,
+   * and the user has not set a snapshot for the account themselves (theirs always wins).
+   */
+  function snapshotsOn(): boolean {
+    if (settings?.snapshots !== true) return false;
+    try {
+      return !!sandbox().snapshotEffect && !describeSandboxAccount(settings).pinnedSnapshot;
+    } catch {
+      return false;
+    }
+  }
+
+  /** What the agent should know about the setup snapshots it can use for this checkout. */
+  function snapshotAdvice(snapshots: SetupSnapshotStatus[], used: string | null): string {
+    const save =
+      sandbox().snapshotEffect === "stops"
+        ? "Saving stops the sandbox for good, so save last and create a new sandbox after."
+        : "Saving pauses the sandbox briefly.";
+    if (!snapshots.length)
+      return `No setup snapshots for this checkout. After a slow setup succeeds (installs, toolchains, services) and a build or test passes, save one with the sandbox_snapshot tool so later sandboxes start ready. ${save}`;
+    return [
+      used
+        ? `Started from setup snapshot ${used}: what it lists is set up already. Sync, then run the command, and install only if it fails.`
+        : "",
+      "Setup snapshots for this checkout (pass one as `snapshot` to sandbox_create):",
+      ...snapshots.map(
+        ({ record, changed }) =>
+          `- ${record.snapshotId} "${record.label}" ${record.project ? "for this checkout" : "for any project"}, saved ${record.createdAt}${record.note ? `: ${record.note}` : ""}${changed.length ? `. OUT OF DATE: ${changed.join(", ")} changed since` : ""}`,
+      ),
+      `To update one, finish the setup in a sandbox and save with \`replace\` set to its id; the old one is deleted. Delete one (sandbox_snapshot, action delete) when nothing needs it any more or sandboxes started from it fail where a clean one does not. ${save}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   const assert = (
     context: ToolContext,
     action: string,
@@ -285,7 +322,12 @@ export async function registerSandboxTools(
         "Start independent work together: Promise.allSettled over jobs, or several sandboxes up to the account limit.",
         "Jobs in one sandbox share its files, so run setup such as installs once, before starting parallel jobs.",
         "Run long jobs with background: true, then carry on or end your turn. A message arrives when each job finishes, so never poll.",
-      ].join(" "),
+        snapshotsOn()
+          ? "This account keeps setup snapshots: new sandboxes can start from one with dependencies and services already set up. After a slow setup (installs, toolchains, databases) succeeds, save one with sandbox_snapshot; a checkout can have several. sandbox_create and sandbox_list show which exist and which are out of date."
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
     });
 
     editor.add({
@@ -317,6 +359,15 @@ export async function registerSandboxTools(
           description:
             "Anyone with a preview URL can open it. Fixed at creation; requires separate approval unless the plugin options already turn it on. Required where previews are always public (Vercel); ignored where they are always private.",
         },
+        ...(snapshotsOn()
+          ? {
+              snapshot: {
+                type: "string",
+                description:
+                  "A setup snapshot id from sandbox_list to start from, or 'none' for a clean sandbox. Defaults to the newest snapshot made for this checkout.",
+              },
+            }
+          : {}),
       }),
       async execute(input, context) {
         const args = (input ?? {}) as Record<string, unknown>;
@@ -347,16 +398,44 @@ export async function registerSandboxTools(
             warning: "Every port of this sandbox will be reachable by anyone with its URL.",
           });
         const directory = await sessionDirectory(context);
-        const record = await current.create({
-          name: typeof args.name === "string" && args.name ? args.name : "OpenCode sandbox",
-          purpose: typeof args.purpose === "string" ? args.purpose : "",
-          project: directory,
-          sessionId: context.sessionID,
-          lifetimeMinutes,
-          publicPreviews,
-        });
+        const snapshots = snapshotsOn() ? await current.setupSnapshots(directory) : [];
+        const wanted = typeof args.snapshot === "string" ? args.snapshot : undefined;
+        if (
+          wanted &&
+          wanted !== "none" &&
+          !snapshots.some((item) => item.record.snapshotId === wanted)
+        )
+          throw new Error(
+            `No setup snapshot ${wanted} for this checkout. Pick one from sandbox_list, or 'none'.`,
+          );
+        const fromSnapshot =
+          wanted === "none"
+            ? null
+            : (wanted ??
+              snapshots.find((item) => item.record.project === directory)?.record.snapshotId ??
+              null);
+        const record = await current
+          .create({
+            name: typeof args.name === "string" && args.name ? args.name : "OpenCode sandbox",
+            purpose: typeof args.purpose === "string" ? args.purpose : "",
+            project: directory,
+            sessionId: context.sessionID,
+            lifetimeMinutes,
+            publicPreviews,
+            ...(fromSnapshot ? { snapshot: fromSnapshot } : {}),
+          })
+          .catch((error: unknown) => {
+            if (fromSnapshot && error instanceof Error)
+              error.message = `${error.message} The sandbox was to start from setup snapshot ${fromSnapshot}; retry with snapshot 'none', and delete the snapshot with the sandbox_snapshot tool if it is gone or broken.`;
+            throw error;
+          });
         return {
-          content: `Created sandbox:\n${describeRecord(record, context.sessionID)}`,
+          content: [
+            `Created sandbox:\n${describeRecord(record, context.sessionID)}`,
+            snapshotsOn() ? snapshotAdvice(snapshots, fromSnapshot) : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
           output: {
             sandboxId: record.id,
             name: record.name,
@@ -381,13 +460,19 @@ export async function registerSandboxTools(
         const summary = describeSandboxAccount(settings);
         const records = await sandbox().list();
         const live = records.filter((record) => record.state !== "terminated");
+        const setup = snapshotsOn()
+          ? snapshotAdvice(await sandbox().setupSnapshots(await sessionDirectory(context)), null)
+          : "";
         return {
           content: [
             `Account: ${JSON.stringify({ ...summary, limits: sandbox().limits })}`,
             live.length
               ? live.map((record) => describeRecord(record, context.sessionID)).join("\n")
               : "No live sandboxes.",
-          ].join("\n"),
+            setup,
+          ]
+            .filter(Boolean)
+            .join("\n"),
           metadata: summary,
         };
       },
@@ -728,6 +813,88 @@ export async function registerSandboxTools(
         };
       },
     });
+
+    if (snapshotsOn())
+      editor.add({
+        name: "sandbox_snapshot",
+        options: LISTED,
+        description:
+          "Save a sandbox as a setup snapshot new sandboxes can start from, or delete one. A checkout can have several (e.g. 'deps' and 'deps + postgres'). Stored in the provider account until deleted.",
+        input: object(
+          {
+            action: { type: "string", enum: ["save", "delete"] },
+            sandboxId: { ...sandboxId, description: "The sandbox to save; required for save" },
+            label: {
+              type: "string",
+              description:
+                "Short name for what it holds, e.g. 'deps + postgres'; required for save",
+            },
+            note: {
+              type: "string",
+              description:
+                "What the sandbox has set up, e.g. 'bun install, Playwright browsers, Postgres 16'",
+            },
+            forThisCheckout: {
+              type: "boolean",
+              description:
+                "Tie it to this checkout (default true), so it is offered here and flagged when its dependency files change. False for a general setup any project can use.",
+            },
+            replace: {
+              type: "string",
+              description: "Id of a snapshot this one replaces; it is deleted once this is saved",
+            },
+            snapshotId: { type: "string", description: "The snapshot to delete" },
+          },
+          ["action"],
+        ),
+        async execute(input, context) {
+          const args = (input ?? {}) as Record<string, unknown>;
+          const current = sandbox();
+          const { mode, account } = current.identity;
+          const directory = await sessionDirectory(context);
+          await assert(
+            context,
+            "gitterm.sandbox.snapshot",
+            [`${mode}:${account}:${directory}`],
+            [`${mode}:${account}:${directory}`],
+            { action: args.action, project: directory },
+          );
+          if (args.action === "delete") {
+            const removed = await current.deleteSetupSnapshot(str(args.snapshotId, "snapshotId"));
+            return {
+              content: `Deleted setup snapshot ${removed.snapshotId} "${removed.label}" from ${current.identity.provider}.`,
+            };
+          }
+          const ref = await refFor(str(args.sandboxId, "sandboxId"));
+          const saved = await current.saveSetupSnapshot(ref, {
+            label: str(args.label, "label"),
+            project: args.forThisCheckout === false ? null : directory,
+            note: typeof args.note === "string" ? args.note : undefined,
+            replace: typeof args.replace === "string" && args.replace ? args.replace : undefined,
+          });
+          if (current.snapshotEffect === "stops") {
+            unwatch(ref.id);
+            for (const [key, proxy] of proxies)
+              if (key.startsWith(`${ref.id}:`)) await proxy.close();
+          }
+          return {
+            content: [
+              `Saved setup snapshot ${saved.record.snapshotId} "${saved.record.label}" of sandbox ${ref.id}, ${saved.record.project ? `for ${saved.record.project}` : "for any project"}.`,
+              saved.replaced
+                ? saved.leftover
+                  ? `It replaces ${saved.replaced}, which could not be deleted; tell the user to delete it in their ${ref.provider} account.`
+                  : `Deleted the snapshot it replaces, ${saved.replaced}.`
+                : "",
+              current.snapshotEffect === "stops"
+                ? `${ref.provider} stopped sandbox ${ref.id} to save it; create a new sandbox to continue.`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" "),
+            metadata: { snapshot: saved.record.snapshotId, sandbox: ref.id },
+          };
+        },
+      });
 
     editor.add({
       name: "sandbox_destroy",

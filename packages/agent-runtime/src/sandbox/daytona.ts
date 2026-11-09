@@ -78,8 +78,8 @@ export function createDaytonaSandboxTransport(config: {
       try {
         sandbox = await client.create(
           {
-            ...(config.snapshot
-              ? { snapshot: config.snapshot }
+            ...((input.snapshot ?? config.snapshot)
+              ? { snapshot: input.snapshot ?? config.snapshot }
               : {
                   image: Image.base(input.template ?? DEFAULT_DAYTONA_SANDBOX_IMAGE).entrypoint([
                     "sleep",
@@ -222,6 +222,26 @@ export function createDaytonaSandboxTransport(config: {
       } catch (error) {
         throw failure(error, "get a preview link");
       }
+    },
+
+    snapshots: {
+      async create(id, name) {
+        try {
+          // Large disks take a while; Daytona's default wait is one minute.
+          await (await running(id)).createSnapshot(name, 1800);
+          return name;
+        } catch (error) {
+          throw failure(error, "snapshot the sandbox");
+        }
+      },
+      async delete(snapshotId) {
+        try {
+          await client.snapshot.delete(await client.snapshot.get(snapshotId));
+        } catch (error) {
+          const classified = failure(error, "delete the snapshot");
+          if (classified.code !== "not_found") throw classified;
+        }
+      },
     },
   };
 }

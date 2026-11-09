@@ -22,7 +22,7 @@ env.INTERNAL_API_KEY ||= "sandbox-integration-test";
 const { and, db, eq, inArray } = await import("@gitterm/db");
 const { user } = await import("@gitterm/db/schema/auth");
 const { cloudProvider, machineProfile } = await import("@gitterm/db/schema/cloud");
-const { usageSession, workspace, workspaceTermination } =
+const { sandboxSnapshot, usageSession, workspace, workspaceTermination } =
   await import("@gitterm/db/schema/workspace");
 const { UNLIMITED_ENTITLEMENTS } = await import("@gitterm/schema/billing");
 const transportModule = await import("../service/sandbox-transport");
@@ -51,9 +51,17 @@ const commands: string[] = [];
 const destroyed: string[] = [];
 const allowanceChecks: unknown[] = [];
 let workspaceLimit = 2;
+let snapshotLimit: number | null = null;
+/** Provider snapshots saved and deleted; a save fails while `failSnapshots` is set. */
+const savedSnapshots: string[] = [];
+const deletedSnapshots: string[] = [];
+let failSnapshots = false;
 let machineAccess: "any" | "smallest" = "any";
 /** What each create asked the provider for. */
-const requested = new Map<string, { template?: string; machine?: Record<string, unknown> }>();
+const requested = new Map<
+  string,
+  { template?: string; machine?: Record<string, unknown>; snapshot?: string }
+>();
 let failDestroys = 0;
 /** Provider-side state; destroy marks a sandbox gone unless `acceptOnlyDestroys` is set. */
 const providerStates = new Map<string, "running" | "paused" | "terminated">();
@@ -84,6 +92,7 @@ beforeAll(async () => {
       template?: string;
       machine?: Record<string, unknown>;
       publicPreviews?: boolean;
+      snapshot?: string;
     }) {
       if (leftoverOnCreate) {
         await beforeLeftover?.(input.labels.gitterm_workspace!);
@@ -94,7 +103,11 @@ beforeAll(async () => {
       const id = `fake-${randomUUID()}`;
       providerPublic.push(input.publicPreviews === true);
       created.set(id, { ...input.labels, template: input.template ?? "" });
-      requested.set(id, { template: input.template, machine: input.machine });
+      requested.set(id, {
+        template: input.template,
+        machine: input.machine,
+        snapshot: input.snapshot,
+      });
       return {
         id,
         state: "running" as const,
@@ -140,6 +153,17 @@ beforeAll(async () => {
     async preview(_id: string, port: number) {
       return { url: `https://${port}-fake.e2b.app`, headers: previewHeaders };
     },
+    snapshots: {
+      async create(_id: string, name: string) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        if (failSnapshots) throw new SandboxProviderError("provider", "E2B failed to snapshot.");
+        savedSnapshots.push(name);
+        return `e2b-${name}`;
+      },
+      async delete(snapshotId: string) {
+        deletedSnapshots.push(snapshotId);
+      },
+    },
   };
   mocks.push(
     // Like the real lookup, resolving the transport reads provider config from the database.
@@ -152,6 +176,7 @@ beforeAll(async () => {
       getEntitlements: async () => ({
         ...UNLIMITED_ENTITLEMENTS,
         maxWorkspaces: workspaceLimit,
+        maxSnapshots: snapshotLimit,
         machineAccess,
       }),
       checkRunAllowance: async (id: string, input: unknown) => {
@@ -212,6 +237,7 @@ afterAll(async () => {
       ),
     );
   }
+  await db.delete(sandboxSnapshot).where(inArray(sandboxSnapshot.userId, [userId, otherId]));
   await db.delete(user).where(inArray(user.id, [userId, otherId]));
 });
 
@@ -889,3 +915,88 @@ integration("#4 AWS status errors are failures, not deletions", async () => {
     spy.mockRestore();
   }
 });
+
+integration(
+  "snapshots are limited per plan, owned by their user, and start new sandboxes",
+  async () => {
+    const previousLimit = workspaceLimit;
+    workspaceLimit = 10;
+    try {
+      const sandbox = await caller(userId).create({ name: "snap", lifetimeMinutes: 30 });
+
+      snapshotLimit = 0;
+      await expect(
+        caller(userId).saveSnapshot({ sandboxId: sandbox.id, label: "deps" }),
+      ).rejects.toThrow("doesn't include sandbox snapshots");
+
+      // Parallel saves can't pass the limit.
+      snapshotLimit = 2;
+      const results = await Promise.allSettled(
+        ["a", "b", "c"].map((label) =>
+          caller(userId).saveSnapshot({ sandboxId: sandbox.id, label }),
+        ),
+      );
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(2);
+      const refused = results.find(
+        (result) => result.status === "rejected",
+      ) as PromiseRejectedResult;
+      expect(String(refused.reason)).toContain("plan limit of 2 sandbox snapshots");
+      // Provider names come from Gitterm's ids, never from the caller's label.
+      expect(savedSnapshots.every((name) => /^gitterm-[0-9a-f-]{36}$/.test(name))).toBe(true);
+
+      const listed = await caller(userId).snapshots();
+      expect(listed).toHaveLength(2);
+      expect(await caller(otherId).snapshots()).toEqual([]);
+      await expect(caller(otherId).deleteSnapshot({ snapshotId: listed[0]!.id })).rejects.toThrow(
+        "Snapshot not found",
+      );
+      await expect(
+        caller(otherId).create({ lifetimeMinutes: 5, snapshotId: listed[0]!.id }),
+      ).rejects.toThrow("Snapshot not found");
+
+      // A new sandbox starts from it, at the size it was saved at.
+      const [source] = await db.select().from(workspace).where(eq(workspace.id, sandbox.id));
+      const fromSnapshot = await caller(userId).create({
+        lifetimeMinutes: 5,
+        snapshotId: listed[0]!.id,
+      });
+      expect(fromSnapshot.machineProfileId).toBe(source!.machineProfileId);
+      const [started] = await db.select().from(workspace).where(eq(workspace.id, fromSnapshot.id));
+      const providerId = started!.externalInstanceId.slice("sandbox:e2b:".length);
+      expect(requested.get(providerId)?.snapshot).toBe(`e2b-gitterm-${listed[0]!.id}`);
+
+      await db
+        .update(machineProfile)
+        .set({ isEnabled: false })
+        .where(eq(machineProfile.id, source!.machineProfileId!));
+      try {
+        await expect(
+          caller(userId).create({ lifetimeMinutes: 5, snapshotId: listed[0]!.id }),
+        ).rejects.toThrow("saved at a size your plan can no longer use");
+      } finally {
+        await db
+          .update(machineProfile)
+          .set({ isEnabled: true })
+          .where(eq(machineProfile.id, source!.machineProfileId!));
+      }
+
+      // Deleting removes it at the provider and frees the slot; a failed save takes none.
+      await caller(userId).deleteSnapshot({ snapshotId: listed[0]!.id });
+      expect(deletedSnapshots).toEqual([`e2b-gitterm-${listed[0]!.id}`]);
+      failSnapshots = true;
+      await expect(
+        caller(userId).saveSnapshot({ sandboxId: sandbox.id, label: "x" }),
+      ).rejects.toThrow("E2B failed to snapshot");
+      failSnapshots = false;
+      await caller(userId).saveSnapshot({ sandboxId: sandbox.id, label: "d" });
+      expect(await caller(userId).snapshots()).toHaveLength(2);
+
+      for (const id of [sandbox.id, fromSnapshot.id])
+        await caller(userId).terminate({ sandboxId: id });
+    } finally {
+      snapshotLimit = null;
+      failSnapshots = false;
+      workspaceLimit = previousLimit;
+    }
+  },
+);

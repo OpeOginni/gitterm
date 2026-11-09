@@ -31,6 +31,8 @@ export interface Entitlements {
   machineAccess: MachineAccess;
   /** Most workspaces (running, pending, or paused) the user may keep; null means no limit. */
   maxWorkspaces: number | null;
+  /** Most managed sandbox snapshots the user may keep; null means no limit. */
+  maxSnapshots: number | null;
   /** Whether the user may opt into persistent storage on providers that make it optional. */
   persistence: boolean;
   customSubdomain: boolean;
@@ -183,6 +185,7 @@ export const UNLIMITED_ENTITLEMENTS: Entitlements = {
   providerKeys: null,
   machineAccess: "any",
   maxWorkspaces: null,
+  maxSnapshots: null,
   persistence: true,
   customSubdomain: true,
   alwaysOn: true,

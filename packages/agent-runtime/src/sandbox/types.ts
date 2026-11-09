@@ -97,6 +97,11 @@ export type SandboxCapabilities = {
   /** Whether a paused sandbox keeps its files and processes. */
   pause: "stateful" | "state-losing";
   maxLifetimeMs: number;
+  /**
+   * Whether the sandbox can be saved as a snapshot new sandboxes start from, and what saving
+   * does to it: `pauses` it briefly, or `stops` it for good (Vercel).
+   */
+  snapshots: "pauses" | "stops" | "none";
 };
 
 export type SandboxCreateInput = {
@@ -120,6 +125,19 @@ export type SandboxCreateInput = {
   env?: Record<string, string>;
   /** Run after every resume, to restart services a pause stopped. Gitterm only. */
   resumeCommand?: string;
+  /** Start from a snapshot saved with `snapshots.create` instead of the template. */
+  snapshot?: string;
+};
+
+/**
+ * Saves a sandbox's disk as a snapshot new sandboxes can start from. Snapshots outlive the
+ * sandbox and are stored (and billed) in the provider account until deleted.
+ */
+export type SandboxSnapshots = {
+  /** Returns the id to pass as `snapshot` when creating a sandbox. */
+  create(id: string, name: string): Promise<string>;
+  /** Deleting a snapshot that no longer exists succeeds. */
+  delete(snapshotId: string): Promise<void>;
 };
 
 export interface SandboxTransport {
@@ -144,6 +162,8 @@ export interface SandboxTransport {
   writeFile(id: string, path: string, data: Uint8Array): Promise<void>;
   readFile(id: string, path: string): Promise<Uint8Array>;
   preview(id: string, port: number): Promise<SandboxPreviewAccess>;
+  /** Present exactly where `capabilities.snapshots` is not `none`. */
+  snapshots?: SandboxSnapshots;
 }
 
 /** Where commands run and what the provider guarantees. Shared by transports and clients. */
@@ -165,11 +185,23 @@ const DAY = 24 * 60 * 60_000;
 export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProviderProfile> = {
   e2b: {
     home: "/home/user",
-    capabilities: { expiry: "hard", previews: "either", pause: "stateful", maxLifetimeMs: DAY },
+    capabilities: {
+      expiry: "hard",
+      previews: "either",
+      pause: "stateful",
+      maxLifetimeMs: DAY,
+      snapshots: "pauses",
+    },
   },
   daytona: {
     home: "/home/daytona",
-    capabilities: { expiry: "hard", previews: "either", pause: "stateful", maxLifetimeMs: DAY },
+    capabilities: {
+      expiry: "hard",
+      previews: "either",
+      pause: "stateful",
+      maxLifetimeMs: DAY,
+      snapshots: "pauses",
+    },
   },
   vercel: {
     home: "/home/vercel-sandbox",
@@ -178,15 +210,28 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       previews: "public",
       pause: "stateful",
       maxLifetimeMs: 5 * 60 * 60_000,
+      snapshots: "stops",
     },
   },
   boat: {
     home: "/home/user",
-    capabilities: { expiry: "archive", previews: "private", pause: "stateful", maxLifetimeMs: DAY },
+    capabilities: {
+      expiry: "archive",
+      previews: "private",
+      pause: "stateful",
+      maxLifetimeMs: DAY,
+      snapshots: "pauses",
+    },
   },
   exedev: {
     home: "/home/exedev",
-    capabilities: { expiry: "none", previews: "private", pause: "stateful", maxLifetimeMs: DAY },
+    capabilities: {
+      expiry: "none",
+      previews: "private",
+      pause: "stateful",
+      maxLifetimeMs: DAY,
+      snapshots: "none",
+    },
   },
   railway: {
     home: "/root",
@@ -195,6 +240,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       previews: "private",
       pause: "state-losing",
       maxLifetimeMs: DAY,
+      snapshots: "none",
     },
   },
   aws: {
@@ -204,12 +250,19 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       previews: "private",
       pause: "state-losing",
       maxLifetimeMs: DAY,
+      snapshots: "none",
     },
   },
   // The Gitterm server enforces lifetimes and serves previews.
   gitterm: {
     home: "/home/user",
-    capabilities: { expiry: "hard", previews: "private", pause: "stateful", maxLifetimeMs: DAY },
+    capabilities: {
+      expiry: "hard",
+      previews: "private",
+      pause: "stateful",
+      maxLifetimeMs: DAY,
+      snapshots: "none",
+    },
   },
 };
 

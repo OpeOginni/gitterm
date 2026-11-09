@@ -53,17 +53,20 @@ export async function followComputeEvents(options: {
   let after = "latest";
   let delay = 1_000;
   while (!options.signal?.aborted) {
-    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    // Aborting the request closes the connection; cancelling its body reader does not on Bun 1.3.
+    const connection = new AbortController();
     try {
       const response = await fetch(`${options.url.replace(/\/$/, "")}/v1/events?after=${after}`, {
         headers: { authorization: `Bearer ${options.serviceToken}` },
-        signal: options.signal,
+        signal: options.signal
+          ? AbortSignal.any([options.signal, connection.signal])
+          : connection.signal,
       });
       if (!response.ok || !response.body) throw new Error(`event stream: ${response.status}`);
       delay = 1_000;
       let buffer = "";
       const decoder = new TextDecoder();
-      reader = response.body.getReader();
+      const reader = response.body.getReader();
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -92,7 +95,7 @@ export async function followComputeEvents(options: {
       console.error("[compute] event stream interrupted:", error);
     } finally {
       // Close this connection before opening the next one.
-      await reader?.cancel().catch(() => {});
+      connection.abort();
     }
     await new Promise((resolve) => setTimeout(resolve, delay));
     delay = Math.min(delay * 2, 30_000);

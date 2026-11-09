@@ -29,6 +29,8 @@ export type SandboxCapabilities = {
   previews: "private" | "public" | "either" | "none";
   pause: "stateful" | "state-losing";
   maxLifetimeMs: number;
+  /** Whether sandboxes can be snapshotted, and whether saving `pauses` or `stops` (Vercel) them. */
+  snapshots: "pauses" | "stops" | "none";
 };
 
 export type SandboxCommandResult = { exitCode: number; stdout: string; stderr: string };

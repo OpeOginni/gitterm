@@ -104,7 +104,7 @@ export type ProviderKey =
   | "vercel"
   | "boat"
   | "exedev"
-  /** gitterm.dev's own sandboxes: pick a size (`small`, `medium`, `large`) as the machine. */
+  /** gitterm.dev's own sandboxes: pick a size (`small` or `medium`) as the machine. */
   | "gitterm";
 
 type ProviderSelectionBase = {
@@ -775,4 +775,15 @@ export type ManagedSandboxCreateInput = {
   publicPreviews?: boolean;
   metadata?: Record<string, string>;
   idempotencyKey?: string;
+  /** Start from one of your snapshots (same provider). It keeps the size it was saved at. */
+  snapshotId?: string;
+};
+
+/** A managed sandbox saved as a snapshot, counted against your plan's snapshot limit. */
+export type ManagedSandboxSnapshot = {
+  id: string;
+  provider: SandboxProviderKey;
+  label: string;
+  machineProfileId: string | null;
+  createdAt: string;
 };

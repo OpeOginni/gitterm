@@ -95,5 +95,6 @@ export type {
   GoogleSetup,
   ManagedSandbox,
   ManagedSandboxCreateInput,
+  ManagedSandboxSnapshot,
   SandboxJobFinished,
 } from "./types.js";

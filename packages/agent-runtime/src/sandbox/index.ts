@@ -10,7 +10,7 @@ export * from "./types";
 
 /** Settings for providers usable with a caller-owned credential. AWS is managed-only. */
 export type SandboxTransportConfig =
-  | { provider: "e2b"; apiKey: string; template?: string }
+  | { provider: "e2b"; apiKey: string; template?: string; snapshot?: string }
   | {
       provider: "daytona";
       apiKey: string;
@@ -25,8 +25,9 @@ export type SandboxTransportConfig =
       projectId: string;
       runtime?: "node24" | "node22" | "python3.13";
       vcpus?: number;
+      snapshot?: string;
     }
-  | { provider: "boat"; apiKey: string; size?: "small" | "default" | "large" }
+  | { provider: "boat"; apiKey: string; size?: "small" | "default" | "large"; snapshot?: string }
   | {
       provider: "exedev";
       apiKey: string;

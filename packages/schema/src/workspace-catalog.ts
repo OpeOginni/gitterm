@@ -77,7 +77,7 @@ export const providerMachineOptionsSchemas = {
       disk: z.string().trim().min(1).optional(),
     })
     .strict(),
-  gitterm: z.object({ size: z.enum(["small", "medium", "large"]).optional() }).strict(),
+  gitterm: z.object({ size: z.enum(["small", "medium"]).optional() }).strict(),
 } satisfies Record<ProviderKey, z.ZodType<Record<string, unknown>>>;
 
 export type ProviderMachineOptions = {

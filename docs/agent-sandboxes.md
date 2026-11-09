@@ -17,10 +17,10 @@ includes an `opencode` binary, which is never started.
 | `direct` (bring your own) | You                           | Your provider account                           | No                      |
 
 On gitterm.dev, managed sandboxes are Gitterm's own: the account sets `"size": "small" |
-"medium" | "large"` instead of a provider, and finished jobs are reported as they happen, so
+"medium"` instead of a provider, and finished jobs are reported as they happen, so
 the plugin doesn't poll for them. The server offers them only in managed mode with
-`COMPUTE_URL` and `COMPUTE_SERVICE_TOKEN` set; a self-hosted deployment uses the providers
-below.
+`COMPUTE_URL` and `COMPUTE_SERVICE_TOKEN` set, after the provider is registered with
+`bun run compute:setup`; a self-hosted deployment uses the providers below.
 
 Each sandbox reference carries its mode, provider, and account name
 (`{ mode, provider, account, id }`). A reference from another mode or account fails with
@@ -275,15 +275,15 @@ The size is set per account, so only the user chooses it; the agent can't. `sand
 reports the selected account's size, so an agent that runs out of memory can tell the user
 which setting to change. To keep a small and a large option, configure two accounts.
 
-| Account          | Setting                                                                                                                                                 | Default                    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `managed`        | gitterm.dev: `"size": "small" \| "medium" \| "large"`. Self-hosted: `"machine"`, one of the deployment's machine profile keys. Both limited by the plan | The plan's default profile |
-| `direct` E2B     | `"template": "<template ID or name>"`. E2B fixes CPU and memory when the template is built (`e2b template build --cpu-count 4 --memory-mb 8192`).       | `base`: 2 vCPU, 512 MB     |
-| `direct` Daytona | `"resources": { "cpu": 4, "memory": 8, "disk": 10 }` (GiB), or `"snapshot"`, which carries its own size                                                 | 1 vCPU, 1 GiB, 3 GiB disk  |
-| `direct` Vercel  | `"vcpus": 4` (1 to 8, 2 GB of memory each)                                                                                                              | 2 vCPU                     |
-| `direct` Boat    | `"size": "small" \| "default" \| "large"`                                                                                                               | `default`                  |
-| `direct` exe.dev | `"cpu": 4, "memory": "8GB", "disk": "20GB"`                                                                                                             | exe.dev's default          |
-| `direct` Railway | None: Railway applies your plan's limits                                                                                                                |                            |
+| Account          | Setting                                                                                                                                           | Default                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `managed`        | gitterm.dev: `"size": "small" \| "medium"`. Self-hosted: `"machine"`, one of the deployment's machine profile keys. Both limited by the plan      | The plan's default profile |
+| `direct` E2B     | `"template": "<template ID or name>"`. E2B fixes CPU and memory when the template is built (`e2b template build --cpu-count 4 --memory-mb 8192`). | `base`: 2 vCPU, 512 MB     |
+| `direct` Daytona | `"resources": { "cpu": 4, "memory": 8, "disk": 10 }` (GiB), or `"snapshot"`, which carries its own size                                           | 1 vCPU, 1 GiB, 3 GiB disk  |
+| `direct` Vercel  | `"vcpus": 4` (1 to 8, 2 GB of memory each)                                                                                                        | 2 vCPU                     |
+| `direct` Boat    | `"size": "small" \| "default" \| "large"`                                                                                                         | `default`                  |
+| `direct` exe.dev | `"cpu": 4, "memory": "8GB", "disk": "20GB"`                                                                                                       | exe.dev's default          |
+| `direct` Railway | None: Railway applies your plan's limits                                                                                                          |                            |
 
 ### Plugin permissions
 
@@ -296,10 +296,57 @@ which setting to change. To keep a small and a large option, configure two accou
 | `gitterm.sandbox.secret`    | variable names                     | Passing local environment variables through `secretEnv`                                        |
 | `gitterm.sandbox.browser`   | `<mode>:<account>:<id>:<port>`     | Creating a loopback proxy for a private preview. "Always" saves `<mode>:<account>:*`.          |
 | `gitterm.sandbox.apply`     | target path                        | Writing an artifact into the checkout. "Always" is not offered.                                |
+| `gitterm.sandbox.snapshot`  | `<mode>:<account>:<checkout root>` | Saving or deleting the checkout's setup snapshot                                               |
 
 Listing sandboxes, reading jobs and logs, cancelling, downloading artifacts into the
 staging directory, and destroying need no approval. A denied action stops before any
 upload, provisioning, or local write.
+
+### Setup snapshots
+
+With `"snapshots": true` in the plugin options, the agent can save a sandbox as a **setup
+snapshot** once a slow setup (dependencies, toolchains, services) works, and later sandboxes
+start from it instead of redoing it. Off by default.
+
+- **Providers:** E2B, Daytona, Vercel, and Boat, with your own key or as a managed account.
+  Gitterm's own sandboxes, exe.dev, Railway, and AWS can't snapshot, so the option is
+  ignored there and the agent is never told about it. Saving pauses the sandbox briefly; on
+  Vercel it stops the sandbox for good, and the agent is told to create a new one.
+- **Managed accounts.** Snapshots are saved in the deployment's provider account and
+  recorded in `sandbox_snapshot`, owned by your user. Plans limit how many you keep: Free 0,
+  Pro 20, Growth 100 (legacy Starter 5); a self-hosted deployment without billing has no
+  limit. Saves are counted under a per-user lock, so parallel saves can't pass it. Provider
+  snapshot names are `gitterm-<id>`, never the label, so users can't collide. A sandbox
+  started from a snapshot runs, and is billed, at the size the snapshot was saved at.
+  API: `sandbox.saveSnapshot`, `sandbox.snapshots`, `sandbox.deleteSnapshot`, and
+  `snapshotId` on `sandbox.create`.
+- **Several per checkout.** Each snapshot has a short label (`deps`, `deps + postgres`) and
+  the agent's note of what it set up. By default it is tied to the checkout it was made
+  from: the provider name includes the checkout's folder name and a hash of its path, and
+  the record keeps hashes of the root dependency files (lockfiles, `package.json`,
+  `pyproject.toml`, `.nvmrc`, `Dockerfile`, and the like). With `forThisCheckout: false`
+  it is a general setup offered to every checkout. Records live locally next to the
+  sandbox records and hold no credentials.
+- **What the agent is told.** The namespace description says the account keeps setup
+  snapshots. `sandbox_create` and `sandbox_list` list the snapshots for this checkout (its
+  own and general ones), which one the new sandbox started from, and which are out of date.
+- **Choosing one.** `sandbox_create` starts from the newest snapshot tied to the checkout,
+  takes another with `snapshot: "<id>"`, or starts clean with `snapshot: "none"`. A general
+  snapshot is used only when the agent picks it.
+- **Out of date.** When a dependency file changed, the snapshot is still usable (an install
+  on top is faster than a clean one) and is flagged. Saving with `replace: "<id>"` saves
+  the new one, then deletes the old one.
+- **Deleting.** `sandbox_snapshot` with `action: "delete"` and a `snapshotId` removes it from
+  the provider. The agent is told to do so when nothing needs it any more, or when sandboxes
+  started from it fail where a clean one does not.
+- **The user's own snapshot wins.** An account with `"snapshot": "<id>"` (E2B, Daytona,
+  Vercel, Boat) starts every sandbox from it, and the agent gets no snapshot tool for that
+  account.
+- Snapshots stay in the provider account until deleted, after the sandbox is gone. Boat
+  includes some saved snapshots in each plan and charges $0.056 a day for each one beyond
+  that; with an empty wallet, saving fails. E2B publishes no snapshot storage price.
+- Deleting a user keeps their `sandbox_snapshot` rows with no owner, so the provider
+  snapshots can still be found and removed.
 
 ## Verification
 

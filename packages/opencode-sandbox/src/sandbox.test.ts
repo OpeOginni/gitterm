@@ -1,6 +1,7 @@
 import { expect, mock, test } from "bun:test";
 
-const created: { publicPreviews?: boolean }[] = [];
+const created: { publicPreviews?: boolean; snapshot?: string }[] = [];
+let setupSnapshots: unknown[] = [];
 let jobStatus = "running";
 let saved: unknown[] = [];
 let pushes = false;
@@ -29,6 +30,8 @@ mock.module("@gitterm/sdk/sandbox", () => ({
       return { previews };
     },
     list: async () => [],
+    snapshotEffect: "pauses",
+    setupSnapshots: async () => setupSnapshots,
     store: { list: async () => saved },
     get onJobFinished() {
       return pushes
@@ -43,7 +46,7 @@ mock.module("@gitterm/sdk/sandbox", () => ({
       if (failRead) throw Object.assign(new Error(failRead.message), { code: failRead.code });
       return jobView(jobStatus);
     },
-    create: async (input: { publicPreviews?: boolean }) => {
+    create: async (input: { publicPreviews?: boolean; snapshot?: string }) => {
       created.push(input);
       return {
         id: "sbx",
@@ -66,13 +69,15 @@ const { registerSandboxTools } = await import("./sandbox");
 
 async function createSandbox(options: Record<string, unknown>, input: Record<string, unknown>) {
   const asked: string[] = [];
-  let create: ((input: unknown, context: unknown) => Promise<unknown>) | undefined;
+  const names: string[] = [];
+  let create: ((input: unknown, context: unknown) => Promise<{ content: string }>) | undefined;
   const ctx = {
     tool: {
       transform: async (transform: (editor: unknown) => void) =>
         transform({
           namespace: () => {},
           add: (tool: { name: string; execute: typeof create }) => {
+            names.push(tool.name);
             if (tool.name === "sandbox_create") create = tool.execute;
           },
         }),
@@ -87,23 +92,29 @@ async function createSandbox(options: Record<string, unknown>, input: Record<str
   };
   await registerSandboxTools(ctx as never, settings as never);
   created.length = 0;
-  await create!(input, { sessionID: "ses", agent: "a", messageID: "m", id: "t" });
-  return { asked, publicPreviews: created[0]?.publicPreviews };
+  const result = await create!(input, { sessionID: "ses", agent: "a", messageID: "m", id: "t" });
+  return {
+    asked,
+    publicPreviews: created[0]?.publicPreviews,
+    snapshot: created[0]?.snapshot,
+    names,
+    content: result.content,
+  };
 }
 
 test("publicPreviews in the options makes every sandbox public without asking", async () => {
-  expect(await createSandbox({ publicPreviews: true }, {})).toEqual({
+  expect(await createSandbox({ publicPreviews: true }, {})).toMatchObject({
     asked: ["gitterm.sandbox.provision"],
     publicPreviews: true,
   });
 });
 
 test("without the option, previews are private unless the agent asks and you approve", async () => {
-  expect(await createSandbox({}, {})).toEqual({
+  expect(await createSandbox({}, {})).toMatchObject({
     asked: ["gitterm.sandbox.provision"],
     publicPreviews: false,
   });
-  expect(await createSandbox({}, { publicPreviews: true })).toEqual({
+  expect(await createSandbox({}, { publicPreviews: true })).toMatchObject({
     asked: ["gitterm.sandbox.provision", "gitterm.sandbox.public"],
     publicPreviews: true,
   });
@@ -112,7 +123,7 @@ test("without the option, previews are private unless the agent asks and you app
 test("where previews are always private, nothing is asked and nothing is made public", async () => {
   previews = "private";
   try {
-    expect(await createSandbox({}, { publicPreviews: true })).toEqual({
+    expect(await createSandbox({}, { publicPreviews: true })).toMatchObject({
       asked: ["gitterm.sandbox.provision"],
       publicPreviews: false,
     });
@@ -272,5 +283,40 @@ test("where the account pushes job completions, the event sends the message at o
     expect(pushed).toBeUndefined();
   } finally {
     pushes = false;
+  }
+});
+
+test("with snapshots on, a sandbox starts from the checkout's newest snapshot unless told otherwise", async () => {
+  const { realpath } = await import("node:fs/promises");
+  const here = await realpath(process.cwd());
+  const snapshot = (id: string, project: string | null, changed: string[] = []) => ({
+    record: { snapshotId: id, label: id, project, note: "", createdAt: "2026-11-09" },
+    changed,
+  });
+  setupSnapshots = [
+    snapshot("shared", null),
+    snapshot("newest", here, ["bun.lock"]),
+    snapshot("older", here),
+  ];
+  try {
+    const defaulted = await createSandbox({ snapshots: true }, {});
+    expect(defaulted.snapshot).toBe("newest");
+    expect(defaulted.names).toContain("sandbox_snapshot");
+    expect(defaulted.content).toContain("OUT OF DATE: bun.lock");
+    expect((await createSandbox({ snapshots: true }, { snapshot: "shared" })).snapshot).toBe(
+      "shared",
+    );
+    expect(
+      (await createSandbox({ snapshots: true }, { snapshot: "none" })).snapshot,
+    ).toBeUndefined();
+    await expect(createSandbox({ snapshots: true }, { snapshot: "gone" })).rejects.toThrow(
+      "No setup snapshot gone",
+    );
+    // Off unless the user turns it on.
+    const off = await createSandbox({}, {});
+    expect(off.snapshot).toBeUndefined();
+    expect(off.names).not.toContain("sandbox_snapshot");
+  } finally {
+    setupSnapshots = [];
   }
 });

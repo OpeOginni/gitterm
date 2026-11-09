@@ -46,7 +46,7 @@ const config = (): WorkspaceConfig => ({
   userId: "u1",
   imageId: "image",
   subdomain: "ws1",
-  imageProviderMetadata: { gitterm: { image: "gitterm-opencode-server", size: "large" } },
+  imageProviderMetadata: { gitterm: { image: "gitterm-opencode-server", size: "medium" } },
   environmentVariables: { USER_VAR: "from-user" } as never,
   provisioningSpec: {
     repo: { url: "https://github.com/acme/app", name: "app", branch: "main", authToken: "t" },
@@ -77,7 +77,7 @@ test("a Gitterm workspace is set up through sandbox calls and keeps a sandbox ha
 
   expect(created[0]).toMatchObject({
     template: "gitterm-opencode-server",
-    machine: { size: "large" },
+    machine: { size: "medium" },
     onTimeout: "pause",
     timeoutMs: 30 * 60_000,
     labels: { gitterm_workspace: "ws1" },

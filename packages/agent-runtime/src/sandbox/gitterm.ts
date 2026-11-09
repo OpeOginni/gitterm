@@ -25,7 +25,7 @@ const info = (sandbox: {
 
 /**
  * Gitterm's own sandboxes, on gitterm.dev only (self-hosted deployments never configure them).
- * Callers ask for a size: `small`, `medium`, or `large`, from the machine profile's `size`
+ * Callers ask for a size: `small` or `medium`, from the machine profile's `size`
  * option. A thin client for the service's API, authenticated with the token the Gitterm
  * server holds.
  */

@@ -1,4 +1,4 @@
-import { db, eq, inArray } from "@gitterm/db";
+import { and, db, eq, inArray, not } from "@gitterm/db";
 import { cloudProvider, image, machineProfile } from "@gitterm/db/schema/cloud";
 import env, { isComputeEnabled } from "@gitterm/env/server";
 import { getBilling } from "../billing";
@@ -6,11 +6,13 @@ import { getBilling } from "../billing";
 /** The provider key of gitterm.dev's own sandboxes. */
 export const COMPUTE_PROVIDER_KEY = "gitterm";
 
-/** The sizes gitterm.dev sells. */
+/**
+ * The sizes gitterm.dev sells. Others already in the database are disabled, not deleted.
+ * `large` (8 vCPU, 16 GB) comes back once Compute has the machines.
+ */
 const SIZES = [
   { key: "small", name: "Small", vcpus: 2, memoryGb: 4, isDefault: false },
   { key: "medium", name: "Medium", vcpus: 4, memoryGb: 8, isDefault: true },
-  { key: "large", name: "Large", vcpus: 8, memoryGb: 16, isDefault: false },
 ] as const;
 
 /** Workspaces keep their files while paused (always persistent), have no SSH, and are ready
@@ -32,13 +34,16 @@ const PROVIDER = {
 };
 
 /**
- * On gitterm.dev, makes sure the Gitterm provider, its sizes, and its images exist so plans,
- * billing, sandboxes and workspaces treat it like any provider. Does nothing on a self-hosted
- * deployment, so self-hosters never see it. Safe to run on every start; an admin's
- * enable/disable is kept.
+ * gitterm.dev only: makes sure the Gitterm provider, its sizes, and its images exist so plans,
+ * billing, sandboxes and workspaces treat it like any provider. Run by
+ * `scripts/setup-gitterm-compute.ts`, never by the server or the seed, so self-hosted
+ * deployments never see it. Safe to rerun; an admin's enable/disable of a sold size is kept.
  */
 export async function ensureComputeProvider(): Promise<void> {
-  if (!isComputeEnabled()) return;
+  if (!isComputeEnabled())
+    throw new Error(
+      "Gitterm Compute is not configured: set DEPLOYMENT_MODE=managed, COMPUTE_URL and COMPUTE_SERVICE_TOKEN.",
+    );
   const [provider] = await db
     .insert(cloudProvider)
     .values({ name: "Gitterm", ...PROVIDER })
@@ -57,6 +62,21 @@ export async function ensureComputeProvider(): Promise<void> {
         isDefault: size.isDefault,
       })
       .onConflictDoNothing({ target: [machineProfile.cloudProviderId, machineProfile.key] });
+  // Disabled, not deleted: workspaces and billing history still point at them.
+  await db
+    .update(machineProfile)
+    .set({ isEnabled: false, isDefault: false, updatedAt: new Date() })
+    .where(
+      and(
+        eq(machineProfile.cloudProviderId, provider!.id),
+        not(
+          inArray(
+            machineProfile.key,
+            SIZES.map((size) => size.key),
+          ),
+        ),
+      ),
+    );
   await warnUnpricedSizes(provider!.id);
   await markComputeImages();
 }
@@ -68,7 +88,9 @@ async function warnUnpricedSizes(cloudProviderId: string): Promise<void> {
   const profiles = await db
     .select({ id: machineProfile.id, key: machineProfile.key })
     .from(machineProfile)
-    .where(eq(machineProfile.cloudProviderId, cloudProviderId));
+    .where(
+      and(eq(machineProfile.cloudProviderId, cloudProviderId), eq(machineProfile.isEnabled, true)),
+    );
   const prices = await billing.getMachinePrices(profiles.map((profile) => profile.id));
   const unpriced = profiles.filter((profile) => !prices.get(profile.id));
   if (unpriced.length)

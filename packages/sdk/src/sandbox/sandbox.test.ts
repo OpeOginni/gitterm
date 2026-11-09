@@ -268,6 +268,7 @@ describe("providers without labels or expiry", () => {
         previews: "private" as const,
         pause: "stateful" as const,
         maxLifetimeMs: 86_400_000,
+        snapshots: "none" as const,
       },
       async create(input: { labels: Record<string, string> }) {
         // Like Boat and exe.dev: only a hash of the account survives, in the name.
