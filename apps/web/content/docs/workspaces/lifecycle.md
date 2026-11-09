@@ -16,11 +16,11 @@ A cloud workspace runs while you use it, pauses when it goes idle, resumes when 
 
 ## Pause, resume and terminate
 
-| Action    | Dashboard (workspace card)   | CLI                                         | SDK                                                    |
+| Action    | Dashboard (workspace row)    | CLI                                         | SDK                                                    |
 | --------- | ---------------------------- | ------------------------------------------- | ------------------------------------------------------ |
-| Pause     | **Pause** button             | `gitterm workspace pause <workspaceId>`     | `client.workspaces.pause(id)`                          |
-| Resume    | **Restart** on a paused card | `gitterm workspace restart <workspaceId>`   | `client.workspaces.restart(id)` or `ensureRunning(id)` |
-| Terminate | **Terminate** button         | `gitterm workspace terminate <workspaceId>` | `client.workspaces.terminate(id)`                      |
+| Pause     | **Pause** in the details     | `gitterm workspace pause <workspaceId>`     | `client.workspaces.pause(id)`                          |
+| Resume    | **Restart** on a paused row  | `gitterm workspace restart <workspaceId>`   | `client.workspaces.restart(id)` or `ensureRunning(id)` |
+| Terminate | **Terminate** in the details | `gitterm workspace terminate <workspaceId>` | `client.workspaces.terminate(id)`                      |
 
 `<workspaceId>` is the workspace's id; `gitterm workspace list` prints it. `gitterm workspace stop` is an alias for `pause`.
 
@@ -39,7 +39,7 @@ A run that is waiting for your answer counts as a run in progress, so it keeps t
 
 ### Keep running when idle
 
-To skip idle pausing, turn on **Keep running when idle** when you create the workspace, or click the infinity button on its card. In the SDK, pass `alwaysOn: true` to `workspaces.create()`.
+To skip idle pausing, turn on **Keep running when idle** when you create the workspace. Its row then shows **Always on**. In the SDK, pass `alwaysOn: true` to `workspaces.create()`.
 
 On managed Gitterm this needs a paid plan, and spending limits still pause the workspace. Compute keeps running, and is billed, while the workspace is idle.
 

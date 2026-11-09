@@ -4,15 +4,24 @@ Give your agents more computers, from the cloud provider you choose. GitTerm giv
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
+## Try it
+
+Give the OpenCode agent on your laptop a remote sandbox:
+
+```sh
+opencode plugin add @gitterm/opencode-sandbox
+```
+
+Then ask the agent to create a sandbox and run your tests there. The [quickstart](https://gitterm.dev/docs/quickstart) has the config for your provider key, and the steps to start a cloud workspace instead. To run your own GitTerm, see [Deploy on Railway](#deploy-on-railway) or [Deploy with Docker Compose](#deploy-with-docker-compose).
+
 ## What GitTerm does
 
-- Gives a local OpenCode agent remote sandboxes for tests, builds and previews (`@gitterm/opencode-sandbox`)
+- Gives a local OpenCode agent remote sandboxes for tests, builds and previews, on your Gitterm plan or with your own provider account (`@gitterm/opencode-sandbox`, [Agent sandboxes](docs/agent-sandboxes.md))
 - Runs OpenCode or T3 Code in cloud workspaces across multiple providers
 - Opens the agent TUI in your browser through TTYD
 - Gives you server-only agent URLs for desktop or local clients
 - Exposes any workspace port behind a shareable URL, so you can preview and test your app live
 - Keeps your model keys yours (bring your own keys, no markup)
-- Gives a local agent remote sandboxes for builds, tests, and previews, either on your Gitterm plan or with your own provider account ([Agent sandboxes](docs/agent-sandboxes.md))
 
 ## Sandbox lifecycle
 
@@ -22,12 +31,11 @@ GitTerm helps you manage a sandbox from first boot through cleanup:
 - **Open** a running workspace in the browser, connect from a local client, or share a live app preview
 - **Pause** workspaces when you are finished for now, preserving their state while stopping active compute
 - **Resume** a paused workspace and continue from where your agent left off
-- **Share** a workspace with teammates when you need to collaborate
 - **Terminate** a workspace when the work is complete
 
 ## Connect to an OpenCode server workspace
 
-A running OpenCode server-only workspace card offers:
+A running OpenCode server-only workspace offers these in the dashboard:
 
 - **Attach TUI:** copies a command to paste into your terminal, which opens the workspace in your local OpenCode TUI. With subdomain routing it carries a paired session token, not the permanent server password. The token lasts up to 30 days, and changing the server password revokes it. Keep the command private.
 - **Open in browser:** opens the workspace's own OpenCode web app. With subdomain routing you are signed in automatically.
@@ -273,6 +281,7 @@ Schema changes ship as migrations: edit the schema, run `db:generate`, commit th
 ## Links
 
 - Website: https://gitterm.dev
+- Docs: https://gitterm.dev/docs
 - OpenCode: https://opencode.ai
 - T3Code: https://github.com/pingdotgg/t3code
 - GitHub: https://github.com/OpeOginni/gitterm

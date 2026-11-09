@@ -24,7 +24,7 @@ bun install
 # Apps
 cp apps/server/.env.example apps/server/.env
 cp apps/web/.env.example apps/web/.env
-cp apps/tunnel-proxy/.env.example apps/tunnel-proxy/.env
+cp apps/proxy/.env.example apps/proxy/.env
 cp apps/listener/.env.example apps/listener/.env
 cp apps/worker/.env.example apps/worker/.env
 ```

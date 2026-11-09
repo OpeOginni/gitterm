@@ -29,12 +29,12 @@ https://<domain>/ws/<port>-<workspace>   # path routing
 
 ## Open a port from the dashboard
 
-1. On the running workspace's card, click **Open port**.
+1. Click the running workspace's row to open its details, then click **Open port** under **Ports**.
 2. Enter the **Port** (1 to 65535) and, optionally, a **Name**.
 3. Turn on **Public URL** only if the port must be reachable without a Gitterm login.
 4. Click **Open port** in the dialog.
 
-You should see the port, such as `:3000`, in the card's port list. Click it to open the URL. Click **Private** or **Public** next to the port to switch its visibility, or remove the port from the same row.
+You should see the port, such as `:3000`, under **Ports**. Click it to open the URL. Click **Private** or **Public** next to the port to switch its visibility, or close the port from the same line.
 
 ## Open a port from inside the workspace
 
