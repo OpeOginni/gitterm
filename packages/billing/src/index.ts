@@ -294,9 +294,20 @@ export function createBilling(): Billing {
     async checkRunAllowance(userId, attempt): Promise<RunAllowance> {
       // Reserve the size being started too, so a near-empty balance can't start
       // compute that overshoots before the next worker pass.
-      const starting = attempt?.machineProfileId
-        ? ((await getMachinePrices([attempt.machineProfileId])).get(attempt.machineProfileId) ?? 0)
-        : 0;
+      let starting = 0;
+      if (attempt) {
+        const price = attempt.machineProfileId
+          ? (await getMachinePrices([attempt.machineProfileId])).get(attempt.machineProfileId)
+          : undefined;
+        // Fail closed: a size without a price is unavailable, not free. A price of 0 is free.
+        if (price === undefined)
+          return {
+            allowed: false,
+            code: "machine_unpriced",
+            reason: "This machine size isn't available yet. Choose another size.",
+          };
+        starting = price;
+      }
       const standing = (
         await getStandings([userId], new Date(), new Map([[userId, starting]]))
       ).get(userId)!;

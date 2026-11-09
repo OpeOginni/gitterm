@@ -200,6 +200,32 @@ describe("managed billing", () => {
     expect(starting.allowed ? null : starting.code).toBe("allowance_reserved");
   });
 
+  integration("refuses sizes without a price, and runs a size priced at zero", async () => {
+    const [bare] = await db
+      .insert(machineProfile)
+      .values({ cloudProviderId: providerId, key: "bare", name: "Bare", vcpus: 1, memoryGb: 1 })
+      .returning();
+    const start = { action: "create" as const, machineProfileId: bare!.id };
+    const paid = await createUser();
+    await subscribe(paid, "pro");
+    const free = await createUser();
+
+    for (const userId of [paid, free]) {
+      const refused = await billing.checkRunAllowance(userId, start);
+      expect(refused.allowed ? null : refused.code).toBe("machine_unpriced");
+      // A cloud start without a size can't be priced either.
+      expect((await billing.checkRunAllowance(userId, { action: "create" })).allowed).toBe(false);
+    }
+
+    await billing.setMachinePrice(bare!.id, 0);
+    expect((await billing.checkRunAllowance(paid, start)).allowed).toBe(true);
+    expect((await billing.checkRunAllowance(free, start)).allowed).toBe(true);
+
+    // Clearing the price takes the size away again.
+    await billing.setMachinePrice(bare!.id, null);
+    expect((await billing.checkRunAllowance(paid, start)).allowed).toBe(false);
+  });
+
   integration("an unclosed session stops costing when its workspace stopped", async () => {
     const userId = await createUser();
     await subscribe(userId, "pro");

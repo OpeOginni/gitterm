@@ -69,6 +69,9 @@
       "types": "./src/service/integrations/mcp.ts",
       "default": "./src/service/integrations/mcp.ts"
     },
+    "./service/compute-provider": {
+      "default": "./src/service/compute-provider.ts"
+    },
     "./service/*": {
       "default": "./src/service/*/index.ts"
     },

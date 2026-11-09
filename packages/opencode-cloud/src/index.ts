@@ -84,7 +84,7 @@ export const GittermCloudPlugin = Plugin.define({
               connected.time.created !== source.time.created
             ) {
               throw new Error(
-                "The discovered service is not hosting this session. Configure localServerUrl for the current server.",
+                "/cloud can't reach the OpenCode server holding this session (opencode --standalone uses a private one). Run `opencode serve --port 4096`, open it with `opencode --server http://127.0.0.1:4096`, and set the plugin's localServerUrl to that address.",
               );
             }
             const client = gitterm();
@@ -133,7 +133,9 @@ export const GittermCloudPlugin = Plugin.define({
         },
       });
     });
-    return () => controller.abort();
+    return async () => {
+      controller.abort();
+    };
   },
 });
 

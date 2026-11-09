@@ -75,6 +75,7 @@ const PROVIDER_LOGOS: Record<string, string> = {
   exedev: "/exe.png",
   railway: "/railway.svg",
   vercel: "/vercel.svg",
+  gitterm: "/gitterm.svg",
 };
 import Link from "next/link";
 
@@ -200,7 +201,7 @@ export function InstanceCard({
       onSuccess: (data) => {
         toast.success(
           data.cleanupInBackground
-            ? "Workspace removed. AWS cleanup is continuing in the background."
+            ? "Workspace removed. Cloud cleanup is continuing in the background."
             : "Workspace terminated successfully",
         );
         queryClient.invalidateQueries({

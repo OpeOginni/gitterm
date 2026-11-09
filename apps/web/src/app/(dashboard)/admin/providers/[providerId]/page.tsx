@@ -1180,10 +1180,7 @@ export default function ProviderSettingsPage() {
                                 .filter(Boolean)
                                 .join(" · ")}
                               {unpriced && (
-                                <span className="text-[#fb923c]">
-                                  {" "}
-                                  · No price set, usage is free
-                                </span>
+                                <span className="text-[#fb923c]"> · No price set, can't start</span>
                               )}
                             </p>
                           </div>

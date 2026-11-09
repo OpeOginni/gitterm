@@ -4,6 +4,33 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.12.1
+
+### Changed
+
+- Update the bundled OpenCode client to 2.2.6.
+
+## 0.12.0
+
+### Breaking
+
+- Sandbox capability objects now require `snapshots`, set to `pauses`, `stops`, or `none`.
+- Managed Gitterm sizes are limited to `small` and `medium`.
+
+### Added
+
+- `@gitterm/sdk/sandbox` provides sandbox accounts, background jobs, source sync, previews,
+  and artifact downloads and apply.
+- Setup snapshots can save project dependencies and restore new sandboxes from them.
+- Managed sandbox APIs support snapshots and streamed job completion events. Hosted users
+  need the API redeployed and pending migrations applied.
+
+### Fixed
+
+- Parallel calls on a paused sandbox no longer fail each other: a call that finds the sandbox
+  already resuming waits for it instead of erroring. Needs the API redeployed.
+- A background job read right after launch is no longer reported `lost` before its runner starts.
+
 ## 0.11.0
 
 ### Added

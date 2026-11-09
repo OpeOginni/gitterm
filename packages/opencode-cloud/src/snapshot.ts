@@ -54,6 +54,14 @@ export async function checkoutRoot(directory: string): Promise<string> {
   return realpath((await git(directory, ["rev-parse", "--show-toplevel"])).toString().trim());
 }
 
+/**
+ * A PEM private key: the header, a real or escaped (JSON) line break, optional PEM headers, then
+ * key data. Code that merely mentions the header, like this detector, has no key data after it.
+ * In a diff each line starts with "+", "-" or " ", so that prefix is allowed after a break.
+ */
+const PRIVATE_KEY =
+  /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----(?:\r?\n[+\- ]?|(?:\\r)?\\n)(?:[A-Za-z-]+: [^\r\n]*(?:\r?\n[+\- ]?|(?:\\r)?\\n))*(?:\r?\n[+\- ]?|(?:\\r)?\\n)?[A-Za-z0-9+/]{16}/;
+
 export function safeRelativePath(file: string): boolean {
   return (
     Boolean(file) &&
@@ -69,7 +77,7 @@ export function safeRelativePath(file: string): boolean {
 }
 
 export function sensitivePath(file: string): boolean {
-  return /(^|\/)(\.env($|\.(?!example$|sample$|template$))|id_(rsa|ed25519|ecdsa)($|\.)|credentials(?:\.json)?$)|\.(pem|p12|pfx|key)$/i.test(
+  return /(^|\/)(\.env($|\.(?!(?:[^/]*\.)?(?:example|sample|template)$))|id_(rsa|ed25519|ecdsa)($|\.)|credentials(?:\.json)?$)|\.(pem|p12|pfx|key)$/i.test(
     file,
   );
 }
@@ -118,11 +126,7 @@ async function readWorkingState(root: string, includeChanges: boolean): Promise<
 
   const stagedBytes = await git(root, ["diff", ...DIFF_ARGS, "--cached", "HEAD", "--"]);
   const unstagedBytes = await git(root, ["diff", ...DIFF_ARGS, "--"]);
-  if (
-    /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/.test(
-      stagedBytes.toString() + unstagedBytes.toString(),
-    )
-  ) {
+  if (PRIVATE_KEY.test(stagedBytes.toString() + unstagedBytes.toString())) {
     throw new Error("Private key material detected in changed files. Remove it before uploading.");
   }
   // Patches can contain non-UTF-8 text; preserve their bytes, not decoded strings.
@@ -161,10 +165,7 @@ async function readWorkingState(root: string, includeChanges: boolean): Promise<
     if (bytes > MAX_SNAPSHOT_BYTES)
       throw new Error("Uncommitted changes exceed the 25 MiB handoff limit.");
     const content = await readFile(full);
-    if (
-      content.includes(Buffer.from("-----BEGIN PRIVATE KEY-----")) ||
-      content.includes(Buffer.from("-----BEGIN RSA PRIVATE KEY-----"))
-    ) {
+    if (PRIVATE_KEY.test(content.toString("latin1"))) {
       throw new Error(
         `Private key material detected in ${JSON.stringify(file)}. Remove it before uploading.`,
       );

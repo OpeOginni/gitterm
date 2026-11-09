@@ -57,6 +57,10 @@ import type {
   McpConnectionDetails,
   McpConnectionTestResult,
   UpdateMcpConnectionInput,
+  ManagedSandbox,
+  ManagedSandboxCreateInput,
+  ManagedSandboxSnapshot,
+  SandboxJobFinished,
 } from "./types.js";
 import { createNoRedirectFetch, normalizeServerUrl, trpcEndpoint } from "./transport.js";
 import { runHelpers } from "./runs.js";
@@ -172,6 +176,46 @@ export type GittermClient = {
     wait(run: RunRef, options?: RunWaitOptions): Promise<AgentRun>;
     events(run: RunRef, options?: RunWatchOptions): AsyncIterable<AgentRunEvent>;
     result(run: RunRef, options?: RunResultOptions): Promise<AgentRunResult>;
+  };
+  /** Plain command sandboxes billed to this account. Higher-level jobs live in `@gitterm/sdk/sandbox`. */
+  sandboxes: {
+    create(input: ManagedSandboxCreateInput): Promise<ManagedSandbox>;
+    list(input?: { includeTerminated?: boolean }): Promise<ManagedSandbox[]>;
+    get(sandboxId: string): Promise<ManagedSandbox>;
+    /** A non-zero exit is returned, not thrown. At most two minutes; use jobs for longer work. */
+    run(
+      sandboxId: string,
+      command: string,
+      options?: { cwd?: string; timeoutMs?: number; env?: Record<string, string> },
+    ): Promise<{ exitCode: number; stdout: string; stderr: string }>;
+    writeFile(sandboxId: string, path: string, data: Uint8Array): Promise<void>;
+    readFile(sandboxId: string, path: string): Promise<Uint8Array>;
+    /**
+     * `headers` holds a sandbox-scoped access value for private previews. `gittermUrl`, when
+     * set, is served by Gitterm: open to anyone if `public`, else only to you signed in.
+     */
+    preview(
+      sandboxId: string,
+      port: number,
+      options?: { public?: boolean },
+    ): Promise<{ url: string; headers: Record<string, string>; gittermUrl?: string }>;
+    /** Resume a sandbox paused for inactivity. Subject to the same quota checks as creation. */
+    resume(sandboxId: string): Promise<void>;
+    terminate(sandboxId: string): Promise<void>;
+    /**
+     * Save a running sandbox as a snapshot new sandboxes can start from (`snapshotId` on
+     * create). Counts against your plan's snapshot limit until deleted. On Vercel, saving
+     * stops the sandbox.
+     */
+    saveSnapshot(sandboxId: string, label: string): Promise<ManagedSandboxSnapshot>;
+    listSnapshots(): Promise<ManagedSandboxSnapshot[]>;
+    deleteSnapshot(snapshotId: string): Promise<void>;
+    /**
+     * Calls `listener` as jobs in your sandboxes finish. Only Gitterm sandboxes on gitterm.dev
+     * report jobs; elsewhere nothing arrives, so keep a slower check as well. Returns a stop
+     * function. The connection reconnects by itself.
+     */
+    onJobFinished(listener: (event: SandboxJobFinished) => void): () => void;
   };
   catalog: {
     agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;
@@ -723,6 +767,63 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         run(async () => trpc.workspace.getSetupStatus.query({ workspaceId: workspaceIdOf(ref) })),
       waitForSetup: (ref: WorkspaceRef, waitOptions?: WaitOptions) =>
         run(() => waitForWorkspaceSetup(workspaceIdOf(ref), waitOptions)),
+    },
+    sandboxes: {
+      create: (input) => run(() => trpc.sandbox.create.mutate(input)),
+      list: (input) => run(() => trpc.sandbox.list.query(input)),
+      get: (sandboxId) => run(() => trpc.sandbox.get.query({ sandboxId })),
+      run: (sandboxId, command, options) =>
+        run(async () => {
+          const result = await trpc.sandbox.run.mutate({ sandboxId, command, ...options });
+          if (!result) throw new GittermError("SERVER_ERROR", "Sandbox command returned no result");
+          return result;
+        }),
+      writeFile: (sandboxId, path, data) =>
+        run(async () => {
+          await trpc.sandbox.writeFile.mutate({
+            sandboxId,
+            path,
+            contentBase64: Buffer.from(data).toString("base64"),
+          });
+        }),
+      readFile: (sandboxId, path) =>
+        run(async () => {
+          const result = await trpc.sandbox.readFile.mutate({ sandboxId, path });
+          return new Uint8Array(Buffer.from(result?.contentBase64 ?? "", "base64"));
+        }),
+      preview: (sandboxId, port, options) =>
+        run(async () => {
+          const result = await trpc.sandbox.preview.mutate({
+            sandboxId,
+            port,
+            public: options?.public,
+          });
+          if (!result) throw new GittermError("SERVER_ERROR", "Sandbox preview returned no result");
+          return result;
+        }),
+      resume: (sandboxId) =>
+        run(async () => {
+          await trpc.workspace.restartWorkspace.mutate({ workspaceId: sandboxId });
+        }),
+      terminate: (sandboxId) =>
+        run(async () => {
+          await trpc.sandbox.terminate.mutate({ sandboxId });
+        }),
+      saveSnapshot: (sandboxId, label) =>
+        run(() => trpc.sandbox.saveSnapshot.mutate({ sandboxId, label: label.slice(0, 120) })),
+      listSnapshots: () => run(() => trpc.sandbox.snapshots.query()),
+      deleteSnapshot: (snapshotId) =>
+        run(async () => {
+          await trpc.sandbox.deleteSnapshot.mutate({ snapshotId });
+        }),
+      onJobFinished: (listener) => {
+        const subscription = trpc.sandbox.jobEvents.subscribe(undefined, {
+          onData: (event) => listener(event as SandboxJobFinished),
+          // A dropped stream is reconnected by the link; polling covers any gap.
+          onError: () => {},
+        });
+        return () => subscription.unsubscribe();
+      },
     },
     runs: {
       create: (input: AgentRunCreateInput) =>

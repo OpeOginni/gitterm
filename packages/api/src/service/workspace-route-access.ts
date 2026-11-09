@@ -1,7 +1,9 @@
 import { and, db, eq, isNull } from "@gitterm/db";
+import { workspace } from "@gitterm/db/schema/workspace";
 import { workspaceRouteAccess } from "@gitterm/db/schema/workspace-route-access";
 import { encryptionContext, getEncryptionService } from "./encryption";
 import { invalidateAllProxyRouteAccessCache, invalidateProxyRouteAccessCache } from "./proxy-cache";
+import { parseSandboxHandle } from "./sandbox-transport";
 
 const encryption = getEncryptionService();
 
@@ -85,6 +87,20 @@ export async function deleteWorkspaceRouteAccess(
 export async function deleteAllWorkspaceRouteAccess(workspaceId: string): Promise<void> {
   await db.delete(workspaceRouteAccess).where(eq(workspaceRouteAccess.workspaceId, workspaceId));
   await invalidateAllProxyRouteAccessCache(workspaceId);
+}
+
+/**
+ * A paused workspace's routes are rebuilt when it resumes. A managed sandbox keeps its
+ * preview routes instead, so shared preview URLs work again once it resumes.
+ */
+export async function deleteRouteAccessOnPause(workspaceId: string): Promise<void> {
+  const [row] = await db
+    .select({ handle: workspace.externalInstanceId })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId))
+    .limit(1);
+  if (row && parseSandboxHandle(row.handle)) return;
+  await deleteAllWorkspaceRouteAccess(workspaceId);
 }
 
 export async function getWorkspaceRouteAccess(

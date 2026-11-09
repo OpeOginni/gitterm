@@ -31,6 +31,8 @@ export interface Entitlements {
   machineAccess: MachineAccess;
   /** Most workspaces (running, pending, or paused) the user may keep; null means no limit. */
   maxWorkspaces: number | null;
+  /** Most managed sandbox snapshots the user may keep; null means no limit. */
+  maxSnapshots: number | null;
   /** Whether the user may opt into persistent storage on providers that make it optional. */
   persistence: boolean;
   customSubdomain: boolean;
@@ -45,8 +47,10 @@ export interface Entitlements {
 /**
  * Why compute may not run. `*_reserved` means the balance or cap is not yet
  * used up, but would be within the reserved minutes of running compute.
+ * `machine_unpriced`: the size being started has no price, so it can't run.
  */
 export type RunDenialCode =
+  | "machine_unpriced"
   | "daily_runtime_limit"
   | "allowance_exhausted"
   | "allowance_reserved"
@@ -61,7 +65,7 @@ export type RunAllowance =
 export interface RunAttempt {
   action: "create" | "resume" | "restart";
   workspaceId?: string;
-  /** Size about to start; its price is reserved with what's already running. */
+  /** Size about to start. It must have a price, which is reserved with what's already running. */
   machineProfileId?: string | null;
 }
 
@@ -145,7 +149,10 @@ export interface Billing {
   readonly plans: readonly string[];
   getEntitlements(userId: string): Promise<Entitlements>;
   getEntitlementsForUsers(userIds: string[]): Promise<Map<string, Entitlements>>;
-  /** Whether the user may start or resume cloud compute now. Denied attempts are recorded. */
+  /**
+   * Whether the user may start or resume cloud compute now. An attempt is denied when its size
+   * has no price. Denied attempts over the allowance are recorded.
+   */
   checkRunAllowance(userId: string, attempt?: RunAttempt): Promise<RunAllowance>;
   /** Which of these users have used up their allowance, so their running workspaces stop. */
   getUsersOverAllowance(userIds: string[]): Promise<Set<string>>;
@@ -183,6 +190,7 @@ export const UNLIMITED_ENTITLEMENTS: Entitlements = {
   providerKeys: null,
   machineAccess: "any",
   maxWorkspaces: null,
+  maxSnapshots: null,
   persistence: true,
   customSubdomain: true,
   alwaysOn: true,

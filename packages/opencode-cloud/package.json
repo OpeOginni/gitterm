@@ -1,7 +1,7 @@
 {
-  "name": "@gitterm/opencode-plugin",
-  "version": "0.1.3",
-  "description": "Continue OpenCode sessions and local checkout changes in GitTerm cloud workspaces",
+  "name": "@gitterm/opencode-cloud",
+  "version": "0.1.4",
+  "description": "Continue OpenCode sessions and local checkout changes in GitTerm cloud workspaces with /cloud",
   "keywords": [
     "gitterm",
     "opencode",
@@ -34,16 +34,16 @@
     "prepack": "bun run check-types && bun run build"
   },
   "dependencies": {
-    "@opencode/client": "^2.0.30"
+    "@opencode/client": "^2.2.6"
   },
   "devDependencies": {
     "@gitterm/sdk": "workspace:*",
-    "@opencode/plugin": "^2.0.30",
+    "@opencode/plugin": "^2.2.6",
     "@types/bun": "^1.2.6",
     "typescript": "^5.8.2"
   },
   "peerDependencies": {
-    "@opencode/plugin": "^2.0.30"
+    "@opencode/plugin": "^2.2.6"
   },
   "engines": {
     "bun": ">=1.2.0"

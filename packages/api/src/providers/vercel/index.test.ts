@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 describe("Vercel environment", () => {
   test("does not send container provisioning manifests to Sandbox.create", async () => {
@@ -86,5 +86,46 @@ describe("Vercel environment", () => {
       detached: true,
     });
     expect(commands[1]).toMatchObject({ cwd: "/repo" });
+  });
+});
+
+describe("Vercel workspace creation", () => {
+  test("records the sandbox before setup, so a failed setup is still cleaned up", async () => {
+    const { VercelProvider } = await import(".");
+    const { Sandbox } = await import("@vercel/sandbox");
+    const events: string[] = [];
+    const failing = (step: string) => async () => {
+      events.push(step);
+      throw new Error(`${step} failed`);
+    };
+    const sandbox = {
+      name: "gitterm-ws",
+      createdAt: new Date(),
+      domain: () => "https://agent",
+      runCommand: failing("setup"),
+      writeFiles: failing("setup"),
+      delete: failing("delete"),
+    };
+    const create = spyOn(Sandbox, "create").mockResolvedValue(sandbox as never);
+    const provider = new VercelProvider();
+    spyOn(provider as any, "getSdkCredentials").mockResolvedValue({});
+    try {
+      await expect(
+        provider.createWorkspace({
+          workspaceId: "ws",
+          userId: "user",
+          imageId: "image",
+          imageProviderMetadata: { vercel: { runtime: "node24" } },
+          subdomain: "ws",
+          onProvisioned: async ({ externalServiceId }) => {
+            events.push(`recorded ${externalServiceId}`);
+          },
+        }),
+      ).rejects.toThrow();
+    } finally {
+      create.mockRestore();
+    }
+    expect(events[0]).toBe("recorded gitterm-ws");
+    expect(events).toContain("delete");
   });
 });
