@@ -254,6 +254,7 @@ async function relaunchWorkspaceSetup(
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
   "api",
+  "compute",
   "www",
   "app",
   "admin",
