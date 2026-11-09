@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import {
   Check,
   ChevronDown,
-  Copy,
   ExternalLink,
   KeyRound,
   Loader2,
@@ -17,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CopyField } from "@/components/dashboard/copy-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { queryClient, trpc } from "@/utils/trpc";
@@ -118,21 +118,6 @@ function DocLink({ href, children }: { href: string; children: React.ReactNode }
   );
 }
 
-function CommandBlock({ command, muted = false }: { command: string; muted?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={() => copy(command)}
-      className={`flex w-full items-start gap-2 rounded-lg bg-background/70 p-3 text-left font-mono text-[12.5px] leading-relaxed transition-colors hover:bg-background ${
-        muted ? "text-fg-3" : "text-fg-2"
-      }`}
-    >
-      <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">{command}</span>
-      <Copy className="mt-0.5 size-3.5 shrink-0 text-fg-4" />
-    </button>
-  );
-}
-
 function Field({
   label,
   hint,
@@ -150,22 +135,6 @@ function Field({
       {children}
       {hint ? <span className="block text-[12.5px] leading-relaxed text-fg-4">{hint}</span> : null}
     </label>
-  );
-}
-
-function CopyValue({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="space-y-1.5">
-      <span className="block text-[12.5px] text-fg-4">{label}</span>
-      <button
-        type="button"
-        onClick={() => copy(value)}
-        className="group flex w-full items-center gap-2 rounded-lg bg-fill-2 px-3 py-2 text-left font-mono text-[12.5px] text-fg-2 transition-colors hover:text-fg"
-      >
-        <span className="min-w-0 flex-1 truncate">{value}</span>
-        <Copy className="size-3.5 shrink-0 text-fg-4 group-hover:text-fg-2" />
-      </button>
-    </div>
   );
 }
 
@@ -415,7 +384,7 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
                   Run these once per project. Skip the first command if the pool already exists.
                   They change your Google IAM configuration, not Gitterm.
                 </p>
-                <CommandBlock command={setupCommands} />
+                <CopyField multiline value={setupCommands} />
                 {provider ? (
                   <p className="mt-2 truncate font-mono text-[12.5px] text-fg-4">
                     Provider: {provider}
@@ -491,10 +460,10 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
                 </button>
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <CopyValue label="Issuer URI" value={integration.setup.issuer} />
-                <CopyValue label="Allowed audience" value={integration.setup.audience} />
+                <CopyField label="Issuer URI" value={integration.setup.issuer} />
+                <CopyField label="Allowed audience" value={integration.setup.audience} />
                 <div className="sm:col-span-2">
-                  <CopyValue
+                  <CopyField
                     label="Service-account IAM principal"
                     value={integration.setup.principalSet}
                   />
@@ -510,8 +479,9 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
                   service account to this identity only.
                 </p>
                 <div className="mt-3">
-                  <CommandBlock
-                    command={`gcloud iam service-accounts add-iam-policy-binding '${integration.serviceAccountEmail}' --project='${integration.projectId}' --role='roles/iam.workloadIdentityUser' --member='${integration.setup.principalSet}'`}
+                  <CopyField
+                    multiline
+                    value={`gcloud iam service-accounts add-iam-policy-binding '${integration.serviceAccountEmail}' --project='${integration.projectId}' --role='roles/iam.workloadIdentityUser' --member='${integration.setup.principalSet}'`}
                   />
                 </div>
                 <details className="mt-3">
@@ -519,7 +489,7 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
                     Pool or provider missing? Re-create them
                   </summary>
                   <div className="mt-2">
-                    <CommandBlock command={googleProviderCommands(integration)} muted />
+                    <CopyField multiline value={googleProviderCommands(integration)} />
                   </div>
                 </details>
               </div>
