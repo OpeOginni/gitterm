@@ -39,7 +39,7 @@ A run that is waiting for your answer counts as a run in progress, so it keeps t
 
 ### Keep running when idle
 
-To skip idle pausing, turn on **Keep running when idle** when you create the workspace. Its row then shows **Always on**. In the SDK, pass `alwaysOn: true` to `workspaces.create()`.
+To skip idle pausing, turn on **Keep running when idle** when you create the workspace, or **Keep on when idle** in the row's details later. The row then shows **Always on**. In the SDK, pass `alwaysOn: true` to `workspaces.create()`.
 
 On managed Gitterm this needs a paid plan, and spending limits still pause the workspace. Compute keeps running, and is billed, while the workspace is idle.
 

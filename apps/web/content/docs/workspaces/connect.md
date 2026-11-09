@@ -62,7 +62,7 @@ OPENCODE_PASSWORD='<password>' opencode --server https://<workspace-url>
 
 ### When pairing isn't available
 
-Pairing needs subdomain routing, because OpenCode expects `/auth/connect` at the root of the server URL. With path routing, or on older workspace servers, **Connect OpenCode app** is not shown, **Attach TUI** uses the server password and the web app asks you to sign in. Every connection goes through Gitterm's HTTPS workspace proxy, so you don't need a tunnel.
+Pairing needs subdomain routing, because OpenCode expects `/auth/connect` at the root of the server URL. With path routing, **Connect OpenCode app** is not shown, **Attach TUI** uses the server password and the web app asks you to sign in. An older workspace server behaves the same way, except that **Connect OpenCode app** is shown and reports that the server does not support pairing yet. Every connection goes through Gitterm's HTTPS workspace proxy, so you don't need a tunnel.
 
 ## OpenCode (TTYD) workspaces
 
