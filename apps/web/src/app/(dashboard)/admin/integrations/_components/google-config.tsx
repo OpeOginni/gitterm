@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Check, LockKeyhole, RotateCw } from "lucide-react";
+import { LockKeyhole, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,9 @@ import { apiPath } from "@gitterm/schema/url";
 import { trpc } from "@/utils/trpc";
 import env from "@gitterm/env/web";
 import type { AdminIntegrationsData } from "./use-admin-integrations";
-import { SettingsGroup, settingsLabel } from "@/components/dashboard/settings/settings-page";
+import { settingsLabel } from "@/components/dashboard/settings/settings-page";
+import { SectionHeading, StatusDot } from "@/components/dashboard/kit";
+import { formPanel } from "../../_components/admin";
 
 type Props = {
   data: AdminIntegrationsData;
@@ -39,37 +41,44 @@ export function GoogleConfig({ data, refresh }: Props) {
       await refresh();
       toast.success(rotate ? "Google signing key rotated" : "Google issuer configured");
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Couldn’t configure Google issuer");
+      toast.error(cause instanceof Error ? cause.message : "Couldn't configure Google issuer");
     }
   }
 
   return (
-    <SettingsGroup
-      title="Workload identity issuer"
-      description="Deployment-wide identity used by users’ Google Cloud connections. No Google private key is needed."
-      action={
-        <Button disabled={configure.isPending} onClick={save} className="gap-2">
-          {configured ? <RotateCw className="size-4" /> : <LockKeyhole className="size-4" />}
-          {configure.isPending
-            ? "Working..."
-            : configured
-              ? "Rotate signing key"
-              : "Generate signing key"}
-        </Button>
-      }
-    >
-      <div className="space-y-4">
+    <section className="space-y-4">
+      <SectionHeading
+        title="Workload identity issuer"
+        action={
+          <Button
+            variant="secondary"
+            disabled={configure.isPending}
+            onClick={save}
+            className="gap-2"
+          >
+            {configured ? <RotateCw className="size-4" /> : <LockKeyhole className="size-4" />}
+            {configure.isPending
+              ? "Working..."
+              : configured
+                ? "Rotate signing key"
+                : "Generate signing key"}
+          </Button>
+        }
+      />
+      <div className={`${formPanel} space-y-4`}>
+        <p className="text-[13.5px] leading-relaxed text-fg-3">
+          One identity for this deployment that users&apos; Google Cloud connections trust. No
+          Google private key needed.
+        </p>
         {configured ? (
-          <div className="rounded-xl bg-fill p-4 text-[14px]">
-            <p className="flex items-center gap-2 text-fg-2">
-              <Check className="size-4 text-[#6bd586]" /> Signing key stored encrypted in GitTerm
-            </p>
-            <p className="mt-2 font-mono text-[12.5px] text-fg-3">Key ID: {configured.keyId}</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-y border-line py-3">
+            <StatusDot tone="ok">Signing key stored, encrypted</StatusDot>
+            <span className="font-mono text-[12.5px] text-fg-3">Key ID {configured.keyId}</span>
           </div>
         ) : (
           <p className="text-[13px] text-fg-3">
-            Generate a signing key here. Existing deployments using env configuration continue to
-            work until you migrate.
+            Generate a signing key here. Deployments configured through env keep working until you
+            migrate.
           </p>
         )}
         <div className="space-y-2">
@@ -91,6 +100,6 @@ export function GoogleConfig({ data, refresh }: Props) {
           </p>
         </div>
       </div>
-    </SettingsGroup>
+    </section>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
-import { Radio } from "lucide-react";
+import { SectionHeading } from "@/components/dashboard/kit";
+import { cn } from "@/lib/utils";
+import { formPanel } from "../../_components/admin";
 import env from "@gitterm/env/web";
 import { CopyField } from "@/components/dashboard/copy-field";
 
@@ -15,7 +17,7 @@ type WebhookSetup = {
 const WEBHOOK_SETUPS: Record<string, WebhookSetup> = {
   railway: {
     route: "railway.handleWebhook",
-    where: "Railway → Project Settings → Webhooks",
+    where: "Railway, Project Settings, Webhooks",
     events: [
       "Deployment Deploying",
       "Deployment Deployed",
@@ -25,19 +27,19 @@ const WEBHOOK_SETUPS: Record<string, WebhookSetup> = {
   },
   e2b: {
     route: "e2b.handleWebhook",
-    where: "E2B dashboard → Webhooks",
+    where: "E2B dashboard, Webhooks",
     events: ["sandbox.lifecycle.paused", "sandbox.lifecycle.resumed", "sandbox.lifecycle.killed"],
     secret: "Same value as Webhook Secret below.",
   },
   daytona: {
     route: "daytona.handleWebhook",
-    where: "Daytona dashboard → Webhooks",
+    where: "Daytona dashboard, Webhooks",
     events: ["sandbox.created", "sandbox.state.updated"],
     secret: "Paste Daytona's signing secret into Webhook Signing Secret below. Required.",
   },
   boat: {
     route: "boat.handleWebhook",
-    where: "Boat dashboard → Webhooks",
+    where: "Boat dashboard, Webhooks",
     events: ["Ready", "Error", "Archived", "Hydrated"],
     secret:
       "boat shows the whsec_ secret once; paste it into Webhook Signing Secret below. Required.",
@@ -46,7 +48,7 @@ const WEBHOOK_SETUPS: Record<string, WebhookSetup> = {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-1.5 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-baseline sm:gap-4">
+    <div className="grid gap-1.5 sm:grid-cols-[72px_minmax(0,1fr)] sm:items-baseline sm:gap-4">
       <dt className="text-[13px] font-medium text-fg-2">{label}</dt>
       <dd className="min-w-0 space-y-1.5 text-[13px] text-fg-3">{children}</dd>
     </div>
@@ -67,19 +69,15 @@ export function ProviderWebhookGuide({
   const webhookUrl = `${listenerUrl || "https://<your-listener-url>"}/trpc/${setup.route}`;
 
   return (
-    <div className="mt-4 overflow-hidden rounded-xl bg-fill">
-      <div className="flex flex-wrap items-center gap-3 px-4 pt-4">
-        <Radio className="size-4 shrink-0 text-primary" />
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium text-fg">Status webhook</p>
-          <p className="text-[13px] text-fg-3">Keeps {providerName} workspace status in sync.</p>
-        </div>
-        <p className="text-[13px] text-fg-3">
-          Add in <span className="text-fg-2">{setup.where}</span>
-        </p>
-      </div>
-
-      <dl className="space-y-3.5 px-4 py-4">
+    <section className="space-y-4">
+      <SectionHeading
+        title="Status webhook"
+        description={`Keeps ${providerName} workspace status in sync.`}
+      />
+      <dl className={cn(formPanel, "space-y-4")}>
+        <Field label="Where">
+          <p className="text-fg-2">{setup.where}</p>
+        </Field>
         <Field label="URL">
           <CopyField value={webhookUrl} placeholder={!listenerUrl} />
           {!listenerUrl && (
@@ -107,6 +105,6 @@ export function ProviderWebhookGuide({
           </Field>
         )}
       </dl>
-    </div>
+    </section>
   );
 }

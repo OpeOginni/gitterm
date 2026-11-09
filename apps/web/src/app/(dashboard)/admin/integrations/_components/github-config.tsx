@@ -14,8 +14,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/utils/trpc";
 import env from "@gitterm/env/web";
 import type { AdminIntegrationsData } from "./use-admin-integrations";
-import { SettingsGroup, settingsLabel } from "@/components/dashboard/settings/settings-page";
-import { StatusChip } from "./ui";
+import { settingsLabel } from "@/components/dashboard/settings/settings-page";
+import { LineCell, LineGrid, SectionHeading, StatusDot } from "@/components/dashboard/kit";
+import { ArrowUpRight } from "lucide-react";
 
 type Props = {
   data: AdminIntegrationsData;
@@ -41,12 +42,13 @@ function GithubAccountLink({ login, size = "sm" }: { login: string; size?: "sm" 
         }
       />
       <span className="truncate text-[13px] font-medium">@{login}</span>
+      <ArrowUpRight className="size-3.5 shrink-0" />
     </a>
   );
 }
 
 function ActiveBadge({ active, label }: { active: boolean; label: string }) {
-  return <StatusChip tone={active ? "ok" : "muted"} label={label} />;
+  return <StatusDot tone={active ? "ok" : "muted"}>{label}</StatusDot>;
 }
 
 export function GithubConfig({ data, refresh }: Props) {
@@ -111,7 +113,7 @@ export function GithubConfig({ data, refresh }: Props) {
       await refresh();
       toast.success("GitHub App verified and saved");
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Couldn’t configure GitHub App");
+      toast.error(cause instanceof Error ? cause.message : "Couldn't configure GitHub App");
     }
   }
 
@@ -129,33 +131,34 @@ export function GithubConfig({ data, refresh }: Props) {
       await refresh();
       toast.success("Shared GitHub PAT verified and saved");
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Couldn’t configure GitHub PAT");
+      toast.error(cause instanceof Error ? cause.message : "Couldn't configure GitHub PAT");
     }
   }
 
   return (
-    <>
-      <SettingsGroup
-        title="Repository credentials"
-        description={
-          <span className="flex flex-wrap items-center gap-2">
-            {statusText}
-            {patLogin ? <GithubAccountLink login={patLogin} /> : null}
-          </span>
-        }
+    <section className="space-y-4">
+      <SectionHeading
+        title="Repository access"
         action={
-          <>
+          <div className="flex items-center gap-4">
             <ActiveBadge active={mode === "app"} label="GitHub App" />
             <ActiveBadge active={mode === "pat"} label="Shared PAT" />
-          </>
+          </div>
         }
       />
+      <p className="-mt-1 flex flex-wrap items-center gap-2 text-[13.5px] leading-relaxed text-fg-3">
+        {statusText}
+        {patLogin ? <GithubAccountLink login={patLogin} /> : null}
+      </p>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <SettingsGroup
-          title="GitHub App"
-          description="Each user installs the App on the repositories they want to use. Recommended for teams."
-        >
+      <LineGrid className="lg:grid-cols-2">
+        <LineCell className="gap-4 p-5 sm:p-6">
+          <div>
+            <h3 className="text-[15px] font-medium text-fg">GitHub App</h3>
+            <p className="mt-1 text-[13.5px] leading-relaxed text-fg-3">
+              Each user installs the App on the repositories they want. Best for teams.
+            </p>
+          </div>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="gh-app-id" className={settingsLabel}>
@@ -263,15 +266,19 @@ export function GithubConfig({ data, refresh }: Props) {
               </Button>
             </div>
           </div>
-        </SettingsGroup>
+        </LineCell>
 
-        <SettingsGroup
-          title="Shared PAT"
-          description="One fine-grained PAT shared with every workspace that selects it. Revoke it on GitHub to cut access."
-        >
+        <LineCell className="gap-4 p-5 sm:p-6">
+          <div>
+            <h3 className="text-[15px] font-medium text-fg">Shared PAT</h3>
+            <p className="mt-1 text-[13.5px] leading-relaxed text-fg-3">
+              One fine-grained token for every workspace that picks it. Revoke it on GitHub to cut
+              access.
+            </p>
+          </div>
           <div className="space-y-4">
             {patLogin ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-fill p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
                 <GithubAccountLink login={patLogin} size="md" />
                 <p className="text-[13px] text-fg-3">Ending in {stored?.patSuffix}</p>
               </div>
@@ -291,7 +298,7 @@ export function GithubConfig({ data, refresh }: Props) {
               />
             </div>
             <p className="text-[13px] text-fg-3">
-              The PAT’s GitHub identity and permissions apply to every workspace using it. Scope it
+              Its GitHub identity and permissions apply to every workspace using it. Scope it
               narrowly.
             </p>
             <div className="flex justify-end">
@@ -306,8 +313,8 @@ export function GithubConfig({ data, refresh }: Props) {
               </Button>
             </div>
           </div>
-        </SettingsGroup>
-      </div>
-    </>
+        </LineCell>
+      </LineGrid>
+    </section>
   );
 }

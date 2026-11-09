@@ -20,3 +20,17 @@ export function useAdminIntegrations(enabled: boolean) {
 }
 
 export type AdminIntegrationsData = NonNullable<ReturnType<typeof useAdminIntegrations>["data"]>;
+
+export type IntegrationStatus = "enabled" | "disabled" | "unconfigured" | "planned";
+
+export function integrationStatus(
+  item: AdminIntegrationsData["integrations"][number],
+  data: AdminIntegrationsData,
+): IntegrationStatus {
+  if (!item.ready) return "planned";
+  const configured =
+    item.key === "github" ? !!data.githubMode : item.key === "google" ? !!data.google : true;
+  // On without credentials still can't work for users.
+  if (!configured) return "unconfigured";
+  return item.enabled ? "enabled" : "disabled";
+}

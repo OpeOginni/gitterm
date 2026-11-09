@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { HelpHint } from "@/components/ui/help-hint";
+import { LineCell, LineGrid, SectionHeading, StatusDot } from "@/components/dashboard/kit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -127,7 +128,7 @@ export function AwsRoleInput({
 
 export function AwsRoleCheckResult({ check }: { check: RoleCheck }) {
   return (
-    <div className="mt-4 space-y-3 rounded-xl bg-fill p-4" role="status">
+    <div className="mt-4 space-y-3 border-t border-line pt-4" role="status">
       <p className="text-[14px] font-medium text-fg">
         Capability discovery:{" "}
         {check.discovery === "available"
@@ -138,9 +139,7 @@ export function AwsRoleCheckResult({ check }: { check: RoleCheck }) {
       </p>
       <p className="break-all font-mono text-[13px] text-fg-3">{check.roleArn}</p>
       {check.missingActions.length > 0 && (
-        <p className="text-[13px] text-amber-600 dark:text-[#fb923c]">
-          Review: {check.missingActions.join(", ")}
-        </p>
+        <p className="text-[13px] text-[#fb923c]">Review: {check.missingActions.join(", ")}</p>
       )}
       {check.warnings.map((warning) => (
         <p key={warning} className="text-[13px] text-fg-3">
@@ -180,16 +179,12 @@ function ProfileCard({
   onRemove?: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl bg-fill p-4">
+    <LineCell className="gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[14px] font-medium text-fg">{name}</p>
-            {isDefault && (
-              <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
-                Default
-              </span>
-            )}
+            {isDefault && <StatusDot tone="busy">Default</StatusDot>}
           </div>
           <p className="text-[13px] leading-relaxed text-fg-3">{description}</p>
         </div>
@@ -221,7 +216,7 @@ function ProfileCard({
           }
         />
       </div>
-    </div>
+    </LineCell>
   );
 }
 
@@ -291,88 +286,87 @@ export function AwsAccessProfiles({
     !pending && !!name.trim() && !!(role.mode === "create" ? role.name.trim() : role.arn.trim());
 
   return (
-    <section className="rounded-2xl bg-card p-5 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-[15px] font-medium text-fg">AWS access profiles</h2>
+    <section className="space-y-4">
+      <SectionHeading
+        title={
+          <span className="inline-flex items-center gap-2">
+            Access profiles
             <HelpHint label="How access profiles work">
               Profiles are IAM roles a user can pick when creating a workspace. Everyone who can use
               this provider sees every profile, so only add roles whose permissions you mean to
               share. Removing a profile stops new selections; existing workspaces and the IAM role
               are untouched.
             </HelpHint>
-          </div>
-          <p className="max-w-2xl text-[13.5px] leading-relaxed text-fg-3">
-            Each profile is an IAM role users can pick for a workspace. The provider default is
-            always available.
-          </p>
-        </div>
-
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button type="button" size="sm" disabled={pending}>
-              <Plus />
-              Add profile
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Add an access profile</DialogTitle>
-              <DialogDescription>
-                Give users another IAM role to choose from, for example one with Bedrock or S3
-                access. It becomes visible to everyone who can use this provider.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="aws-profile-name">Profile name</Label>
-                <Input
-                  id="aws-profile-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  maxLength={80}
+          </span>
+        }
+        count={profiles.length + 1}
+        description="IAM roles users can pick for a workspace. The provider default is always there."
+        action={
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button type="button" variant="secondary" disabled={pending}>
+                <Plus />
+                Add profile
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Add an access profile</DialogTitle>
+                <DialogDescription>
+                  Give users another IAM role to choose from, for example one with Bedrock or S3
+                  access. It becomes visible to everyone who can use this provider.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="aws-profile-name">Profile name</Label>
+                  <Input
+                    id="aws-profile-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    maxLength={80}
+                    disabled={pending}
+                    placeholder="Sandbox application builder"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="aws-profile-description">What it can do</Label>
+                  <Input
+                    id="aws-profile-description"
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    maxLength={500}
+                    disabled={pending}
+                    placeholder="Shown to users when they pick a profile. IAM stays authoritative."
+                  />
+                </div>
+                <AwsRoleInput
+                  id="aws-profile-role"
+                  value={role}
+                  onChange={setRole}
                   disabled={pending}
-                  placeholder="Sandbox application builder"
+                  accountId={accountId}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="aws-profile-description">What it can do</Label>
-                <Input
-                  id="aws-profile-description"
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  maxLength={500}
-                  disabled={pending}
-                  placeholder="Shown to users when they pick a profile. IAM stays authoritative."
-                />
-              </div>
-              <AwsRoleInput
-                id="aws-profile-role"
-                value={role}
-                onChange={setRole}
-                disabled={pending}
-                accountId={accountId}
-              />
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setIsAddOpen(false)}
-                disabled={add.isPending}
-              >
-                Cancel
-              </Button>
-              <Button type="button" disabled={!canAdd} onClick={() => add.mutate()}>
-                {add.isPending ? "Adding…" : "Add for all users"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setIsAddOpen(false)}
+                  disabled={add.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button type="button" disabled={!canAdd} onClick={() => add.mutate()}>
+                  {add.isPending ? "Adding…" : "Add for all users"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <LineGrid className="md:grid-cols-2">
         <ProfileCard
           name="Provider default"
           description="Used when a workspace does not pick a profile."
@@ -399,19 +393,7 @@ export function AwsAccessProfiles({
             }}
           />
         ))}
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => setIsAddOpen(true)}
-          className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl p-4 text-center text-[13px] text-fg-3 transition-colors hover:bg-fill hover:text-fg-2 disabled:pointer-events-none disabled:opacity-50"
-        >
-          <Plus className="size-4" />
-          <span className="font-medium text-fg-2">Add a profile</span>
-          <span className="max-w-56 leading-relaxed">
-            A separate role with its own permissions that users can pick per workspace.
-          </span>
-        </button>
-      </div>
+      </LineGrid>
 
       {check && <AwsRoleCheckResult check={check} />}
     </section>
