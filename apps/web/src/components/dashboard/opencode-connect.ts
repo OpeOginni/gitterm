@@ -8,19 +8,33 @@ function createConnection(workspaceId: string, kind: "link" | "tui") {
   return trpcClient.workspace.createOpencodeConnection.mutate({ workspaceId, kind });
 }
 
-/** Copy a pairing link for the OpenCode desktop app's Connect server dialog. */
-export async function copyOpencodePairingLink(workspaceId: string) {
-  try {
-    const result = await createConnection(workspaceId, "link");
-    if (result.kind !== "link") throw new Error("Could not create a pairing link");
-    await navigator.clipboard.writeText(result.link);
-    toast.success("Pairing link copied", {
-      description:
-        "In the OpenCode desktop app, choose Connect server and paste it. Works once, within 5 minutes.",
-    });
-  } catch (error) {
-    toast.error(error instanceof Error ? error.message : "Could not create a pairing link");
-  }
+/** A one-time code for the OpenCode desktop or mobile app, as a link and as its parts. */
+export async function createOpencodePairing(workspaceId: string) {
+  const result = await createConnection(workspaceId, "link");
+  if (result.kind !== "link") throw new Error("Could not create a pairing link");
+  return result;
+}
+
+/**
+ * Create a code and copy its link in one click. Browsers only copy during a click, so the
+ * clipboard is handed the link as a promise that fills in once the code arrives.
+ */
+export function startOpencodePairing(workspaceId: string) {
+  const pairing = createOpencodePairing(workspaceId);
+  const copied =
+    typeof ClipboardItem === "undefined"
+      ? Promise.resolve(false)
+      : navigator.clipboard
+          .write([
+            new ClipboardItem({
+              "text/plain": pairing.then(({ link }) => new Blob([link], { type: "text/plain" })),
+            }),
+          ])
+          .then(
+            () => true,
+            () => false,
+          );
+  return { pairing, copied };
 }
 
 /** Build an attach command that carries a paired session token instead of the server password. */
