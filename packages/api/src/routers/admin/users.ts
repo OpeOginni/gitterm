@@ -7,20 +7,12 @@
 import { z } from "zod";
 import { adminProcedure, router } from "../..";
 import { TRPCError } from "@trpc/server";
-import { db, eq, sql, desc, asc, and } from "@gitterm/db";
+import { db, eq, sql, desc, asc } from "@gitterm/db";
 import { user } from "@gitterm/db/schema/auth";
 import { workspace, usageSession } from "@gitterm/db/schema/workspace";
 import { isGitHubAuthEnabled, isEmailAuthEnabled } from "@gitterm/env/server";
 import { auth } from "@gitterm/auth";
 import { getBilling } from "../../billing";
-
-/**
- * Synthetic anon "try gitterm" users live on this email domain - see
- * `packages/api/src/service/anon/anon-user.ts`. They are excluded from the
- * admin user listing and stats so the dashboard reflects real signups only.
- */
-const ANON_EMAIL_PATTERN = "%@anon.gitterm.local";
-const excludeAnonUsers = sql`${user.email} NOT LIKE ${ANON_EMAIL_PATTERN}`;
 
 // ============================================================================
 // Input Schemas
@@ -60,13 +52,9 @@ export const usersRouter = router({
   list: adminProcedure.input(listUsersSchema).query(async ({ input }) => {
     const { limit, offset, search, sortBy, sortOrder } = input;
 
-    // Always hide synthetic anon users from the admin panel.
     const whereClause = search
-      ? and(
-          excludeAnonUsers,
-          sql`(${user.email} ILIKE ${"%" + search + "%"} OR ${user.name} ILIKE ${"%" + search + "%"})`,
-        )
-      : excludeAnonUsers;
+      ? sql`(${user.email} ILIKE ${"%" + search + "%"} OR ${user.name} ILIKE ${"%" + search + "%"})`
+      : undefined;
 
     // Apply sorting
     const sortFn = sortOrder === "asc" ? asc : desc;
@@ -81,7 +69,7 @@ export const usersRouter = router({
       .limit(limit)
       .offset(offset);
 
-    // Get total count (excluding anon)
+    // Get total count
     const [countResult] = await db
       .select({ count: sql<number>`count(*)` })
       .from(user)
@@ -174,7 +162,7 @@ export const usersRouter = router({
   get: adminProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
     const [foundUser] = await db.select().from(user).where(eq(user.id, input.id));
 
-    if (!foundUser || foundUser.email.endsWith("@anon.gitterm.local")) {
+    if (!foundUser) {
       throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
     }
 
@@ -224,7 +212,7 @@ export const usersRouter = router({
         ...(role ? { role } : {}),
         updatedAt: new Date(),
       })
-      .where(and(eq(user.id, id), excludeAnonUsers))
+      .where(eq(user.id, id))
       .returning();
 
     if (!updated) {
@@ -260,10 +248,7 @@ export const usersRouter = router({
       // facts, drop the analytics link, and remove the payment customer.
       await (await getBilling()).onUserDeleted(input.id);
 
-      const [deleted] = await db
-        .delete(user)
-        .where(and(eq(user.id, input.id), excludeAnonUsers))
-        .returning();
+      const [deleted] = await db.delete(user).where(eq(user.id, input.id)).returning();
 
       if (!deleted) {
         throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
@@ -271,62 +256,6 @@ export const usersRouter = router({
 
       return { success: true };
     }),
-
-  /**
-   * Terminate any anon "try gitterm" workspaces that the E2B webhook /
-   * background reaper failed to clean up.
-   *
-   * Reuses the same selector as the worker reaper but is intended for
-   * one-click admin recovery from the dashboard (e.g. when the listener
-   * URL isn't public in dev and webhooks never arrive).
-   */
-  cleanupAnonStragglers: adminProcedure.mutation(async () => {
-    // Lazy import to avoid pulling provider code into the listener bundle.
-    const { e2bProvider } = await import("../../providers");
-    const { updateWorkspaceByIdReturningAndInvalidate } =
-      await import("../../service/workspace-mutations");
-    const { deleteWorkspaceRouteAccess } = await import("../../service/workspace-route-access");
-
-    // Anon workspaces are non-persistent E2B workspaces owned by a synthetic
-    // anon user (email LIKE '%@anon.gitterm.local'). We sweep any that are
-    // still in 'running' or 'pending' (E2B kills at 10 min, so anything older
-    // than 12 min is stale).
-    const cutoff = new Date(Date.now() - 12 * 60 * 1000);
-    const stragglers = await db
-      .select({
-        id: workspace.id,
-        externalInstanceId: workspace.externalInstanceId,
-      })
-      .from(workspace)
-      .innerJoin(user, eq(workspace.userId, user.id))
-      .where(
-        and(
-          eq(workspace.persistent, false),
-          sql`${user.email} LIKE ${ANON_EMAIL_PATTERN}`,
-          sql`${workspace.status} IN ('running', 'pending')`,
-          sql`${workspace.startedAt} < ${cutoff}`,
-        ),
-      );
-
-    let terminated = 0;
-    for (const ws of stragglers) {
-      if (ws.externalInstanceId) {
-        await e2bProvider.terminateWorkspace(ws.externalInstanceId).catch(() => undefined);
-      }
-      await deleteWorkspaceRouteAccess(ws.id, null).catch(() => undefined);
-      const now = new Date();
-      await updateWorkspaceByIdReturningAndInvalidate(ws.id, {
-        status: "terminated",
-        pausedAt: now,
-        terminatedAt: now,
-        upstreamUrl: null,
-        externalInstanceId: "",
-      });
-      terminated += 1;
-    }
-
-    return { found: stragglers.length, terminated };
-  }),
 
   /**
    * Get dashboard stats
@@ -337,20 +266,14 @@ export const usersRouter = router({
         total: sql<number>`count(*)`,
         admins: sql<number>`count(*) FILTER (WHERE ${user.role} = 'admin')`,
       })
-      .from(user)
-      .where(excludeAnonUsers);
-
-    // Workspace stats also exclude anon workspaces - they belong to synthetic
-    // users and inflate "Active" until the reaper or E2B webhook fires.
+      .from(user);
     const [workspaceStats] = await db
       .select({
         total: sql<number>`count(*)`,
         running: sql<number>`count(*) FILTER (WHERE ${workspace.status} = 'running')`,
         paused: sql<number>`count(*) FILTER (WHERE ${workspace.status} = 'paused')`,
       })
-      .from(workspace)
-      .innerJoin(user, eq(workspace.userId, user.id))
-      .where(excludeAnonUsers);
+      .from(workspace);
 
     const planCounts = await (await getBilling()).countUsersByPlan();
     const paidUsers = Object.entries(planCounts)

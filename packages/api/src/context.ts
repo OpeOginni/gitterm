@@ -44,11 +44,6 @@ export async function createContext({ context }: CreateContextOptions) {
       ? await context.req.text()
       : "";
 
-  // Resolve the originating client IP (proxy hops). Falls back to the socket
-  // address for local development. Used by the anonymous "try gitterm" flow
-  // for IP-based rate limiting - never persisted raw, always hashed.
-  const clientIp = resolveClientIp(context);
-
   return {
     session,
     internalApiKey,
@@ -64,30 +59,9 @@ export async function createContext({ context }: CreateContextOptions) {
     boatWebhookDelivery,
     boatWebhookTimestamp,
     boatWebhookSignature,
-    clientIp,
-    // The raw Hono context is exposed so a small set of procedures (e.g. the
-    // anonymous try-gitterm flow) can append `Set-Cookie` headers. Most
-    // procedures should not touch this - prefer typed return values.
+    // Connection procedures set cache-control headers on sensitive responses.
     honoContext: context,
   };
-}
-
-function resolveClientIp(context: HonoContext): string | null {
-  const xff = context.req.raw.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  const xri = context.req.raw.headers.get("x-real-ip");
-  if (xri) return xri.trim();
-  const cf = context.req.raw.headers.get("cf-connecting-ip");
-  if (cf) return cf.trim();
-  // Hono's incoming request - try the underlying socket if present
-  // (this is best-effort; in production we expect XFF from Caddy).
-  const anyCtx = context as unknown as {
-    env?: { incoming?: { socket?: { remoteAddress?: string } } };
-  };
-  return anyCtx.env?.incoming?.socket?.remoteAddress ?? null;
 }
 
 export async function createListenerContext({ context }: CreateContextOptions) {
@@ -146,7 +120,6 @@ export async function createListenerContext({ context }: CreateContextOptions) {
     boatWebhookDelivery,
     boatWebhookTimestamp,
     boatWebhookSignature,
-    clientIp: null as string | null,
     honoContext: context,
   };
 }

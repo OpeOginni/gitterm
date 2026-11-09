@@ -14,7 +14,6 @@ import type {
   WorkspaceProvisioningSpec,
   WorkspaceStatusResult,
 } from "../compute";
-import { resolveProvisioningSpec } from "../provisioning-spec";
 import {
   buildHostAlias,
   buildSshCommand,
@@ -28,7 +27,6 @@ import { createProvisionLogger } from "../provision-logger";
 import { inlineGitAuthCommands } from "../git-auth";
 import type { E2BConfig } from "./types";
 import { getWorkspaceIdleTimeoutMs } from "../../service/workspace-timeouts";
-import { ANON_WORKSPACE_TTL_SECONDS } from "../../service/anon/anon-lifetime";
 import { redactSecrets } from "../../utils/redact-secrets";
 
 export type { E2BConfig } from "./types";
@@ -138,9 +136,8 @@ export class E2BProvider implements ComputeProvider {
     config: WorkspaceConfig,
     onTimeout: "pause" | "kill",
     sshEnabled: boolean,
-    timeoutOverrideMs?: number,
   ): Promise<E2BSandbox> {
-    const timeoutMs = timeoutOverrideMs ?? (await getWorkspaceIdleTimeoutMs(config.userId));
+    const timeoutMs = await getWorkspaceIdleTimeoutMs(config.userId);
 
     return Sandbox.create(this.getTemplateId(config, sshEnabled), {
       apiKey: await this.getApiKey(),
@@ -425,16 +422,15 @@ export class E2BProvider implements ComputeProvider {
     config: WorkspaceConfig,
     onTimeout: "pause" | "kill",
     persistent: boolean,
-    timeoutOverrideMs?: number,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const spec = resolveProvisioningSpec(config);
+    const spec = config.provisioningSpec ?? null;
     const provisionLogger = createProvisionLogger(
       this.name,
       config.workspaceId,
       spec?.repo?.authToken ? [spec.repo.authToken] : [],
     );
     const sandbox = await provisionLogger.step("create-sandbox", () =>
-      this.createSandbox(config, onTimeout, this.isSshEnabledWorkspace(spec), timeoutOverrideMs),
+      this.createSandbox(config, onTimeout, this.isSshEnabledWorkspace(spec)),
     );
     const repoDir = this.getRepoDir(spec);
 
@@ -514,22 +510,6 @@ export class E2BProvider implements ComputeProvider {
 
   async createWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
     return (await this.provisionWorkspace(config, "pause", false)) as WorkspaceInfo;
-  }
-
-  /**
-   * Spawn an ephemeral, throwaway sandbox for the anonymous "try gitterm"
-   * homepage flow. Identical to `createWorkspace` but uses `onTimeout: "kill"`
-   * so the sandbox is destroyed (not paused) when the 10-minute lease
-   * expires. There's no signed-in user to ever resume an anon workspace, so
-   * pausing would just leave a zombie.
-   */
-  async createEphemeralAnonWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
-    return (await this.provisionWorkspace(
-      config,
-      "kill",
-      false,
-      ANON_WORKSPACE_TTL_SECONDS * 1_000,
-    )) as WorkspaceInfo;
   }
 
   async createPersistentWorkspace(

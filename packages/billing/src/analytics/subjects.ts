@@ -1,9 +1,6 @@
-import { and, db, eq, inArray, isNull, not, sql } from "@gitterm/db";
+import { db, eq, inArray, isNull, sql } from "@gitterm/db";
 import { user } from "@gitterm/db/schema/auth";
 import { billingAnalyticsSubject } from "@gitterm/db/schema/billing-analytics";
-
-/** Synthetic "try GitTerm" users; excluded from analytics. */
-const ANON_EMAIL_PATTERN = "%@anon.gitterm.local";
 
 /** Analytics ids for these users, creating subjects as needed. Unknown users are skipped. */
 export async function ensureSubjects(userIds: string[]): Promise<Map<string, string>> {
@@ -51,12 +48,7 @@ export async function syncSubjects(): Promise<number> {
         })
         .from(user)
         .leftJoin(billingAnalyticsSubject, eq(billingAnalyticsSubject.userId, user.id))
-        .where(
-          and(
-            isNull(billingAnalyticsSubject.userId),
-            not(sql`${user.email} like ${ANON_EMAIL_PATTERN}`),
-          ),
-        ),
+        .where(isNull(billingAnalyticsSubject.userId)),
     )
     .onConflictDoNothing()
     .returning({ userId: billingAnalyticsSubject.userId });

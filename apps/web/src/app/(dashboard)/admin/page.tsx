@@ -3,14 +3,10 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
-import { Loader2, Trash2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
-import { toast } from "sonner";
-import { SettingsGroup } from "@/components/dashboard/settings/settings-page";
 
 function StatCell({
   label,
@@ -52,27 +48,9 @@ export default function AdminPage() {
     }
   }, [session, isSessionPending, router]);
 
-  const queryClient = useQueryClient();
   const { data: stats, isLoading } = useQuery({
     queryKey: ["admin", "stats"],
     queryFn: () => trpcClient.admin.users.stats.query(),
-  });
-
-  const cleanupAnonMutation = useMutation({
-    mutationFn: () => trpcClient.admin.users.cleanupAnonStragglers.mutate(),
-    onSuccess: ({ found, terminated }) => {
-      if (found === 0) {
-        toast.success("No anon stragglers found.");
-      } else {
-        toast.success(
-          `Terminated ${terminated} of ${found} anon ${found === 1 ? "workspace" : "workspaces"}.`,
-        );
-      }
-      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
-    },
-    onError: (error) => {
-      toast.error(`Cleanup failed: ${error.message}`);
-    },
   });
 
   if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
@@ -119,28 +97,6 @@ export default function AdminPage() {
           isLoading={isLoading}
         />
       </div>
-
-      {/* Maintenance row */}
-      <SettingsGroup
-        title="Anon stragglers"
-        description="Terminate any try‑gitterm sandboxes that outlived their 10‑min lease (E2B webhook / reaper safety net)."
-        action={
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => cleanupAnonMutation.mutate()}
-            disabled={cleanupAnonMutation.isPending}
-            className="gap-2"
-          >
-            {cleanupAnonMutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Trash2 className="size-4" />
-            )}
-            {cleanupAnonMutation.isPending ? "Sweeping…" : "Sweep now"}
-          </Button>
-        }
-      />
     </DashboardShell>
   );
 }

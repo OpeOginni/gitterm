@@ -37,7 +37,6 @@ import { upsertWorkspaceRouteAccess } from "../service/workspace-route-access";
 import { getWorkspacePortUrl } from "../utils/routing";
 import type { ExposedPort } from "@gitterm/schema/workspace-ports";
 import { workspaceMetadataSchema } from "./workspace/managment";
-import { isAnonEmail } from "../service/anon/anon-user";
 import { proxyRouteHeaders } from "../service/proxy-route-headers";
 import { computeJobEvents, type SandboxJobFinished } from "../service/compute-events";
 
@@ -245,9 +244,6 @@ export const sandboxRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
-      if (isAnonEmail(ctx.session.user.email))
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sign in to create sandboxes." });
-
       if (input.idempotencyKey) {
         const existing = await db.query.workspace.findFirst({
           where: and(

@@ -41,8 +41,6 @@ import {
 import { filterIdleWorkspacesByRedisActivityWith } from "../../service/workspace-activity";
 import type { E2BConfig } from "../../providers/e2b";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
-import { ANON_WORKSPACE_TTL_SECONDS } from "../../service/anon/anon-lifetime";
-import { isAnonEmail } from "../../service/anon/anon-user";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
 import {
   deleteWorkspaceForUser,
@@ -87,17 +85,15 @@ export const internalRouter = router({
         domain: workspace.domain,
         lastActiveAt: workspace.lastActiveAt,
         alwaysOn: workspace.alwaysOn,
-        email: user.email,
       })
       .from(workspace)
-      .leftJoin(user, eq(workspace.userId, user.id))
       .where(eq(workspace.status, "running"));
     const entitlements = await (
       await getBilling()
     ).getEntitlementsForUsers([...new Set(runningWorkspaces.map((ws) => ws.userId))]);
     // Always-on workspaces skip idle pausing while their owner's plan allows it.
     const candidates = runningWorkspaces.filter(
-      (ws) => !isAnonEmail(ws.email) && !(ws.alwaysOn && entitlements.get(ws.userId)?.alwaysOn),
+      (ws) => !(ws.alwaysOn && entitlements.get(ws.userId)?.alwaysOn),
     );
     const thresholdFor = (ws: { userId: string }): Date => {
       const timeoutMinutes =
@@ -111,8 +107,7 @@ export const internalRouter = router({
     );
 
     return idleWorkspaces.map(
-      ({ lastActiveAt: _lastActiveAt, alwaysOn: _alwaysOn, email: _email, ...idleWorkspace }) =>
-        idleWorkspace,
+      ({ lastActiveAt: _lastActiveAt, alwaysOn: _alwaysOn, ...idleWorkspace }) => idleWorkspace,
     );
   }),
 
@@ -203,7 +198,7 @@ export const internalRouter = router({
         .select({ email: user.email })
         .from(user)
         .where(eq(user.id, notice.userId));
-      if (!owner || isAnonEmail(owner.email)) {
+      if (!owner) {
         await delivery("skipped", "no_recipient");
         continue;
       }
@@ -236,22 +231,19 @@ export const internalRouter = router({
         regionId: workspace.regionId,
         cloudProviderId: workspace.cloudProviderId,
         domain: workspace.domain,
-        email: user.email,
       })
       .from(workspace)
-      .leftJoin(user, eq(workspace.userId, user.id))
       .where(and(eq(workspace.status, "running"), eq(workspace.hostingType, "cloud")));
-    const candidates = runningWorkspaces.filter((ws) => !isAnonEmail(ws.email));
     const overAllowance = await billing.getUsersOverAllowance([
-      ...new Set(candidates.map((ws) => ws.userId)),
+      ...new Set(runningWorkspaces.map((ws) => ws.userId)),
     ]);
-    const quotaExceededWorkspaces = candidates.filter((ws) => overAllowance.has(ws.userId));
+    const quotaExceededWorkspaces = runningWorkspaces.filter((ws) => overAllowance.has(ws.userId));
 
     logger.info(`Found ${quotaExceededWorkspaces.length} workspaces with exceeded quota`, {
       action: "quota_check",
     });
 
-    return quotaExceededWorkspaces.map(({ email: _email, ...ws }) => ws);
+    return quotaExceededWorkspaces;
   }),
 
   // Pause a workspace (for worker)
@@ -486,37 +478,6 @@ export const internalRouter = router({
       ...sweepResult,
     };
   }),
-  /**
-   * Find anonymous "try gitterm" workspaces that have outlived their 10-min
-   * E2B lease. These are
-   * always still in `running` state in the DB if E2B's webhook was delayed
-   * or lost. The reaper terminates them as a safety net.
-   */
-  getAnonStragglerWorkspaces: internalProcedure.query(async () => {
-    const cutoff = new Date(Date.now() - ANON_WORKSPACE_TTL_SECONDS * 1_000);
-    const stragglers = await db
-      .select({
-        id: workspace.id,
-        externalInstanceId: workspace.externalInstanceId,
-        userId: workspace.userId,
-        cloudProviderId: workspace.cloudProviderId,
-        startedAt: workspace.startedAt,
-      })
-      .from(workspace)
-      .innerJoin(user, eq(workspace.userId, user.id))
-      .where(
-        and(
-          eq(workspace.status, "running"),
-          eq(workspace.persistent, false),
-          lt(workspace.startedAt, cutoff),
-          // Synthetic anon users live on this domain - see service/anon/anon-user.ts
-          sql`${user.email} LIKE ${"%@anon.gitterm.local"}`,
-        ),
-      );
-
-    return stragglers;
-  }),
-
   /** Workspaces whose caller-set autoTerminateAt has passed and are not yet terminated. */
   getAutoTerminateDueWorkspaces: internalProcedure.query(async () => {
     return db

@@ -32,7 +32,6 @@ const schema = z.object({
   NEXT_PUBLIC_ENABLE_BILLING: boolWithDefault(false),
   NEXT_PUBLIC_ENABLE_EMAIL_AUTH: boolWithDefault(false),
   NEXT_PUBLIC_ENABLE_GITHUB_AUTH: boolWithDefault(true),
-  NEXT_PUBLIC_ENABLE_ANON_TRY: boolWithDefault(false),
   NEXT_PUBLIC_BASE_DOMAIN: z.string().default("gitterm.dev"),
   NEXT_PUBLIC_ROUTING_MODE: routingModeWithBuildPlaceholder,
   NEXT_PUBLIC_SERVER_URL: optional,
@@ -56,7 +55,6 @@ const rawEnv: Record<string, string | undefined> = {
   NEXT_PUBLIC_ENABLE_BILLING: process.env.NEXT_PUBLIC_ENABLE_BILLING,
   NEXT_PUBLIC_ENABLE_EMAIL_AUTH: process.env.NEXT_PUBLIC_ENABLE_EMAIL_AUTH,
   NEXT_PUBLIC_ENABLE_GITHUB_AUTH: process.env.NEXT_PUBLIC_ENABLE_GITHUB_AUTH,
-  NEXT_PUBLIC_ENABLE_ANON_TRY: process.env.NEXT_PUBLIC_ENABLE_ANON_TRY,
   NEXT_PUBLIC_BASE_DOMAIN: process.env.NEXT_PUBLIC_BASE_DOMAIN,
   NEXT_PUBLIC_ROUTING_MODE: process.env.NEXT_PUBLIC_ROUTING_MODE,
   NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL,
@@ -78,6 +76,5 @@ export const isEmailAuthEnabled = (config: WebEnv = env) =>
   config.NEXT_PUBLIC_DEPLOYMENT_MODE === "self-hosted" || config.NEXT_PUBLIC_ENABLE_EMAIL_AUTH;
 export const isGitHubAuthEnabled = (config: WebEnv = env) =>
   config.NEXT_PUBLIC_DEPLOYMENT_MODE === "managed" && config.NEXT_PUBLIC_ENABLE_GITHUB_AUTH;
-export const isAnonTryEnabled = () => env.NEXT_PUBLIC_ENABLE_ANON_TRY;
 
 export { schema as webEnvSchema };

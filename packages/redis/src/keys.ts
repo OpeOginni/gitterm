@@ -22,8 +22,4 @@ export const RedisKeys = {
   // Same Redis Cluster hash slot for the atomic global/user/connection budget script.
   mcpTestCooldown: (connectionId: string) => `mcp:{test-budget}:cooldown:${connectionId}`,
   mcpTestRate: (userId: string) => `mcp:{test-budget}:rate:${userId}`,
-
-  // Anonymous "try gitterm" homepage sandbox
-  anonTryIp: (ipHash: string) => `anon:try:ip:${ipHash}`,
-  anonTryUser: (ipHash: string) => `anon:try:user:${ipHash}`,
 } as const;

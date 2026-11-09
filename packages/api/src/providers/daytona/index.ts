@@ -17,7 +17,6 @@ import type {
   WorkspaceProvisioningSpec,
   WorkspaceStatusResult,
 } from "../compute";
-import { resolveProvisioningSpec } from "../provisioning-spec";
 import { DAYTONA_DEFAULT_RESOURCES } from "./resources";
 import {
   buildHostAlias,
@@ -332,7 +331,7 @@ export class DaytonaProvider implements ComputeProvider {
     config: WorkspaceConfig,
     persistent: boolean,
   ): Promise<WorkspaceInfo | PersistentWorkspaceInfo> {
-    const spec = resolveProvisioningSpec(config);
+    const spec = config.provisioningSpec ?? null;
     const provisionLogger = createProvisionLogger(
       this.name,
       config.workspaceId,

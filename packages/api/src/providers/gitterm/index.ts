@@ -14,7 +14,6 @@ import type {
 } from "../compute";
 import { inlineGitAuthCommands } from "../git-auth";
 import { createProvisionLogger } from "../provision-logger";
-import { resolveProvisioningSpec } from "../provisioning-spec";
 import type {
   WorkspaceSSHAccess,
   WorkspaceSSHAccessCleanupConfig,
@@ -125,7 +124,7 @@ export class GittermProvider implements ComputeProvider {
   }
 
   private async provisionWorkspace(config: WorkspaceConfig): Promise<WorkspaceInfo> {
-    const spec = resolveProvisioningSpec(config);
+    const spec = config.provisioningSpec ?? null;
     const logger = createProvisionLogger(
       this.name,
       config.workspaceId,

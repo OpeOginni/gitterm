@@ -330,6 +330,13 @@
       "when": 1793961087522,
       "tag": "0046_workspace_operation_lease",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1794227694280,
+      "tag": "0047_remove_anonymous_trials",
+      "breakpoints": true
     }
   ]
 }

@@ -11,7 +11,6 @@ export const user = pgTable("user", {
   sshPublicKey: text("ssh_public_key"),
   defaultCloudProviderId: uuid("default_cloud_provider_id"),
   showGitTermOnCommits: boolean("show_gitterm_on_commits").notNull().default(true),
-  allowTrial: boolean("allow_trial").notNull().default(false),
   role: userRoleEnum("role").notNull().default("user"),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
