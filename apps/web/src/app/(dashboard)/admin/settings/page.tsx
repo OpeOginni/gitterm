@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
-import { authClient } from "@/lib/auth-client";
+import { Panel, PanelRow } from "@/components/dashboard/kit";
+import { useAdminGuard } from "../_components/admin";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SettingsGroup, SettingsSaveBar } from "@/components/dashboard/settings/settings-page";
+import { SettingsSaveBar } from "@/components/dashboard/settings/settings-page";
 import { trpcClient } from "@/utils/trpc";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -21,30 +21,22 @@ interface SettingValue {
   max: number;
 }
 
+/** Sentence-case labels and units for the server's settings, by key. */
+const COPY: Record<string, { label: string; unit: string }> = {
+  idle_timeout_minutes: { label: "Idle timeout", unit: "minutes" },
+  free_tier_daily_minutes: { label: "Free daily minutes", unit: "minutes a day" },
+};
+
 export default function SettingsPage() {
-  const router = useRouter();
-  const { data: session, isPending: isSessionPending } = authClient.useSession();
+  const { ready } = useAdminGuard();
   const queryClient = useQueryClient();
   const [formValues, setFormValues] = useState<Record<string, number>>({});
   const [hasChanges, setHasChanges] = useState(false);
 
-  useEffect(() => {
-    if (!isSessionPending) {
-      if (!session?.user) {
-        router.push("/login");
-        return;
-      }
-      const userRole = (session.user as any)?.role;
-      if (userRole !== "admin") {
-        router.push("/dashboard");
-        return;
-      }
-    }
-  }, [session?.user, isSessionPending, router]);
-
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "settings"],
     queryFn: () => trpcClient.admin.settings.get.query(),
+    enabled: ready,
   });
 
   // Initialize form values when data loads
@@ -64,7 +56,7 @@ export default function SettingsPage() {
       trpcClient.admin.settings.update.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
-      toast.success("Settings saved successfully");
+      toast.success("Settings saved");
       setHasChanges(false);
     },
     onError: (error) => toast.error(error.message),
@@ -96,50 +88,34 @@ export default function SettingsPage() {
     }
   };
 
-  // Don't render content if not authenticated or not admin (will redirect)
-  if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
-    return (
-      <DashboardShell>
-        <div className="flex h-64 items-center justify-center">
-          <Skeleton className="h-8 w-48" />
-        </div>
-      </DashboardShell>
-    );
-  }
-
   return (
     <DashboardShell>
-      <DashboardHeader
-        heading="System settings"
-        text="Configure system-wide settings for workspaces and quotas."
-      />
+      <DashboardHeader heading="System settings" text="Limits that apply to every workspace." />
 
-      {isLoading ? (
-        <div className="space-y-3 rounded-2xl bg-card p-6">
+      {!ready || isLoading ? (
+        <Panel>
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="space-y-2 py-2">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-4 w-72" />
-            </div>
+            <PanelRow key={i} className="block space-y-2 py-5">
+              <Skeleton className="h-4 w-40 bg-fill" />
+              <Skeleton className="h-3.5 w-72 bg-fill" />
+            </PanelRow>
           ))}
-        </div>
+        </Panel>
       ) : (
-        <SettingsGroup bodyClassName="py-1">
-          <div className="divide-y divide-line">
-            {data?.settings.map((setting: SettingValue) => (
+        <Panel>
+          {data?.settings.map((setting: SettingValue) => {
+            const copy = COPY[setting.key];
+            return (
               <div
                 key={setting.key}
-                className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-5"
               >
                 <div className="min-w-0 space-y-1">
-                  <Label htmlFor={setting.key} className="text-[15px] font-medium text-fg">
-                    {setting.label}
+                  <Label htmlFor={setting.key} className="text-[14px] font-medium text-fg">
+                    {copy?.label ?? setting.label}
                   </Label>
-                  <p className="max-w-xl text-[13.5px] leading-relaxed text-fg-3">
+                  <p className="max-w-xl text-[13px] leading-relaxed text-fg-3">
                     {setting.description}
-                  </p>
-                  <p className="text-[12.5px] text-fg-4">
-                    Range: {setting.min} - {setting.max}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
@@ -150,16 +126,19 @@ export default function SettingsPage() {
                     max={setting.max}
                     value={formValues[setting.key] ?? setting.value}
                     onChange={(e) => handleValueChange(setting.key, e.target.value)}
-                    className="w-28"
+                    className="w-24 font-mono tabular-nums"
                   />
-                  <span className="w-28 text-[13.5px] text-fg-3">
-                    {setting.key === "idle_timeout_minutes" ? "minutes" : "minutes per day"}
-                  </span>
+                  <div className="w-32">
+                    <p className="text-[13px] text-fg-2">{copy?.unit ?? "minutes"}</p>
+                    <p className="text-[12.5px] text-fg-4 tabular-nums">
+                      {setting.min} to {setting.max}
+                    </p>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </SettingsGroup>
+            );
+          })}
+        </Panel>
       )}
 
       <SettingsSaveBar

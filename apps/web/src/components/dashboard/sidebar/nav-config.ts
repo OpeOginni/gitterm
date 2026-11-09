@@ -1,4 +1,5 @@
 import {
+  Box,
   Braces,
   Container,
   Cpu,
@@ -31,6 +32,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: null,
     items: [
       { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
+      { href: "/dashboard/sandboxes", label: "Agent sandboxes", icon: Box },
       { href: "/dashboard/bots", label: "Bots", icon: Bot },
     ],
   },

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import Image from "next/image";
 import type { Route } from "next";
-import { ArrowUpRight, Check, ChevronDown, Loader2, Plus } from "lucide-react";
+import { Check, ChevronRight, Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +24,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { trpcClient } from "@/utils/trpc";
 
-import { StatusChip } from "./status-chip";
+import { Panel, SectionHeading, StatusDot } from "@/components/dashboard/kit";
+import { providerStatus } from "../../_components/admin";
 import type { ProviderRow } from "./types";
 
 interface AwsProviderSectionProps {
@@ -110,7 +111,6 @@ export function AwsProviderSection({ awsProviders }: AwsProviderSectionProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [label, setLabel] = useState("");
@@ -136,152 +136,74 @@ export function AwsProviderSection({ awsProviders }: AwsProviderSectionProps) {
     onError: (error) => toast.error(error.message),
   });
 
-  const awsCount = awsProviders.length;
-  const configured = awsProviders.filter((p) => p.providerConfig?.isEnabled).length;
-  const needsSetup = awsProviders.some((p) => !p.providerConfig);
-  const allDisabled = awsCount > 0 && awsProviders.every((p) => !p.isEnabled);
-
   return (
     <>
-      <section className="overflow-hidden rounded-2xl bg-card">
-        <button
-          type="button"
-          onClick={() => setIsExpanded((v) => !v)}
-          className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-fill focus-visible:bg-fill focus-visible:outline-none"
-          aria-expanded={isExpanded}
-        >
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill">
-            <Image src="/aws.svg" alt="AWS" width={22} height={22} className="size-5" />
-          </span>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <h3 className="text-[15px] font-medium text-fg">AWS</h3>
-              <span className="text-[13px] text-fg-4">Region-scoped</span>
-              {awsCount === 0 ? (
-                <StatusChip tone="warn">Not configured</StatusChip>
-              ) : needsSetup ? (
-                <StatusChip tone="warn">
-                  {configured}/{awsCount} configured
-                </StatusChip>
-              ) : allDisabled ? (
-                <StatusChip>All disabled</StatusChip>
-              ) : (
-                <StatusChip tone="ok">{configured} active</StatusChip>
-              )}
-            </div>
-            <p className="mt-1 text-[13px] text-fg-3">
-              {awsCount === 0
-                ? "Each region runs its own ECS cluster, ALB, and EFS stack."
-                : `${awsCount} region${awsCount === 1 ? "" : "s"} · ${
-                    awsProviders
-                      .slice(0, 3)
-                      .map((p) => getCanonicalAwsRegion(p)?.externalRegionIdentifier)
-                      .filter(Boolean)
-                      .join(", ") || "-"
-                  }${awsCount > 3 ? ` +${awsCount - 3}` : ""}`}
+      <section className="space-y-4">
+        <SectionHeading
+          title={
+            <span className="inline-flex items-center gap-2.5">
+              <Image src="/aws.svg" alt="" width={22} height={22} className="h-[18px] w-auto" />
+              AWS regions
+            </span>
+          }
+          count={awsProviders.length || undefined}
+          description="Each region runs its own ECS cluster, load balancer, and EFS stack."
+          action={
+            <Button variant="secondary" onClick={() => setIsAddOpen(true)}>
+              <Plus className="size-4" />
+              Add region
+            </Button>
+          }
+        />
+        {awsProviders.length === 0 ? (
+          <div className="rounded-xl border border-line px-4 py-4 sm:px-5">
+            <p className="text-[14px] font-medium text-fg-2">No regions yet</p>
+            <p className="mt-0.5 text-[13px] text-fg-3">
+              Add one, then give it credentials and provision its stack.
             </p>
           </div>
-
-          <span className="flex items-center gap-1.5 text-[13px] text-fg-3">
-            <span className="hidden sm:inline" aria-hidden>
-              {isExpanded ? "Collapse" : "Expand"}
-            </span>
-            <ChevronDown
-              className={cn(
-                "size-4 transition-transform duration-200",
-                isExpanded && "rotate-180 text-fg",
-              )}
-            />
-          </span>
-        </button>
-
-        <div
-          className={cn(
-            "grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none",
-            isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-          )}
-        >
-          <div className="overflow-hidden">
-            <div className="px-5 pt-1 pb-5">
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {awsProviders.map((provider) => {
-                  const primaryRegion = getCanonicalAwsRegion(provider);
-                  const regionFlag = getRegionFlag(primaryRegion);
-                  return (
-                    <Link
-                      key={provider.id}
-                      href={`/admin/providers/${provider.id}` as Route}
-                      className="group/card flex items-center gap-3 rounded-xl bg-fill p-3.5 transition-colors hover:bg-fill-2 focus-visible:bg-fill-2 focus-visible:outline-none"
-                    >
-                      <span
-                        aria-hidden
-                        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill-2 text-base"
-                      >
-                        {regionFlag}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="truncate font-mono text-[13.5px] font-medium text-fg">
-                            {primaryRegion?.externalRegionIdentifier ?? provider.name}
-                          </p>
-                          <ArrowUpRight className="size-3.5 shrink-0 text-fg-3 opacity-0 transition-opacity group-hover/card:opacity-100" />
-                        </div>
-                        {primaryRegion?.location && (
-                          <p className="truncate text-[12.5px] text-fg-3">
-                            {primaryRegion.location}
-                          </p>
-                        )}
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12.5px]">
-                          {provider.providerConfig?.isEnabled ? (
-                            <span className="inline-flex items-center gap-1.5 text-[#6bd586]">
-                              <span className="size-1.5 rounded-full bg-[#6bd586]" />
-                              Active
-                            </span>
-                          ) : provider.providerConfig ? (
-                            <span className="inline-flex items-center gap-1.5 text-fg-3">
-                              <span className="size-1.5 rounded-full bg-fg-4" />
-                              Config disabled
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 text-[#fb923c]">
-                              <span className="size-1.5 rounded-full bg-[#fb923c]" />
-                              Needs setup
-                            </span>
-                          )}
-                          {!provider.isEnabled && <span className="text-fg-3">· Disabled</span>}
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-
-                <button
-                  type="button"
-                  onClick={() => setIsAddOpen(true)}
-                  className="group/add flex items-center gap-3 rounded-xl p-3.5 text-left transition-colors hover:bg-fill focus-visible:bg-fill focus-visible:outline-none"
+        ) : (
+          <Panel>
+            {awsProviders.map((provider) => {
+              const region = getCanonicalAwsRegion(provider);
+              const status = providerStatus(provider);
+              return (
+                <Link
+                  key={provider.id}
+                  href={`/admin/providers/${provider.id}` as Route}
+                  className="group flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-fill focus-visible:bg-fill focus-visible:outline-none sm:px-5"
                 >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill">
-                    <Plus className="size-4 text-fg-3 transition-colors group-hover/add:text-primary" />
+                  <span
+                    aria-hidden
+                    className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill text-base"
+                  >
+                    {getRegionFlag(region)}
                   </span>
-                  <div>
-                    <p className="text-[14px] font-medium text-fg-2">Add a region</p>
-                    <p className="text-[12.5px] text-fg-3">Pick and provision</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex min-w-0 items-baseline gap-2">
+                      <span className="truncate text-[14px] font-medium text-fg">
+                        {provider.name}
+                      </span>
+                      {region ? (
+                        <span className="shrink-0 font-mono text-[12.5px] text-fg-4">
+                          {region.externalRegionIdentifier}
+                        </span>
+                      ) : null}
+                    </p>
+                    {region?.location ? (
+                      <p className="mt-0.5 truncate text-[13px] text-fg-3">{region.location}</p>
+                    ) : null}
                   </div>
-                </button>
-              </div>
-
-              {awsCount === 0 && (
-                <p className="mt-3 text-[13px] text-fg-3">
-                  No regions yet. Each region is configured independently with its own credentials
-                  and SSH policy.
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+                  <StatusDot tone={status.tone} className="shrink-0">
+                    {status.label}
+                  </StatusDot>
+                  <ChevronRight className="size-4 shrink-0 text-fg-4 transition-colors group-hover:text-fg" />
+                </Link>
+              );
+            })}
+          </Panel>
+        )}
       </section>
-
       <Dialog
         open={isAddOpen}
         onOpenChange={(open) => {
@@ -333,7 +255,7 @@ export function AwsProviderSection({ awsProviders }: AwsProviderSectionProps) {
                           isDisabled
                             ? "cursor-not-allowed bg-fill opacity-50"
                             : isSelected
-                              ? "bg-primary/10 shadow-[inset_0_0_0_1px_rgba(211,173,85,0.45)]"
+                              ? "bg-primary/10 ring-1 ring-primary/45 ring-inset"
                               : "bg-fill hover:bg-fill-2",
                         )}
                       >

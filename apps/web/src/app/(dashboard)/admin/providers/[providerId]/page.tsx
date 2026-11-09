@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
-import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Seg } from "@/components/site/seg";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  ChevronLeft,
   Download,
   Loader2,
   Lock,
@@ -43,6 +43,7 @@ import type { Route } from "next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { strToU8, zipSync } from "fflate";
 import { awsRoleSelectionSchema, awsAccessProfileSchema } from "@gitterm/schema";
@@ -55,7 +56,9 @@ import {
   AwsRoleCheckResult,
   type AwsRoleSelection,
 } from "../_components/aws-access-profiles";
-import { StatusChip } from "../_components/status-chip";
+import { Panel, PanelRow, SectionHeading, StatusDot } from "@/components/dashboard/kit";
+import { CopyField } from "@/components/dashboard/copy-field";
+import { formPanel, providerStatus, useAdminGuard } from "../../_components/admin";
 
 interface ProviderConfigField {
   fieldName: string;
@@ -156,7 +159,7 @@ export default function ProviderSettingsPage() {
     return Array.isArray(param) ? param[0] : param;
   }, [params]);
 
-  const { data: session, isPending: isSessionPending } = authClient.useSession();
+  const { ready } = useAdminGuard();
   const queryClient = useQueryClient();
 
   const [providerName, setProviderName] = useState("");
@@ -535,19 +538,6 @@ export default function ProviderSettingsPage() {
     );
     setSetupScript(selectedDefault?.commands.join("\n") ?? "");
   }, [setupAgentTypeId, setupDefaults]);
-
-  useEffect(() => {
-    if (!isSessionPending) {
-      if (!session?.user) {
-        router.push("/login");
-        return;
-      }
-      const userRole = (session.user as any)?.role;
-      if (userRole !== "admin") {
-        router.push("/dashboard");
-      }
-    }
-  }, [session?.user, isSessionPending, router]);
 
   const pinnedAwsRegionIdentifier =
     provider?.providerKey === "aws"
@@ -1040,489 +1030,166 @@ export default function ProviderSettingsPage() {
     }
   };
 
-  if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
+  if (!ready) {
     return (
       <DashboardShell>
         <div className="flex h-64 items-center justify-center">
-          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-8 w-48 bg-fill" />
         </div>
       </DashboardShell>
     );
   }
 
+  const status = provider ? providerStatus(provider) : null;
+  const statusText = !provider
+    ? ""
+    : status?.state === "ready"
+      ? "Users can start workspaces here."
+      : status?.state === "setup"
+        ? provider.providerConfig
+          ? "Its credentials are turned off. Turn them on below and save."
+          : "Save working credentials below so workspaces can start."
+        : provider.providerConfig?.isEnabled
+          ? "Hidden from users. Turn it on when you're ready."
+          : "Hidden from users. Save working credentials before turning it on.";
+  const savedSetupScripts = setupDefaults?.filter((entry) => entry.commands.length > 0).length ?? 0;
+
+  const saveButton = (
+    <Button onClick={handleSaveSettings} disabled={!resolvedProviderTypeId || isSavingConfig}>
+      {isSavingConfig ? <Loader2 className="animate-spin" /> : null}
+      {isSavingConfig ? "Saving…" : "Save settings"}
+    </Button>
+  );
+
   return (
     <DashboardShell>
       <DashboardHeader
-        heading={provider ? `${provider.name} settings` : "Provider settings"}
-        text="Manage credentials, naming, enablement, and regions for this provider."
+        heading={provider?.name ?? <span className="sr-only">Loading provider</span>}
+        text="General and Credentials save with Save settings. Everything else saves on its own."
         icon={
           provider ? (
-            <div className="rounded-xl bg-fill p-2">
-              <img src={getIcon(provider.providerKey)} alt="" className="h-5 w-5 object-contain" />
-            </div>
-          ) : undefined
+            <span className="flex size-10 items-center justify-center rounded-lg bg-fill">
+              <Image
+                src={getIcon(provider.providerKey)}
+                alt=""
+                width={20}
+                height={20}
+                className="size-5 object-contain"
+              />
+            </span>
+          ) : (
+            // The name comes with the provider: hold the icon's and title's places until then.
+            <>
+              <Skeleton className="size-10 rounded-lg bg-fill-2" />
+              <Skeleton className="h-8 w-40 bg-fill-2" />
+            </>
+          )
         }
       >
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="secondary">
-            <Link href={"/admin/providers" as Route}>Back to providers</Link>
+          <Button asChild variant="ghost" className="text-fg-3">
+            <Link href={"/admin/providers" as Route}>
+              <ChevronLeft />
+              All providers
+            </Link>
           </Button>
-          <Button onClick={handleSaveSettings} disabled={!resolvedProviderTypeId || isSavingConfig}>
-            {isSavingConfig ? "Saving..." : "Save settings"}
-          </Button>
+          {saveButton}
         </div>
       </DashboardHeader>
 
-      <div className="pt-2 space-y-6">
-        {isLoadingProvider ? (
-          <div className="space-y-4">
-            <Skeleton className="h-32 w-full rounded-2xl bg-card" />
-            <Skeleton className="h-52 w-full rounded-2xl bg-card" />
-            <Skeleton className="h-52 w-full rounded-2xl bg-card" />
-          </div>
-        ) : (
-          <div className="flex flex-col gap-6">
-            {/* Machine Profiles Section */}
-            <section className="order-1 rounded-2xl bg-card p-5 sm:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-fg">Machine profiles</h2>
-                  <p className="max-w-2xl text-[13.5px] leading-relaxed text-fg-3">
-                    Name provider-specific compute settings once, then expose the stable key to the
-                    SDK. On managed plans, Free users get the smallest enabled size.
-                  </p>
+      {isLoadingProvider ? (
+        <ProviderSkeleton />
+      ) : (
+        <div className="space-y-12">
+          <Panel>
+            <PanelRow className="gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <Label htmlFor="provider-enabled" className="text-[14px] font-medium text-fg">
+                    Available to users
+                  </Label>
+                  {status ? <StatusDot tone={status.tone}>{status.label}</StatusDot> : null}
                 </div>
-                <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
-                  {machineProfiles?.length ?? 0} profiles
-                </span>
+                <p className="mt-0.5 text-[13px] text-fg-3">{statusText}</p>
               </div>
+              <Switch
+                id="provider-enabled"
+                checked={provider?.isEnabled}
+                disabled={!provider?.isEnabled && !provider?.providerConfig?.isEnabled}
+                onCheckedChange={handleToggleProvider}
+              />
+            </PanelRow>
+          </Panel>
 
-              {provider && (
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Machine size choice</Label>
-                    <Seg
-                      ariaLabel="Machine size choice"
-                      options={MACHINE_SELECTION_MODES.map((mode) => ({
-                        value: mode.value,
-                        label: mode.label,
-                      }))}
-                      value={provider.machineSelectionPolicy.mode}
-                      onChange={(mode) => {
-                        if (mode === provider.machineSelectionPolicy.mode) return;
-                        updateMachineSettings.mutate({
-                          id: provider.id,
-                          machineSelectionPolicy: { mode },
-                        });
-                      }}
-                      className="flex w-full sm:w-fit"
-                    />
+          <section className="space-y-4">
+            <SectionHeading title="General" />
+            <div className={formPanel}>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="provider-name">Name</Label>
+                  <Input
+                    id="provider-name"
+                    value={providerName}
+                    onChange={(e) => {
+                      markSettingsDirty();
+                      setProviderName(e.target.value);
+                    }}
+                    placeholder="Railway"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Type</Label>
+                  <Input value={selectedProviderType?.displayName ?? "Unknown"} disabled readOnly />
+                </div>
+              </div>
+              {provider?.supportsRegions && (
+                <div className="mt-5 flex items-center justify-between gap-4 border-t border-line pt-5">
+                  <div className="space-y-1">
+                    <Label htmlFor="region-selection" className="text-[14px] font-medium text-fg">
+                      Users pick a region
+                    </Label>
                     <p className="text-[13px] text-fg-3">
-                      &ldquo;Default size only&rdquo; runs every workspace on the default profile.
+                      {isAwsProvider
+                        ? "AWS always uses the region set in its credentials."
+                        : "Off means every workspace runs in the default region."}
                     </p>
                   </div>
-                  {/* Region-capable providers show their regions instead. */}
-                  {!provider.supportsRegions && (
-                    <div className="space-y-2">
-                      <Label htmlFor="provider-location">Location shown to users</Label>
-                      <Input
-                        key={provider.location ?? ""}
-                        id="provider-location"
-                        defaultValue={provider.location ?? ""}
-                        placeholder="e.g., EU"
-                        onBlur={(event) => {
-                          const location = event.target.value.trim() || null;
-                          if (location !== provider.location) {
-                            updateMachineSettings.mutate({ id: provider.id, location });
-                          }
-                        }}
-                      />
-                      <p className="text-[13px] text-fg-3">
-                        Optional, e.g. where your provider account runs sandboxes.
-                      </p>
-                    </div>
-                  )}
+                  <Switch
+                    id="region-selection"
+                    checked={isAwsProvider ? false : allowUserRegionSelection}
+                    disabled={isAwsProvider}
+                    onCheckedChange={(checked) => {
+                      markSettingsDirty();
+                      setAllowUserRegionSelection(checked);
+                    }}
+                  />
                 </div>
               )}
-
-              <div className="mt-4 space-y-3">
-                {machineProfiles && machineProfiles.length > 0 ? (
-                  <div className="max-h-[32rem] divide-y divide-line overflow-y-auto">
-                    {machineProfiles.map((profile) => {
-                      const unpriced = billingEnabled && profile.priceMicrosPerHour === null;
-                      const options = Object.entries(profile.providerOptions)
-                        .map(
-                          ([key, value]) =>
-                            `${key}=${typeof value === "object" ? JSON.stringify(value) : String(value)}`,
-                        )
-                        .join(" ");
-                      return (
-                        <div
-                          key={profile.id}
-                          className="flex flex-col gap-3 py-3.5 md:flex-row md:items-center"
-                        >
-                          <div
-                            className={`min-w-0 flex-1 space-y-1 ${profile.isEnabled ? "" : "opacity-50"}`}
-                          >
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-[14px] font-medium text-fg">{profile.name}</p>
-                              <code className="rounded bg-fill-2 px-1.5 py-0.5 font-mono text-[12.5px] text-fg-3">
-                                {profile.key}
-                              </code>
-                              {profile.isDefault && (
-                                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[12.5px] font-medium text-[#e2c47c]">
-                                  Default
-                                </span>
-                              )}
-                            </div>
-                            <p className="truncate text-[13px] text-fg-3">
-                              {[formatMachineSize(profile), options || "Provider-managed resources"]
-                                .filter(Boolean)
-                                .join(" · ")}
-                              {unpriced && (
-                                <span className="text-[#fb923c]"> · No price set, can't start</span>
-                              )}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center justify-end gap-3">
-                            {billingEnabled && (
-                              <div className="relative w-28">
-                                <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-[13px] text-fg-3">
-                                  $
-                                </span>
-                                <Input
-                                  key={profile.priceMicrosPerHour ?? "unpriced"}
-                                  type="number"
-                                  min={0}
-                                  step="0.001"
-                                  className={`h-8 pl-6 pr-8 font-mono text-[13px] tabular-nums ${unpriced ? "ring-1 ring-[#fb923c]/50" : ""}`}
-                                  aria-label={`${profile.name} price per hour`}
-                                  placeholder="—"
-                                  defaultValue={
-                                    profile.priceMicrosPerHour === null
-                                      ? ""
-                                      : profile.priceMicrosPerHour / 1_000_000
-                                  }
-                                  onBlur={(event) => {
-                                    const value = event.target.value.trim();
-                                    const microsPerHour =
-                                      value === "" ? null : Math.round(Number(value) * 1_000_000);
-                                    if (microsPerHour !== null && !Number.isFinite(microsPerHour))
-                                      return;
-                                    if (microsPerHour !== profile.priceMicrosPerHour) {
-                                      setMachineProfilePrice.mutate({
-                                        id: profile.id,
-                                        microsPerHour,
-                                      });
-                                    }
-                                  }}
-                                />
-                                <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-[13px] text-fg-3">
-                                  /h
-                                </span>
-                              </div>
-                            )}
-                            {/* Fixed slot so the switches line up whether or not a row is the default. */}
-                            <div className="flex w-24 justify-end">
-                              {!profile.isDefault && profile.isEnabled && (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-8 text-[13px] text-fg-3 hover:text-fg"
-                                  onClick={() =>
-                                    updateMachineProfile.mutate({ id: profile.id, isDefault: true })
-                                  }
-                                >
-                                  Make default
-                                </Button>
-                              )}
-                            </div>
-                            <Switch
-                              checked={profile.isEnabled}
-                              onCheckedChange={(isEnabled) =>
-                                updateMachineProfile.mutate({ id: profile.id, isEnabled })
-                              }
-                              aria-label={`${profile.isEnabled ? "Disable" : "Enable"} ${profile.name}`}
-                            />
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="size-8 text-fg-3 hover:text-destructive"
-                              onClick={() => deleteMachineProfile.mutate(profile.id)}
-                              aria-label={`Delete ${profile.name}`}
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-
-                {machineFields.length > 0 ? (
-                  <div className="rounded-xl bg-fill p-4">
-                    <p className="mb-3 text-[14px] font-medium text-fg">New profile</p>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="machine-name">Profile name</Label>
-                        <Input
-                          id="machine-name"
-                          value={newMachineProfile.name}
-                          placeholder="Standard"
-                          onChange={(event) =>
-                            setNewMachineProfile((current) => ({
-                              ...current,
-                              name: event.target.value,
-                            }))
-                          }
-                        />
-                        {newMachineProfileKey && (
-                          <p className="text-[13px] text-fg-3">
-                            SDK key: <code>{newMachineProfileKey}</code>
-                          </p>
-                        )}
-                        {duplicateMachineProfile && (
-                          <p className="text-[13px] text-destructive">
-                            A profile named {duplicateMachineProfile.name} already exists.
-                          </p>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="machine-vcpus">vCPUs</Label>
-                          <Input
-                            id="machine-vcpus"
-                            type="number"
-                            value={newMachineProfile.vcpus}
-                            placeholder="4"
-                            onChange={(event) =>
-                              setNewMachineProfile((current) => ({
-                                ...current,
-                                vcpus: event.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="machine-memory">Memory (GB)</Label>
-                          <Input
-                            id="machine-memory"
-                            type="number"
-                            value={newMachineProfile.memoryGb}
-                            placeholder="8"
-                            onChange={(event) =>
-                              setNewMachineProfile((current) => ({
-                                ...current,
-                                memoryGb: event.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                        <p className="col-span-2 text-[13px] text-fg-3">
-                          What the provider actually provisions; shown to users.
-                        </p>
-                      </div>
-                      {machineFields.map((field) => {
-                        const [parent, child] = field.path.split(".");
-                        const value = child
-                          ? newMachineProfile.providerOptions[parent]?.[child]
-                          : newMachineProfile.providerOptions[parent];
-                        return (
-                          <div key={field.path} className="space-y-2">
-                            <Label>{field.label}</Label>
-                            {field.type === "select" ? (
-                              <Select
-                                value={String(value ?? "")}
-                                onValueChange={(nextValue) =>
-                                  setNewMachineProfile((current) => ({
-                                    ...current,
-                                    providerOptions: setNestedOption(
-                                      current.providerOptions,
-                                      field.path,
-                                      nextValue,
-                                    ),
-                                  }))
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue
-                                    placeholder={`Select ${field.label.toLowerCase()}`}
-                                  />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {field.options?.map((option) => (
-                                    <SelectItem key={option} value={option}>
-                                      {option}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <Input
-                                type={field.type ?? "text"}
-                                value={String(value ?? "")}
-                                placeholder={field.placeholder}
-                                onChange={(event) =>
-                                  setNewMachineProfile((current) => ({
-                                    ...current,
-                                    providerOptions: setNestedOption(
-                                      current.providerOptions,
-                                      field.path,
-                                      event.target.value,
-                                    ),
-                                  }))
-                                }
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-4 flex items-center justify-between gap-4">
-                      <label className="flex items-center gap-2 text-[13px] text-fg-3">
-                        <Switch
-                          checked={newMachineProfile.isDefault}
-                          onCheckedChange={(isDefault) =>
-                            setNewMachineProfile((current) => ({ ...current, isDefault }))
-                          }
-                        />
-                        Use by default
-                      </label>
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={
-                          !provider?.id ||
-                          !newMachineProfile.name ||
-                          !newMachineProfileKey ||
-                          !!duplicateMachineProfile ||
-                          createMachineProfile.isPending
-                        }
-                        onClick={() =>
-                          provider?.id &&
-                          createMachineProfile.mutate({
-                            cloudProviderId: provider.id,
-                            ...newMachineProfile,
-                            vcpus: Number(newMachineProfile.vcpus) || null,
-                            memoryGb: Number(newMachineProfile.memoryGb) || null,
-                          })
-                        }
-                      >
-                        {createMachineProfile.isPending ? (
-                          <Loader2 className="animate-spin" />
-                        ) : (
-                          <Plus />
-                        )}
-                        Add profile
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-xl bg-fill p-4 text-[14px] text-fg-3">
-                    {provider?.name} controls machine resources at the provider level, so no
-                    per-workspace profile is required.
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-end gap-2 px-1">
-                <Label className="text-[14px] text-fg-2">Enabled</Label>
-                <Switch
-                  checked={provider?.isEnabled}
-                  disabled={!provider?.isEnabled && !provider?.providerConfig?.isEnabled}
-                  onCheckedChange={handleToggleProvider}
-                  aria-label="Enable provider"
-                />
-              </div>
-              <div className="rounded-2xl bg-card p-5 sm:p-6">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="provider-name">Provider name</Label>
-                    <Input
-                      id="provider-name"
-                      value={providerName}
-                      onChange={(e) => {
-                        markSettingsDirty();
-                        setProviderName(e.target.value);
-                      }}
-                      placeholder="e.g., Railway"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Provider type</Label>
-                    <Input
-                      value={selectedProviderType?.displayName ?? "Unknown"}
-                      disabled
-                      readOnly
-                    />
-                  </div>
-                </div>
-                {provider?.supportsRegions && (
-                  <div className="mt-5 flex items-center justify-between gap-4 border-t border-line pt-5">
-                    <div className="space-y-1">
-                      <p className="text-[14px] font-medium text-fg">Allow user region selection</p>
-                      <p className="text-[13px] text-fg-3">
-                        {isAwsProvider
-                          ? "AWS uses the default region selected in the credentials config above."
-                          : "When enabled, users can choose a region. When disabled, the default region is always used."}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Label className="text-[14px] text-fg-2">Enabled</Label>
-                      <Switch
-                        checked={isAwsProvider ? false : allowUserRegionSelection}
-                        disabled={isAwsProvider}
-                        onCheckedChange={(checked) => {
-                          markSettingsDirty();
-                          setAllowUserRegionSelection(checked);
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
+          </section>
 
-            {/* Credentials & Config Section */}
-            <section className="rounded-2xl bg-card p-5 sm:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h2 className="text-[15px] font-medium text-fg">Credentials and config</h2>
-                  <StatusChip
-                    tone={
-                      provider?.providerConfig
-                        ? provider.providerConfig.isEnabled
-                          ? "ok"
-                          : "muted"
-                        : "warn"
-                    }
-                  >
-                    {provider?.providerConfig
-                      ? provider.providerConfig.isEnabled
-                        ? "Active and ready"
-                        : "Saved but disabled"
-                      : "Missing configurations"}
-                  </StatusChip>
-                </div>
-              </div>
+          <section className="space-y-4">
+            <SectionHeading
+              title="Credentials"
+              description={
+                provider?.providerConfig
+                  ? "Encrypted at rest. Leave a secret blank to keep the saved one."
+                  : "Nothing saved yet."
+              }
+            />
 
-              {isAwsProvider && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-fill px-4 py-3">
-                  <div className="flex items-center gap-2 text-[13px]">
-                    <span className="text-fg-3">AWS stack</span>
-                    <span className="size-1 rounded-full bg-fg-4" />
-                    <span
-                      className={hasExistingAwsSetup ? "font-mono text-[#6bd586]" : "text-fg-3"}
-                    >
-                      {hasExistingAwsSetup
-                        ? (awsSetupSummary?.stackName ?? "active")
-                        : "not provisioned"}
-                    </span>
+            {isAwsProvider && (
+              <Panel>
+                <PanelRow className="flex-wrap gap-y-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5 text-[13px]">
+                    <span className="text-fg-3">Stack</span>
+                    {hasExistingAwsSetup ? (
+                      <StatusDot tone="ok" className="font-mono">
+                        {awsSetupSummary?.stackName ?? "Provisioned"}
+                      </StatusDot>
+                    ) : (
+                      <StatusDot tone="muted">Not provisioned</StatusDot>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Button
@@ -1568,160 +1235,127 @@ export default function ProviderSettingsPage() {
                       Delete
                     </Button>
                   </div>
-                </div>
-              )}
+                </PanelRow>
+              </Panel>
+            )}
 
-              <Dialog
-                open={awsActionDialog !== null}
-                onOpenChange={(open) => !open && setAwsActionDialog(null)}
-              >
-                <DialogContent className="sm:max-w-xl">
-                  <DialogHeader>
-                    <DialogTitle>
-                      {awsActionDialog === "reset"
-                        ? "Reset AWS infrastructure"
-                        : "Delete AWS infrastructure"}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {awsActionDialog === "reset"
-                        ? "GitTerm will delete the shared stack, then provision it again using the saved region and encrypted credentials."
-                        : "The shared AWS stack, provider record, and saved credentials will be removed. The task role is retained in IAM."}
-                    </DialogDescription>
-                  </DialogHeader>
+            {isAwsProvider && <AwsSetupGuide region={awsDefaultRegion} role={awsRoleSelection} />}
 
-                  <ol className="divide-y divide-line">
-                    {[
-                      "All AWS workspaces for this provider must already be deleted.",
-                      "Shared EFS data and CloudWatch logs will be deleted. The IAM task role is retained.",
-                      awsActionDialog === "reset"
-                        ? "Saved access keys remain encrypted and will be reused for the rebuild."
-                        : "Saved credentials are removed from GitTerm; the IAM access keys themselves are not revoked.",
-                      awsActionDialog === "reset"
-                        ? "Provider returns to service as soon as the new stack finishes provisioning."
-                        : "Add the AWS region again if you want to rebuild this provider.",
-                    ].map((line, index) => (
-                      <li
-                        key={index}
-                        className="flex items-start gap-3 py-2.5 text-[13.5px] leading-relaxed text-fg-2"
-                      >
-                        <span className="w-4 shrink-0 text-fg-4 tabular-nums">{index + 1}.</span>
-                        <span>{line}</span>
-                      </li>
-                    ))}
-                  </ol>
+            <Dialog
+              open={awsActionDialog !== null}
+              onOpenChange={(open) => !open && setAwsActionDialog(null)}
+            >
+              <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>
+                    {awsActionDialog === "reset"
+                      ? "Reset AWS infrastructure"
+                      : "Delete AWS infrastructure"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {awsActionDialog === "reset"
+                      ? "GitTerm will delete the shared stack, then provision it again using the saved region and encrypted credentials."
+                      : "The shared AWS stack, provider record, and saved credentials will be removed. The task role is retained in IAM."}
+                  </DialogDescription>
+                </DialogHeader>
 
-                  <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => setAwsActionDialog(null)}
-                      disabled={isAwsActionPending || isBootstrappingAws}
+                <ol className="divide-y divide-line">
+                  {[
+                    "All AWS workspaces for this provider must already be deleted.",
+                    "Shared EFS data and CloudWatch logs will be deleted. The IAM task role is retained.",
+                    awsActionDialog === "reset"
+                      ? "Saved access keys remain encrypted and will be reused for the rebuild."
+                      : "Saved credentials are removed from GitTerm; the IAM access keys themselves are not revoked.",
+                    awsActionDialog === "reset"
+                      ? "Provider returns to service as soon as the new stack finishes provisioning."
+                      : "Add the AWS region again if you want to rebuild this provider.",
+                  ].map((line, index) => (
+                    <li
+                      key={index}
+                      className="flex items-start gap-3 py-2.5 text-[13.5px] leading-relaxed text-fg-2"
                     >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={awsActionDialog === "reset" ? "default" : "destructive"}
-                      onClick={
-                        awsActionDialog === "reset"
-                          ? handleResetAwsInfrastructure
-                          : confirmDeleteAwsInfrastructure
-                      }
-                      disabled={isAwsActionPending || isBootstrappingAws}
-                    >
-                      {awsActionDialog === "reset" ? (
-                        isResettingAwsInfrastructure ? (
-                          <>
-                            <Loader2 className="animate-spin" />
-                            Resetting
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw />
-                            Confirm reset
-                          </>
-                        )
-                      ) : isDeletingAwsInfrastructure ? (
+                      <span className="w-4 shrink-0 text-fg-4 tabular-nums">{index + 1}.</span>
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ol>
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setAwsActionDialog(null)}
+                    disabled={isAwsActionPending || isBootstrappingAws}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={awsActionDialog === "reset" ? "default" : "destructive"}
+                    onClick={
+                      awsActionDialog === "reset"
+                        ? handleResetAwsInfrastructure
+                        : confirmDeleteAwsInfrastructure
+                    }
+                    disabled={isAwsActionPending || isBootstrappingAws}
+                  >
+                    {awsActionDialog === "reset" ? (
+                      isResettingAwsInfrastructure ? (
                         <>
                           <Loader2 className="animate-spin" />
-                          Deleting
+                          Resetting
                         </>
                       ) : (
                         <>
-                          <Trash2 />
-                          Confirm delete
+                          <RefreshCw />
+                          Confirm reset
                         </>
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                      )
+                    ) : isDeletingAwsInfrastructure ? (
+                      <>
+                        <Loader2 className="animate-spin" />
+                        Deleting
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 />
+                        Confirm delete
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
+            <div className={formPanel}>
+              {provider?.providerConfig ? (
+                <div className="mb-5 flex items-center justify-between gap-4 border-b border-line pb-5">
+                  <div className="space-y-1">
+                    <Label htmlFor="config-enabled" className="text-[14px] font-medium text-fg">
+                      Use these credentials
+                    </Label>
+                    <p className="text-[13px] text-fg-3">
+                      Off stops new workspaces on this provider.
+                    </p>
+                  </div>
+                  <Switch
+                    id="config-enabled"
+                    checked={configEnabled}
+                    onCheckedChange={(checked) => {
+                      markSettingsDirty();
+                      setConfigEnabled(checked);
+                    }}
+                  />
+                </div>
+              ) : null}
               {!resolvedProviderTypeId && (
-                <div className="mt-4 rounded-xl bg-fill p-4 text-[14px] text-fg-3">
-                  No provider definition found for this entry. Make sure the provider key maps to a
-                  registered provider type.
-                </div>
+                <p className="mb-4 text-[13.5px] text-fg-3">
+                  No provider type matches this entry. Check that its key maps to a registered
+                  provider type.
+                </p>
               )}
 
-              {isCloudflareProvider && (
-                <div className="mt-4 space-y-3 rounded-xl bg-fill p-4">
-                  <div className="flex items-center gap-2">
-                    <img src="/cloudflare.svg" alt="Cloudflare" className="h-4 w-auto" />
-                    <p className="text-[14px] font-medium text-fg">Deploy the sandbox worker</p>
-                  </div>
-
-                  <p className="text-[13px] text-fg-3">
-                    Cloudflare workspaces run behind a Worker you deploy into your own Cloudflare
-                    account. Follow the steps below, then paste the resulting Worker URL and the
-                    same Internal API Key into the fields below.
-                  </p>
-
-                  <ol className="space-y-2">
-                    {(cloudflareManualSetup?.steps ?? []).map((step, i) => (
-                      <li key={i} className="flex gap-2.5 text-[13px] text-fg-3">
-                        <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full bg-fill-2 text-[12px] font-medium text-fg-2">
-                          {i + 1}
-                        </span>
-                        <span>{step}</span>
-                      </li>
-                    ))}
-                  </ol>
-
-                  {cloudflareManualSetup?.command && (
-                    <div className="space-y-1">
-                      <p className="text-[13px] font-medium text-fg-2">Deploy command</p>
-                      <pre className="overflow-x-auto rounded-lg bg-background px-3 py-2 font-mono text-[12.5px] leading-relaxed text-fg-2">
-                        <code>{cloudflareManualSetup.command}</code>
-                      </pre>
-                    </div>
-                  )}
-
-                  <div className="pt-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={downloadWorkerZip}
-                      disabled={(cloudflareWorkerFiles?.length ?? 0) === 0}
-                    >
-                      <Download />
-                      Download setup ZIP
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {isAwsProvider && <AwsSetupGuide region={awsDefaultRegion} role={awsRoleSelection} />}
-
-              <ProviderWebhookGuide
-                providerKey={providerKey || selectedProviderType?.name || ""}
-                providerName={
-                  selectedProviderType?.displayName ?? provider?.name ?? "this provider"
-                }
-              />
-
-              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="config-name">Configuration name</Label>
                   <Input
@@ -1731,14 +1365,13 @@ export default function ProviderSettingsPage() {
                       markSettingsDirty();
                       setConfigName(e.target.value);
                     }}
-                    placeholder="e.g., Railway Production"
+                    placeholder="Railway production"
                   />
                 </div>
               </div>
 
               {resolvedProviderTypeId && isLoadingFields && (
                 <div className="mt-4 space-y-4">
-                  <Skeleton className="h-12 w-full bg-fill" />
                   <Skeleton className="h-12 w-full bg-fill" />
                   <Skeleton className="h-12 w-full bg-fill" />
                 </div>
@@ -1754,7 +1387,8 @@ export default function ProviderSettingsPage() {
                     accountId={awsAccountId}
                   />
                   <p className="text-[13px] leading-relaxed text-fg-3">
-                    Applied on provision/apply · New workspaces only. Existing roles stay unchanged.
+                    Applied on provision or apply, to new workspaces only. Existing roles stay
+                    unchanged.
                   </p>
                   {!isAwsTaskRoleNameValid && (
                     <p className="text-[13px] text-destructive">
@@ -1778,223 +1412,629 @@ export default function ProviderSettingsPage() {
                     )}
                 </div>
               )}
-            </section>
 
-            {isAwsProvider && provider?.providerConfig && providerId && (
-              <AwsAccessProfiles
-                key={providerId}
-                providerId={providerId}
-                profiles={awsAccessProfileSchema
-                  .array()
-                  .parse(provider.providerConfig.config.accessProfiles ?? [])}
-                defaultRoleArn={String(provider.providerConfig.config.taskRoleArn ?? "")}
-                disabled={isBootstrappingAws || isAwsActionPending}
+              {!isAwsProvider && resolvedProviderTypeId ? (
+                <div className="mt-5 flex justify-end border-t border-line pt-4">{saveButton}</div>
+              ) : null}
+            </div>
+          </section>
+
+          {isCloudflareProvider && (
+            <section className="space-y-4">
+              <SectionHeading
+                title="Sandbox worker"
+                description="Cloudflare workspaces run behind a Worker in your own account. Deploy it, then paste its URL and the same internal API key into Credentials."
               />
-            )}
-
-            <section className="rounded-2xl bg-card p-5 sm:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-fg">Default setup script</h2>
-                  <p className="max-w-2xl text-[13.5px] leading-relaxed text-fg-3">
-                    Runs in the repository after the agent starts. Failures never stop workspace
-                    readiness.
-                  </p>
-                </div>
-                <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
-                  {setupDefaults?.filter((entry) => entry.commands.length > 0).length ?? 0}{" "}
-                  configured
-                </span>
+              <div className={formPanel}>
+                <ol className="space-y-2.5">
+                  {(cloudflareManualSetup?.steps ?? []).map((step, i) => (
+                    <li key={i} className="flex gap-3 text-[13.5px] leading-relaxed text-fg-2">
+                      <span className="w-4 shrink-0 text-fg-4 tabular-nums">{i + 1}.</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+                {cloudflareManualSetup?.command && (
+                  <CopyField
+                    label="Deploy command"
+                    multiline
+                    value={cloudflareManualSetup.command}
+                    className="mt-4"
+                  />
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="mt-4"
+                  onClick={downloadWorkerZip}
+                  disabled={(cloudflareWorkerFiles?.length ?? 0) === 0}
+                >
+                  <Download />
+                  Download setup ZIP
+                </Button>
               </div>
+            </section>
+          )}
 
-              <div className="mt-4 space-y-4">
-                <div className="max-w-sm space-y-2">
-                  <Label>Applies to</Label>
-                  <Select value={setupAgentTypeId} onValueChange={setSetupAgentTypeId}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All agents on this provider</SelectItem>
-                      {agentTypes
-                        ?.filter((agent) => agent.isEnabled)
-                        .map((agent) => (
-                          <SelectItem key={agent.id} value={agent.id}>
-                            {agent.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+          <ProviderWebhookGuide
+            providerKey={providerKey || selectedProviderType?.name || ""}
+            providerName={selectedProviderType?.displayName ?? provider?.name ?? "this provider"}
+          />
+
+          {isAwsProvider && provider?.providerConfig && providerId && (
+            <AwsAccessProfiles
+              key={providerId}
+              providerId={providerId}
+              profiles={awsAccessProfileSchema
+                .array()
+                .parse(provider.providerConfig.config.accessProfiles ?? [])}
+              defaultRoleArn={String(provider.providerConfig.config.taskRoleArn ?? "")}
+              disabled={isBootstrappingAws || isAwsActionPending}
+            />
+          )}
+
+          <section className="space-y-4">
+            <SectionHeading
+              title="Machine sizes"
+              count={machineProfiles?.length || undefined}
+              description="Each size has a stable key for the SDK. Free users get the smallest enabled size."
+            />
+
+            {provider && (
+              <div className="grid gap-x-8 gap-y-5 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="workspace-setup-script">Shell script</Label>
-                  <Textarea
-                    id="workspace-setup-script"
-                    value={setupScript}
-                    onChange={(event) => setSetupScript(event.target.value)}
-                    placeholder={"npm install\n./scripts/bootstrap.sh"}
-                    className="min-h-36 font-mono text-[13px]"
-                    spellCheck={false}
+                  <Label>Size choice</Label>
+                  <Seg
+                    ariaLabel="Machine size choice"
+                    options={MACHINE_SELECTION_MODES.map((mode) => ({
+                      value: mode.value,
+                      label: mode.label,
+                    }))}
+                    value={provider.machineSelectionPolicy.mode}
+                    onChange={(mode) => {
+                      if (mode === provider.machineSelectionPolicy.mode) return;
+                      updateMachineSettings.mutate({
+                        id: provider.id,
+                        machineSelectionPolicy: { mode },
+                      });
+                    }}
+                    className="flex w-full sm:w-fit"
                   />
                   <p className="text-[13px] text-fg-3">
-                    Admin defaults run before commands supplied through the SDK. Logs and status are
-                    written to <code>~/.gitterm/setup</code>.
+                    Saves right away. Default size only runs every workspace on the default.
                   </p>
                 </div>
-                <div className="flex justify-end">
+                {/* Region-capable providers show their regions instead. */}
+                {!provider.supportsRegions && (
+                  <div className="space-y-2">
+                    <Label htmlFor="provider-location">Location shown to users</Label>
+                    <Input
+                      key={provider.location ?? ""}
+                      id="provider-location"
+                      defaultValue={provider.location ?? ""}
+                      placeholder="EU"
+                      onBlur={(event) => {
+                        const location = event.target.value.trim() || null;
+                        if (location !== provider.location) {
+                          updateMachineSettings.mutate({ id: provider.id, location });
+                        }
+                      }}
+                    />
+                    <p className="text-[13px] text-fg-3">
+                      Optional. Where your provider account runs sandboxes.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {machineProfiles && machineProfiles.length > 0 ? (
+              <Panel className="max-h-[36rem] overflow-y-auto">
+                {machineProfiles.map((profile) => {
+                  const unpriced = billingEnabled && profile.priceMicrosPerHour === null;
+                  const options = Object.entries(profile.providerOptions)
+                    .map(
+                      ([key, value]) =>
+                        `${key}=${typeof value === "object" ? JSON.stringify(value) : String(value)}`,
+                    )
+                    .join(" ");
+                  return (
+                    <PanelRow
+                      key={profile.id}
+                      className="flex-col items-stretch md:flex-row md:items-center"
+                    >
+                      <div className={cn("min-w-0 flex-1", !profile.isEnabled && "opacity-50")}>
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <span className="text-[14px] font-medium text-fg">{profile.name}</span>
+                          <span className="font-mono text-[12.5px] text-fg-4">{profile.key}</span>
+                          {profile.isDefault && <StatusDot tone="busy">Default</StatusDot>}
+                        </div>
+                        <p className="mt-0.5 truncate text-[13px] text-fg-3">
+                          {[formatMachineSize(profile), options || "Provider-managed resources"]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                        {unpriced && (
+                          <p className="mt-0.5 text-[13px] text-[#fb923c]">
+                            No price yet, so it can't start.
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 max-md:justify-between">
+                        {billingEnabled && (
+                          <div className="relative w-28">
+                            <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-[13px] text-fg-3">
+                              $
+                            </span>
+                            <Input
+                              key={profile.priceMicrosPerHour ?? "unpriced"}
+                              type="number"
+                              min={0}
+                              step="0.001"
+                              className={cn(
+                                "h-8 pr-8 pl-6 font-mono text-[13px] tabular-nums",
+                                unpriced && "ring-1 ring-[#fb923c]/50",
+                              )}
+                              aria-label={`${profile.name} price per hour`}
+                              placeholder="–"
+                              defaultValue={
+                                profile.priceMicrosPerHour === null
+                                  ? ""
+                                  : profile.priceMicrosPerHour / 1_000_000
+                              }
+                              onBlur={(event) => {
+                                const value = event.target.value.trim();
+                                const microsPerHour =
+                                  value === "" ? null : Math.round(Number(value) * 1_000_000);
+                                if (microsPerHour !== null && !Number.isFinite(microsPerHour))
+                                  return;
+                                if (microsPerHour !== profile.priceMicrosPerHour) {
+                                  setMachineProfilePrice.mutate({
+                                    id: profile.id,
+                                    microsPerHour,
+                                  });
+                                }
+                              }}
+                            />
+                            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-[13px] text-fg-3">
+                              /h
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          {/* Fixed slot so the switches line up whether or not a row is the default. */}
+                          <div className="flex w-[6.5rem] justify-end">
+                            {!profile.isDefault && profile.isEnabled && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="text-fg-3"
+                                onClick={() =>
+                                  updateMachineProfile.mutate({ id: profile.id, isDefault: true })
+                                }
+                              >
+                                Make default
+                              </Button>
+                            )}
+                          </div>
+                          <Switch
+                            checked={profile.isEnabled}
+                            onCheckedChange={(isEnabled) =>
+                              updateMachineProfile.mutate({ id: profile.id, isEnabled })
+                            }
+                            aria-label={`${profile.isEnabled ? "Disable" : "Enable"} ${profile.name}`}
+                          />
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 text-fg-3 hover:text-destructive"
+                            onClick={() => deleteMachineProfile.mutate(profile.id)}
+                            aria-label={`Delete ${profile.name}`}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </PanelRow>
+                  );
+                })}
+              </Panel>
+            ) : null}
+
+            {machineFields.length > 0 ? (
+              <div className={formPanel}>
+                <p className="mb-4 text-[14px] font-medium text-fg">New size</p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="machine-name">Name</Label>
+                    <Input
+                      id="machine-name"
+                      value={newMachineProfile.name}
+                      placeholder="Standard"
+                      onChange={(event) =>
+                        setNewMachineProfile((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
+                      }
+                    />
+                    {newMachineProfileKey && (
+                      <p className="text-[13px] text-fg-3">
+                        SDK key <code className="font-mono text-fg-2">{newMachineProfileKey}</code>
+                      </p>
+                    )}
+                    {duplicateMachineProfile && (
+                      <p className="text-[13px] text-destructive">
+                        A size named {duplicateMachineProfile.name} already exists.
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="machine-vcpus">vCPUs</Label>
+                      <Input
+                        id="machine-vcpus"
+                        type="number"
+                        value={newMachineProfile.vcpus}
+                        placeholder="4"
+                        onChange={(event) =>
+                          setNewMachineProfile((current) => ({
+                            ...current,
+                            vcpus: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="machine-memory">Memory (GB)</Label>
+                      <Input
+                        id="machine-memory"
+                        type="number"
+                        value={newMachineProfile.memoryGb}
+                        placeholder="8"
+                        onChange={(event) =>
+                          setNewMachineProfile((current) => ({
+                            ...current,
+                            memoryGb: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <p className="col-span-2 text-[13px] text-fg-3">
+                      What the provider really provisions. Shown to users.
+                    </p>
+                  </div>
+                  {machineFields.map((field) => {
+                    const [parent, child] = field.path.split(".");
+                    const value = child
+                      ? newMachineProfile.providerOptions[parent]?.[child]
+                      : newMachineProfile.providerOptions[parent];
+                    return (
+                      <div key={field.path} className="space-y-2">
+                        <Label>{field.label}</Label>
+                        {field.type === "select" ? (
+                          <Select
+                            value={String(value ?? "")}
+                            onValueChange={(nextValue) =>
+                              setNewMachineProfile((current) => ({
+                                ...current,
+                                providerOptions: setNestedOption(
+                                  current.providerOptions,
+                                  field.path,
+                                  nextValue,
+                                ),
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options?.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            type={field.type ?? "text"}
+                            value={String(value ?? "")}
+                            placeholder={field.placeholder}
+                            onChange={(event) =>
+                              setNewMachineProfile((current) => ({
+                                ...current,
+                                providerOptions: setNestedOption(
+                                  current.providerOptions,
+                                  field.path,
+                                  event.target.value,
+                                ),
+                              }))
+                            }
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-5 flex items-center justify-between gap-4 border-t border-line pt-4">
+                  <label className="flex items-center gap-2.5 text-[13px] text-fg-2">
+                    <Switch
+                      checked={newMachineProfile.isDefault}
+                      onCheckedChange={(isDefault) =>
+                        setNewMachineProfile((current) => ({ ...current, isDefault }))
+                      }
+                    />
+                    Make it the default
+                  </label>
                   <Button
                     type="button"
-                    size="sm"
-                    disabled={!provider?.id || setSetupDefault.isPending}
+                    variant="secondary"
+                    disabled={
+                      !provider?.id ||
+                      !newMachineProfile.name ||
+                      !newMachineProfileKey ||
+                      !!duplicateMachineProfile ||
+                      createMachineProfile.isPending
+                    }
                     onClick={() =>
                       provider?.id &&
-                      setSetupDefault.mutate({
+                      createMachineProfile.mutate({
                         cloudProviderId: provider.id,
-                        agentTypeId: setupAgentTypeId === "all" ? null : setupAgentTypeId,
-                        commands: setupScript.trim() ? [setupScript.trim()] : [],
+                        ...newMachineProfile,
+                        vcpus: Number(newMachineProfile.vcpus) || null,
+                        memoryGb: Number(newMachineProfile.memoryGb) || null,
                       })
                     }
                   >
-                    {setSetupDefault.isPending ? (
+                    {createMachineProfile.isPending ? (
                       <Loader2 className="animate-spin" />
                     ) : (
-                      <ScrollText />
+                      <Plus />
                     )}
-                    Save setup script
+                    Add size
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[13.5px] text-fg-3">
+                {provider?.name} sets machine resources itself, so there are no sizes to add here.
+              </p>
+            )}
+          </section>
+
+          {provider?.supportsRegions && !isAwsProvider && (
+            <section className="space-y-4">
+              <SectionHeading
+                title="Regions"
+                count={provider.regions?.length || undefined}
+                description="Turning a region off hides it from new workspaces."
+              />
+              {provider.regions?.length ? (
+                <Panel className="max-h-[28rem] overflow-y-auto">
+                  {provider.regions.map((region) => (
+                    <PanelRow key={region.id}>
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill">
+                        <MapPin className="size-4 text-fg-3" />
+                      </span>
+                      <div className={cn("min-w-0 flex-1", !region.isEnabled && "opacity-60")}>
+                        <p className="flex min-w-0 items-baseline gap-2">
+                          <span className="truncate text-[14px] font-medium text-fg">
+                            {region.name}
+                          </span>
+                          <span className="shrink-0 font-mono text-[12.5px] text-fg-4">
+                            {region.externalRegionIdentifier}
+                          </span>
+                        </p>
+                        <p className="mt-0.5 truncate text-[13px] text-fg-3">{region.location}</p>
+                      </div>
+                      <Switch
+                        checked={region.isEnabled}
+                        aria-label={`${region.isEnabled ? "Disable" : "Enable"} ${region.name}`}
+                        onCheckedChange={(checked) =>
+                          toggleRegion.mutate({
+                            id: region.id,
+                            isEnabled: checked,
+                          })
+                        }
+                      />
+                    </PanelRow>
+                  ))}
+                </Panel>
+              ) : null}
+
+              <div className={formPanel}>
+                <p className="mb-4 text-[14px] font-medium text-fg">New region</p>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="region-name">Name</Label>
+                    <Input
+                      id="region-name"
+                      value={newRegion.name}
+                      onChange={(e) => setNewRegion({ ...newRegion, name: e.target.value })}
+                      placeholder="US West"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Location</Label>
+                    <Input
+                      id="location"
+                      value={newRegion.location}
+                      onChange={(e) => setNewRegion({ ...newRegion, location: e.target.value })}
+                      placeholder="California"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="external-id">Provider ID</Label>
+                    <Input
+                      id="external-id"
+                      value={newRegion.externalRegionIdentifier}
+                      onChange={(e) =>
+                        setNewRegion({
+                          ...newRegion,
+                          externalRegionIdentifier: e.target.value,
+                        })
+                      }
+                      placeholder="us-west-2"
+                      className="font-mono text-[13px]"
+                    />
+                  </div>
+                </div>
+                <div className="mt-5 flex justify-end border-t border-line pt-4">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      if (!provider?.id) {
+                        toast.error("Select a provider first.");
+                        return;
+                      }
+                      createRegion.mutate({
+                        cloudProviderId: provider.id,
+                        ...newRegion,
+                      });
+                    }}
+                    disabled={
+                      !newRegion.name ||
+                      !newRegion.location ||
+                      !newRegion.externalRegionIdentifier ||
+                      createRegion.isPending
+                    }
+                  >
+                    {createRegion.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
+                    Add region
                   </Button>
                 </div>
               </div>
             </section>
+          )}
 
-            {provider?.supportsRegions && !isAwsProvider && (
-              <section className="order-2 rounded-2xl bg-card p-5 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <h2 className="text-[15px] font-medium text-fg">Regions</h2>
-                    <p className="max-w-2xl text-[13.5px] leading-relaxed text-fg-3">
-                      Enable, disable, or add regions for this provider.
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
-                    {provider?.regions?.length ?? 0} total
-                  </span>
-                </div>
-
-                <div className="mt-4 max-h-[28rem] divide-y divide-line overflow-y-auto">
-                  {provider?.regions?.length ? (
-                    provider.regions.map((region: any) => (
-                      <div
-                        key={region.id}
-                        className={`flex items-center justify-between gap-4 py-3 ${
-                          !region.isEnabled ? "opacity-60" : ""
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-xl bg-fill p-2">
-                            <MapPin className="size-4 text-fg-3" />
-                          </div>
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[14px] font-medium text-fg">{region.name}</span>
-                              {!region.isEnabled && (
-                                <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
-                                  Disabled
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[13px] text-fg-3">
-                              {region.location} ·{" "}
-                              <span className="font-mono">{region.externalRegionIdentifier}</span>
-                            </p>
-                          </div>
-                        </div>
-                        <Switch
-                          checked={region.isEnabled}
-                          onCheckedChange={(checked) =>
-                            toggleRegion.mutate({
-                              id: region.id,
-                              isEnabled: checked,
-                            })
-                          }
-                        />
-                      </div>
-                    ))
+          <section className="space-y-4">
+            <SectionHeading
+              title="Setup script"
+              count={savedSetupScripts || undefined}
+              description="Runs in the repository after the agent starts. A failure never blocks the workspace."
+            />
+            <div className={cn(formPanel, "space-y-4")}>
+              <div className="max-w-sm space-y-2">
+                <Label>Applies to</Label>
+                <Select value={setupAgentTypeId} onValueChange={setSetupAgentTypeId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All agents on this provider</SelectItem>
+                    {agentTypes
+                      ?.filter((agent) => agent.isEnabled)
+                      .map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="workspace-setup-script">Shell script</Label>
+                <Textarea
+                  id="workspace-setup-script"
+                  value={setupScript}
+                  onChange={(event) => setSetupScript(event.target.value)}
+                  placeholder={"npm install\n./scripts/bootstrap.sh"}
+                  className="min-h-36 font-mono text-[13px]"
+                  spellCheck={false}
+                />
+                <p className="text-[13px] text-fg-3">
+                  Runs before commands sent through the SDK. Logs go to{" "}
+                  <code className="font-mono text-fg-2">~/.gitterm/setup</code>.
+                </p>
+              </div>
+              <div className="flex justify-end border-t border-line pt-4">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!provider?.id || setSetupDefault.isPending}
+                  onClick={() =>
+                    provider?.id &&
+                    setSetupDefault.mutate({
+                      cloudProviderId: provider.id,
+                      agentTypeId: setupAgentTypeId === "all" ? null : setupAgentTypeId,
+                      commands: setupScript.trim() ? [setupScript.trim()] : [],
+                    })
+                  }
+                >
+                  {setSetupDefault.isPending ? (
+                    <Loader2 className="animate-spin" />
                   ) : (
-                    <p className="py-12 text-center text-[14px] text-fg-3">
-                      No regions configured yet.
-                    </p>
+                    <ScrollText />
                   )}
-                </div>
-
-                <div className="mt-5 rounded-xl bg-fill p-4 sm:p-5">
-                  <p className="text-[14px] font-medium text-fg">Add region</p>
-                  <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="region-name">Region name</Label>
-                      <Input
-                        id="region-name"
-                        value={newRegion.name}
-                        onChange={(e) => setNewRegion({ ...newRegion, name: e.target.value })}
-                        placeholder="e.g., US West"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="location">Location</Label>
-                      <Input
-                        id="location"
-                        value={newRegion.location}
-                        onChange={(e) =>
-                          setNewRegion({
-                            ...newRegion,
-                            location: e.target.value,
-                          })
-                        }
-                        placeholder="e.g., California"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="external-id">External identifier</Label>
-                      <Input
-                        id="external-id"
-                        value={newRegion.externalRegionIdentifier}
-                        onChange={(e) =>
-                          setNewRegion({
-                            ...newRegion,
-                            externalRegionIdentifier: e.target.value,
-                          })
-                        }
-                        placeholder="e.g., us-west-2"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center justify-end">
-                    <Button
-                      onClick={() => {
-                        if (!provider?.id) {
-                          toast.error("Select a provider first.");
-                          return;
-                        }
-                        createRegion.mutate({
-                          cloudProviderId: provider.id,
-                          ...newRegion,
-                        });
-                      }}
-                      disabled={
-                        !newRegion.name ||
-                        !newRegion.location ||
-                        !newRegion.externalRegionIdentifier ||
-                        createRegion.isPending
-                      }
-                    >
-                      {createRegion.isPending ? "Adding..." : "Add region"}
-                    </Button>
-                  </div>
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-      </div>
+                  Save script
+                </Button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </DashboardShell>
+  );
+}
+
+/** A labelled input as it loads. */
+function fieldSkeleton(key: number) {
+  return (
+    <div key={key} className="space-y-2">
+      <Skeleton className="h-3.5 w-20 bg-fill-2" />
+      <Skeleton className="h-10 w-full rounded-lg bg-fill-2" />
+    </div>
+  );
+}
+
+/** The page's shape while the provider loads: availability, then its headed sections. */
+function ProviderSkeleton() {
+  return (
+    <div className="space-y-12">
+      <Panel>
+        <PanelRow className="gap-4">
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-4 w-40 bg-fill-2" />
+            <Skeleton className="h-3.5 w-72 max-w-full bg-fill-2" />
+          </div>
+          <Skeleton className="h-5 w-9 shrink-0 rounded-full bg-fill-2" />
+        </PanelRow>
+      </Panel>
+
+      <section className="space-y-4">
+        <SectionHeading title="General" />
+        <div className={`${formPanel} grid grid-cols-1 gap-4 md:grid-cols-2`}>
+          {[0, 1].map(fieldSkeleton)}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <SectionHeading title="Credentials" />
+        <div className={`${formPanel} space-y-4`}>
+          <Skeleton className="h-3.5 w-80 max-w-full bg-fill-2" />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{[0, 1].map(fieldSkeleton)}</div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <SectionHeading title="Machine sizes" />
+        <Panel>
+          {[0, 1, 2].map((i) => (
+            <PanelRow key={i}>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Skeleton className="h-4 w-28 bg-fill-2" />
+                <Skeleton className="h-3.5 w-40 bg-fill-2" />
+              </div>
+              <Skeleton className="h-8 w-24 shrink-0 rounded-lg bg-fill-2" />
+            </PanelRow>
+          ))}
+        </Panel>
+      </section>
+    </div>
   );
 }

@@ -27,7 +27,7 @@ export function DashboardHeader({
   children,
   className,
 }: {
-  heading: string;
+  heading: React.ReactNode;
   text?: string;
   icon?: React.ReactNode;
   children?: React.ReactNode;

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { DashboardHeader } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
+import { SectionHeading } from "@/components/dashboard/kit";
 import { cn } from "@/lib/utils";
 
 export function SettingsPage({
@@ -26,29 +27,26 @@ export function SettingsPart({
   id,
   label,
   description,
+  action,
   children,
 }: {
   id: string;
   label: string;
   description?: ReactNode;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-8 space-y-4 pt-6">
-      <div>
-        <h2 className="text-[17px] font-medium tracking-[-0.01em] text-fg">{label}</h2>
-        {description ? (
-          <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-fg-3">{description}</p>
-        ) : null}
-      </div>
+    <section id={id} className="scroll-mt-8 space-y-4">
+      <SectionHeading title={label} description={description} action={action} />
       {children}
     </section>
   );
 }
 
 /**
- * One settings group: a lighter surface with a title, a short description and its content.
- * Hierarchy comes from spacing and the surface, never from a border around it.
+ * One settings group: a hairline panel with a title, a short description and its content.
+ * Hierarchy comes from spacing and type; the panel has no fill of its own.
  */
 export function SettingsGroup({
   title,
@@ -67,7 +65,7 @@ export function SettingsGroup({
 }) {
   const hasHeader = title || description || action;
   return (
-    <section className={cn("rounded-2xl bg-card", className)}>
+    <section className={cn("rounded-xl border border-line", className)}>
       {hasHeader ? (
         <header className="px-5 pt-5 sm:px-6">
           {title || action ? (

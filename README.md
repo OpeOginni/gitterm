@@ -30,8 +30,8 @@ GitTerm helps you manage a sandbox from first boot through cleanup:
 A running OpenCode server-only workspace card offers:
 
 - **Attach TUI:** copies a command to paste into your terminal, which opens the workspace in your local OpenCode TUI. With subdomain routing it carries a paired session token, not the permanent server password. The token lasts up to 30 days, and changing the server password revokes it. Keep the command private.
-- **Browser icon:** opens the workspace's own OpenCode web app. With subdomain routing you are signed in automatically.
-- **Desktop pairing link:** copies a link to paste into **Connect server** in an up-to-date OpenCode 2 desktop app. Links work once and expire after five minutes.
+- **Open in browser:** opens the workspace's own OpenCode web app. With subdomain routing you are signed in automatically.
+- **Connect OpenCode app:** shows a QR code to scan with the OpenCode app on your phone, and a link to paste into **Connect server** in the desktop app, or into the phone app when GitTerm is open on the same phone. Codes work once and expire after five minutes.
 - **Password:** the server password, for any client that asks for it.
 
 Pairing needs subdomain routing, because OpenCode expects `/auth/connect` at the root of the server URL. With path routing, and on older servers without pairing, Attach TUI uses the server password and the web app asks you to sign in. These connections use GitTerm's existing HTTPS workspace proxy; no additional tunnel is required.

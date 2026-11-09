@@ -4,7 +4,7 @@ import type React from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { initiateCheckout, openCustomerPortal, isBillingEnabled } from "@/lib/auth-client";
-import { ArrowRight, ExternalLink, Loader2, Sparkles } from "lucide-react";
+import { ArrowRight, ExternalLink, Loader2 } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 import { track } from "@/lib/analytics";
@@ -14,56 +14,83 @@ import { Switch } from "@/components/ui/switch";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
-import { SettingsGroup, SettingsSaveBar } from "@/components/dashboard/settings/settings-page";
+import { SettingsSaveBar } from "@/components/dashboard/settings/settings-page";
+import { Panel, PanelRow, StatusDot } from "@/components/dashboard/kit";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type CheckoutPlan = "pro" | "growth";
 
-/** Used to suggest Growth when Pro plus pay-as-you-go would cost more. */
-const GROWTH_PRICE_CENTS = 20000;
-const GROWTH_INCLUDED_CENTS = 25000;
-const PRO_PRICE_CENTS = 2500;
-const PRO_INCLUDED_CENTS = 2500;
-
-const dollars = (cents: number) =>
+export const dollars = (cents: number) =>
   `$${(cents / 100).toFixed(cents % 100 === 0 && cents >= 1000 ? 0 : 2)}`;
 
-/** One plan row in the workspace-card style: what you are on, and where to change it. */
+/** The plan as the panel's first row: what you are on, and where to change it. */
 function PlanRow({
   name,
+  price,
   detail,
   action,
 }: {
-  name: React.ReactNode;
+  name: string;
+  price?: string;
   detail?: React.ReactNode;
   action?: React.ReactNode;
 }) {
   return (
-    <SettingsGroup>
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
-          <Sparkles className="size-4 text-primary opacity-80" />
-        </span>
-        <div className="min-w-[12rem] flex-1">
-          <p className="text-[15px] font-medium text-fg">{name}</p>
-          {detail ? (
-            <p className="mt-0.5 max-w-2xl text-[13.5px] leading-relaxed text-fg-3">{detail}</p>
-          ) : null}
-        </div>
-        {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+    <PanelRow className="flex-wrap gap-y-3 py-4">
+      <div className="min-w-[12rem] flex-1">
+        <p className="flex flex-wrap items-baseline gap-x-2.5">
+          <span className="font-display text-[19px] font-semibold tracking-[-0.02em] text-fg">
+            {name}
+          </span>
+          {price ? <span className="text-[13.5px] text-fg-3 tabular-nums">{price}</span> : null}
+        </p>
+        {detail ? (
+          <p className="mt-1 max-w-xl text-[13.5px] leading-relaxed text-fg-3">{detail}</p>
+        ) : null}
       </div>
-    </SettingsGroup>
+      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+    </PanelRow>
+  );
+}
+
+/** Shaped like the paid plan panel: the plan row, then pay-as-you-go. */
+function BillingSkeleton() {
+  return (
+    <Panel>
+      <PanelRow className="py-4">
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-6 w-36 bg-fill-2" />
+          <Skeleton className="h-4 w-64 max-w-full bg-fill-2" />
+        </div>
+        <Skeleton className="h-9 w-24 shrink-0 rounded-lg bg-fill-2" />
+      </PanelRow>
+      <PanelRow className="items-start gap-4 py-4">
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-5 w-32 bg-fill-2" />
+          <Skeleton className="h-4 w-96 max-w-full bg-fill-2" />
+        </div>
+        <Skeleton className="mt-0.5 h-5 w-9 shrink-0 rounded-full bg-fill-2" />
+      </PanelRow>
+    </Panel>
   );
 }
 
 export function BillingSection() {
-  const { data } = useBillingAccount();
+  const { data, isPending } = useBillingAccount();
   const account = data?.account ?? null;
   const [isPortalLoading, setIsPortalLoading] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
   if (!isBillingEnabled) {
-    return <PlanRow name="Self-hosted" detail="All features unlocked; no quotas or plans." />;
+    return (
+      <Panel>
+        <PlanRow name="Self-hosted" detail="Every feature unlocked. No quotas or plans." />
+      </Panel>
+    );
   }
+
+  // Not "Free" before the account loads: that would flash the wrong plan.
+  if (isPending) return <BillingSkeleton />;
 
   const handleOpenPortal = async () => {
     setIsPortalLoading(true);
@@ -91,16 +118,11 @@ export function BillingSection() {
 
   if (account?.compute) {
     return (
-      <div className="space-y-3">
+      <PayAsYouGoSettings compute={account.compute}>
         <PlanRow
-          name={
-            <>
-              {account.planName}
-              <span className="ml-2 font-normal text-fg-3">
-                {dollars(account.priceCents)} / month
-              </span>
-            </>
-          }
+          name={account.planName}
+          price={`${dollars(account.priceCents)} a month`}
+          detail={`Includes ${dollars(account.compute.includedCents)} of compute each period.`}
           action={
             <>
               {account.plan !== "growth" ? (
@@ -108,7 +130,7 @@ export function BillingSection() {
                   variant="ghost"
                   disabled={isCheckoutLoading}
                   onClick={() => handleUpgrade("growth")}
-                  className="text-[#e2c47c] hover:text-[#e2c47c]"
+                  className="text-primary hover:text-primary"
                 >
                   Upgrade to Growth
                 </Button>
@@ -126,137 +148,43 @@ export function BillingSection() {
             </>
           }
         />
-        <PayAsYouGoSettings compute={account.compute} />
-      </div>
+      </PayAsYouGoSettings>
     );
   }
 
   return (
-    <PlanRow
-      name="Free"
-      detail="Small E2B or Boat sandboxes and 60 minutes a day. Upgrade for every provider and machine size, always-on workspaces, sandbox snapshots, and a monthly compute balance."
-      action={
-        <Button asChild className="gap-1.5">
-          <Link href={"/pricing" as Route}>
-            Upgrade
-            <ArrowRight className="size-3" />
-          </Link>
-        </Button>
-      }
-    />
-  );
-}
-
-type ComputeUsage = NonNullable<
-  NonNullable<ReturnType<typeof useBillingAccount>["data"]>["account"]
->["compute"] &
-  object;
-
-function UsageBar({ percent }: { percent: number }) {
-  return (
-    <div className="h-2 overflow-hidden rounded-full bg-fill-2">
-      <div
-        className={`h-full rounded-full ${percent >= 100 ? "bg-destructive" : percent >= 75 ? "bg-[#fb923c]" : "bg-primary"}`}
-        style={{ width: `${Math.min(100, percent)}%` }}
-      />
-    </div>
-  );
-}
-
-/** Paid plans: included compute and pay-as-you-go spend this period, with an upgrade hint. */
-export function ComputeUsageCard() {
-  const { data } = useBillingAccount();
-  const account = data?.account;
-  const compute = account?.compute;
-  if (!account || !compute) return null;
-
-  const resets = new Date(account.period.end).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-  const proBill = PRO_PRICE_CENTS + Math.max(0, compute.projectedCents - PRO_INCLUDED_CENTS);
-  const recommendGrowth = account.plan === "pro" && proBill > GROWTH_PRICE_CENTS;
-
-  return (
-    <SettingsGroup bodyClassName="space-y-5">
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <h3 className="text-[15px] font-medium text-fg">Included compute</h3>
-          <p className="text-[13.5px] tabular-nums text-fg-2">
-            {dollars(compute.usedCents)} of {dollars(compute.includedCents)} · resets {resets}
-          </p>
-        </div>
-        <UsageBar percent={(compute.usedCents / Math.max(compute.includedCents, 1)) * 100} />
-        {compute.runningCentsPerHour > 0 ? (
-          <p className="text-[13px] text-fg-3">
-            Running workspaces cost {dollars(compute.runningCentsPerHour)}/hour right now.
-          </p>
-        ) : null}
-      </div>
-
-      <div className="space-y-3 border-t border-line pt-5">
-        <div className={`space-y-3 ${compute.payAsYouGo ? "" : "opacity-60"}`}>
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <h3 className="text-[15px] font-medium text-fg">
-              Pay-as-you-go
-              {compute.payAsYouGo ? (
-                compute.overageDiscountPercent ? (
-                  <span className="ml-2 font-normal text-fg-3">
-                    {compute.overageDiscountPercent}% off
-                  </span>
-                ) : null
-              ) : (
-                <span className="ml-2 rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] font-normal text-fg-3">
-                  Off
-                </span>
-              )}
-            </h3>
-            <p className="text-[13.5px] tabular-nums text-fg-2">
-              {dollars(compute.overageCents)}
-              {compute.spendCapCents !== null ? ` of ${dollars(compute.spendCapCents)} limit` : ""}
-            </p>
-          </div>
-          {compute.payAsYouGo && compute.spendCapCents !== null ? (
-            <UsageBar percent={(compute.overageCents / Math.max(compute.spendCapCents, 1)) * 100} />
-          ) : (
-            <div className="h-2 rounded-full bg-fill-2" />
-          )}
-        </div>
-        {compute.payAsYouGo ? null : (
-          <p className="text-[13px] text-fg-3">
-            Workspaces pause when the included compute runs out.{" "}
-            <Link href={"#billing" as Route} className="text-primary hover:underline">
-              Turn on pay-as-you-go
-            </Link>{" "}
-            to keep them running.
-          </p>
-        )}
-      </div>
-
-      {recommendGrowth ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl bg-primary/10 px-4 py-3">
-          <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-fg-2">
-            At your current pace you&apos;ll use about {dollars(compute.projectedCents)} of compute
-            this period: about {dollars(proBill)} on Pro. Growth covers up to{" "}
-            {dollars(GROWTH_INCLUDED_CENTS)} for {dollars(GROWTH_PRICE_CENTS)}.
-          </p>
-          <Button
-            size="sm"
-            onClick={() => {
-              track("checkout_started", { plan: "growth", source: "settings_usage" });
-              void initiateCheckout("growth");
-            }}
-          >
-            Switch to Growth
+    <Panel>
+      <PlanRow
+        name="Free"
+        detail="Small E2B or Boat sandboxes and 60 minutes a day. Upgrade for every provider and machine size, always-on workspaces, sandbox snapshots, and a monthly compute balance."
+        action={
+          <Button asChild className="gap-1.5">
+            <Link href={"/pricing" as Route}>
+              Upgrade
+              <ArrowRight className="size-3" />
+            </Link>
           </Button>
-        </div>
-      ) : null}
-    </SettingsGroup>
+        }
+      />
+    </Panel>
   );
 }
 
-/** Whether to keep running past the included compute, and up to what limit. */
-function PayAsYouGoSettings({ compute }: { compute: ComputeUsage }) {
+export type ComputeUsage = NonNullable<
+  NonNullable<NonNullable<ReturnType<typeof useBillingAccount>["data"]>["account"]>["compute"]
+>;
+
+/**
+ * Whether to keep running past the included compute, and up to what limit, below the plan row
+ * (`children`). The save bar sits outside the panel so it can stick to the viewport.
+ */
+function PayAsYouGoSettings({
+  compute,
+  children,
+}: {
+  compute: ComputeUsage;
+  children: React.ReactNode;
+}) {
   const queryClient = useQueryClient();
   const [payAsYouGo, setPayAsYouGo] = useState(compute.payAsYouGo);
   const [capDollars, setCapDollars] = useState(
@@ -283,36 +211,51 @@ function PayAsYouGoSettings({ compute }: { compute: ComputeUsage }) {
 
   return (
     <>
-      <SettingsGroup
-        title="Pay-as-you-go"
-        description={
-          payAsYouGo
-            ? "Extra compute is billed at each size's hourly price. Workspaces pause when your limit is reached."
-            : "Workspaces pause when the included compute runs out. Your work is kept."
-        }
-        bodyClassName="space-y-4"
-      >
-        <label className="flex items-center justify-between gap-4 text-[14px] text-fg-2">
-          Keep running past the included compute
-          <Switch checked={payAsYouGo} onCheckedChange={setPayAsYouGo} />
-        </label>
+      <Panel>
+        {children}
+        <PanelRow className="items-start gap-4 py-4">
+          <div className="min-w-0 flex-1">
+            <label
+              htmlFor="pay-as-you-go"
+              className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[14px] font-medium text-fg"
+            >
+              Pay-as-you-go
+              <StatusDot tone={compute.payAsYouGo ? "ok" : "muted"}>
+                {compute.payAsYouGo ? "On" : "Off"}
+              </StatusDot>
+            </label>
+            <p className="mt-1 max-w-xl text-[13.5px] leading-relaxed text-fg-3">
+              {payAsYouGo
+                ? `Keep running past the included compute, billed at each size's hourly price${compute.overageDiscountPercent ? ` less ${compute.overageDiscountPercent}%` : ""}. Workspaces pause at your limit.`
+                : "Workspaces pause when the included compute runs out. Your work is kept."}
+            </p>
+          </div>
+          <Switch
+            id="pay-as-you-go"
+            checked={payAsYouGo}
+            onCheckedChange={setPayAsYouGo}
+            className="mt-0.5"
+          />
+        </PanelRow>
         {payAsYouGo ? (
-          <label className="flex flex-wrap items-center gap-2 text-[14px] text-fg-2">
-            Spend limit
-            <span className="ml-auto flex items-center gap-2 text-fg-3">
+          <PanelRow className="flex-wrap gap-y-2">
+            <label htmlFor="spend-limit" className="flex-1 text-[14px] text-fg-2">
+              Spend limit per period
+            </label>
+            <span className="flex items-center gap-2 text-[14px] text-fg-3">
               $
               <Input
+                id="spend-limit"
                 type="number"
                 min={1}
-                className="h-9 w-24"
+                className="h-9 w-24 tabular-nums"
                 value={capDollars}
                 onChange={(event) => setCapDollars(event.target.value)}
               />
-              per period
             </span>
-          </label>
+          </PanelRow>
         ) : null}
-      </SettingsGroup>
+      </Panel>
       <SettingsSaveBar
         visible={dirty}
         saving={saveSettings.isPending}
@@ -322,41 +265,5 @@ function PayAsYouGoSettings({ compute }: { compute: ComputeUsage }) {
         }
       />
     </>
-  );
-}
-
-/**
- * Simple upgrade prompt component for use throughout the app
- */
-export function UpgradePrompt({
-  message = "Unlock more features",
-  size = "default",
-}: {
-  message?: string;
-  size?: "default" | "compact";
-}) {
-  if (!isBillingEnabled) {
-    return null;
-  }
-
-  if (size === "compact") {
-    return (
-      <Link
-        href={"/pricing" as Route}
-        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-      >
-        <Sparkles className="h-3 w-3" />
-        {message}
-      </Link>
-    );
-  }
-
-  return (
-    <Link href={"/pricing" as Route}>
-      <Button variant="outline" size="sm" className="gap-2">
-        <Sparkles className="h-4 w-4" />
-        {message}
-      </Button>
-    </Link>
   );
 }

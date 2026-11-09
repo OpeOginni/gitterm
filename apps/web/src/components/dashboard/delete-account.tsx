@@ -20,7 +20,8 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/utils/trpc";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
-import { SettingsGroup, SettingsPart } from "@/components/dashboard/settings/settings-page";
+import { SettingsPart } from "@/components/dashboard/settings/settings-page";
+import { Panel, PanelRow } from "@/components/dashboard/kit";
 
 export function DeleteAccountSection() {
   const [isOpen, setIsOpen] = useState(false);
@@ -52,17 +53,17 @@ export function DeleteAccountSection() {
 
   return (
     <SettingsPart id="delete" label="Delete account">
-      <SettingsGroup>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="max-w-xl text-[14px] leading-relaxed text-fg-3">
+      <Panel>
+        <PanelRow className="flex-col items-start gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-xl text-[13.5px] leading-relaxed text-fg-3">
             Permanently delete your profile, workspaces, integrations, and usage history. This
-            cannot be undone.
+            can&apos;t be undone.
           </p>
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
               <Button
                 variant="secondary"
-                className="shrink-0 gap-2 text-red-300 hover:text-red-200"
+                className="shrink-0 gap-2 text-destructive hover:text-destructive"
               >
                 <Trash2 className="size-4" />
                 Delete account
@@ -71,7 +72,7 @@ export function DeleteAccountSection() {
             <DialogContent className="border-line bg-settings-dialog sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <AlertTriangle className="size-5 text-red-400" />
+                  <AlertTriangle className="size-5 text-destructive" />
                   Delete account
                 </DialogTitle>
                 <DialogDescription className="text-left">
@@ -81,9 +82,7 @@ export function DeleteAccountSection() {
 
               <div className="space-y-4 py-2">
                 <div className="space-y-3 rounded-xl bg-destructive/[0.07] p-4">
-                  <p className="text-[14px] font-medium text-fg">
-                    The following will be permanently deleted:
-                  </p>
+                  <p className="text-[14px] font-medium text-fg">This permanently deletes</p>
                   <ul className="ml-1 space-y-1.5 text-[14px] text-fg-3">
                     <li className="flex items-center gap-2">
                       <span className="h-1 w-1 rounded-full bg-destructive/70" />
@@ -107,8 +106,10 @@ export function DeleteAccountSection() {
                 <div className="space-y-2">
                   <Label htmlFor="confirm" className="text-[13.5px] font-normal text-fg-3">
                     Type{" "}
-                    <span className="font-mono font-medium text-red-300">delete my account</span> to
-                    confirm
+                    <span className="font-mono font-medium text-destructive">
+                      delete my account
+                    </span>{" "}
+                    to confirm
                   </Label>
                   <Input
                     id="confirm"
@@ -136,7 +137,7 @@ export function DeleteAccountSection() {
                   {deleteAccountMutation.isPending ? (
                     <>
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      Deleting...
+                      Deleting…
                     </>
                   ) : (
                     <>
@@ -148,8 +149,8 @@ export function DeleteAccountSection() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
-      </SettingsGroup>
+        </PanelRow>
+      </Panel>
     </SettingsPart>
   );
 }

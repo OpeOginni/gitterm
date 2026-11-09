@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
 import { IntegrationCallbackHandler } from "@/components/dashboard/integrations/integration-callback-handler";
 import { IntegrationsList } from "@/components/dashboard/integrations/integrations-list";
+import { SettingsPage } from "@/components/dashboard/settings/settings-page";
+import { SettingsShell } from "@/components/dashboard/settings/settings-shell";
 import { authClient } from "@/lib/auth-client";
 
 export default async function IntegrationsPage() {
@@ -21,17 +22,16 @@ export default async function IntegrationsPage() {
   }
 
   return (
-    <DashboardShell>
-      <DashboardHeader
-        heading="Integrations"
-        text="Connect repository access, cloud identities, and tools for your agents."
-      />
-      <div className="mx-auto max-w-4xl space-y-10 pt-2">
+    <SettingsShell>
+      <SettingsPage
+        title="Integrations"
+        description="Connect repository access, cloud identities, and tools for your agents."
+      >
         <Suspense fallback={null}>
           <IntegrationCallbackHandler />
         </Suspense>
         <IntegrationsList />
-      </div>
-    </DashboardShell>
+      </SettingsPage>
+    </SettingsShell>
   );
 }

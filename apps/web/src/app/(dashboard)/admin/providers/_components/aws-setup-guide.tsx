@@ -86,11 +86,11 @@ export function AwsSetupGuide({ region, role }: { region: string; role: AwsRoleS
   const policy = data?.policy;
 
   return (
-    <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-fill p-4">
-      <div className="flex items-start gap-3">
-        <div className="rounded-lg bg-fill-2 p-2 text-fg-2">
+    <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line px-4 py-3.5 sm:px-5">
+      <div className="flex items-start gap-3.5">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill text-fg-3">
           <ShieldCheck className="size-4" />
-        </div>
+        </span>
         <div className="space-y-1">
           <h3 className="text-[14px] font-medium text-fg">Control-plane credentials</h3>
           <p className="text-[13px] text-fg-3">

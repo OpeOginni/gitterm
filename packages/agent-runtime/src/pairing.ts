@@ -13,7 +13,13 @@ export async function createOpencodeConnection(target: RuntimeConnection, kind: 
   const pairing = await call(client.server.pair(requestTimeout()));
   const expiresAt = new Date(Date.now() + pairing.expires_in * 1_000).toISOString();
   if (kind === "link") {
-    return { kind, url, link: `${url}/auth/connect/${pairing.code}`, expiresAt } as const;
+    return {
+      kind,
+      url,
+      code: pairing.code,
+      link: `${url}/auth/connect/${pairing.code}`,
+      expiresAt,
+    } as const;
   }
   const session = await call(client.server.connect({ code: pairing.code }, requestTimeout()));
   return { kind, url, token: session.token } as const;

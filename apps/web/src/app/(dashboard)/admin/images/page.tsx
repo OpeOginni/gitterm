@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Image from "next/image";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
-import { authClient } from "@/lib/auth-client";
+import { Panel, PanelRow, StatusDot } from "@/components/dashboard/kit";
+import { cn } from "@/lib/utils";
+import { useAdminGuard } from "../_components/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,8 +28,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SettingsGroup, settingsLabel } from "@/components/dashboard/settings/settings-page";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { SettingsEmpty, settingsLabel } from "@/components/dashboard/settings/settings-page";
+import { Container, Pencil, Plus, Trash2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import { getIcon } from "@/components/dashboard/create-instance/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -155,7 +156,7 @@ function ProviderMetadataEditor({
           precedence over general images.
         </p>
       </div>
-      <div className="divide-y divide-line rounded-xl bg-fill px-4">
+      <div className="divide-y divide-line rounded-xl border border-line px-4">
         {PROVIDER_DEFINITIONS.map((provider) => {
           const enabled = drafts[provider.key] !== undefined;
           return (
@@ -207,8 +208,7 @@ function ProviderMetadataEditor({
 }
 
 export default function ImagesPage() {
-  const router = useRouter();
-  const { data: session, isPending: isSessionPending } = authClient.useSession();
+  const { ready } = useAdminGuard();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [deleteImageId, setDeleteImageId] = useState<string | null>(null);
@@ -219,19 +219,6 @@ export default function ImagesPage() {
     extraMetadata: Record<string, unknown>;
   } | null>(null);
 
-  useEffect(() => {
-    if (!isSessionPending) {
-      if (!session?.user) {
-        router.push("/login");
-        return;
-      }
-      const userRole = (session.user as any)?.role;
-      if (userRole !== "admin") {
-        router.push("/dashboard");
-        return;
-      }
-    }
-  }, [session?.user, isSessionPending, router]);
   const [newImage, setNewImage] = useState({
     name: "",
     imageId: "",
@@ -341,11 +328,11 @@ export default function ImagesPage() {
   });
 
   // Don't render content if not authenticated or not admin (will redirect)
-  if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
+  if (!ready) {
     return (
       <DashboardShell>
         <div className="flex h-64 items-center justify-center">
-          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-8 w-48 bg-fill" />
         </div>
       </DashboardShell>
     );
@@ -355,20 +342,20 @@ export default function ImagesPage() {
     <DashboardShell>
       <DashboardHeader
         heading="Runtime images"
-        text="Manage the runtime images for each workspace agent. When several images support a provider, the most provider-specific image runs there."
+        text="The container images agents run in. Where several fit a provider, the most specific one runs."
       >
-        <div className="flex gap-2">
+        <div className="flex self-start">
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button disabled={(agentTypes?.length ?? 0) === 0}>
-                <Plus className="h-4 w-4" />
+                <Plus className="size-4" />
                 Add image
               </Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Add container image</DialogTitle>
-                <DialogDescription>Register a new Docker image for workspaces.</DialogDescription>
+                <DialogTitle>Add image</DialogTitle>
+                <DialogDescription>A Docker image an agent runs in.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -379,7 +366,7 @@ export default function ImagesPage() {
                     id="name"
                     value={newImage.name}
                     onChange={(e) => setNewImage({ ...newImage, name: e.target.value })}
-                    placeholder="e.g., gitterm-opencode"
+                    placeholder="gitterm-opencode"
                   />
                 </div>
                 <div className="space-y-2">
@@ -390,10 +377,11 @@ export default function ImagesPage() {
                     id="imageId"
                     value={newImage.imageId}
                     onChange={(e) => setNewImage({ ...newImage, imageId: e.target.value })}
-                    placeholder="e.g., opeoginni/gitterm-opencode:latest"
+                    placeholder="opeoginni/gitterm-opencode:latest"
+                    className="font-mono text-[13px]"
                   />
                   <p className="text-[13px] text-fg-3">
-                    Full Docker image reference including registry and tag
+                    The full reference, with registry and tag.
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -437,7 +425,7 @@ export default function ImagesPage() {
                     createImage.isPending
                   }
                 >
-                  {createImage.isPending ? "Creating..." : "Create"}
+                  {createImage.isPending ? "Creating…" : "Create"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -446,130 +434,131 @@ export default function ImagesPage() {
       </DashboardHeader>
 
       {isLoading ? (
-        <div className="space-y-2">
+        <Panel>
           {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full bg-fill" />
+            <PanelRow key={i}>
+              <Skeleton className="size-9 rounded-lg bg-fill" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-4 w-48 bg-fill" />
+                <Skeleton className="h-3.5 w-64 bg-fill" />
+              </div>
+            </PanelRow>
           ))}
+        </Panel>
+      ) : images?.length === 0 ? (
+        <div className="rounded-xl border border-line px-4 py-4 sm:px-5">
+          <SettingsEmpty
+            icon={<Container />}
+            title="No images yet"
+            description="Add one so an agent can start."
+          />
         </div>
       ) : (
-        <SettingsGroup
-          title={
-            images?.length
-              ? `${images.length} ${images.length === 1 ? "image" : "images"}`
-              : "Images"
-          }
-          bodyClassName="pt-2"
-        >
-          {images?.length === 0 ? (
-            <p className="py-6 text-[14px] text-fg-3">
-              No images configured yet. Add one to get started.
-            </p>
-          ) : (
-            <ul className="max-h-[70vh] divide-y divide-line overflow-y-auto">
-              {images?.map((image) => {
-                const isSeeded =
-                  image.name === "gitterm-opencode" ||
-                  image.name === "gitterm-opencode-server" ||
-                  image.name === "gitterm-t3code-server";
-                const supportedProviders = image.supportedProviders.map(
-                  (provider) => PROVIDER_LABELS[provider] ?? provider,
-                );
+        <Panel className="max-h-[75vh] overflow-y-auto">
+          {images?.map((image) => {
+            const isSeeded =
+              image.name === "gitterm-opencode" ||
+              image.name === "gitterm-opencode-server" ||
+              image.name === "gitterm-t3code-server";
+            const supportedProviders = image.supportedProviders.map(
+              (provider) => PROVIDER_LABELS[provider] ?? provider,
+            );
 
-                return (
-                  <li
-                    key={image.id}
-                    className={`flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4 ${!image.isEnabled ? "opacity-60" : ""}`}
-                  >
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill">
-                      <Image
-                        src={getIcon(image.agentType.key)}
-                        alt=""
-                        width={20}
-                        height={20}
-                        className="h-5 w-5 object-contain"
-                      />
+            return (
+              <div
+                key={image.id}
+                className="flex flex-wrap items-center gap-x-3.5 gap-y-2 px-4 py-3.5 sm:flex-nowrap sm:px-5"
+              >
+                <span
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill",
+                    !image.isEnabled && "opacity-60",
+                  )}
+                >
+                  <Image
+                    src={getIcon(image.agentType.key)}
+                    alt=""
+                    width={18}
+                    height={18}
+                    className="size-[18px] object-contain"
+                  />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                    <h3
+                      className={cn(
+                        "text-[14px] font-medium",
+                        image.isEnabled ? "text-fg" : "text-fg-3",
+                      )}
+                    >
+                      {image.name}
+                    </h3>
+                    <span className="text-[12.5px] text-fg-3">
+                      {image.agentType.name}
+                      {image.agentType.serverOnly ? ", server only" : ""}
                     </span>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                        <h3 className="text-[14.5px] font-medium text-fg">{image.name}</h3>
-                        <span className="text-[13px] text-fg-3">{image.agentType.name}</span>
-                        {image.agentType.serverOnly ? (
-                          <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
-                            Server only
-                          </span>
-                        ) : null}
-                        {!image.isEnabled ? (
-                          <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
-                            Disabled
-                          </span>
-                        ) : null}
-                      </div>
-                      <code className="block max-w-2xl truncate font-mono text-[12.5px] text-fg-3">
-                        {image.imageId}
-                      </code>
-                      <p className="text-[13px] text-fg-3">
-                        {supportedProviders.length > 0 ? (
-                          <>Runs on {supportedProviders.join(" · ")}</>
-                        ) : (
-                          <span className="text-[#fb923c]">
-                            No provider compatibility configured
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center justify-end gap-1.5">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 text-fg-3 hover:text-fg"
-                        onClick={() =>
-                          setEditingImage({
-                            id: image.id,
-                            name: image.name,
-                            providerDrafts: metadataToDrafts(image.providerMetadata ?? {}),
-                            extraMetadata: extraMetadata(image.providerMetadata ?? {}),
-                          })
-                        }
-                        aria-label={`Edit provider metadata for ${image.name}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      {!isSeeded ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 text-fg-3 hover:text-destructive"
-                          onClick={() => setDeleteImageId(image.id)}
-                          aria-label={`Delete ${image.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      ) : null}
-                      <Switch
-                        className="ml-1.5"
-                        checked={image.isEnabled}
-                        onCheckedChange={(checked) =>
-                          toggleImage.mutate({ id: image.id, isEnabled: checked })
-                        }
-                        aria-label={`${image.isEnabled ? "Disable" : "Enable"} ${image.name}`}
-                      />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </SettingsGroup>
+                    {!image.isEnabled ? <StatusDot tone="muted">Off</StatusDot> : null}
+                  </div>
+                  <code className="mt-0.5 block truncate font-mono text-[12px] text-fg-4">
+                    {image.imageId}
+                  </code>
+                  <p className="mt-0.5 text-[12.5px] text-fg-3">
+                    {supportedProviders.length > 0 ? (
+                      <>Runs on {supportedProviders.join(" · ")}</>
+                    ) : (
+                      <span className="text-[#fb923c]">No provider set, so it never runs</span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center justify-end gap-1 max-sm:basis-full">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-fg-3"
+                    onClick={() =>
+                      setEditingImage({
+                        id: image.id,
+                        name: image.name,
+                        providerDrafts: metadataToDrafts(image.providerMetadata ?? {}),
+                        extraMetadata: extraMetadata(image.providerMetadata ?? {}),
+                      })
+                    }
+                    aria-label={`Edit providers for ${image.name}`}
+                  >
+                    <Pencil className="size-3.5" />
+                    Providers
+                  </Button>
+                  {!isSeeded ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-fg-3 hover:text-destructive"
+                      onClick={() => setDeleteImageId(image.id)}
+                      aria-label={`Delete ${image.name}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  ) : null}
+                  <Switch
+                    className="ml-1.5"
+                    checked={image.isEnabled}
+                    onCheckedChange={(checked) =>
+                      toggleImage.mutate({ id: image.id, isEnabled: checked })
+                    }
+                    aria-label={`${image.isEnabled ? "Disable" : "Enable"} ${image.name}`}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </Panel>
       )}
 
       <Dialog open={!!editingImage} onOpenChange={(open) => !open && setEditingImage(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Edit provider metadata</DialogTitle>
-            <DialogDescription>
-              Configure where {editingImage?.name} can run. Saving replaces its complete provider
-              mapping.
-            </DialogDescription>
+            <DialogTitle>Providers for {editingImage?.name}</DialogTitle>
+            <DialogDescription>Where it can run. Saving replaces the whole list.</DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <ProviderMetadataEditor
@@ -585,7 +574,7 @@ export default function ImagesPage() {
               Cancel
             </Button>
             <Button onClick={handleUpdateImage} disabled={updateImage.isPending}>
-              {updateImage.isPending ? "Saving..." : "Save metadata"}
+              {updateImage.isPending ? "Saving…" : "Save providers"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -596,7 +585,7 @@ export default function ImagesPage() {
           <DialogHeader>
             <DialogTitle>Delete image</DialogTitle>
             <DialogDescription>
-              This removes the custom image from the admin catalog. Seeded images cannot be deleted.
+              It leaves the catalog for good. Built-in images can&apos;t be deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -608,7 +597,7 @@ export default function ImagesPage() {
               onClick={() => deleteImageId && deleteImage.mutate({ id: deleteImageId })}
               disabled={deleteImage.isPending}
             >
-              {deleteImage.isPending ? "Deleting..." : "Delete"}
+              {deleteImage.isPending ? "Deleting…" : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

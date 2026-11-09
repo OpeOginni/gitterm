@@ -964,6 +964,8 @@ integration(
       const [started] = await db.select().from(workspace).where(eq(workspace.id, fromSnapshot.id));
       const providerId = started!.externalInstanceId.slice("sandbox:e2b:".length);
       expect(requested.get(providerId)?.snapshot).toBe(`e2b-gitterm-${listed[0]!.id}`);
+      // The sandbox remembers its snapshot, so the dashboard can show where it came from.
+      expect(started!.snapshotId).toBe(listed[0]!.id);
 
       await db
         .update(machineProfile)
@@ -983,6 +985,11 @@ integration(
       // Deleting removes it at the provider and frees the slot; a failed save takes none.
       await caller(userId).deleteSnapshot({ snapshotId: listed[0]!.id });
       expect(deletedSnapshots).toEqual([`e2b-gitterm-${listed[0]!.id}`]);
+      const [afterDelete] = await db
+        .select({ snapshotId: workspace.snapshotId })
+        .from(workspace)
+        .where(eq(workspace.id, fromSnapshot.id));
+      expect(afterDelete!.snapshotId).toBeNull();
       failSnapshots = true;
       await expect(
         caller(userId).saveSnapshot({ sandboxId: sandbox.id, label: "x" }),

@@ -8,14 +8,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { codeSnippet, dockerCommand, envFile, type Platform } from "./config";
 import { CodeBlock } from "./step";
 
-const subheadClass = "flex items-center gap-2.5 text-sm font-semibold text-fg";
+const subheadClass = "flex items-center gap-2.5 text-[15px] font-medium text-fg";
 const code = "whitespace-nowrap rounded bg-fill-2 px-1 py-0.5 font-mono text-[12.5px] text-fg-2";
 
 /** A deploy step heading: the step's number, quietly, then what to do. */
 function Subhead({ number, children }: { number: number; children: ReactNode }) {
   return (
     <h4 className={subheadClass}>
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-fill-2 text-[12.5px] font-medium tabular-nums text-fg-3">
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-line-2 text-[12px] font-medium tabular-nums text-fg-3">
         {number}
       </span>
       {children}
@@ -116,13 +116,13 @@ export function DeployInstructions({
   const platformName = platform === "slack" ? "Slack" : "Discord";
   const pkg = `@gitterm/${platform}-bot`;
   return (
-    <div className="space-y-8">
+    <div className="space-y-9">
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Subhead number={1}>Save this as .env</Subhead>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             className="gap-1.5"
             onClick={onRotate}
             disabled={rotating}
@@ -136,7 +136,7 @@ export function DeployInstructions({
           </Button>
         </div>
         {token ? (
-          <p className="flex items-start gap-2 text-[13px] text-[#fb923c]">
+          <p className="flex items-start gap-2 text-[13px] text-primary">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             The token is shown only once. Copy the file now.
           </p>

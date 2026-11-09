@@ -337,6 +337,13 @@
       "when": 1794227694280,
       "tag": "0047_remove_anonymous_trials",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1794236353590,
+      "tag": "0048_workspace_snapshot",
+      "breakpoints": true
     }
   ]
 }

@@ -32,7 +32,7 @@ import { DeployInstructions } from "./config-step";
 import { ModelStepBody } from "./model-step";
 import { ComputeStepBody, type ComputeOption } from "./compute-step";
 import { RepositoryStepBody, type GitHubAccess } from "./repository-step";
-import { SetupSummary, Step, type StepInfo } from "./step";
+import { Radio, SetupSummary, Step, choiceTile, type StepInfo } from "./step";
 
 /** A saved bot as the edit page loads it. */
 export type SavedBot = BotSettings & { id: string };
@@ -65,9 +65,18 @@ const settingsKey = (settings: BotSettings) =>
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 const sandboxes = (count: number) => `${count} ${count === 1 ? "sandbox" : "sandboxes"}`;
+const refreshBots = () =>
+  void queryClient.invalidateQueries({ queryKey: trpc.bots.list.queryKey() });
 
 /** The bot setup flow: creates a bot, or edits a saved one when `bot` is given. */
-export function BotSetup({ bot }: { bot?: SavedBot }) {
+export function BotSetup({
+  bot,
+  initialPlatform,
+}: {
+  bot?: SavedBot;
+  /** A new bot's platform, when someone came from that platform's link. */
+  initialPlatform?: Platform;
+}) {
   const router = useRouter();
   const { data: catalog, isLoading: isLoadingCatalog } = useQuery(
     trpc.integrations.list.queryOptions(),
@@ -172,7 +181,9 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
   const providerName = (key: string | null) =>
     computeOptions.find((option) => option.key === key)?.name;
 
-  const [platform, setPlatform] = useState<Platform | null>(bot?.platform ?? null);
+  const [platform, setPlatform] = useState<Platform | null>(
+    bot?.platform ?? initialPlatform ?? null,
+  );
 
   const [behavior, setBehavior] = useState<BotBehavior>({
     channels: bot?.channels ?? [],
@@ -211,8 +222,6 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
       : null;
   const changed = !!settings && settingsKey(settings) !== savedKey;
 
-  const refreshBots = () =>
-    void queryClient.invalidateQueries({ queryKey: trpc.bots.list.queryKey() });
   const create = useMutation(
     trpc.bots.create.mutationOptions({
       onSuccess: (result, input) => {
@@ -223,6 +232,10 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
         // Becomes the bot's own page without remounting, so the one-time token stays visible.
         window.history.replaceState(null, "", `/dashboard/bots/${result.bot.id}`);
         refreshBots();
+        // The token and run commands appear in the last step: bring it into view.
+        requestAnimationFrame(() =>
+          document.getElementById("bot-deploy")?.scrollIntoView({ behavior: "smooth" }),
+        );
       },
       onError: (error) => toast.error(`Could not create the bot: ${error.message}`),
     }),
@@ -355,27 +368,18 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
     </>
   );
 
-  if (isLoadingCatalog) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-5 w-80 bg-fill" />
-        <Skeleton className="h-40 w-full bg-fill" />
-        <Skeleton className="h-40 w-full bg-fill" />
-      </div>
-    );
-  }
+  if (isLoadingCatalog) return <BotSetupSkeleton />;
 
-  const editFooter = savedId ? (
+  const createBot = () => settings && create.mutate(settings);
+  const save = () => savedId && settings && update.mutate({ id: savedId, ...settings });
+
+  const railFooter = savedId ? (
     <>
       <Button
         variant={changed ? "default" : "secondary"}
-        className={cn(
-          "h-10 w-full gap-2",
-          // Nothing to save: still a button, just neutral, rather than faded into the card.
-          !changed && "text-fg-3 disabled:opacity-100",
-        )}
+        className={cn("h-10 w-full gap-2", !changed && "text-fg-3 disabled:opacity-100")}
         disabled={!changed || update.isPending}
-        onClick={() => settings && update.mutate({ id: savedId, ...settings })}
+        onClick={save}
       >
         {update.isPending ? (
           <Loader2 className="size-4 animate-spin" />
@@ -384,278 +388,384 @@ export function BotSetup({ bot }: { bot?: SavedBot }) {
         )}
         Save changes
       </Button>
-      <button
-        type="button"
-        onClick={() => setConfirmDelete(true)}
-        className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg text-[13px] text-fg-3 transition-colors hover:bg-red-500/10 hover:text-red-300"
-      >
-        <Trash2 className="size-4" />
-        Delete bot
-      </button>
-      <Dialog
-        open={confirmDelete}
-        onOpenChange={(open) => !remove.isPending && setConfirmDelete(open)}
-      >
-        <DialogContent className="border-line bg-settings-dialog sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Delete {name.trim() || defaultName}?</DialogTitle>
-            <DialogDescription>
-              Its token stops working, and{" "}
-              {isCountingSandboxes
-                ? "every sandbox it created"
-                : sandboxCount
-                  ? `its ${sandboxes(sandboxCount)}`
-                  : "any sandbox it created"}{" "}
-              will be terminated. Work that wasn&apos;t pushed is lost. This can&apos;t be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmDelete(false)}
-              disabled={remove.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="gap-2"
-              disabled={remove.isPending}
-              onClick={() => remove.mutate({ id: savedId })}
-            >
-              {remove.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Trash2 className="size-4" />
-              )}
-              Delete bot
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <p className="text-center text-[12.5px] text-fg-4">
+        {changed ? "A running bot picks it up within a minute." : "Everything is saved."}
+      </p>
     </>
-  ) : undefined;
+  ) : (
+    <>
+      <Button
+        className="h-10 w-full gap-2"
+        disabled={!settings || create.isPending}
+        onClick={createBot}
+      >
+        {create.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+        Create bot
+      </Button>
+      <p className="text-center text-[12.5px] text-fg-4">
+        {settings ? "Creates its token, shown once." : "Finish the required steps first."}
+      </p>
+    </>
+  );
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_288px] xl:gap-12">
       <aside className="lg:sticky lg:top-8 lg:order-last">
-        <SetupSummary steps={steps} footer={editFooter} />
+        <SetupSummary steps={steps} footer={railFooter} />
       </aside>
 
-      <div className="space-y-4">
-        <Step step={modelStep} number={number(modelStep)} hint={modelHint}>
-          <ModelStepBody
-            isLoading={isLoadingCredentials || isLoadingProviders}
-            providers={providersData?.providers ?? []}
-            credentials={credentials}
-            credential={credential}
-            onCredentialChange={(id) => {
-              setCredentialId(id);
-              setModelInput(null);
-            }}
-            model={model}
-            onModelChange={setModelInput}
-            modelProblem={modelIssue}
-          />
-        </Step>
-
-        <Step
-          step={repoStep}
-          number={number(repoStep)}
-          hint={
-            repository
-              ? `The agent works in ${repository.fullName}${branch ? ` on ${branch}` : ""}.`
-              : "Pick a repository or paste its URL."
-          }
-        >
-          <RepositoryStepBody
-            access={githubAccess}
-            onAccessChange={setGithubAccess}
-            githubEnabled={githubEnabled}
-            repoUrl={repoUrl}
-            branch={branch}
-            onRepoUrlChange={setRepoUrl}
-            onBranchChange={setBranch}
-          />
-        </Step>
-
-        {computeStep ? (
-          <Step
-            step={computeStep}
-            number={number(computeStep)}
-            hint="Where new sandboxes run. Regions and sizes use the provider's defaults."
-          >
-            <ComputeStepBody
-              options={computeOptions}
-              selected={provider}
-              defaultKey={defaultKey}
-              onSelect={setProvider}
+      <div className="min-w-0">
+        <div className="divide-y divide-line">
+          <Step step={modelStep} number={number(modelStep)} hint={modelHint}>
+            <ModelStepBody
+              isLoading={isLoadingCredentials || isLoadingProviders}
+              providers={providersData?.providers ?? []}
+              credentials={credentials}
+              credential={credential}
+              onCredentialChange={(id) => {
+                setCredentialId(id);
+                setModelInput(null);
+              }}
+              model={model}
+              onModelChange={setModelInput}
+              modelProblem={modelIssue}
             />
           </Step>
-        ) : null}
 
-        {toolsStep ? (
           <Step
-            step={toolsStep}
-            number={number(toolsStep)}
-            hint="MCP servers the agent can use. GitHub is attached automatically."
+            step={repoStep}
+            number={number(repoStep)}
+            hint={
+              repository
+                ? `The agent works in ${repository.fullName}${branch ? ` on ${branch}` : ""}.`
+                : "Pick a repository or paste its URL."
+            }
           >
-            {tools.length === 0 ? (
-              <p className="text-[13px] text-fg-3">
-                No connected tools.{" "}
-                <Link
-                  href={"/dashboard/integrations" as Route}
-                  className="text-fg-2 underline underline-offset-2 hover:text-fg"
-                >
-                  Add one in Integrations
-                </Link>
-                .
-              </p>
-            ) : (
-              <div className="space-y-3">
-                <div className="max-h-72 space-y-1 overflow-y-auto">
-                  {tools.map((tool) => (
-                    <label
-                      key={tool.id}
-                      className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl bg-fill px-3.5 text-sm transition-colors hover:bg-fill-2"
-                    >
-                      <Checkbox
-                        checked={selectedTools.some((entry) => entry.id === tool.id)}
-                        onCheckedChange={(checked) => toggleTool(tool.id, checked === true)}
-                      />
-                      <span className="min-w-0 flex-1 truncate text-fg">{tool.name}</span>
-                      <span className="rounded-md bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
-                        {tool.integration === "executor" ? "Executor" : "MCP"}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <Link
-                  href={"/dashboard/integrations" as Route}
-                  className="inline-block text-[13px] text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg"
-                >
-                  Manage connections
-                </Link>
-              </div>
-            )}
-          </Step>
-        ) : null}
-
-        <Step
-          step={platformStep}
-          number={number(platformStep)}
-          hint="Where people talk to the agent."
-        >
-          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
-            {PLATFORMS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={platform === option.value}
-                onClick={() => {
-                  // Channel and people ids belong to one platform; they don't carry over.
-                  if (platform && option.value !== platform) {
-                    setBehavior((current) => ({ ...current, channels: [], allowedUsers: [] }));
-                  }
-                  setPlatform(option.value);
-                }}
-                className={cn(
-                  "flex items-center gap-3.5 rounded-xl bg-fill px-4 py-3.5 text-left transition-[background-color,box-shadow]",
-                  platform === option.value
-                    ? "bg-fill-2 shadow-[inset_0_0_0_1px_rgba(211,173,85,0.5)]"
-                    : "hover:bg-fill-2",
-                )}
-              >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-fill-2">
-                  <Image src={option.logo} alt="" width={20} height={20} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px] font-medium text-fg">{option.label}</span>
-                  <span className="block truncate text-[13px] text-fg-3">{option.description}</span>
-                </span>
-                <span
-                  className={cn(
-                    "flex size-4 shrink-0 items-center justify-center rounded-full border",
-                    platform === option.value ? "border-primary" : "border-fg-4",
-                  )}
-                >
-                  {platform === option.value ? (
-                    <span className="size-2 rounded-full bg-primary" />
-                  ) : null}
-                </span>
-              </button>
-            ))}
-          </div>
-        </Step>
-
-        <Step
-          step={behaviorStep}
-          number={number(behaviorStep)}
-          hint={
-            platform
-              ? "Where it answers, who can use it, and what the agent should know."
-              : "Pick a platform first."
-          }
-        >
-          {platform ? (
-            <BehaviorStepBody
-              platform={platform}
-              behavior={behavior}
-              onChange={(patch) => setBehavior((current) => ({ ...current, ...patch }))}
+            <RepositoryStepBody
+              access={githubAccess}
+              onAccessChange={setGithubAccess}
+              githubEnabled={githubEnabled}
+              repoUrl={repoUrl}
+              branch={branch}
+              onRepoUrlChange={setRepoUrl}
+              onBranchChange={setBranch}
             />
+          </Step>
+
+          {computeStep ? (
+            <Step
+              step={computeStep}
+              number={number(computeStep)}
+              hint="Where new sandboxes run. Regions and sizes use the provider's defaults."
+            >
+              <ComputeStepBody
+                options={computeOptions}
+                selected={provider}
+                defaultKey={defaultKey}
+                onSelect={setProvider}
+              />
+            </Step>
           ) : null}
-        </Step>
 
-        <Step
-          step={deployStep}
-          number={number(deployStep)}
-          hint="Its token, the .env, and how to run it."
-        >
-          <div className="space-y-8">
-            <div className="space-y-2">
-              <label htmlFor="bot-display-name" className="text-[13px] font-medium text-fg-2">
-                Name in Gitterm
-              </label>
-              <div className="flex flex-wrap gap-3">
-                <Input
-                  id="bot-display-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder={defaultName}
-                  maxLength={100}
-                  className="min-w-56 flex-1"
-                />
-                {savedId ? null : (
-                  <Button
-                    className="h-10 gap-2"
-                    disabled={!settings || create.isPending}
-                    onClick={() => settings && create.mutate(settings)}
+          {toolsStep ? (
+            <Step
+              step={toolsStep}
+              number={number(toolsStep)}
+              hint="MCP servers the agent can use. GitHub is attached automatically."
+            >
+              {tools.length === 0 ? (
+                <p className="text-[13px] text-fg-3">
+                  No connected tools.{" "}
+                  <Link
+                    href={"/dashboard/integrations" as Route}
+                    className="text-fg-2 underline underline-offset-2 hover:text-fg"
                   >
-                    {create.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                    Create bot
-                  </Button>
-                )}
-              </div>
-              {savedId ? null : (
-                <p className="text-[12.5px] text-fg-4">
-                  Saves the bot and creates its Gitterm token, shown once.
+                    Add one in Integrations
+                  </Link>
+                  .
                 </p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="max-h-72 divide-y divide-line overflow-y-auto rounded-xl border border-line">
+                    {tools.map((tool) => (
+                      <label
+                        key={tool.id}
+                        className="flex min-h-11 cursor-pointer items-center gap-3 px-3.5 text-[13.5px] transition-colors hover:bg-fill"
+                      >
+                        <Checkbox
+                          checked={selectedTools.some((entry) => entry.id === tool.id)}
+                          onCheckedChange={(checked) => toggleTool(tool.id, checked === true)}
+                        />
+                        <span className="min-w-0 flex-1 truncate text-fg">{tool.name}</span>
+                        <span className="text-[12.5px] text-fg-4">
+                          {tool.integration === "executor" ? "Executor" : "MCP"}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <Link
+                    href={"/dashboard/integrations" as Route}
+                    className="inline-block text-[13px] text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg"
+                  >
+                    Manage connections
+                  </Link>
+                </div>
               )}
-            </div>
+            </Step>
+          ) : null}
 
-            {savedId && platform ? (
-              <DeployInstructions
-                name={name.trim() || defaultName}
+          <Step
+            step={platformStep}
+            number={number(platformStep)}
+            hint="Where people talk to the agent."
+          >
+            <div className="grid gap-2.5 sm:grid-cols-2" role="radiogroup">
+              {PLATFORMS.map((option) => {
+                const selected = platform === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => {
+                      // Channel and people ids belong to one platform; they don't carry over.
+                      if (platform && option.value !== platform) {
+                        setBehavior((current) => ({ ...current, channels: [], allowedUsers: [] }));
+                      }
+                      setPlatform(option.value);
+                    }}
+                    className={cn(choiceTile(selected), "flex items-center gap-3.5 px-4 py-3.5")}
+                  >
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-fill">
+                      <Image src={option.logo} alt="" width={20} height={20} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14px] font-medium text-fg">{option.label}</span>
+                      <span className="block truncate text-[13px] text-fg-3">
+                        {option.description}
+                      </span>
+                    </span>
+                    <Radio selected={selected} />
+                  </button>
+                );
+              })}
+            </div>
+          </Step>
+
+          <Step
+            step={behaviorStep}
+            number={number(behaviorStep)}
+            hint={
+              platform
+                ? "Where it answers, who can use it, and what the agent should know."
+                : "Pick a platform first."
+            }
+          >
+            {platform ? (
+              <BehaviorStepBody
                 platform={platform}
-                token={token}
-                githubToken={githubAccess === "token"}
-                rotating={rotate.isPending}
-                onRotate={() => rotate.mutate({ id: savedId })}
+                behavior={behavior}
+                onChange={(patch) => setBehavior((current) => ({ ...current, ...patch }))}
               />
             ) : null}
+          </Step>
+
+          <Step
+            step={deployStep}
+            number={number(deployStep)}
+            hint={
+              savedId
+                ? "Its token, the .env, and how to run it."
+                : "Name it, then create it to get its token."
+            }
+          >
+            <div className="space-y-10">
+              <div className="space-y-2">
+                <label htmlFor="bot-display-name" className="text-[13px] font-medium text-fg-2">
+                  Name in Gitterm
+                </label>
+                <div className="flex flex-wrap gap-3">
+                  <Input
+                    id="bot-display-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder={defaultName}
+                    maxLength={100}
+                    className="h-10 min-w-56 flex-1"
+                  />
+                  {savedId ? null : (
+                    <Button
+                      className="h-10 gap-2 max-sm:w-full"
+                      disabled={!settings || create.isPending}
+                      onClick={createBot}
+                    >
+                      {create.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                      Create bot
+                    </Button>
+                  )}
+                </div>
+                {savedId ? null : (
+                  <p className="text-[12.5px] text-fg-4">
+                    Saves the bot and creates its Gitterm token, shown once.
+                  </p>
+                )}
+              </div>
+
+              {savedId && platform ? (
+                <DeployInstructions
+                  name={name.trim() || defaultName}
+                  platform={platform}
+                  token={token}
+                  githubToken={githubAccess === "token"}
+                  rotating={rotate.isPending}
+                  onRotate={() => rotate.mutate({ id: savedId })}
+                />
+              ) : null}
+            </div>
+          </Step>
+        </div>
+
+        {savedId ? (
+          <section className="mt-2 flex flex-col gap-4 border-t border-line pt-8 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <h2 className="text-[14px] font-medium text-fg">Delete this bot</h2>
+              <p className="text-[13px] leading-relaxed text-fg-3">
+                Its token stops working and the sandboxes it started are terminated.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="shrink-0 gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="size-4" />
+              Delete bot
+            </Button>
+          </section>
+        ) : null}
+
+        {/* Phones: the rail's save sits at the top of the page, so unsaved changes get a bar here. */}
+        {savedId && changed ? (
+          <div className="sticky bottom-0 z-20 -mx-4 mt-8 flex items-center justify-between gap-3 border-t border-line bg-background/90 py-3 pr-20 pl-4 backdrop-blur-md sm:-mx-6 sm:pl-6 md:-mx-8 md:pl-8 lg:hidden">
+            <span className="text-[13px] text-fg-3">Unsaved changes</span>
+            <Button className="gap-2" disabled={update.isPending} onClick={save}>
+              {update.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+              Save
+            </Button>
           </div>
-        </Step>
+        ) : null}
+      </div>
+
+      {savedId ? (
+        <Dialog
+          open={confirmDelete}
+          onOpenChange={(open) => !remove.isPending && setConfirmDelete(open)}
+        >
+          <DialogContent className="border-line bg-settings-dialog sm:max-w-[420px]">
+            <DialogHeader>
+              <DialogTitle>Delete {name.trim() || defaultName}?</DialogTitle>
+              <DialogDescription>
+                Its token stops working, and{" "}
+                {isCountingSandboxes
+                  ? "every sandbox it created"
+                  : sandboxCount
+                    ? `its ${sandboxes(sandboxCount)}`
+                    : "any sandbox it created"}{" "}
+                will be terminated. Work that wasn&apos;t pushed is lost. This can&apos;t be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setConfirmDelete(false)}
+                disabled={remove.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="gap-2"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate({ id: savedId })}
+              >
+                {remove.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Trash2 className="size-4" />
+                )}
+                Delete bot
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The setup's shape while it loads: numbered steps beside the "Your bot" card. The first two
+ * steps are always Model and Repository, so their titles show for real.
+ */
+export function BotSetupSkeleton() {
+  return (
+    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_288px] xl:gap-12">
+      <aside className="lg:order-last">
+        <div className="overflow-hidden rounded-xl border border-line bg-background">
+          <div className="space-y-3.5 px-5 pt-5 pb-4">
+            <span className="block font-display text-[17px] font-semibold tracking-[-0.01em] text-fg">
+              Your bot
+            </span>
+            <Skeleton className="h-1 w-full rounded-full bg-fill-2" />
+          </div>
+          <ol className="hidden px-2 pb-2 lg:block">
+            {Array.from({ length: 7 }, (_, index) => (
+              <li key={index} className="flex items-center gap-3 px-3 py-2">
+                <Skeleton className="size-6 shrink-0 rounded-full bg-fill-2" />
+                <span className="min-w-0 flex-1">
+                  <span className="flex h-5 items-center">
+                    <Skeleton className="h-3 w-20 bg-fill-2" />
+                  </span>
+                  <span className="flex h-[18px] items-center">
+                    <Skeleton className="h-2.5 w-32 bg-fill-2" />
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+          <div className="hidden space-y-2 border-t border-line p-4 lg:block">
+            <Skeleton className="h-10 w-full rounded-lg bg-fill-2" />
+            <div className="flex h-[18px] items-center justify-center">
+              <Skeleton className="h-2.5 w-36 bg-fill-2" />
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div className="min-w-0 divide-y divide-line">
+        {["Model", "Repository", null].map((title, index) => (
+          <section key={index} className="py-9 first:pt-0">
+            <div className="flex items-center gap-3.5">
+              <span className="w-6 shrink-0 font-mono text-[12.5px] text-fg-4 tabular-nums">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              {title ? (
+                <h2 className="font-display text-[20px] leading-tight font-semibold tracking-[-0.02em] text-fg">
+                  {title}
+                </h2>
+              ) : (
+                <Skeleton className="h-5 w-28 bg-fill-2" />
+              )}
+            </div>
+            <div className="sm:pl-[38px]">
+              <div className="mt-1.5 flex h-[22px] items-center">
+                <Skeleton className="h-3 w-72 max-w-full bg-fill-2" />
+              </div>
+              <Skeleton className="mt-5 h-24 w-full rounded-xl bg-fill-2" />
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

@@ -26,9 +26,9 @@ export default async function BotsPage() {
     <DashboardShell>
       <DashboardHeader
         heading="Bots"
-        text="Run a coding agent on your repository from Slack or Discord."
+        text="A coding agent your team mentions in Slack or Discord. It works on your repository and answers in the thread."
       >
-        <Button asChild className="gap-2">
+        <Button asChild className="gap-1.5">
           <Link href={"/dashboard/bots/new" as Route}>
             <Plus className="size-4" />
             New bot

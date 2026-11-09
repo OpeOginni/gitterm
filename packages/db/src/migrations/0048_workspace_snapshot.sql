@@ -1,0 +1,2 @@
+ALTER TABLE "workspace" ADD COLUMN "snapshot_id" uuid;--> statement-breakpoint
+ALTER TABLE "workspace" ADD CONSTRAINT "workspace_snapshot_id_sandbox_snapshot_id_fk" FOREIGN KEY ("snapshot_id") REFERENCES "public"."sandbox_snapshot"("id") ON DELETE set null ON UPDATE no action;

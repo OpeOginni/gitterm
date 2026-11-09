@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
-import { authClient } from "@/lib/auth-client";
+import { Panel, PanelRow } from "@/components/dashboard/kit";
+import { SettingsEmpty } from "@/components/dashboard/settings/settings-page";
+import { Seg } from "@/components/site/seg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,18 +24,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  Shield,
-  User as UserIcon,
-  Trash2,
-  Plus,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Search, Trash2, Users } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { formatDate, timeAgo, useAdminGuard } from "../_components/admin";
 
 type UserRole = "user" | "admin";
 
@@ -55,35 +49,27 @@ const initialCreateForm: CreateUserForm = {
   plan: "free",
 };
 
+/** The list endpoint's largest page; filters by plan and role apply to the loaded page. */
+const PAGE_SIZE = 100;
+
+const compactTrigger =
+  "h-8 min-w-0 gap-1.5 bg-transparent px-2.5 text-[13px] text-fg-2 capitalize hover:bg-fill-2";
+
 export default function UsersPage() {
-  const router = useRouter();
-  const { data: session, isPending: isSessionPending } = authClient.useSession();
+  const { ready, userId } = useAdminGuard();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    if (!isSessionPending) {
-      if (!session?.user) {
-        router.push("/login");
-        return;
-      }
-      const userRole = (session.user as any)?.role;
-      if (userRole !== "admin") {
-        router.push("/dashboard");
-        return;
-      }
-    }
-  }, [session?.user, isSessionPending, router]);
   const [page, setPage] = useState(0);
+  const [planFilter, setPlanFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createForm, setCreateForm] = useState<CreateUserForm>(initialCreateForm);
-  const limit = 20;
 
-  // Fetch admin config to check if user creation is allowed
   const { data: config } = useQuery({
     queryKey: ["admin", "config"],
     queryFn: () => trpcClient.admin.config.query(),
+    enabled: ready,
   });
 
   const { data, isLoading } = useQuery({
@@ -91,9 +77,11 @@ export default function UsersPage() {
     queryFn: () =>
       trpcClient.admin.users.list.query({
         search: search || undefined,
-        offset: page * limit,
-        limit,
+        offset: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
       }),
+    enabled: ready,
+    placeholderData: keepPreviousData,
   });
 
   const billingPlans = data?.plans ?? [];
@@ -103,36 +91,33 @@ export default function UsersPage() {
       trpcClient.admin.users.update.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
       toast.success("User updated");
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: (error) => toast.error(error.message),
   });
 
   const deleteUser = useMutation({
     mutationFn: (id: string) => trpcClient.admin.users.delete.mutate({ id }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
       setDeleteUserId(null);
       toast.success("User deleted");
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: (error) => toast.error(error.message),
   });
 
   const createUser = useMutation({
     mutationFn: (params: CreateUserForm) => trpcClient.admin.users.create.mutate(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
       setShowCreateDialog(false);
       setCreateForm(initialCreateForm);
-      toast.success("User created successfully");
+      toast.success("User created");
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: (error) => toast.error(error.message),
   });
 
   const handleCreateSubmit = (e: React.FormEvent) => {
@@ -140,15 +125,24 @@ export default function UsersPage() {
     createUser.mutate(createForm);
   };
 
-  const totalPages = Math.ceil((data?.total ?? 0) / limit);
+  const total = data?.total ?? 0;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
   const canCreateUsers = config?.auth.canCreateUsers ?? false;
 
-  // Don't render content if not authenticated or not admin (will redirect)
-  if (isSessionPending || !session?.user || (session.user as any)?.role !== "admin") {
+  const pageUsers = data?.users ?? [];
+  const users = pageUsers.filter(
+    (user) =>
+      (planFilter === "all" || (user.plan ?? "free") === planFilter) &&
+      (roleFilter === "all" || ((user.role as UserRole | null) ?? "user") === roleFilter),
+  );
+  const filtered = planFilter !== "all" || roleFilter !== "all";
+  const deleting = pageUsers.find((user) => user.id === deleteUserId);
+
+  if (!ready) {
     return (
       <DashboardShell>
         <div className="flex h-64 items-center justify-center">
-          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-8 w-48 bg-fill" />
         </div>
       </DashboardShell>
     );
@@ -156,202 +150,222 @@ export default function UsersPage() {
 
   return (
     <DashboardShell>
-      <DashboardHeader heading="Users" text="View and manage all users in the system.">
-        <div className="flex items-center gap-2">
-          {canCreateUsers && (
-            <Button onClick={() => setShowCreateDialog(true)} className="gap-1.5">
+      <DashboardHeader heading="Users" text="Everyone with an account on this deployment.">
+        {/* Whether users can be added comes with the config: hold its place until then. */}
+        {!config ? (
+          <Skeleton className="h-10 w-[7.5rem] self-start rounded-lg bg-fill-2" />
+        ) : (
+          canCreateUsers && (
+            <Button onClick={() => setShowCreateDialog(true)} className="gap-1.5 self-start">
               <Plus className="size-4" />
               Add user
             </Button>
-          )}
-        </div>
+          )
+        )}
       </DashboardHeader>
 
       <div className="space-y-4">
-        {/* Search */}
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-4" />
-          <Input
-            placeholder="Search users..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
-            className="pl-9"
-          />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 lg:w-80">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-4" />
+            <Input
+              type="search"
+              aria-label="Search by name or email"
+              placeholder="Search by name or email"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2 lg:ml-auto">
+            {/* Plans come with the users; hold the filter's place until they load. */}
+            {!data ? (
+              <Skeleton className="h-10 w-[21rem] max-w-full rounded-[14px] bg-fill-2" />
+            ) : billingPlans.length > 0 ? (
+              <Seg
+                ariaLabel="Filter by plan"
+                value={planFilter}
+                onChange={setPlanFilter}
+                className="max-w-full overflow-x-auto [&>button]:min-h-8 [&>button]:px-3 [&>button]:text-[13px]"
+                options={[
+                  { value: "all", label: "All plans" },
+                  ...billingPlans.map((plan) => ({
+                    value: plan,
+                    label: <span className="capitalize">{plan}</span>,
+                  })),
+                ]}
+              />
+            ) : null}
+            <Seg
+              ariaLabel="Filter by role"
+              value={roleFilter}
+              onChange={setRoleFilter}
+              className="[&>button]:min-h-8 [&>button]:px-3 [&>button]:text-[13px]"
+              options={[
+                { value: "all", label: "Everyone" },
+                { value: "admin", label: "Admins" },
+              ]}
+            />
+          </div>
         </div>
 
-        {/* Table */}
         {isLoading ? (
-          <div className="space-y-3">
+          <Panel>
             {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
+              <PanelRow key={i}>
+                <Skeleton className="size-8 shrink-0 rounded-full bg-fill-2" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-40 bg-fill-2" />
+                  <Skeleton className="h-3.5 w-56 max-w-full bg-fill-2" />
+                </div>
+              </PanelRow>
             ))}
+          </Panel>
+        ) : users.length === 0 ? (
+          <div className="rounded-xl border border-line px-4 py-4 sm:px-5">
+            <SettingsEmpty
+              icon={<Users />}
+              title={search || filtered ? "No users match" : "No users yet"}
+              description={
+                search || filtered ? "Try another name, email, or filter." : "Sign-ups appear here."
+              }
+            />
           </div>
         ) : (
-          <>
-            <div className="overflow-hidden rounded-2xl bg-card">
-              <div className="max-h-[70vh] overflow-auto">
-                <table className="w-full">
-                  <thead className="sticky top-0 z-10 bg-card">
-                    <tr className="border-b border-line">
-                      <th className="h-10 px-6 text-left align-middle text-[13px] font-medium text-fg-3">
-                        User
-                      </th>
-                      {billingPlans.length > 0 && (
-                        <th className="h-10 px-4 text-left align-middle text-[13px] font-medium text-fg-3">
-                          Plan
-                        </th>
-                      )}
-                      <th className="h-10 px-4 text-left align-middle text-[13px] font-medium text-fg-3">
-                        Role
-                      </th>
-                      <th className="h-10 px-4 text-left align-middle text-[13px] font-medium text-fg-3">
-                        Created
-                      </th>
-                      <th className="h-10 px-6 text-right align-middle text-[13px] font-medium text-fg-3">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data?.users.map((user) => (
-                      <tr
-                        key={user.id}
-                        className="border-b border-line transition-colors last:border-0 hover:bg-fill"
+          <Panel>
+            {users.map((user) => {
+              const role = (user.role as UserRole | null) ?? "user";
+              const isSelf = user.id === userId;
+              return (
+                <PanelRow key={user.id} className="flex-wrap gap-y-2.5 sm:flex-nowrap">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-fill-2 text-[13px] font-medium text-fg-2">
+                    {(user.name || user.email).charAt(0).toUpperCase()}
+                  </span>
+                  <div className="min-w-0 flex-1 basis-[calc(100%-3rem)] sm:basis-auto">
+                    <p className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-[14px] font-medium text-fg">{user.name}</span>
+                      {isSelf ? (
+                        <span className="shrink-0 text-[12.5px] text-fg-4">You</span>
+                      ) : null}
+                    </p>
+                    <p className="truncate text-[13px] text-fg-3">{user.email}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1 max-sm:basis-full max-sm:pl-[34px]">
+                    {billingPlans.length > 0 ? (
+                      <Select
+                        value={user.plan ?? "free"}
+                        onValueChange={(value) => updateUser.mutate({ id: user.id, plan: value })}
                       >
-                        <td className="px-6 py-3.5">
-                          <div className="min-w-0">
-                            <div className="text-[14px] font-medium text-fg">{user.name}</div>
-                            <div className="text-[13px] text-fg-3">{user.email}</div>
-                          </div>
-                        </td>
-                        {billingPlans.length > 0 && (
-                          <td className="px-4 py-3.5">
-                            <Select
-                              value={user.plan ?? "free"}
-                              onValueChange={(value) => {
-                                updateUser.mutate({ id: user.id, plan: value });
-                              }}
-                            >
-                              <SelectTrigger className="w-28 h-8 text-sm capitalize">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {billingPlans.map((plan) => (
-                                  <SelectItem key={plan} value={plan} className="capitalize">
-                                    {plan}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </td>
-                        )}
-                        <td className="px-4 py-3.5">
-                          <Select
-                            value={(user as any).role || "user"}
-                            onValueChange={(value: UserRole) => {
-                              updateUser.mutate({ id: user.id, role: value });
-                            }}
-                          >
-                            <SelectTrigger className="w-32 h-8 text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="user">
-                                <div className="flex items-center gap-2">
-                                  <UserIcon className="h-3 w-3" />
-                                  User
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="admin">
-                                <div className="flex items-center gap-2">
-                                  <Shield className="h-3 w-3" />
-                                  Admin
-                                </div>
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-4 py-3.5 text-[13.5px] whitespace-nowrap text-fg-3">
-                          {new Date(user.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-3.5 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Delete ${user.name}`}
-                            className="size-9 text-fg-3 hover:text-red-400"
-                            onClick={() => setDeleteUserId(user.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                    {data?.users.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="py-12 text-center text-[14px] text-fg-3">
-                          No users found
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-[13.5px] text-fg-3">
-                  Showing {page * limit + 1} to {Math.min((page + 1) * limit, data?.total ?? 0)} of{" "}
-                  {data?.total ?? 0}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setPage((p) => p - 1)}
-                    disabled={page === 0}
-                  >
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    Previous
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setPage((p) => p + 1)}
-                    disabled={page >= totalPages - 1}
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
+                        <SelectTrigger
+                          size="sm"
+                          aria-label={`Plan for ${user.name}`}
+                          className={compactTrigger}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {billingPlans.map((plan) => (
+                            <SelectItem key={plan} value={plan} className="capitalize">
+                              {plan}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : null}
+                    <Select
+                      value={role}
+                      disabled={isSelf}
+                      onValueChange={(value: UserRole) =>
+                        updateUser.mutate({ id: user.id, role: value })
+                      }
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        aria-label={`Role for ${user.name}`}
+                        className={compactTrigger}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span
+                      className="w-24 text-right text-[12.5px] whitespace-nowrap text-fg-4 max-sm:mr-auto max-sm:w-auto max-sm:pl-2 max-sm:text-left"
+                      title={`Joined ${formatDate(user.createdAt)}`}
+                    >
+                      {timeAgo(user.createdAt)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete ${user.name}`}
+                      disabled={isSelf}
+                      className="size-8 text-fg-3 hover:text-destructive"
+                      onClick={() => setDeleteUserId(user.id)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                </PanelRow>
+              );
+            })}
+          </Panel>
         )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[13px] text-fg-4 tabular-nums">
+            {!data
+              ? null
+              : filtered
+                ? `${users.length} of ${pageUsers.length} shown`
+                : totalPages > 1
+                  ? `${page * PAGE_SIZE + 1} to ${Math.min((page + 1) * PAGE_SIZE, total)} of ${total}`
+                  : `${total} ${total === 1 ? "user" : "users"}`}
+            {filtered && totalPages > 1 ? " on this page" : null}
+          </p>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage((p) => p - 1)}
+                disabled={page === 0}
+              >
+                <ChevronLeft className="size-4" />
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={page >= totalPages - 1}
+              >
+                Next
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Create User Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent>
           <form onSubmit={handleCreateSubmit}>
             <DialogHeader>
               <DialogTitle>Add user</DialogTitle>
-              <DialogDescription>
-                Create a new user account. The user will be able to log in with the email and
-                password you provide.
-              </DialogDescription>
+              <DialogDescription>They sign in with this email and password.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="name">Name</Label>
                 <Input
                   id="name"
-                  placeholder="John Doe"
+                  placeholder="Ada Lovelace"
                   value={createForm.name}
                   onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
                   required
@@ -362,7 +376,7 @@ export default function UsersPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="john@example.com"
+                  placeholder="ada@example.com"
                   value={createForm.email}
                   onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
                   required
@@ -373,7 +387,7 @@ export default function UsersPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Minimum 8 characters"
+                  placeholder="At least 8 characters"
                   value={createForm.password}
                   onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
                   minLength={8}
@@ -389,22 +403,12 @@ export default function UsersPage() {
                       setCreateForm((f) => ({ ...f, role: value }))
                     }
                   >
-                    <SelectTrigger id="role">
+                    <SelectTrigger id="role" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="user">
-                        <div className="flex items-center gap-2">
-                          <UserIcon className="h-3 w-3" />
-                          User
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="admin">
-                        <div className="flex items-center gap-2">
-                          <Shield className="h-3 w-3" />
-                          Admin
-                        </div>
-                      </SelectItem>
+                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -415,7 +419,7 @@ export default function UsersPage() {
                       value={createForm.plan}
                       onValueChange={(value) => setCreateForm((f) => ({ ...f, plan: value }))}
                     >
-                      <SelectTrigger id="plan" className="capitalize">
+                      <SelectTrigger id="plan" className="w-full capitalize">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -442,21 +446,19 @@ export default function UsersPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={createUser.isPending}>
-                {createUser.isPending ? "Creating..." : "Create user"}
+                {createUser.isPending ? "Creating…" : "Create user"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteUserId} onOpenChange={() => setDeleteUserId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete user</DialogTitle>
+            <DialogTitle>Delete {deleting?.name ?? "user"}?</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this user? This action cannot be undone. All their
-              workspaces will be terminated.
+              Their account goes for good and all their workspaces are terminated.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -468,7 +470,7 @@ export default function UsersPage() {
               onClick={() => deleteUserId && deleteUser.mutate(deleteUserId)}
               disabled={deleteUser.isPending}
             >
-              {deleteUser.isPending ? "Deleting..." : "Delete user"}
+              {deleteUser.isPending ? "Deleting…" : "Delete user"}
             </Button>
           </DialogFooter>
         </DialogContent>
