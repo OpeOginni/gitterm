@@ -45,6 +45,7 @@ function fixture(answers: Array<Record<string, boolean> | "cancelled">) {
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   };
   const local = {
+    experimental: { job: { list: async () => [] } },
     session: {
       active: async () => ({}),
       get: async () => session,
@@ -131,6 +132,26 @@ test("a running source session is rejected, not interrupted", async () => {
   const f = fixture([]);
   f.local.session.active = async () => ({ ses_test: { type: "running" } });
   await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("Stop this session");
+  expect(f.creates()).toBe(0);
+});
+
+test("background jobs prevent handoff even when the source session is idle", async () => {
+  const f = fixture([]);
+  f.local.experimental.job.list = async (input) => {
+    expect(input).toEqual({ sessionID: "ses_test", status: "running", descendants: true });
+    return [
+      {
+        kind: "shell",
+        id: "job_test",
+        sessionID: "ses_test",
+        status: "running",
+        time: { started: 1 },
+        shellID: "sh_test",
+        command: "sleep 60",
+      },
+    ];
+  };
+  await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("background jobs");
   expect(f.creates()).toBe(0);
 });
 

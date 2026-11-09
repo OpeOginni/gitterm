@@ -4,6 +4,12 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.12.1
+
+### Changed
+
+- Update the bundled OpenCode client to 2.2.6.
+
 ## 0.12.0
 
 ### Breaking
