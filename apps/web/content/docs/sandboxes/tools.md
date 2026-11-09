@@ -4,7 +4,7 @@ nav: Tools
 description: Every sandbox_* tool the sandbox plugin gives your agent, with its arguments.
 ---
 
-This is the reference for the nine `sandbox_*` tools that `@gitterm/opencode-sandbox` adds to your local agent. You never call these yourself: you ask in plain words, and the agent picks the tools and arguments. Use this page to read what the agent did, or to write instructions for it. The tools work only after you add a sandbox account; see [Setup](/docs/sandboxes/setup).
+This is the reference for the `sandbox_*` tools that `@gitterm/opencode-sandbox` adds to your local agent. You never call these yourself: you ask in plain words, and the agent picks the tools and arguments. Use this page to read what the agent did, or to write instructions for it. The tools work only after you add a sandbox account; see [Setup](/docs/sandboxes/setup).
 
 Every tool except `sandbox_create` and `sandbox_list` takes a `sandboxId`, from `sandbox_create` or `sandbox_list`. A sandbox belongs to the account that created it. Using it while another account is selected is an error. A managed sandbox that paused while idle resumes when a tool next uses it; see [Pausing](/docs/sandboxes/providers#pausing-managed-only).
 
@@ -21,6 +21,7 @@ Sandbox output is wrapped in an `untrusted` block that tells the model to treat 
 | [`sandbox_artifact`](#sandbox_artifact) | Downloads a file to a staging directory                           | No                                     |
 | [`sandbox_apply`](#sandbox_apply)       | Copies a downloaded file into the checkout                        | Yes, every time                        |
 | [`sandbox_destroy`](#sandbox_destroy)   | Deletes a sandbox                                                 | No                                     |
+| [`sandbox_snapshot`](#sandbox_snapshot) | Saves or deletes a setup snapshot (with the `snapshots` option)   | Yes                                    |
 
 The approval actions and how to pre-approve them are in [Setup](/docs/sandboxes/setup#approvals).
 
@@ -34,6 +35,7 @@ Creates a sandbox. Billing starts now. No coding agent runs in it.
 | `purpose`         | string  | No       | None                                      | Why it exists, for example `run integration tests`.                                                                                                                                                                                                                                                   |
 | `lifetimeMinutes` | integer | No       | `defaultLifetimeMinutes` (30)             | When the sandbox ends. At most `maxLifetimeMinutes`.                                                                                                                                                                                                                                                  |
 | `publicPreviews`  | boolean | No       | The `publicPreviews` option, else `false` | Makes every preview reachable by anyone with the URL. Fixed for the sandbox's life. Needs a separate approval unless the plugin's `publicPreviews` option is on. Has no effect where previews are always private; see [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider). |
+| `snapshot`        | string  | No       | The newest snapshot for this checkout     | Only with the `snapshots` option. A setup snapshot id from `sandbox_list` to start from, or `none` for a clean sandbox.                                                                                                                                                                               |
 
 Creation fails when the account already has `maxSandboxes` live sandboxes. What happens at the end of the lifetime depends on the account and provider; see [Providers](/docs/sandboxes/providers).
 
@@ -138,3 +140,17 @@ Deletes the sandbox. It reports the sandbox terminated only once the provider co
 | Argument    | Type   | Required | Default | What it does       |
 | ----------- | ------ | -------- | ------- | ------------------ |
 | `sandboxId` | string | Yes      | None    | Sandbox to delete. |
+
+## sandbox_snapshot
+
+Saves a sandbox as a setup snapshot that new sandboxes can start from, or deletes one. The tool exists only when the `snapshots` option is on; see [Setup snapshots](/docs/sandboxes/setup#setup-snapshots).
+
+| Argument          | Type    | Required  | Default | What it does                                                                                        |
+| ----------------- | ------- | --------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `action`          | string  | Yes       | None    | `save` or `delete`.                                                                                 |
+| `sandboxId`       | string  | To save   | None    | The sandbox to save.                                                                                |
+| `label`           | string  | To save   | None    | Short name for what it holds, for example `deps + postgres`.                                        |
+| `note`            | string  | No        | None    | What the sandbox has set up.                                                                        |
+| `forThisCheckout` | boolean | No        | `true`  | Ties the snapshot to this checkout, so it is offered here and flagged when dependency files change. |
+| `replace`         | string  | No        | None    | Id of a snapshot this one replaces. It is deleted once the new one is saved.                        |
+| `snapshotId`      | string  | To delete | None    | The snapshot to delete.                                                                             |

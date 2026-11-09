@@ -136,7 +136,8 @@ For a project with a slow setup, let the agent save a sandbox once dependencies 
 - Works on E2B, Daytona, Vercel and Boat, with your own key or a Gitterm plan. On a plan, snapshots need Pro or Growth; see [Plans](/docs/account/plans-and-billing#plans).
 - The agent gets a `sandbox_snapshot` tool. OpenCode asks before each save or delete; allow `gitterm.sandbox.snapshot` under [Approvals](#approvals) to skip the prompt.
 - A project can have several snapshots, such as one with dependencies and one with dependencies and a database. New sandboxes start from the project's newest one unless the agent picks another.
-- When a lockfile changed since a snapshot, the agent is told, so it can save a new one. The old one is deleted.
+- When a lockfile changed since a snapshot, the agent is told. It can then save a replacement, which deletes the old one. Until it does, the old one is still used.
+- On Vercel, saving a snapshot ends the sandbox it was saved from.
 - Snapshots stay in the provider account until deleted. On a Gitterm plan they are listed under **Agent sandboxes** in the dashboard, where you can delete them.
 
 To start every sandbox from a snapshot you made yourself, set `snapshot` on the account instead. The agent then does not manage snapshots for that account.
@@ -158,6 +159,7 @@ OpenCode asks you before each of these actions. The resource is what a saved rul
 | `gitterm.sandbox.secret`    | Variable names                     | Passing local environment variables with `secretEnv`                                                      |
 | `gitterm.sandbox.browser`   | `<mode>:<account>:<id>:<port>`     | Creating a loopback proxy for a private preview                                                           |
 | `gitterm.sandbox.apply`     | Target path                        | Writing an artifact into the checkout. "Always" is not offered.                                           |
+| `gitterm.sandbox.snapshot`  | `<mode>:<account>:<checkout root>` | Saving or deleting a setup snapshot. Only with the `snapshots` option.                                    |
 
 These need no approval: `sandbox_list`, `sandbox_job` (including cancelling a job), `sandbox_artifact` (it downloads to a staging directory only), and `sandbox_destroy`. A denied action stops before anything is uploaded, created, or written.
 

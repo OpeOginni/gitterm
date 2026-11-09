@@ -67,7 +67,7 @@ export function InstanceList({ kind }: { kind: "agents" | "sandboxes" }) {
   });
   const providersQuery = useQuery(trpc.workspace.listCloudProviders.queryOptions());
   const snapshotsQuery = useQuery(trpc.sandbox.snapshots.queryOptions());
-  // An agent with no model key starts but cannot answer, so the empty list points there first.
+  // Most agents need a model key to answer, so the empty list offers that step too.
   const credentialsQuery = useQuery(trpc.modelCredentials.listMyCredentials.queryOptions());
   const needsModelKey =
     credentialsQuery.data && !credentialsQuery.data.credentials.some((c) => c.isActive);
@@ -189,7 +189,7 @@ export function InstanceList({ kind }: { kind: "agents" | "sandboxes" }) {
         </p>
         {needsModelKey && (
           <Button size="sm" variant="secondary" className="mt-5" asChild>
-            <Link href={"/dashboard/models" as Route}>Add a model key first</Link>
+            <Link href={"/dashboard/models" as Route}>Add a model key</Link>
           </Button>
         )}
       </div>

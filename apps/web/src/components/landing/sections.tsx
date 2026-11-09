@@ -255,8 +255,8 @@ const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }
     body: (
       <>
         The agent starts a sandbox on the provider you set and syncs your working tree. Ignored
-        files like <code>.env</code> stay home. With setup snapshots on, the next sandbox starts
-        with dependencies already installed.
+        files like <code>.env</code> stay home. Once it has saved a setup snapshot, the next sandbox
+        starts with dependencies already installed.
       </>
     ),
     used: ["sandbox_create", "sandbox_sync"],
