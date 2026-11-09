@@ -10,6 +10,11 @@ body {
   overflow-x: clip;
 }
 
+/* next/font sets --font-sans (Martian Grotesk) on <body>, so the family has to be resolved there, not on <html> */
+body {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
 /* ── Text, line & fill scale ─────────────────────────────────────────────
  * THE central contrast system. Every piece of UI text picks one of four
  * steps; every hairline picks one of two; every subtle fill picks one of two.
@@ -162,9 +167,7 @@ body {
   --sidebar-accent-foreground: var(--fg-2);
   --sidebar-border: var(--line);
   --sidebar-ring: var(--fg);
-  --font-sans: sans-serif;
-  --font-serif: serif;
-  --font-mono: monospace;
+  /* --font-sans and --font-mono come from next/font on <body>; resetting them here broke the fonts inside .dark */
   --radius: 0.5rem;
   --shadow-x: 0px;
   --shadow-y: 4px;
@@ -231,6 +234,7 @@ body {
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -315,19 +319,6 @@ body {
   );
   mix-blend-mode: overlay;
   border-radius: inherit;
-}
-
-/* Display utility - Geist, tight tracking so headings read as one block */
-.font-display {
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: -0.035em;
-}
-
-/* Accent word inside a display heading - weight shift, no italic */
-.font-display-accent {
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-  font-weight: 500;
-  letter-spacing: -0.035em;
 }
 
 /* Cream accent for serif italic flourishes */

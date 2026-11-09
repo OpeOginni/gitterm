@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, KeyRound } from "lucide-react";
+import { ChevronRight, KeyRound, Plus } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import type { Route } from "next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -30,74 +29,16 @@ import { getIcon } from "@/components/dashboard/create-instance";
 import Image from "next/image";
 
 import { AwsProviderSection } from "./_components/aws-provider-section";
+import { StatusChip } from "./_components/status-chip";
 import type { ProviderRow } from "./_components/types";
 
 function ProviderRowSkeleton() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-center gap-4">
-        <Skeleton className="h-10 w-10 rounded-xl bg-foreground/[0.08]" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Skeleton className="h-5 w-28 rounded-md bg-foreground/[0.08]" />
-            <Skeleton className="h-4 w-16 rounded-md bg-foreground/[0.06]" />
-            <Skeleton className="h-5 w-24 rounded-full bg-foreground/[0.07]" />
-          </div>
-          <Skeleton className="h-4 w-36 rounded-md bg-foreground/[0.06]" />
-        </div>
-        <div className="hidden items-center gap-2 sm:flex">
-          <Skeleton className="h-4 w-4 rounded-full bg-foreground/[0.06]" />
-          <Skeleton className="h-4 w-16 rounded-md bg-foreground/[0.06]" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AwsProviderSectionSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-amber-500/15 bg-card">
-      <div className="flex items-center gap-4 p-5">
-        <Skeleton className="h-10 w-10 rounded-xl bg-foreground/[0.08]" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Skeleton className="h-5 w-12 rounded-md bg-foreground/[0.08]" />
-            <Skeleton className="h-4 w-24 rounded-md bg-foreground/[0.06]" />
-            <Skeleton className="h-5 w-24 rounded-full bg-amber-500/15" />
-          </div>
-          <Skeleton className="h-4 w-[18rem] rounded-md bg-foreground/[0.06]" />
-        </div>
-        <div className="hidden items-center gap-3 sm:flex">
-          <Skeleton className="h-4 w-16 rounded-md bg-foreground/[0.06]" />
-          <Skeleton className="h-4 w-4 rounded-full bg-foreground/[0.06]" />
-        </div>
-      </div>
-
-      <div className="border-t border-border/60 bg-foreground/[0.015] p-4">
-        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-          {[...Array(2)].map((_, i) => (
-            <div key={i} className="rounded-xl border border-border bg-card p-4">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-[34px] w-[34px] rounded-lg bg-foreground/[0.08]" />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Skeleton className="h-4 w-24 rounded-md bg-foreground/[0.08]" />
-                  <Skeleton className="h-3 w-28 rounded-md bg-foreground/[0.06]" />
-                  <Skeleton className="h-3 w-20 rounded-md bg-foreground/[0.06]" />
-                </div>
-              </div>
-            </div>
-          ))}
-
-          <div className="rounded-xl border border-dashed border-border bg-transparent p-4">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-[34px] w-[34px] rounded-lg bg-foreground/[0.06]" />
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-24 rounded-md bg-foreground/[0.08]" />
-                <Skeleton className="h-3 w-20 rounded-md bg-foreground/[0.06]" />
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="flex items-center gap-4 px-5 py-4">
+      <Skeleton className="size-10 rounded-xl bg-fill-2" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <Skeleton className="h-5 w-40 rounded-md bg-fill-2" />
+        <Skeleton className="h-4 w-28 rounded-md bg-fill" />
       </div>
     </div>
   );
@@ -105,11 +46,15 @@ function AwsProviderSectionSkeleton() {
 
 function ProvidersPageSkeleton() {
   return (
-    <div className="space-y-3">
-      <AwsProviderSectionSkeleton />
-      {[...Array(3)].map((_, i) => (
-        <ProviderRowSkeleton key={i} />
-      ))}
+    <div className="space-y-6">
+      <div className="rounded-2xl bg-card">
+        <ProviderRowSkeleton />
+      </div>
+      <div className="divide-y divide-line rounded-2xl bg-card">
+        {[...Array(3)].map((_, i) => (
+          <ProviderRowSkeleton key={i} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -187,13 +132,10 @@ export default function ProvidersPage() {
     return (
       <DashboardShell>
         <DashboardHeader
-          heading="Cloud Providers"
+          heading="Cloud providers"
           text="Manage cloud providers, regions, and credentials. Each AWS region is its own provider."
         >
-          <div className="flex gap-2">
-            <Skeleton className="h-10 w-28 rounded-xl bg-foreground/[0.08]" />
-            <Skeleton className="h-10 w-32 rounded-xl bg-foreground/[0.08]" />
-          </div>
+          <Skeleton className="h-10 w-32 rounded-lg bg-fill-2" />
         </DashboardHeader>
         <div className="pt-2">
           <ProvidersPageSkeleton />
@@ -205,23 +147,20 @@ export default function ProvidersPage() {
   return (
     <DashboardShell>
       <DashboardHeader
-        heading="Cloud Providers"
+        heading="Cloud providers"
         text="Manage cloud providers, regions, and credentials. Each AWS region is its own provider."
       >
         <div className="flex gap-2">
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="font-mono text-xs font-bold uppercase tracking-wider"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Provider
+              <Button>
+                <Plus className="size-4" />
+                Add provider
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Cloud Provider</DialogTitle>
+                <DialogTitle>Add cloud provider</DialogTitle>
                 <DialogDescription>
                   Register a new cloud provider (e.g., Railway, custom). For AWS regions, use the
                   dedicated AWS button instead.
@@ -229,7 +168,7 @@ export default function ProvidersPage() {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Provider Name</Label>
+                  <Label htmlFor="name">Provider name</Label>
                   <Input
                     id="name"
                     value={newProviderName}
@@ -238,7 +177,7 @@ export default function ProvidersPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="provider-key">Implementation Key</Label>
+                  <Label htmlFor="provider-key">Implementation key</Label>
                   <Input
                     id="provider-key"
                     value={newProviderKey}
@@ -246,24 +185,24 @@ export default function ProvidersPage() {
                       setNewProviderKey(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))
                     }
                     placeholder="e.g., railway"
-                    className="font-mono text-xs"
+                    className="font-mono text-[13px]"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[13px] leading-relaxed text-fg-3">
                     Maps the provider row to a compute implementation. Use{" "}
-                    <span className="font-mono text-foreground">aws</span>,{" "}
-                    <span className="font-mono text-foreground">railway</span>,{" "}
-                    <span className="font-mono text-foreground">e2b</span>,{" "}
-                    <span className="font-mono text-foreground">daytona</span>, or{" "}
-                    <span className="font-mono text-foreground">vercel</span>, or{" "}
-                    <span className="font-mono text-foreground">boat</span>, or{" "}
-                    <span className="font-mono text-foreground">exedev</span>, or{" "}
-                    <span className="font-mono text-foreground">cloudflare</span>.
+                    <span className="font-mono text-fg-2">aws</span>,{" "}
+                    <span className="font-mono text-fg-2">railway</span>,{" "}
+                    <span className="font-mono text-fg-2">e2b</span>,{" "}
+                    <span className="font-mono text-fg-2">daytona</span>, or{" "}
+                    <span className="font-mono text-fg-2">vercel</span>, or{" "}
+                    <span className="font-mono text-fg-2">boat</span>, or{" "}
+                    <span className="font-mono text-fg-2">exedev</span>, or{" "}
+                    <span className="font-mono text-fg-2">cloudflare</span>.
                   </p>
                 </div>
-                <div className="flex items-center justify-between rounded-xl border border-border bg-fill px-3 py-2">
+                <div className="flex items-center justify-between gap-4 rounded-xl bg-fill px-4 py-3">
                   <div>
-                    <Label htmlFor="supports-regions">Supports Regions</Label>
-                    <p className="text-xs text-fg-4">
+                    <Label htmlFor="supports-regions">Supports regions</Label>
+                    <p className="mt-0.5 text-[13px] text-fg-3">
                       Disable for providers that do not expose region selection.
                     </p>
                   </div>
@@ -275,7 +214,7 @@ export default function ProvidersPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                <Button variant="secondary" onClick={() => setIsCreateOpen(false)}>
                   Cancel
                 </Button>
                 <Button
@@ -296,102 +235,71 @@ export default function ProvidersPage() {
         </div>
       </DashboardHeader>
 
-      <div className="pt-2">
-        {isLoading ? (
-          <ProvidersPageSkeleton />
-        ) : (
-          <ul className="space-y-2">
-            {/* Keep the AWS region group with providers sharing its configuration state. */}
-            {awsIsConfigured && (
-              <li>
-                <AwsProviderSection awsProviders={groupedProviders.awsProviders} />
-              </li>
-            )}
+      {isLoading ? (
+        <ProvidersPageSkeleton />
+      ) : (
+        <div className="space-y-6">
+          {/* Keep the AWS region group with providers sharing its configuration state. */}
+          {awsIsConfigured && <AwsProviderSection awsProviders={groupedProviders.awsProviders} />}
 
-            {/* Other providers - flat rows */}
-            {groupedProviders.others.map((provider) => (
-              <li key={provider.id}>
-                <Link
-                  href={`/admin/providers/${provider.id}` as Route}
-                  className="group relative block overflow-hidden rounded-2xl border border-border bg-card p-5 transition-all hover:border-amber-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                >
-                  <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-amber-500/[0.05] opacity-0 blur-3xl transition-opacity duration-300 group-hover:opacity-100" />
-                  <div className="flex items-center gap-4">
-                    <div className="rounded-xl border border-border bg-foreground/[0.02] p-2.5">
+          {groupedProviders.others.length > 0 && (
+            <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-card">
+              {groupedProviders.others.map((provider) => (
+                <li key={provider.id}>
+                  <Link
+                    href={`/admin/providers/${provider.id}` as Route}
+                    className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-fill focus-visible:bg-fill focus-visible:outline-none"
+                  >
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill">
                       <Image
                         src={getIcon(provider.name)}
                         alt={provider.name}
                         height={20}
                         width={20}
-                        className="h-5 w-5"
+                        className="size-5"
                       />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-foreground/90">{provider.name}</h3>
-                        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                        <h3 className="text-[15px] font-medium text-fg">{provider.name}</h3>
+                        <span className="font-mono text-[12.5px] text-fg-4">
                           {provider.providerKey}
                         </span>
                         {!provider.providerConfig ? (
-                          <Badge
-                            variant="outline"
-                            className="border-amber-500/20 bg-amber-500/10 text-amber-400 text-[10px]"
-                          >
-                            Missing Config
-                          </Badge>
+                          <StatusChip tone="warn">Missing config</StatusChip>
                         ) : provider.providerConfig.isEnabled ? (
-                          <Badge
-                            variant="outline"
-                            className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-[10px]"
-                          >
-                            Configured
-                          </Badge>
+                          <StatusChip tone="ok">Configured</StatusChip>
                         ) : (
-                          <Badge
-                            variant="outline"
-                            className="border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-[10px]"
-                          >
-                            Config Disabled
-                          </Badge>
+                          <StatusChip>Config disabled</StatusChip>
                         )}
-                        {!provider.isEnabled && (
-                          <Badge
-                            variant="outline"
-                            className="border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-[10px]"
-                          >
-                            Disabled
-                          </Badge>
-                        )}
+                        {!provider.isEnabled && <StatusChip>Disabled</StatusChip>}
                       </div>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="mt-1 text-[13px] text-fg-3">
                         {provider.supportsRegions
                           ? `${provider.regions.length} region${provider.regions.length !== 1 ? "s" : ""}`
                           : "Regions not supported"}
                       </p>
                     </div>
-                    <div className="hidden items-center gap-2 text-xs text-muted-foreground transition-colors group-hover:text-foreground/70 sm:flex">
-                      <KeyRound className="h-3.5 w-3.5 text-muted-foreground group-hover:text-fg-2" />
-                      <span className="font-mono uppercase tracking-[0.18em]">Settings</span>
-                    </div>
-                  </div>
-                </Link>
-              </li>
-            ))}
+                    <span className="hidden items-center gap-1.5 text-[13px] text-fg-3 transition-colors group-hover:text-fg sm:flex">
+                      <KeyRound className="size-3.5" />
+                      Settings
+                      <ChevronRight className="size-3.5" />
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
 
-            {!awsIsConfigured && (
-              <li>
-                <AwsProviderSection awsProviders={groupedProviders.awsProviders} />
-              </li>
-            )}
+          {!awsIsConfigured && <AwsProviderSection awsProviders={groupedProviders.awsProviders} />}
 
-            {(providers?.length ?? 0) === 0 && (
-              <li className="py-12 text-center text-sm text-muted-foreground">
-                No cloud providers configured yet. Run the seed script to add defaults.
-              </li>
-            )}
-          </ul>
-        )}
-      </div>
+          {(providers?.length ?? 0) === 0 && (
+            <p className="py-12 text-center text-[14px] text-fg-3">
+              No cloud providers configured yet. Run the seed script to add defaults.
+            </p>
+          )}
+        </div>
+      )}
     </DashboardShell>
   );
 }

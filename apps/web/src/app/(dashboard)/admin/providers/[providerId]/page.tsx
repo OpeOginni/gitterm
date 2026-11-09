@@ -16,7 +16,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -25,11 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Seg } from "@/components/site/seg";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Cpu,
   Download,
-  KeyRound,
   Loader2,
   Lock,
   MapPin,
@@ -57,6 +55,7 @@ import {
   AwsRoleCheckResult,
   type AwsRoleSelection,
 } from "../_components/aws-access-profiles";
+import { StatusChip } from "../_components/status-chip";
 
 interface ProviderConfigField {
   fieldName: string;
@@ -765,10 +764,10 @@ export default function ProviderSettingsPage() {
               {field.fieldLabel}
               {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+            {field.isEncrypted && <Lock className="size-3.5 text-fg-4" />}
           </div>
           {hasSavedEncryptedValue && (
-            <div className="rounded-md border border-border/70 bg-foreground/[0.02] px-3 py-2 font-mono text-xs text-muted-foreground">
+            <div className="rounded-lg bg-fill px-3 py-2 font-mono text-[13px] text-fg-3">
               {encryptedFieldPreview}
             </div>
           )}
@@ -789,7 +788,7 @@ export default function ProviderSettingsPage() {
             className={cn(readOnly && "cursor-default")}
           />
           {hasSavedEncryptedValue && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px] text-fg-3">
               Current value is masked above. Leave this blank to keep it, or enter a new one to
               replace it.
             </p>
@@ -806,7 +805,7 @@ export default function ProviderSettingsPage() {
               {field.fieldLabel}
               {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+            {field.isEncrypted && <Lock className="size-3.5 text-fg-4" />}
           </div>
           <Switch
             id={field.fieldName}
@@ -830,7 +829,7 @@ export default function ProviderSettingsPage() {
               {field.fieldLabel}
               {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
             </Label>
-            {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+            {field.isEncrypted && <Lock className="size-3.5 text-fg-4" />}
           </div>
           {readOnly ? (
             <Input
@@ -886,7 +885,7 @@ export default function ProviderSettingsPage() {
             className="disabled:cursor-not-allowed disabled:opacity-60"
           />
           {pinnedRegion && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px] text-fg-3">
               Pinned to {pinnedRegion.name} for this AWS provider.
             </p>
           )}
@@ -901,10 +900,10 @@ export default function ProviderSettingsPage() {
             {field.fieldLabel}
             {field.isRequired && !readOnly && <span className="text-destructive">*</span>}
           </Label>
-          {field.isEncrypted && <Lock className="h-3 w-3 text-muted-foreground" />}
+          {field.isEncrypted && <Lock className="size-3.5 text-fg-4" />}
         </div>
         {hasSavedEncryptedValue && (
-          <div className="rounded-md border border-border/70 bg-foreground/[0.02] px-3 py-2 font-mono text-xs text-muted-foreground">
+          <div className="rounded-lg bg-fill px-3 py-2 font-mono text-[13px] text-fg-3">
             {encryptedFieldPreview}
           </div>
         )}
@@ -925,7 +924,7 @@ export default function ProviderSettingsPage() {
           className={cn(readOnly && "cursor-default")}
         />
         {hasSavedEncryptedValue && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[13px] text-fg-3">
             Current value is masked above. Leave this blank to keep it, or enter a new one to
             replace it.
           </p>
@@ -1054,26 +1053,22 @@ export default function ProviderSettingsPage() {
   return (
     <DashboardShell>
       <DashboardHeader
-        heading={provider ? `${provider.name} Settings` : "Provider Settings"}
+        heading={provider ? `${provider.name} settings` : "Provider settings"}
         text="Manage credentials, naming, enablement, and regions for this provider."
         icon={
           provider ? (
-            <div className="rounded-xl border border-border bg-foreground/[0.02] p-2">
+            <div className="rounded-xl bg-fill p-2">
               <img src={getIcon(provider.providerKey)} alt="" className="h-5 w-5 object-contain" />
             </div>
           ) : undefined
         }
       >
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline">
-            <Link href={"/admin/providers" as Route}>Back to Providers</Link>
+          <Button asChild variant="secondary">
+            <Link href={"/admin/providers" as Route}>Back to providers</Link>
           </Button>
-          <Button
-            onClick={handleSaveSettings}
-            disabled={!resolvedProviderTypeId || isSavingConfig}
-            className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
-          >
-            {isSavingConfig ? "Saving..." : "Save Settings"}
+          <Button onClick={handleSaveSettings} disabled={!resolvedProviderTypeId || isSavingConfig}>
+            {isSavingConfig ? "Saving..." : "Save settings"}
           </Button>
         </div>
       </DashboardHeader>
@@ -1081,60 +1076,48 @@ export default function ProviderSettingsPage() {
       <div className="pt-2 space-y-6">
         {isLoadingProvider ? (
           <div className="space-y-4">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-52 w-full" />
-            <Skeleton className="h-52 w-full" />
+            <Skeleton className="h-32 w-full rounded-2xl bg-card" />
+            <Skeleton className="h-52 w-full rounded-2xl bg-card" />
+            <Skeleton className="h-52 w-full rounded-2xl bg-card" />
           </div>
         ) : (
           <div className="flex flex-col gap-6">
             {/* Machine Profiles Section */}
-            <div className="order-1 rounded-2xl border border-border bg-card p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+            <section className="order-1 rounded-2xl bg-card p-5 sm:p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="size-4 text-muted-foreground" />
-                    <p className="text-sm font-medium text-foreground/90">Machine Profiles</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
+                  <h2 className="text-[15px] font-medium text-fg">Machine profiles</h2>
+                  <p className="max-w-2xl text-[13.5px] leading-relaxed text-fg-3">
                     Name provider-specific compute settings once, then expose the stable key to the
                     SDK. On managed plans, Free users get the smallest enabled size.
                   </p>
                 </div>
-                <Badge
-                  variant="outline"
-                  className="border-foreground/[0.08] bg-foreground/[0.04] text-xs text-muted-foreground"
-                >
+                <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
                   {machineProfiles?.length ?? 0} profiles
-                </Badge>
+                </span>
               </div>
 
               {provider && (
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Machine size choice</Label>
-                    <Select
+                    <Seg
+                      ariaLabel="Machine size choice"
+                      options={MACHINE_SELECTION_MODES.map((mode) => ({
+                        value: mode.value,
+                        label: mode.label,
+                      }))}
                       value={provider.machineSelectionPolicy.mode}
-                      onValueChange={(mode) =>
+                      onChange={(mode) => {
+                        if (mode === provider.machineSelectionPolicy.mode) return;
                         updateMachineSettings.mutate({
                           id: provider.id,
-                          machineSelectionPolicy: {
-                            mode: mode as (typeof MACHINE_SELECTION_MODES)[number]["value"],
-                          },
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MACHINE_SELECTION_MODES.map((mode) => (
-                          <SelectItem key={mode.value} value={mode.value}>
-                            {mode.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
+                          machineSelectionPolicy: { mode },
+                        });
+                      }}
+                      className="flex w-full sm:w-fit"
+                    />
+                    <p className="text-[13px] text-fg-3">
                       &ldquo;Default size only&rdquo; runs every workspace on the default profile.
                     </p>
                   </div>
@@ -1154,7 +1137,7 @@ export default function ProviderSettingsPage() {
                           }
                         }}
                       />
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[13px] text-fg-3">
                         Optional, e.g. where your provider account runs sandboxes.
                       </p>
                     </div>
@@ -1164,7 +1147,7 @@ export default function ProviderSettingsPage() {
 
               <div className="mt-4 space-y-3">
                 {machineProfiles && machineProfiles.length > 0 ? (
-                  <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+                  <div className="max-h-[32rem] divide-y divide-line overflow-y-auto">
                     {machineProfiles.map((profile) => {
                       const unpriced = billingEnabled && profile.priceMicrosPerHour === null;
                       const options = Object.entries(profile.providerOptions)
@@ -1176,35 +1159,35 @@ export default function ProviderSettingsPage() {
                       return (
                         <div
                           key={profile.id}
-                          className="flex flex-col gap-3 px-4 py-3.5 md:flex-row md:items-center"
+                          className="flex flex-col gap-3 py-3.5 md:flex-row md:items-center"
                         >
                           <div
                             className={`min-w-0 flex-1 space-y-1 ${profile.isEnabled ? "" : "opacity-50"}`}
                           >
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-medium text-fg">{profile.name}</p>
-                              <code className="rounded bg-fill px-1.5 py-0.5 font-mono text-[10px] text-fg-3">
+                              <p className="text-[14px] font-medium text-fg">{profile.name}</p>
+                              <code className="rounded bg-fill-2 px-1.5 py-0.5 font-mono text-[12.5px] text-fg-3">
                                 {profile.key}
                               </code>
                               {profile.isDefault && (
-                                <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.16em] text-primary">
+                                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[12.5px] font-medium text-[#e2c47c]">
                                   Default
                                 </span>
                               )}
                             </div>
-                            <p className="truncate text-xs text-fg-4">
+                            <p className="truncate text-[13px] text-fg-3">
                               {[formatMachineSize(profile), options || "Provider-managed resources"]
                                 .filter(Boolean)
                                 .join(" · ")}
                               {unpriced && (
-                                <span className="text-amber-400"> · No price set, can't start</span>
+                                <span className="text-[#fb923c]"> · No price set, can't start</span>
                               )}
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center justify-end gap-3">
                             {billingEnabled && (
                               <div className="relative w-28">
-                                <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-xs text-fg-4">
+                                <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-[13px] text-fg-3">
                                   $
                                 </span>
                                 <Input
@@ -1212,7 +1195,7 @@ export default function ProviderSettingsPage() {
                                   type="number"
                                   min={0}
                                   step="0.001"
-                                  className={`h-8 pl-6 pr-8 font-mono text-xs tabular-nums ${unpriced ? "border-amber-500/40" : ""}`}
+                                  className={`h-8 pl-6 pr-8 font-mono text-[13px] tabular-nums ${unpriced ? "ring-1 ring-[#fb923c]/50" : ""}`}
                                   aria-label={`${profile.name} price per hour`}
                                   placeholder="—"
                                   defaultValue={
@@ -1234,7 +1217,7 @@ export default function ProviderSettingsPage() {
                                     }
                                   }}
                                 />
-                                <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-fg-4">
+                                <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-[13px] text-fg-3">
                                   /h
                                 </span>
                               </div>
@@ -1246,7 +1229,7 @@ export default function ProviderSettingsPage() {
                                   type="button"
                                   size="sm"
                                   variant="ghost"
-                                  className="h-8 text-xs text-fg-3 hover:text-fg"
+                                  className="h-8 text-[13px] text-fg-3 hover:text-fg"
                                   onClick={() =>
                                     updateMachineProfile.mutate({ id: profile.id, isDefault: true })
                                   }
@@ -1266,7 +1249,7 @@ export default function ProviderSettingsPage() {
                               type="button"
                               size="icon"
                               variant="ghost"
-                              className="size-8 text-fg-4 hover:text-red-400"
+                              className="size-8 text-fg-3 hover:text-destructive"
                               onClick={() => deleteMachineProfile.mutate(profile.id)}
                               aria-label={`Delete ${profile.name}`}
                             >
@@ -1280,7 +1263,8 @@ export default function ProviderSettingsPage() {
                 ) : null}
 
                 {machineFields.length > 0 ? (
-                  <div className="rounded-xl border border-dashed border-foreground/[0.12] p-4">
+                  <div className="rounded-xl bg-fill p-4">
+                    <p className="mb-3 text-[14px] font-medium text-fg">New profile</p>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="machine-name">Profile name</Label>
@@ -1296,12 +1280,12 @@ export default function ProviderSettingsPage() {
                           }
                         />
                         {newMachineProfileKey && (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-[13px] text-fg-3">
                             SDK key: <code>{newMachineProfileKey}</code>
                           </p>
                         )}
                         {duplicateMachineProfile && (
-                          <p className="text-xs text-destructive">
+                          <p className="text-[13px] text-destructive">
                             A profile named {duplicateMachineProfile.name} already exists.
                           </p>
                         )}
@@ -1337,7 +1321,7 @@ export default function ProviderSettingsPage() {
                             }
                           />
                         </div>
-                        <p className="col-span-2 text-xs text-muted-foreground">
+                        <p className="col-span-2 text-[13px] text-fg-3">
                           What the provider actually provisions; shown to users.
                         </p>
                       </div>
@@ -1398,7 +1382,7 @@ export default function ProviderSettingsPage() {
                       })}
                     </div>
                     <div className="mt-4 flex items-center justify-between gap-4">
-                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <label className="flex items-center gap-2 text-[13px] text-fg-3">
                         <Switch
                           checked={newMachineProfile.isDefault}
                           onCheckedChange={(isDefault) =>
@@ -1437,17 +1421,17 @@ export default function ProviderSettingsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-foreground/[0.08] p-4 text-sm text-muted-foreground">
+                  <div className="rounded-xl bg-fill p-4 text-[14px] text-fg-3">
                     {provider?.name} controls machine resources at the provider level, so no
                     per-workspace profile is required.
                   </div>
                 )}
               </div>
-            </div>
+            </section>
 
             <div className="space-y-4">
               <div className="flex items-center justify-end gap-2 px-1">
-                <Label className="text-sm text-muted-foreground">Enabled</Label>
+                <Label className="text-[14px] text-fg-2">Enabled</Label>
                 <Switch
                   checked={provider?.isEnabled}
                   disabled={!provider?.isEnabled && !provider?.providerConfig?.isEnabled}
@@ -1455,10 +1439,10 @@ export default function ProviderSettingsPage() {
                   aria-label="Enable provider"
                 />
               </div>
-              <div className="rounded-2xl border border-border bg-card p-6">
+              <div className="rounded-2xl bg-card p-5 sm:p-6">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="provider-name">Provider Name</Label>
+                    <Label htmlFor="provider-name">Provider name</Label>
                     <Input
                       id="provider-name"
                       value={providerName}
@@ -1470,7 +1454,7 @@ export default function ProviderSettingsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Provider Type</Label>
+                    <Label>Provider type</Label>
                     <Input
                       value={selectedProviderType?.displayName ?? "Unknown"}
                       disabled
@@ -1479,19 +1463,17 @@ export default function ProviderSettingsPage() {
                   </div>
                 </div>
                 {provider?.supportsRegions && (
-                  <div className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4">
+                  <div className="mt-5 flex items-center justify-between gap-4 border-t border-line pt-5">
                     <div className="space-y-1">
-                      <p className="text-sm font-medium text-foreground/90">
-                        Allow User Region Selection
-                      </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[14px] font-medium text-fg">Allow user region selection</p>
+                      <p className="text-[13px] text-fg-3">
                         {isAwsProvider
                           ? "AWS uses the default region selected in the credentials config above."
                           : "When enabled, users can choose a region. When disabled, the default region is always used."}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Label className="text-sm text-muted-foreground">Enabled</Label>
+                      <Label className="text-[14px] text-fg-2">Enabled</Label>
                       <Switch
                         checked={isAwsProvider ? false : allowUserRegionSelection}
                         disabled={isAwsProvider}
@@ -1507,42 +1489,35 @@ export default function ProviderSettingsPage() {
             </div>
 
             {/* Credentials & Config Section */}
-            <div className="rounded-2xl border border-border bg-card p-6">
+            <section className="rounded-2xl bg-card p-5 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-2">
-                    <KeyRound className="size-4 text-muted-foreground" />
-                    <p className="text-sm font-medium text-foreground/90">Credentials & Config</p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "text-[10px]",
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h2 className="text-[15px] font-medium text-fg">Credentials and config</h2>
+                  <StatusChip
+                    tone={
                       provider?.providerConfig
                         ? provider.providerConfig.isEnabled
-                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                          : "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground"
-                        : "border-amber-500/20 bg-amber-500/10 text-amber-400",
-                    )}
+                          ? "ok"
+                          : "muted"
+                        : "warn"
+                    }
                   >
                     {provider?.providerConfig
                       ? provider.providerConfig.isEnabled
                         ? "Active and ready"
                         : "Saved but disabled"
                       : "Missing configurations"}
-                  </Badge>
+                  </StatusChip>
                 </div>
               </div>
 
               {isAwsProvider && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-foreground/[0.015] px-4 py-3">
-                  <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.22em]">
-                    <span className="text-muted-foreground">aws.stack</span>
-                    <span className="h-1 w-1 rounded-full bg-foreground/20" />
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-fill px-4 py-3">
+                  <div className="flex items-center gap-2 text-[13px]">
+                    <span className="text-fg-3">AWS stack</span>
+                    <span className="size-1 rounded-full bg-fg-4" />
                     <span
-                      className={
-                        hasExistingAwsSetup ? "text-emerald-300/80" : "text-muted-foreground"
-                      }
+                      className={hasExistingAwsSetup ? "font-mono text-[#6bd586]" : "text-fg-3"}
                     >
                       {hasExistingAwsSetup
                         ? (awsSetupSummary?.stackName ?? "active")
@@ -1553,7 +1528,7 @@ export default function ProviderSettingsPage() {
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       onClick={handleAwsSimpleSetup}
                       disabled={!canRunAwsSimpleSetup || isBootstrappingAws || isAwsActionPending}
                     >
@@ -1563,7 +1538,7 @@ export default function ProviderSettingsPage() {
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       onClick={() => setAwsActionDialog("reset")}
                       disabled={
                         !canResetAwsInfrastructure || isBootstrappingAws || isAwsActionPending
@@ -1602,9 +1577,6 @@ export default function ProviderSettingsPage() {
               >
                 <DialogContent className="sm:max-w-xl">
                   <DialogHeader>
-                    <div className="pb-1 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                      <span>{awsActionDialog === "reset" ? "aws.reset" : "aws.delete"}</span>
-                    </div>
                     <DialogTitle>
                       {awsActionDialog === "reset"
                         ? "Reset AWS infrastructure"
@@ -1617,7 +1589,7 @@ export default function ProviderSettingsPage() {
                     </DialogDescription>
                   </DialogHeader>
 
-                  <ul className="overflow-hidden rounded-lg border border-border divide-y divide-border/70">
+                  <ol className="divide-y divide-line">
                     {[
                       "All AWS workspaces for this provider must already be deleted.",
                       "Shared EFS data and CloudWatch logs will be deleted. The IAM task role is retained.",
@@ -1630,21 +1602,18 @@ export default function ProviderSettingsPage() {
                     ].map((line, index) => (
                       <li
                         key={index}
-                        className="flex items-start gap-3 px-4 py-2.5 text-xs leading-relaxed text-foreground/60"
+                        className="flex items-start gap-3 py-2.5 text-[13.5px] leading-relaxed text-fg-2"
                       >
-                        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-foreground/55">
-                          {String(index + 1).padStart(2, "0")}
-                        </span>
+                        <span className="w-4 shrink-0 text-fg-4 tabular-nums">{index + 1}.</span>
                         <span>{line}</span>
                       </li>
                     ))}
-                  </ul>
+                  </ol>
 
                   <DialogFooter>
                     <Button
                       type="button"
-                      variant="outline"
-                      size="sm"
+                      variant="secondary"
                       onClick={() => setAwsActionDialog(null)}
                       disabled={isAwsActionPending || isBootstrappingAws}
                     >
@@ -1652,8 +1621,7 @@ export default function ProviderSettingsPage() {
                     </Button>
                     <Button
                       type="button"
-                      size="sm"
-                      variant={awsActionDialog === "reset" ? "secondary" : "destructive"}
+                      variant={awsActionDialog === "reset" ? "default" : "destructive"}
                       onClick={
                         awsActionDialog === "reset"
                           ? handleResetAwsInfrastructure
@@ -1670,7 +1638,7 @@ export default function ProviderSettingsPage() {
                         ) : (
                           <>
                             <RefreshCw />
-                            Confirm Reset
+                            Confirm reset
                           </>
                         )
                       ) : isDeletingAwsInfrastructure ? (
@@ -1681,7 +1649,7 @@ export default function ProviderSettingsPage() {
                       ) : (
                         <>
                           <Trash2 />
-                          Confirm Delete
+                          Confirm delete
                         </>
                       )}
                     </Button>
@@ -1690,22 +1658,20 @@ export default function ProviderSettingsPage() {
               </Dialog>
 
               {!resolvedProviderTypeId && (
-                <div className="mt-4 rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-4 text-sm text-muted-foreground">
+                <div className="mt-4 rounded-xl bg-fill p-4 text-[14px] text-fg-3">
                   No provider definition found for this entry. Make sure the provider key maps to a
                   registered provider type.
                 </div>
               )}
 
               {isCloudflareProvider && (
-                <div className="mt-4 space-y-3 rounded-xl border border-[#f6821f]/25 bg-gradient-to-b from-[#f6821f]/[0.06] to-transparent p-4">
+                <div className="mt-4 space-y-3 rounded-xl bg-fill p-4">
                   <div className="flex items-center gap-2">
                     <img src="/cloudflare.svg" alt="Cloudflare" className="h-4 w-auto" />
-                    <p className="text-sm font-medium text-foreground/90">
-                      Deploy the sandbox worker
-                    </p>
+                    <p className="text-[14px] font-medium text-fg">Deploy the sandbox worker</p>
                   </div>
 
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[13px] text-fg-3">
                     Cloudflare workspaces run behind a Worker you deploy into your own Cloudflare
                     account. Follow the steps below, then paste the resulting Worker URL and the
                     same Internal API Key into the fields below.
@@ -1713,8 +1679,8 @@ export default function ProviderSettingsPage() {
 
                   <ol className="space-y-2">
                     {(cloudflareManualSetup?.steps ?? []).map((step, i) => (
-                      <li key={i} className="flex gap-2.5 text-xs text-muted-foreground">
-                        <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#f6821f]/15 text-[10px] font-semibold text-[#f6821f]">
+                      <li key={i} className="flex gap-2.5 text-[13px] text-fg-3">
+                        <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full bg-fill-2 text-[12px] font-medium text-fg-2">
                           {i + 1}
                         </span>
                         <span>{step}</span>
@@ -1724,10 +1690,8 @@ export default function ProviderSettingsPage() {
 
                   {cloudflareManualSetup?.command && (
                     <div className="space-y-1">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#f6821f]/80">
-                        deploy command
-                      </p>
-                      <pre className="overflow-x-auto rounded-lg border border-[#f6821f]/20 bg-[#f6821f]/[0.04] px-3 py-2 text-[11px] leading-relaxed text-foreground/85">
+                      <p className="text-[13px] font-medium text-fg-2">Deploy command</p>
+                      <pre className="overflow-x-auto rounded-lg bg-background px-3 py-2 font-mono text-[12.5px] leading-relaxed text-fg-2">
                         <code>{cloudflareManualSetup.command}</code>
                       </pre>
                     </div>
@@ -1737,10 +1701,9 @@ export default function ProviderSettingsPage() {
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       onClick={downloadWorkerZip}
                       disabled={(cloudflareWorkerFiles?.length ?? 0) === 0}
-                      className="border-[#f6821f]/30 text-[#f6821f] hover:bg-[#f6821f]/10 hover:text-[#f6821f]"
                     >
                       <Download />
                       Download setup ZIP
@@ -1760,7 +1723,7 @@ export default function ProviderSettingsPage() {
 
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="config-name">Configuration Name</Label>
+                  <Label htmlFor="config-name">Configuration name</Label>
                   <Input
                     id="config-name"
                     value={configName}
@@ -1775,9 +1738,9 @@ export default function ProviderSettingsPage() {
 
               {resolvedProviderTypeId && isLoadingFields && (
                 <div className="mt-4 space-y-4">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full bg-fill" />
+                  <Skeleton className="h-12 w-full bg-fill" />
+                  <Skeleton className="h-12 w-full bg-fill" />
                 </div>
               )}
 
@@ -1790,11 +1753,11 @@ export default function ProviderSettingsPage() {
                     disabled={isBootstrappingAws || isAwsActionPending}
                     accountId={awsAccountId}
                   />
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  <p className="text-[13px] leading-relaxed text-fg-3">
                     Applied on provision/apply · New workspaces only. Existing roles stay unchanged.
                   </p>
                   {!isAwsTaskRoleNameValid && (
-                    <p className="text-xs text-destructive">
+                    <p className="text-[13px] text-destructive">
                       Enter a valid IAM role ARN or a new role name (up to 64 letters, numbers, or
                       _+=,.@- characters).
                     </p>
@@ -1815,7 +1778,7 @@ export default function ProviderSettingsPage() {
                     )}
                 </div>
               )}
-            </div>
+            </section>
 
             {isAwsProvider && provider?.providerConfig && providerId && (
               <AwsAccessProfiles
@@ -1829,25 +1792,19 @@ export default function ProviderSettingsPage() {
               />
             )}
 
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+            <section className="rounded-2xl bg-card p-5 sm:p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <ScrollText className="size-4 text-muted-foreground" />
-                    <p className="text-sm font-medium text-foreground/90">Default Setup Script</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
+                  <h2 className="text-[15px] font-medium text-fg">Default setup script</h2>
+                  <p className="max-w-2xl text-[13.5px] leading-relaxed text-fg-3">
                     Runs in the repository after the agent starts. Failures never stop workspace
                     readiness.
                   </p>
                 </div>
-                <Badge
-                  variant="outline"
-                  className="border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-xs"
-                >
+                <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
                   {setupDefaults?.filter((entry) => entry.commands.length > 0).length ?? 0}{" "}
                   configured
-                </Badge>
+                </span>
               </div>
 
               <div className="mt-4 space-y-4">
@@ -1876,10 +1833,10 @@ export default function ProviderSettingsPage() {
                     value={setupScript}
                     onChange={(event) => setSetupScript(event.target.value)}
                     placeholder={"npm install\n./scripts/bootstrap.sh"}
-                    className="min-h-36 font-mono text-xs"
+                    className="min-h-36 font-mono text-[13px]"
                     spellCheck={false}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[13px] text-fg-3">
                     Admin defaults run before commands supplied through the SDK. Logs and status are
                     written to <code>~/.gitterm/setup</code>.
                   </p>
@@ -1907,57 +1864,47 @@ export default function ProviderSettingsPage() {
                   </Button>
                 </div>
               </div>
-            </div>
+            </section>
 
             {provider?.supportsRegions && !isAwsProvider && (
-              <div className="order-2 rounded-2xl border border-border bg-card p-6">
-                <div className="flex flex-wrap items-center justify-between gap-4">
+              <section className="order-2 rounded-2xl bg-card p-5 sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="size-4 text-muted-foreground" />
-                      <p className="text-sm font-medium text-foreground/90">Regions</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
+                    <h2 className="text-[15px] font-medium text-fg">Regions</h2>
+                    <p className="max-w-2xl text-[13.5px] leading-relaxed text-fg-3">
                       Enable, disable, or add regions for this provider.
                     </p>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className="border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-xs"
-                  >
+                  <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
                     {provider?.regions?.length ?? 0} total
-                  </Badge>
+                  </span>
                 </div>
 
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 max-h-[28rem] divide-y divide-line overflow-y-auto">
                   {provider?.regions?.length ? (
                     provider.regions.map((region: any) => (
                       <div
                         key={region.id}
-                        className={`flex items-center justify-between rounded-xl border border-border bg-foreground/[0.02] px-4 py-3 ${
+                        className={`flex items-center justify-between gap-4 py-3 ${
                           !region.isEnabled ? "opacity-60" : ""
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="rounded-xl bg-foreground/[0.04] p-2">
-                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                          <div className="rounded-xl bg-fill p-2">
+                            <MapPin className="size-4 text-fg-3" />
                           </div>
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-foreground/90">
-                                {region.name}
-                              </span>
+                              <span className="text-[14px] font-medium text-fg">{region.name}</span>
                               {!region.isEnabled && (
-                                <Badge
-                                  variant="outline"
-                                  className="border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground text-xs"
-                                >
+                                <span className="rounded-full bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
                                   Disabled
-                                </Badge>
+                                </span>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                              {region.location} • {region.externalRegionIdentifier}
+                            <p className="text-[13px] text-fg-3">
+                              {region.location} ·{" "}
+                              <span className="font-mono">{region.externalRegionIdentifier}</span>
                             </p>
                           </div>
                         </div>
@@ -1973,17 +1920,17 @@ export default function ProviderSettingsPage() {
                       </div>
                     ))
                   ) : (
-                    <p className="py-12 text-center text-muted-foreground">
+                    <p className="py-12 text-center text-[14px] text-fg-3">
                       No regions configured yet.
                     </p>
                   )}
                 </div>
 
-                <div className="mt-5 rounded-xl border border-dashed border-foreground/[0.08] bg-foreground/[0.01] p-5">
-                  <p className="text-sm font-medium text-foreground/90">Add Region</p>
+                <div className="mt-5 rounded-xl bg-fill p-4 sm:p-5">
+                  <p className="text-[14px] font-medium text-fg">Add region</p>
                   <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="space-y-2">
-                      <Label htmlFor="region-name">Region Name</Label>
+                      <Label htmlFor="region-name">Region name</Label>
                       <Input
                         id="region-name"
                         value={newRegion.name}
@@ -2006,7 +1953,7 @@ export default function ProviderSettingsPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="external-id">External Identifier</Label>
+                      <Label htmlFor="external-id">External identifier</Label>
                       <Input
                         id="external-id"
                         value={newRegion.externalRegionIdentifier}
@@ -2022,7 +1969,6 @@ export default function ProviderSettingsPage() {
                   </div>
                   <div className="mt-4 flex items-center justify-end">
                     <Button
-                      variant="outline"
                       onClick={() => {
                         if (!provider?.id) {
                           toast.error("Select a provider first.");
@@ -2040,11 +1986,11 @@ export default function ProviderSettingsPage() {
                         createRegion.isPending
                       }
                     >
-                      {createRegion.isPending ? "Adding..." : "Add Region"}
+                      {createRegion.isPending ? "Adding..." : "Add region"}
                     </Button>
                   </div>
                 </div>
-              </div>
+              </section>
             )}
           </div>
         )}

@@ -15,9 +15,9 @@ export function CliCommandDisplay({ command, onDone }: CliCommandDisplayProps) {
   return (
     <div className="grid gap-4 py-4">
       <div className="grid gap-3">
-        <Label className="text-sm font-medium">Run this command to connect:</Label>
+        <Label className="text-[13px] font-medium text-fg-2">Run this command to connect</Label>
         <div className="flex gap-2">
-          <Input value={command} readOnly className="font-mono text-sm bg-secondary/50" />
+          <Input value={command} readOnly className="font-mono text-[13px]" />
           <Button
             variant="outline"
             onClick={() => {
@@ -28,14 +28,12 @@ export function CliCommandDisplay({ command, onDone }: CliCommandDisplayProps) {
             Copy
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[13px] text-fg-3">
           Once connected, your local server will be available at the subdomain you chose.
         </p>
       </div>
       <DialogFooter>
-        <Button onClick={onDone} className="bg-primary text-primary-foreground hover:bg-primary/90">
-          Done
-        </Button>
+        <Button onClick={onDone}>Done</Button>
       </DialogFooter>
     </div>
   );

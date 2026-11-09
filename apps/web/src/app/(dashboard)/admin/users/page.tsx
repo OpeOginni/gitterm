@@ -156,21 +156,18 @@ export default function UsersPage() {
 
   return (
     <DashboardShell>
-      <DashboardHeader heading="User Management" text="View and manage all users in the system.">
+      <DashboardHeader heading="Users" text="View and manage all users in the system.">
         <div className="flex items-center gap-2">
           {canCreateUsers && (
-            <Button
-              onClick={() => setShowCreateDialog(true)}
-              className="bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add User
+            <Button onClick={() => setShowCreateDialog(true)} className="gap-1.5">
+              <Plus className="size-4" />
+              Add user
             </Button>
           )}
         </div>
       </DashboardHeader>
 
-      <div className="pt-2 space-y-6">
+      <div className="space-y-4">
         {/* Search */}
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-4" />
@@ -194,26 +191,26 @@ export default function UsersPage() {
           </div>
         ) : (
           <>
-            <div className="rounded-2xl border border-border bg-card overflow-hidden">
-              <div className="overflow-x-auto">
+            <div className="overflow-hidden rounded-2xl bg-card">
+              <div className="max-h-[70vh] overflow-auto">
                 <table className="w-full">
-                  <thead>
+                  <thead className="sticky top-0 z-10 bg-card">
                     <tr className="border-b border-line">
-                      <th className="h-10 px-6 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
+                      <th className="h-10 px-6 text-left align-middle text-[13px] font-medium text-fg-3">
                         User
                       </th>
                       {billingPlans.length > 0 && (
-                        <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
+                        <th className="h-10 px-4 text-left align-middle text-[13px] font-medium text-fg-3">
                           Plan
                         </th>
                       )}
-                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
+                      <th className="h-10 px-4 text-left align-middle text-[13px] font-medium text-fg-3">
                         Role
                       </th>
-                      <th className="h-10 px-4 text-left align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
+                      <th className="h-10 px-4 text-left align-middle text-[13px] font-medium text-fg-3">
                         Created
                       </th>
-                      <th className="h-10 px-6 text-right align-middle font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
+                      <th className="h-10 px-6 text-right align-middle text-[13px] font-medium text-fg-3">
                         Actions
                       </th>
                     </tr>
@@ -222,16 +219,16 @@ export default function UsersPage() {
                     {data?.users.map((user) => (
                       <tr
                         key={user.id}
-                        className="border-b border-line transition-colors hover:bg-fill"
+                        className="border-b border-line transition-colors last:border-0 hover:bg-fill"
                       >
-                        <td className="py-4 px-6">
-                          <div>
-                            <div className="font-medium text-fg">{user.name}</div>
-                            <div className="text-sm text-fg-4">{user.email}</div>
+                        <td className="px-6 py-3.5">
+                          <div className="min-w-0">
+                            <div className="text-[14px] font-medium text-fg">{user.name}</div>
+                            <div className="text-[13px] text-fg-3">{user.email}</div>
                           </div>
                         </td>
                         {billingPlans.length > 0 && (
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-3.5">
                             <Select
                               value={user.plan ?? "free"}
                               onValueChange={(value) => {
@@ -251,7 +248,7 @@ export default function UsersPage() {
                             </Select>
                           </td>
                         )}
-                        <td className="px-4 py-4">
+                        <td className="px-4 py-3.5">
                           <Select
                             value={(user as any).role || "user"}
                             onValueChange={(value: UserRole) => {
@@ -277,14 +274,15 @@ export default function UsersPage() {
                             </SelectContent>
                           </Select>
                         </td>
-                        <td className="px-4 py-4 text-sm text-fg-4">
+                        <td className="px-4 py-3.5 text-[13.5px] whitespace-nowrap text-fg-3">
                           {new Date(user.createdAt).toLocaleDateString()}
                         </td>
-                        <td className="py-4 px-6 text-right">
+                        <td className="px-6 py-3.5 text-right">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-fg-4 hover:text-destructive"
+                            aria-label={`Delete ${user.name}`}
+                            className="size-9 text-fg-3 hover:text-red-400"
                             onClick={() => setDeleteUserId(user.id)}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -294,7 +292,7 @@ export default function UsersPage() {
                     ))}
                     {data?.users.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-12 text-center text-fg-4">
+                        <td colSpan={5} className="py-12 text-center text-[14px] text-fg-3">
                           No users found
                         </td>
                       </tr>
@@ -306,14 +304,14 @@ export default function UsersPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 border-t border-line">
-                <div className="text-sm text-fg-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-[13.5px] text-fg-3">
                   Showing {page * limit + 1} to {Math.min((page + 1) * limit, data?.total ?? 0)} of{" "}
                   {data?.total ?? 0}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     size="sm"
                     onClick={() => setPage((p) => p - 1)}
                     disabled={page === 0}
@@ -322,7 +320,7 @@ export default function UsersPage() {
                     Previous
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     size="sm"
                     onClick={() => setPage((p) => p + 1)}
                     disabled={page >= totalPages - 1}
@@ -342,7 +340,7 @@ export default function UsersPage() {
         <DialogContent>
           <form onSubmit={handleCreateSubmit}>
             <DialogHeader>
-              <DialogTitle>Add New User</DialogTitle>
+              <DialogTitle>Add user</DialogTitle>
               <DialogDescription>
                 Create a new user account. The user will be able to log in with the email and
                 password you provide.
@@ -435,7 +433,7 @@ export default function UsersPage() {
             <DialogFooter>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 onClick={() => {
                   setShowCreateDialog(false);
                   setCreateForm(initialCreateForm);
@@ -444,7 +442,7 @@ export default function UsersPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={createUser.isPending}>
-                {createUser.isPending ? "Creating..." : "Create User"}
+                {createUser.isPending ? "Creating..." : "Create user"}
               </Button>
             </DialogFooter>
           </form>
@@ -455,14 +453,14 @@ export default function UsersPage() {
       <Dialog open={!!deleteUserId} onOpenChange={() => setDeleteUserId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete User</DialogTitle>
+            <DialogTitle>Delete user</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete this user? This action cannot be undone. All their
               workspaces will be terminated.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteUserId(null)}>
+            <Button variant="secondary" onClick={() => setDeleteUserId(null)}>
               Cancel
             </Button>
             <Button
@@ -470,7 +468,7 @@ export default function UsersPage() {
               onClick={() => deleteUserId && deleteUser.mutate(deleteUserId)}
               disabled={deleteUser.isPending}
             >
-              {deleteUser.isPending ? "Deleting..." : "Delete User"}
+              {deleteUser.isPending ? "Deleting..." : "Delete user"}
             </Button>
           </DialogFooter>
         </DialogContent>

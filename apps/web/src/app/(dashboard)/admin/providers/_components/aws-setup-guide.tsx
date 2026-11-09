@@ -40,14 +40,14 @@ function Step({
     <li className="relative pl-10 pb-7 last:pb-0 after:absolute after:top-7 after:bottom-0 after:left-3 after:w-px after:bg-line last:after:hidden">
       <span
         aria-hidden
-        className="absolute top-0 left-0 flex size-6 items-center justify-center rounded-full border border-line-2 bg-surface-2 text-xs font-semibold text-fg"
+        className="absolute top-0 left-0 flex size-6 items-center justify-center rounded-full bg-fill-2 text-[12.5px] font-medium text-fg"
       >
         {number}
       </span>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-8">
         <div className="space-y-1 md:max-w-sm">
-          <p className="text-sm font-medium leading-6 text-fg">{title}</p>
-          <p className="text-xs leading-relaxed text-fg-3">{detail}</p>
+          <p className="text-[14px] font-medium leading-6 text-fg">{title}</p>
+          <p className="text-[13px] leading-relaxed text-fg-3">{detail}</p>
         </div>
         {action && <div className="shrink-0 md:pt-0.5">{action}</div>}
       </div>
@@ -86,14 +86,14 @@ export function AwsSetupGuide({ region, role }: { region: string; role: AwsRoleS
   const policy = data?.policy;
 
   return (
-    <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-fill p-4">
+    <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-fill p-4">
       <div className="flex items-start gap-3">
         <div className="rounded-lg bg-fill-2 p-2 text-fg-2">
           <ShieldCheck className="size-4" />
         </div>
         <div className="space-y-1">
-          <h3 className="text-sm font-medium text-fg">Control-plane credentials</h3>
-          <p className="text-xs text-fg-3">
+          <h3 className="text-[14px] font-medium text-fg">Control-plane credentials</h3>
+          <p className="text-[13px] text-fg-3">
             A dedicated IAM user with a policy generated for this provider.
           </p>
         </div>
@@ -101,7 +101,7 @@ export function AwsSetupGuide({ region, role }: { region: string; role: AwsRoleS
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button type="button" size="sm" variant="outline">
+          <Button type="button" size="sm" variant="secondary">
             Setup & IAM policy
           </Button>
         </DialogTrigger>
@@ -132,7 +132,7 @@ export function AwsSetupGuide({ region, role }: { region: string; role: AwsRoleS
                     onChange={(event) =>
                       setTypedAccountId(event.target.value.replace(/\D/g, "").slice(0, 12))
                     }
-                    className="h-9 font-mono text-xs md:text-xs"
+                    className="h-9 font-mono text-[13px] md:text-[13px]"
                     aria-describedby="aws-policy-scope"
                     aria-invalid={!!accountId && !isAccountValid}
                   />
@@ -145,7 +145,7 @@ export function AwsSetupGuide({ region, role }: { region: string; role: AwsRoleS
                 </div>
               }
             >
-              <p id="aws-policy-scope" className="text-xs leading-relaxed text-fg-4">
+              <p id="aws-policy-scope" className="text-[13px] leading-relaxed text-fg-3">
                 {blocker ?? (
                   <>
                     {typedAccountId === null && arnAccountId && "Account taken from the role ARN. "}
@@ -156,7 +156,7 @@ export function AwsSetupGuide({ region, role }: { region: string; role: AwsRoleS
                 )}
               </p>
               {error && (
-                <p role="alert" className="mt-1 text-xs text-destructive">
+                <p role="alert" className="mt-1 text-[13px] text-destructive">
                   {error.message}
                 </p>
               )}
@@ -167,7 +167,7 @@ export function AwsSetupGuide({ region, role }: { region: string; role: AwsRoleS
                     fileName={`gitterm-iam-${accountId}-${region}.json`}
                     height="220px"
                   />
-                  <p className="text-xs leading-relaxed text-fg-4">
+                  <p className="text-[13px] leading-relaxed text-fg-3">
                     A deployment baseline, not a certified least-privilege policy. Some regional
                     actions use wildcard resources. Review it with your AWS administrator.
                   </p>
@@ -207,7 +207,7 @@ export function AwsSetupGuide({ region, role }: { region: string; role: AwsRoleS
             />
           </ol>
 
-          <ul className="space-y-2 border-t border-line pt-4 text-xs leading-relaxed text-fg-3">
+          <ul className="space-y-2 border-t border-line pt-4 text-[13px] leading-relaxed text-fg-3">
             <li className="flex gap-2.5">
               <KeyRound className="mt-0.5 size-3.5 shrink-0 text-fg-4" aria-hidden />
               <span>

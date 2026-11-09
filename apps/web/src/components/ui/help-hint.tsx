@@ -71,7 +71,7 @@ export function HelpHint({
       <TooltipContent
         side={side}
         sideOffset={2}
-        className="max-w-[15rem] text-[11px] sm:max-w-none sm:text-nowrap"
+        className="max-w-[15rem] sm:max-w-none sm:text-nowrap"
       >
         {children}
       </TooltipContent>

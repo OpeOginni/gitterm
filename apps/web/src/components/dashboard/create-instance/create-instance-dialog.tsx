@@ -17,7 +17,7 @@ import { CreateCloudInstance } from "./create-cloud-instance";
 import { usePrefetchCreateInstanceData } from "./use-prefetch-create-instance-data";
 import type { CreateInstanceResult } from "./types";
 
-const DIALOG_DESCRIPTION = "Deploy a new development workspace from a GitHub repository.";
+const DIALOG_DESCRIPTION = "Start a cloud workspace for your coding agent.";
 
 export function CreateInstanceDialog() {
   const [open, setOpen] = useState(false);
@@ -68,13 +68,13 @@ export function CreateInstanceDialog() {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button className="gap-2 bg-primary font-mono text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/85">
-          <Plus className="h-4 w-4" /> New Instance
+        <Button className="gap-2">
+          <Plus className="size-4" /> New workspace
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[620px] max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Instance</DialogTitle>
+          <DialogTitle>New workspace</DialogTitle>
           <DialogDescription>{DIALOG_DESCRIPTION}</DialogDescription>
         </DialogHeader>
 

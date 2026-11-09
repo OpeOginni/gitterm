@@ -35,19 +35,16 @@ export function DashboardHeader({
 }) {
   return (
     <div
-      className={cn(
-        "flex flex-col gap-4 border-b border-line pb-6 sm:flex-row sm:items-center sm:justify-between",
-        className,
-      )}
+      className={cn("flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between", className)}
     >
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
           {icon}
-          <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl text-balance">
+          <h1 className="text-[26px] font-display font-semibold leading-tight tracking-[-0.025em] text-balance text-fg md:text-[30px]">
             {heading}
           </h1>
         </div>
-        {text ? <p className="text-sm text-fg-4 md:text-base">{text}</p> : null}
+        {text ? <p className="max-w-2xl text-[15px] leading-relaxed text-fg-3">{text}</p> : null}
       </div>
       {children}
     </div>

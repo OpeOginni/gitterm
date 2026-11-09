@@ -1,28 +1,28 @@
 import type { Metadata } from "next";
-import { LandingHeader } from "@/components/landing/header";
-import { Footer } from "@/components/landing/footer";
+import { SiteShell } from "@/components/site/site-shell";
 
 export const metadata: Metadata = {
   title: "GitTerm· Terms of Service",
   description: "The terms that govern your use of the GitTerm hosted service.",
 };
 
+const linkClass =
+  "text-[#e2c47c] underline decoration-[#e2c47c]/40 underline-offset-4 transition-colors hover:decoration-[#e2c47c]";
+
 const LAST_UPDATED = "May 26, 2026";
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-background text-white">
-      <LandingHeader />
-      <main className="mx-auto max-w-[760px] px-4 pt-24 pb-14 sm:px-6 sm:pt-32 sm:pb-20">
+    <SiteShell>
+      <div className="mx-auto w-full max-w-[calc(70ch+3rem)] px-4 pt-[clamp(56px,8vw,96px)] pb-[clamp(64px,9vw,112px)] sm:px-6">
         <header className="border-b border-line pb-8">
-          <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-primary/80">Legal</p>
-          <h1 className="mt-3 font-display text-4xl font-medium tracking-tight text-white sm:text-5xl">
-            Terms of Service
+          <h1 className="m-0 text-[clamp(2.2rem,5vw,3.4rem)] leading-[1.04] font-display font-semibold tracking-[-0.03em] text-fg">
+            Terms of service
           </h1>
-          <p className="mt-3 text-sm text-fg-3">Last updated {LAST_UPDATED}</p>
+          <p className="mt-4 text-[15px] text-fg-3">Last updated {LAST_UPDATED}</p>
         </header>
 
-        <article className="mt-10 space-y-10 text-[15px] leading-relaxed text-fg-2">
+        <article className="mt-10 space-y-11 text-[16px] leading-[1.7] text-fg-2 [&_code]:rounded [&_code]:bg-fill-2 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.88em] [&_code]:text-fg [&_li]:pl-1">
           <Section title="1. Agreement">
             <p>
               These Terms of Service ("Terms") govern your access to and use of the hosted GitTerm
@@ -40,7 +40,7 @@ export default function TermsPage() {
               You must be at least 13 years old (or the minimum age of digital consent in your
               jurisdiction) to use the Service. You are responsible for keeping your credentials
               secure and for all activity under your account. Notify us immediately at{" "}
-              <a className="text-primary underline" href="mailto:help@gitterm.dev">
+              <a className={linkClass} href="mailto:help@gitterm.dev">
                 help@gitterm.dev
               </a>{" "}
               if you suspect unauthorized access.
@@ -48,7 +48,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="3. Plans, billing & refunds">
-            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
+            <ul className="list-disc space-y-2.5 pl-5 marker:text-fg-4">
               <li>
                 Paid plans are billed in advance on a recurring basis through our payments
                 processor. By subscribing you authorize recurring charges until you cancel.
@@ -66,7 +66,7 @@ export default function TermsPage() {
 
           <Section title="4. Acceptable use">
             <p>You agree not to use the Service to:</p>
-            <ul className="list-disc space-y-2 pl-5 marker:text-fg-4">
+            <ul className="list-disc space-y-2.5 pl-5 marker:text-fg-4">
               <li>break the law or infringe third-party rights;</li>
               <li>
                 run cryptocurrency miners, botnets, denial-of-service tooling, spam infrastructure,
@@ -176,24 +176,23 @@ export default function TermsPage() {
           <Section title="14. Contact">
             <p>
               Questions about these Terms? Email{" "}
-              <a className="text-primary underline" href="mailto:help@gitterm.dev">
+              <a className={linkClass} href="mailto:help@gitterm.dev">
                 help@gitterm.dev
               </a>
               .
             </p>
           </Section>
         </article>
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </SiteShell>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-3">
-      <h2 className="font-display text-2xl font-medium text-white">{title}</h2>
-      <div className="space-y-3">{children}</div>
+    <section className="space-y-3.5">
+      <h2 className="text-[21px] leading-[1.3] font-medium tracking-[-0.02em] text-fg">{title}</h2>
+      <div className="space-y-4">{children}</div>
     </section>
   );
 }

@@ -1,25 +1,15 @@
 "use client";
 
-import { LandingHeader } from "@/components/landing/header";
-import { Footer } from "@/components/landing/footer";
 import { initiateCheckout, isBillingEnabled, authClient } from "@/lib/auth-client";
-import {
-  Check,
-  X,
-  Terminal,
-  ArrowRight,
-  Loader2,
-  Mail,
-  Gauge,
-  Pause,
-  ShieldCheck,
-} from "lucide-react";
+import { Check, Minus, ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/analytics";
 import { useCurrentPlan } from "@/lib/billing";
+import { SiteShell } from "@/components/site/site-shell";
+import { Band, SectionHead, Wrap } from "@/components/site/section";
 
 type UserPlan = "free" | "pro" | "growth" | "starter";
 type CheckoutPlanSlug = "pro" | "growth";
@@ -61,6 +51,7 @@ const PLANS: PlanCard[] = [
       "**Always-on** workspaces, no daily limit",
       "Pay-as-you-go with **your** spending cap",
       "**15** workspaces · **15-day** retention",
+      "**20** sandbox snapshots",
       "Custom subdomains and persistence",
     ],
     cta: "Get Pro",
@@ -77,6 +68,7 @@ const PLANS: PlanCard[] = [
       "**Every** machine size",
       "**Always-on** workspaces, no daily limit",
       "**50** workspaces · **30-day** retention",
+      "**100** sandbox snapshots",
       "Custom subdomains and persistence",
     ],
     cta: "Get Growth",
@@ -102,27 +94,30 @@ const COMPARISON_ROWS: Array<{
   { label: "Always-on workspaces", free: false, pro: true, growth: true },
   { label: "Workspaces", free: "**2**", pro: "**15**", growth: "**50**" },
   { label: "Idle retention", free: "2 days", pro: "15 days", growth: "30 days" },
+  { label: "Sandbox snapshots", free: false, pro: "**20**", growth: "**100**" },
   { label: "Persistent workspaces", free: false, pro: true, growth: true },
   { label: "Custom subdomains", free: false, pro: true, growth: true },
 ];
 
 const HOW_BILLING_WORKS = [
   {
-    icon: Gauge,
     title: "Billed by the second",
     body: "Running workspaces draw from your balance at each machine's hourly rate.",
   },
   {
-    icon: Pause,
     title: "Stopped costs nothing",
     body: "Paused workspaces keep your files and use no compute.",
   },
   {
-    icon: ShieldCheck,
     title: "You set the cap",
     body: "Stop at your balance, or turn on pay-as-you-go with a monthly limit.",
   },
 ];
+
+const primaryButton =
+  "bg-primary text-primary-foreground hover:bg-[#c09a45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
+const secondaryButton =
+  "bg-white/[0.04] text-fg-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] hover:bg-white/[0.07] hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
 /** Renders `**bold**` segments as emphasised text. */
 function Rich({ text }: { text: string }) {
@@ -130,7 +125,7 @@ function Rich({ text }: { text: string }) {
     <>
       {text.split(/(\*\*[^*]+\*\*)/).map((part, index) =>
         part.startsWith("**") ? (
-          <strong key={index} className="font-semibold text-fg">
+          <strong key={index} className="font-medium text-fg">
             {part.slice(2, -2)}
           </strong>
         ) : (
@@ -144,9 +139,9 @@ function Rich({ text }: { text: string }) {
 function ComparisonValue({ value }: { value: string | boolean }) {
   if (typeof value === "boolean") {
     return value ? (
-      <Check className="mx-auto h-4 w-4 text-primary" aria-label="Included" />
+      <Check className="mx-auto size-4 text-[#e2c47c]" aria-label="Included" />
     ) : (
-      <X className="mx-auto h-4 w-4 text-fg-4" aria-label="Not included" />
+      <Minus className="mx-auto size-4 text-fg-4" aria-label="Not included" />
     );
   }
   return (
@@ -172,39 +167,41 @@ function PlanCardView({
   const isCurrent = currentPlan === plan.id;
   const isThisPlanLoading = isLoading && loadingPlan === plan.slug;
   const buttonClass = cn(
-    "inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-colors",
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    "inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg text-[14.5px] font-medium transition-colors",
     "disabled:cursor-not-allowed disabled:opacity-70",
   );
 
   return (
     <div
       className={cn(
-        "relative flex flex-col rounded-2xl border p-6 sm:p-7",
+        "flex flex-col rounded-2xl px-6 py-8 sm:px-8",
         plan.featured
-          ? "border-primary/60 bg-primary/[0.06] shadow-[0_0_60px_-20px] shadow-primary/40"
-          : "border-line bg-fill",
+          ? "bg-card shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09),0_30px_80px_-40px_rgba(0,0,0,0.8)] md:-my-5 md:py-[52px]"
+          : "",
       )}
     >
-      {plan.featured ? (
-        <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-primary-foreground">
-          Best value
-        </span>
-      ) : null}
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[19px] font-medium tracking-[-0.02em] text-fg">{plan.name}</h2>
+        {plan.featured ? (
+          <span className="text-[13px] font-medium text-[#e2c47c]">Best value</span>
+        ) : null}
+      </div>
+      <p className="mt-1.5 text-[15px] text-fg-3">{plan.tagline}</p>
 
-      <h2 className="text-lg font-semibold text-fg">{plan.name}</h2>
-      <p className="mt-1 text-sm text-fg-3">{plan.tagline}</p>
-
-      <div className="mt-6 flex items-baseline gap-1.5">
-        <span className="text-5xl font-semibold tracking-tight text-fg tabular-nums">
+      <div className="mt-7 flex items-baseline gap-1.5">
+        <span className="text-[3rem] leading-none font-normal tracking-[-0.04em] text-fg tabular-nums">
           ${plan.price}
         </span>
-        <span className="text-sm text-fg-4">/month</span>
+        <span className="text-[15px] text-fg-4">/month</span>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-7">
         {isCurrent ? (
-          <span className={cn(buttonClass, "border border-line text-fg-4")}>Current plan</span>
+          <span
+            className={cn(buttonClass, "text-fg-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]")}
+          >
+            Current plan
+          </span>
         ) : plan.slug ? (
           <button
             type="button"
@@ -213,41 +210,33 @@ function PlanCardView({
             className={cn(
               buttonClass,
               "cursor-pointer",
-              plan.featured
-                ? "bg-primary text-primary-foreground hover:bg-primary/85"
-                : "bg-fg text-background hover:bg-fg-2",
+              plan.featured ? primaryButton : secondaryButton,
             )}
           >
             {isThisPlanLoading ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
                 Processing…
               </>
             ) : (
               <>
                 {plan.cta}
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="size-4" />
               </>
             )}
           </button>
         ) : (
-          <Link
-            href="/dashboard"
-            className={cn(
-              buttonClass,
-              "border border-line bg-fill text-fg-2 hover:border-line-2 hover:text-fg",
-            )}
-          >
+          <Link href="/dashboard" className={cn(buttonClass, secondaryButton)}>
             {plan.cta}
-            <ArrowRight className="h-4 w-4" />
+            <ArrowRight className="size-4" />
           </Link>
         )}
       </div>
 
-      <ul className="mt-6 flex flex-col gap-3">
+      <ul className="mt-8 flex flex-col gap-3.5">
         {plan.features.map((feature) => (
-          <li key={feature} className="flex items-start gap-2.5 text-sm text-fg-3">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <li key={feature} className="flex items-start gap-3 text-[15px] leading-[1.5] text-fg-3">
+            <Check className="mt-[3px] size-4 shrink-0 text-[#e2c47c]" />
             <span>
               <Rich text={feature} />
             </span>
@@ -329,147 +318,133 @@ function PricingPageContent() {
   };
 
   return (
-    <main className="min-h-screen bg-background text-fg dark landing-grid grain">
-      <LandingHeader />
+    <SiteShell>
+      <Wrap className="pt-[clamp(56px,8vw,104px)] pb-[clamp(64px,9vw,112px)]">
+        <div className="mx-auto max-w-[44rem] text-center">
+          <h1 className="m-0 text-[clamp(2.4rem,5.6vw,4.4rem)] leading-[1] font-display font-semibold tracking-[-0.035em] text-balance text-fg">
+            Pay for the compute. Nothing else.
+          </h1>
+          <p className="mx-auto mt-6 max-w-[36rem] text-[clamp(16px,1.5vw,18px)] leading-[1.65] text-pretty text-fg-3">
+            Every paid plan is a monthly compute balance, billed by the second. Bring your own model
+            keys: we never mark up AI.
+          </p>
+        </div>
 
-      <section className="pt-24 pb-16 sm:pt-32 sm:pb-24 md:pt-40 md:pb-32">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6">
-          {/* Header */}
-          <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
-            <p className="marker">Pricing</p>
-            <h1 className="mt-4 font-display text-[clamp(2.25rem,7vw,4.5rem)] font-light leading-[1] tracking-tight text-fg">
-              Pay for the{" "}
-              <span className="font-display-accent text-[color:var(--cream)]">compute</span>.
-              Nothing else.
-            </h1>
-            <p className="mt-5 text-[15px] leading-[1.6] text-fg-3 sm:text-[17px]">
-              Every paid plan is a monthly compute balance, billed by the second. Bring your own
-              model keys: we never mark up AI.
-            </p>
-          </div>
+        <div className="mx-auto mt-[clamp(48px,6vw,80px)] grid max-w-[440px] grid-cols-1 gap-4 md:max-w-none md:grid-cols-3 md:items-stretch md:gap-2">
+          {PLANS.map((plan) => (
+            <PlanCardView
+              key={plan.id}
+              plan={plan}
+              currentPlan={session ? currentPlan : undefined}
+              onUpgrade={handleUpgrade}
+              isLoading={isLoading}
+              loadingPlan={loadingPlan}
+            />
+          ))}
+        </div>
 
-          {/* Plan cards */}
-          <div className="mx-auto grid max-w-[440px] grid-cols-1 gap-6 md:max-w-none md:grid-cols-3 md:items-stretch">
-            {PLANS.map((plan) => (
-              <PlanCardView
-                key={plan.id}
-                plan={plan}
-                currentPlan={session ? currentPlan : undefined}
-                onUpgrade={handleUpgrade}
-                isLoading={isLoading}
-                loadingPlan={loadingPlan}
-              />
-            ))}
-          </div>
-
-          {/* How billing works */}
-          <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-3">
-            {HOW_BILLING_WORKS.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="bg-background p-6">
-                <Icon className="h-5 w-5 text-primary" />
-                <p className="mt-3 text-sm font-semibold text-fg">{title}</p>
-                <p className="mt-1 text-sm leading-relaxed text-fg-3">{body}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Plan comparison */}
-          <section className="mt-16 sm:mt-24">
-            <p className="marker">Compare plans</p>
-            <h2 className="mt-3 font-display text-2xl font-light tracking-tight text-fg md:text-3xl">
-              Same product, bigger balance.
-            </h2>
-            <div className="mt-6 overflow-x-auto rounded-2xl border border-line bg-fill">
-              <table className="w-full border-collapse text-xs sm:text-sm">
-                <thead>
-                  <tr className="border-b border-line font-mono text-[10px] uppercase tracking-[0.2em] text-fg-4">
-                    <th className="px-3 py-3 text-left font-medium sm:px-5">Feature</th>
-                    <th className="px-2 py-3 text-center font-medium sm:px-4">Free</th>
-                    <th className="px-2 py-3 text-center font-medium sm:px-4">Pro</th>
-                    <th className="bg-primary/[0.08] px-2 py-3 text-center font-medium text-primary sm:px-4">
-                      Growth
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {COMPARISON_ROWS.map((row) => (
-                    <tr key={row.label} className="border-b border-line last:border-b-0">
-                      <td className="px-3 py-3.5 text-fg-2 sm:px-5">{row.label}</td>
-                      <td className="px-2 py-3.5 text-center sm:px-4">
-                        <ComparisonValue value={row.free} />
-                      </td>
-                      <td className="px-2 py-3.5 text-center sm:px-4">
-                        <ComparisonValue value={row.pro} />
-                      </td>
-                      <td className="bg-primary/[0.08] px-2 py-3.5 text-center sm:px-4">
-                        <ComparisonValue value={row.growth} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="mt-[clamp(48px,6vw,80px)] grid gap-px border border-line bg-line sm:grid-cols-3">
+          {HOW_BILLING_WORKS.map(({ title, body }) => (
+            <div key={title} className="bg-background px-6 pt-6 pb-7">
+              <h3 className="m-0 text-[16.5px] font-medium text-fg">{title}</h3>
+              <p className="mt-2 text-[15px] leading-[1.6] text-fg-3">{body}</p>
             </div>
-            <p className="mt-3 text-xs text-fg-4">
-              Workspaces count every cloud workspace you keep, running or paused.
-            </p>
-          </section>
+          ))}
+        </div>
+      </Wrap>
 
-          {/* Closing */}
-          <section className="mt-16 grid gap-8 border-t border-line pt-12 sm:mt-24 md:grid-cols-2 md:items-center">
+      <Band>
+        <Wrap>
+          <SectionHead title="Same product, bigger balance.">
+            Workspaces count every cloud workspace you keep, running or paused.
+          </SectionHead>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[13.5px] sm:text-[15px]">
+              <thead>
+                <tr className="border-b border-line-2 text-fg-2">
+                  <th className="py-3.5 pr-2 text-left sm:pr-4 font-medium">
+                    <span className="sr-only">Feature</span>
+                  </th>
+                  <th className="w-[22%] px-1 py-3.5 sm:px-3 text-center font-medium">Free</th>
+                  <th className="w-[22%] px-1 py-3.5 sm:px-3 text-center font-medium">Pro</th>
+                  <th className="w-[22%] rounded-t-xl bg-card px-1 py-3.5 sm:px-3 text-center font-medium text-[#e2c47c]">
+                    Growth
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARISON_ROWS.map((row) => (
+                  <tr key={row.label} className="border-b border-line last:border-b-0">
+                    <td className="py-4 pr-2 text-fg-2 sm:pr-4">{row.label}</td>
+                    <td className="px-1 py-4 text-center sm:px-3">
+                      <ComparisonValue value={row.free} />
+                    </td>
+                    <td className="px-1 py-4 text-center sm:px-3">
+                      <ComparisonValue value={row.pro} />
+                    </td>
+                    <td className="bg-card px-1 py-4 text-center sm:px-3">
+                      <ComparisonValue value={row.growth} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Wrap>
+      </Band>
+
+      <Band>
+        <Wrap>
+          <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
             <div>
-              <h2 className="font-display text-2xl font-light tracking-tight text-fg">
+              <h2 className="m-0 text-[clamp(2rem,4.2vw,3.2rem)] leading-[1.04] font-display font-medium tracking-[-0.025em] text-balance text-fg">
                 No AI markup. No middleman.
               </h2>
-              <p className="mt-3 max-w-md text-sm leading-relaxed text-fg-3">
+              <p className="mt-4 max-w-[34rem] text-[16px] leading-[1.6] text-fg-3">
                 Your model keys and subscriptions stay yours. Plans only cover the workspace:
                 compute, storage, and orchestration.
               </p>
             </div>
-            <div className="flex flex-wrap gap-3 md:justify-end">
+            <div className="flex flex-wrap gap-3">
               <Link
                 href="mailto:help@gitterm.dev"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-line bg-fill px-5 text-sm font-medium text-fg-2 transition-colors hover:border-line-2 hover:text-fg"
+                className={cn(
+                  "inline-flex h-11 items-center justify-center rounded-lg px-4 text-[14.5px] font-medium transition-colors",
+                  secondaryButton,
+                )}
               >
                 Questions? Email us
-                <Mail className="h-4 w-4" />
               </Link>
               <Link
                 href="/dashboard"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/85"
+                className={cn(
+                  "inline-flex h-11 items-center justify-center gap-2 rounded-lg px-4 text-[14.5px] font-medium transition-colors",
+                  primaryButton,
+                )}
               >
                 Start free
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="size-4" />
               </Link>
             </div>
-          </section>
-
-          <p className="mt-12 text-center text-sm text-fg-3">
+          </div>
+          <p className="mt-12 text-[15px] text-fg-3">
             Want to run GitTerm on your own infra?{" "}
             <Link
               href="/self-host"
-              className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
+              className="font-medium whitespace-nowrap text-[#e2c47c] underline decoration-[#e2c47c]/40 underline-offset-4 transition-colors hover:decoration-[#e2c47c]"
             >
               Self-host it
-              <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </p>
-        </div>
-      </section>
-
-      <Footer />
-    </main>
+        </Wrap>
+      </Band>
+    </SiteShell>
   );
 }
 
 export default function PricingPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <Terminal className="h-8 w-8 animate-pulse text-primary" />
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="dark min-h-screen bg-background" />}>
       <PricingPageContent />
     </Suspense>
   );

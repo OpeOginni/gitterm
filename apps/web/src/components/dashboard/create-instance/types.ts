@@ -122,7 +122,7 @@ export interface ResolvedGitHubRepository {
 }
 
 export const ICON_MAP: Record<string, string> = {
-  t3code: "/t3.svg",
+  t3code: "/t3-nightly.svg",
   opencode: "/opencode.svg",
   shuvcode: "/opencode.svg",
   railway: "/railway.svg",
@@ -133,7 +133,7 @@ export const ICON_MAP: Record<string, string> = {
   "exe.dev": "/exe.png",
   exedev: "/exe.png",
   vercel: "/vercel.svg",
-  aws: "/ECS.svg",
+  aws: "/aws.svg",
   claude: "/claude.svg",
   gitterm: "/gitterm.svg",
 };

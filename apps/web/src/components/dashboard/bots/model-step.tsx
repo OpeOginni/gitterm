@@ -24,7 +24,7 @@ const refresh = () =>
     queryKey: trpc.modelCredentials.listMyCredentials.queryKey(),
   });
 
-const fieldLabelClass = "font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4";
+const fieldLabelClass = "text-[13px] font-medium text-fg-2";
 
 export function ModelStepBody({
   isLoading,
@@ -51,13 +51,13 @@ export function ModelStepBody({
   const active = credentials.filter((candidate) => candidate.isActive);
   const hasOauth = providers.some((provider) => provider.authType === "oauth");
   const addButtons = (
-    <div className="flex justify-center gap-2">
-      <Button className="h-9 gap-2" onClick={() => setApiKeyOpen(true)}>
+    <div className="flex flex-wrap justify-center gap-2">
+      <Button className="gap-2" onClick={() => setApiKeyOpen(true)}>
         <Key className="size-3.5" />
         Add API key
       </Button>
       {hasOauth ? (
-        <Button variant="outline" className="h-9 gap-2" onClick={() => setConnectOpen(true)}>
+        <Button variant="outline" className="gap-2" onClick={() => setConnectOpen(true)}>
           <UserRound className="size-3.5" />
           Add a subscription
         </Button>
@@ -70,9 +70,9 @@ export function ModelStepBody({
       {isLoading ? (
         <Skeleton className="h-16 w-full bg-fill" />
       ) : active.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 py-4 text-center">
-          <p className="text-sm text-fg-2">
-            The agent runs on your own API key or a subscription you already pay for.
+        <div className="flex flex-col items-center gap-4 rounded-xl bg-fill px-4 py-6 text-center">
+          <p className="max-w-md text-sm leading-relaxed text-fg-2">
+            Add an API key or connect a subscription you already pay for. The agent runs on it.
           </p>
           {addButtons}
         </div>
@@ -82,7 +82,7 @@ export function ModelStepBody({
             <div className="grid gap-2">
               <Label className={fieldLabelClass}>Credential</Label>
               <Select value={credential?.id} onValueChange={onCredentialChange}>
-                <SelectTrigger className="h-10 w-full border-line bg-input/70">
+                <SelectTrigger className="h-10 w-full">
                   <SelectValue placeholder="Choose a credential" />
                 </SelectTrigger>
                 <SelectContent>
@@ -97,7 +97,7 @@ export function ModelStepBody({
                         {candidate.providerDisplayName} · {candidate.label}
                       </span>
                       {candidate.isDefault ? (
-                        <span className="font-mono text-[10px] text-fg-4">default</span>
+                        <span className="text-[12.5px] text-fg-4">Default</span>
                       ) : null}
                     </SelectItem>
                   ))}
@@ -121,11 +121,11 @@ export function ModelStepBody({
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {modelProblem ? <p className="text-xs text-destructive">{modelProblem}</p> : null}
+            {modelProblem ? <p className="text-[13px] text-red-300">{modelProblem}</p> : null}
             <Button
               size="sm"
               variant="ghost"
-              className="ml-auto h-7 gap-1.5 text-xs text-fg-3"
+              className="ml-auto gap-1.5 text-fg-3"
               onClick={() => setApiKeyOpen(true)}
             >
               <Plus className="size-3.5" />

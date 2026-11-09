@@ -8,8 +8,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { codeSnippet, dockerCommand, envFile, type Platform } from "./config";
 import { CodeBlock } from "./step";
 
-const subheadClass = "font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4";
-const code = "whitespace-nowrap rounded bg-fill-2 px-1 py-0.5 font-mono text-[12px] text-fg-2";
+const subheadClass = "flex items-center gap-2.5 text-sm font-semibold text-fg";
+const code = "whitespace-nowrap rounded bg-fill-2 px-1 py-0.5 font-mono text-[12.5px] text-fg-2";
+
+/** A deploy step heading: the step's number, quietly, then what to do. */
+function Subhead({ number, children }: { number: number; children: ReactNode }) {
+  return (
+    <h4 className={subheadClass}>
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-fill-2 text-[12.5px] font-medium tabular-nums text-fg-3">
+        {number}
+      </span>
+      {children}
+    </h4>
+  );
+}
 
 function Steps({ items }: { items: ReactNode[] }) {
   return (
@@ -28,7 +40,7 @@ function SlackSetup({ name }: { name: string }) {
   const href = `https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(manifest)}`;
   return (
     <div className="space-y-4">
-      <Button asChild className="h-9 gap-1.5">
+      <Button asChild className="gap-1.5">
         <a href={href} target="_blank" rel="noopener noreferrer">
           Create the Slack app
           <ExternalLink className="size-3.5" />
@@ -63,7 +75,7 @@ function SlackSetup({ name }: { name: string }) {
 function DiscordSetup() {
   return (
     <div className="space-y-4">
-      <Button asChild className="h-9 gap-1.5">
+      <Button asChild className="gap-1.5">
         <a
           href="https://discord.com/developers/applications"
           target="_blank"
@@ -107,11 +119,11 @@ export function DeployInstructions({
     <div className="space-y-8">
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h4 className={subheadClass}>1 · Save this as .env</h4>
+          <Subhead number={1}>Save this as .env</Subhead>
           <Button
             size="sm"
             variant="outline"
-            className="h-8 gap-1.5"
+            className="gap-1.5"
             onClick={onRotate}
             disabled={rotating}
           >
@@ -124,8 +136,8 @@ export function DeployInstructions({
           </Button>
         </div>
         {token ? (
-          <p className="flex items-start gap-2 text-xs text-amber-300">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <p className="flex items-start gap-2 text-[13px] text-[#fb923c]">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             The token is shown only once. Copy the file now.
           </p>
         ) : null}
@@ -137,31 +149,31 @@ export function DeployInstructions({
       </section>
 
       <section className="space-y-3">
-        <h4 className={subheadClass}>2 · Create the {platformName} bot</h4>
+        <Subhead number={2}>Create the {platformName} bot</Subhead>
         {platform === "slack" ? <SlackSetup name={name} /> : <DiscordSetup />}
       </section>
 
       <section className="space-y-3">
-        <h4 className={subheadClass}>3 · Run it</h4>
-        <Tabs defaultValue="docker" className="gap-4 pt-1">
+        <Subhead number={3}>Run it</Subhead>
+        <Tabs defaultValue="docker" className="gap-4">
           <TabsList>
             <TabsTrigger value="docker">Docker</TabsTrigger>
             <TabsTrigger value="terminal">Terminal</TabsTrigger>
             <TabsTrigger value="code">Code</TabsTrigger>
           </TabsList>
           <TabsContent value="docker" className="space-y-2">
-            <p className="text-xs text-fg-4">
+            <p className="text-[13px] text-fg-3">
               Next to the .env. Logs:{" "}
               <span className={code}>docker logs -f gitterm-{platform}-bot</span>
             </p>
             <CodeBlock code={dockerCommand(platform)} copyLabel="Command" language="shell" />
           </TabsContent>
           <TabsContent value="terminal" className="space-y-2">
-            <p className="text-xs text-fg-4">Next to the .env.</p>
+            <p className="text-[13px] text-fg-3">Next to the .env.</p>
             <CodeBlock code={`npx ${pkg}`} copyLabel="Command" language="shell" />
           </TabsContent>
           <TabsContent value="code" className="space-y-2">
-            <p className="text-xs text-fg-4">
+            <p className="text-[13px] text-fg-3">
               Install <span className={code}>{pkg}</span> and run with{" "}
               <span className={code}>node --env-file=.env index.ts</span>.
             </p>

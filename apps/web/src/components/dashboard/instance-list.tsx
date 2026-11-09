@@ -67,7 +67,7 @@ import {
 } from "./opencode-connect";
 
 const PROVIDER_LOGOS: Record<string, string> = {
-  aws: "/ECS.svg",
+  aws: "/aws.svg",
   cloudflare: "/cloudflare.svg",
   daytona: "/daytona.svg",
   e2b: "/E2B.svg",
@@ -102,8 +102,8 @@ export function InstanceList() {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-accent" />
-          <p className="text-sm text-muted-foreground">Loading workspaces...</p>
+          <Loader2 className="size-6 animate-spin text-fg-4" />
+          <p className="text-sm text-fg-3">Loading workspaces…</p>
         </div>
       </div>
     );
@@ -116,13 +116,15 @@ export function InstanceList() {
 
   if (workspaces.length === 0 && page === 0) {
     return (
-      <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-fill p-8 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-fill">
-          <Terminal className="h-7 w-7 text-fg-4" />
+      <div className="flex h-72 flex-col items-center justify-center rounded-2xl bg-card p-8 text-center">
+        <div className="flex size-12 items-center justify-center rounded-xl bg-fill-2">
+          <Terminal className="size-5 text-fg-3" />
         </div>
-        <h3 className="mt-5 text-lg font-medium text-fg">No active workspaces</h3>
-        <p className="mt-2 max-w-sm text-sm text-fg-4">
-          Connect a GitHub repo and launch a workspace that can clone, commit, push, and open pull
+        <h3 className="mt-5 text-[17px] font-semibold tracking-[-0.01em] text-fg">
+          No workspaces yet
+        </h3>
+        <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-fg-3">
+          Create one with the button above. Pick a GitHub repo to clone, commit and open pull
           requests, or start from a blank terminal.
         </p>
       </div>
@@ -139,8 +141,8 @@ export function InstanceList() {
 
       {/* Pagination */}
       {pagination && totalPages > 1 && (
-        <div className="flex items-center justify-between pt-4 border-t border-line">
-          <p className="text-sm text-fg-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <p className="text-[13px] text-fg-3">
             Showing {pagination.offset + 1} to{" "}
             {Math.min(pagination.offset + workspaces.length, pagination.total)} of{" "}
             {pagination.total} workspaces
@@ -152,10 +154,10 @@ export function InstanceList() {
               onClick={() => setPage((p) => p - 1)}
               disabled={page === 0 || workspacesQuery.isFetching}
             >
-              <ChevronLeft className="h-4 w-4 mr-1" />
+              <ChevronLeft className="size-4 mr-1" />
               Previous
             </Button>
-            <span className="text-sm text-fg-4 px-2">
+            <span className="px-2 text-[13px] text-fg-3">
               Page {page + 1} of {totalPages}
             </span>
             <Button
@@ -165,7 +167,7 @@ export function InstanceList() {
               disabled={!pagination.hasMore || workspacesQuery.isFetching}
             >
               Next
-              <ChevronRight className="h-4 w-4 ml-1" />
+              <ChevronRight className="size-4 ml-1" />
             </Button>
           </div>
         </div>
@@ -335,33 +337,33 @@ export function InstanceCard({
     switch (status) {
       case "running":
         return (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-[#6bd586]/10 px-2 py-0.5 text-[12.5px] font-medium text-[#6bd586]">
+            <span className="size-1.5 rounded-full bg-[#6bd586] motion-safe:animate-pulse" />
             Running
           </span>
         );
       case "pending":
         return (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-fill px-2.5 py-0.5 text-[11px] font-medium text-fg-3">
-            <Loader2 className="h-3 w-3 animate-spin" />
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-fill-2 px-2 py-0.5 text-[12.5px] font-medium text-fg-3">
+            <Loader2 className="size-3 animate-spin" />
             Pending
           </span>
         );
       case "paused":
         return (
-          <span className="inline-flex items-center rounded-full border border-line bg-fill px-2.5 py-0.5 text-[11px] font-medium text-fg-4">
+          <span className="inline-flex items-center rounded-md bg-fill-2 px-2 py-0.5 text-[12.5px] font-medium text-fg-3">
             Paused
           </span>
         );
       case "terminated":
         return (
-          <span className="inline-flex items-center rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-0.5 text-[11px] font-medium text-red-400">
+          <span className="inline-flex items-center rounded-md bg-red-500/10 px-2 py-0.5 text-[12.5px] font-medium text-red-300">
             Terminated
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center rounded-full border border-line bg-fill px-2.5 py-0.5 text-[11px] font-medium text-fg-4">
+          <span className="inline-flex items-center rounded-md bg-fill-2 px-2 py-0.5 text-[12.5px] font-medium text-fg-3">
             {status}
           </span>
         );
@@ -505,80 +507,71 @@ export function InstanceCard({
       <div className="grid gap-4">
         {!needsSshConfig && (
           <div className="grid gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              SSH command
-            </p>
+            <p className="text-[13px] font-medium text-fg-2">SSH command</p>
             <div
-              className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
+              className="group relative cursor-pointer rounded-xl bg-fill px-4 py-3 transition-colors hover:bg-fill-2"
               onClick={() => copyValue(access.sshCommand, "SSH command copied")}
             >
-              <code className="block text-sm font-medium text-foreground break-all pr-8">
+              <code className="block break-all pr-8 font-mono text-[13px] text-fg">
                 {access.sshCommand}
               </code>
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 transition-opacity group-hover:opacity-100">
-                <Copy className="h-3.5 w-3.5" />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-4 transition-colors group-hover:text-fg-2">
+                <Copy className="size-3.5" />
               </div>
             </div>
           </div>
         )}
 
         {!needsProxySetup && needsSshConfig && (
-          <div className="grid gap-2 rounded-xl border border-border/50 bg-secondary/15 p-3">
+          <div className="grid gap-2">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                One-time SSH config
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="text-[13px] font-medium text-fg-2">One-time SSH config</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-fg-3">
                 Railway uses a TCP proxy on port {access.port}. Add this to{" "}
                 <code>~/.ssh/config</code>, then use the editor buttons below.
               </p>
             </div>
             <button
               type="button"
-              className="group relative w-full cursor-pointer rounded-md border border-border/40 bg-secondary/30 px-3 py-2 text-left transition-colors hover:bg-secondary/50"
+              className="group relative w-full cursor-pointer rounded-xl bg-fill px-3 py-2.5 text-left transition-colors hover:bg-fill-2"
               onClick={() => copyValue(access.sshConfigSnippet, "SSH config copied")}
             >
-              <code className="block max-h-24 overflow-y-auto whitespace-pre-wrap break-all pr-7 text-xs font-medium text-foreground">
+              <code className="block max-h-24 overflow-y-auto whitespace-pre-wrap break-all pr-7 font-mono text-[12.5px] text-fg">
                 {access.sshConfigSnippet}
               </code>
-              <Copy className="absolute right-2.5 top-2.5 h-3.5 w-3.5 opacity-40 transition-opacity group-hover:opacity-100" />
+              <Copy className="absolute right-2.5 top-2.5 size-3.5 text-fg-4 transition-colors group-hover:text-fg-2" />
             </button>
           </div>
         )}
 
         {needsProxySetup && (
-          <div className="grid gap-2 rounded-xl border border-border/50 bg-secondary/15 p-3">
+          <div className="grid gap-2">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                One-time local setup
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="text-[13px] font-medium text-fg-2">One-time local setup</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-fg-3">
                 E2B needs a local proxy. Do these once, then use the editor buttons below.
               </p>
             </div>
             {setupSteps.map((step, index) => (
-              <div
-                key={step.label}
-                className="grid gap-2 rounded-lg border border-border/40 bg-background/40 p-3"
-              >
+              <div key={step.label} className="grid gap-2">
                 <div className="flex items-start gap-2">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/12 text-[12px] font-semibold text-[#e2c47c]">
                     {index + 1}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground">{step.label}</p>
-                    <p className="text-xs text-muted-foreground">{step.help}</p>
+                    <p className="text-sm font-medium text-fg">{step.label}</p>
+                    <p className="text-[13px] text-fg-3">{step.help}</p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  className="group relative w-full cursor-pointer rounded-md border border-border/40 bg-secondary/30 px-3 py-2 text-left transition-colors hover:bg-secondary/50"
+                  className="group relative w-full cursor-pointer rounded-xl bg-fill px-3 py-2.5 text-left transition-colors hover:bg-fill-2"
                   onClick={() => copyValue(step.value, step.copied)}
                 >
-                  <code className="block max-h-24 overflow-y-auto whitespace-pre-wrap break-all pr-7 text-xs font-medium text-foreground">
+                  <code className="block max-h-24 overflow-y-auto whitespace-pre-wrap break-all pr-7 font-mono text-[12.5px] text-fg">
                     {step.value}
                   </code>
-                  <Copy className="absolute right-2.5 top-2.5 h-3.5 w-3.5 opacity-40 transition-opacity group-hover:opacity-100" />
+                  <Copy className="absolute right-2.5 top-2.5 size-3.5 text-fg-4 transition-colors group-hover:text-fg-2" />
                 </button>
               </div>
             ))}
@@ -587,16 +580,14 @@ export function InstanceCard({
 
         {/* Open in editor buttons */}
         <div className="grid gap-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Open in editor
-          </p>
+          <p className="text-[13px] font-medium text-fg-2">Open in editor</p>
           <div className="grid gap-1.5">
             {editorProtocols.map((editor) => (
               <a
                 key={editor.protocol}
                 href={buildEditorUri(editor.protocol, remoteTarget, access.projectPathHint)}
                 onClick={() => trackConnection("editor")}
-                className="flex items-center gap-3 rounded-lg border border-border/40 bg-secondary/20 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/40 hover:border-border/60"
+                className="flex items-center gap-3 rounded-xl bg-fill px-3 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-fill-2"
               >
                 <Image
                   src={editor.icon}
@@ -606,50 +597,50 @@ export function InstanceCard({
                   className="h-[18px] w-[18px]"
                 />
                 <span className="flex-1">Open in {editor.name}</span>
-                <SquareArrowOutUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+                <SquareArrowOutUpRight className="size-3.5 text-fg-4" />
               </a>
             ))}
           </div>
         </div>
 
         {needsSshConfig && (
-          <details className="group rounded-lg border border-border/40 bg-secondary/10 px-3 py-2 text-xs text-muted-foreground">
-            <summary className="cursor-pointer list-none font-medium text-muted-foreground transition-colors hover:text-foreground">
+          <details className="group text-[13px] text-fg-3">
+            <summary className="cursor-pointer list-none font-medium text-fg-3 transition-colors hover:text-fg">
               Manual SSH command
             </summary>
             <button
               type="button"
-              className="group/copy relative mt-2 w-full cursor-pointer rounded-md border border-border/40 bg-secondary/30 px-3 py-2 text-left transition-colors hover:bg-secondary/50"
+              className="group/copy relative mt-2 w-full cursor-pointer rounded-xl bg-fill px-3 py-2.5 text-left transition-colors hover:bg-fill-2"
               onClick={() => copyValue(access.sshCommand, "SSH command copied")}
             >
-              <code className="block max-h-24 overflow-y-auto break-all pr-7 text-xs font-medium text-foreground">
+              <code className="block max-h-24 overflow-y-auto break-all pr-7 font-mono text-[12.5px] text-fg">
                 {access.sshCommand}
               </code>
-              <Copy className="absolute right-2.5 top-2.5 h-3.5 w-3.5 opacity-40 transition-opacity group-hover/copy:opacity-100" />
+              <Copy className="absolute right-2.5 top-2.5 size-3.5 text-fg-4 transition-colors group-hover/copy:text-fg-2" />
             </button>
           </details>
         )}
 
         {/* Copy connection string for Neovim / other editors */}
         <div className="grid gap-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Copy SSH target for Neovim / other editors
+          <p className="text-[13px] font-medium text-fg-2">
+            SSH target for Neovim and other editors
           </p>
           <div
-            className="group relative cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-4 py-3 transition-colors hover:bg-secondary/50"
+            className="group relative cursor-pointer rounded-xl bg-fill px-4 py-3 transition-colors hover:bg-fill-2"
             onClick={() => copyValue(access.sshConnectionString, "Connection string copied")}
           >
-            <code className="block text-sm font-medium text-foreground break-all pr-8">
+            <code className="block break-all pr-8 font-mono text-[13px] text-fg">
               {access.sshConnectionString}
             </code>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 transition-opacity group-hover:opacity-100">
-              <Copy className="h-3.5 w-3.5" />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-4 transition-colors group-hover:text-fg-2">
+              <Copy className="size-3.5" />
             </div>
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          Project path: <code className="text-foreground/80">{access.projectPathHint}</code>
+        <p className="text-[13px] text-fg-3">
+          Project path: <code className="font-mono text-fg-2">{access.projectPathHint}</code>
           {access.expiresAt && (
             <span className="ml-2">
               &middot; Expires{" "}
@@ -661,7 +652,7 @@ export function InstanceCard({
         </p>
 
         {access.notes.length > 0 && (
-          <div className="grid gap-1.5 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5 text-xs text-muted-foreground">
+          <div className="grid gap-1.5 rounded-xl bg-fill px-3 py-2.5 text-[13px] leading-relaxed text-fg-3">
             {access.notes.map((note) => (
               <p key={note}>{note}</p>
             ))}
@@ -676,18 +667,18 @@ export function InstanceCard({
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
         <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">Editor Connect</DialogTitle>
+            <DialogTitle>Connect an editor</DialogTitle>
             <DialogDescription>Connect from your preferred editor over SSH.</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-1">
             {editorAccessQuery.isLoading ? (
-              <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/20 p-4 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Preparing SSH access...
+              <div className="flex items-center gap-2 rounded-xl bg-fill p-4 text-sm text-fg-3">
+                <Loader2 className="size-4 animate-spin" />
+                Preparing SSH access…
               </div>
             ) : editorAccessQuery.error ? (
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+              <div className="rounded-xl bg-[#fb923c]/10 p-4 text-sm text-[#fb923c]">
                 {editorAccessQuery.error.message}
               </div>
             ) : editorAccessQuery.data ? (
@@ -707,9 +698,7 @@ export function InstanceCard({
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Open workspace port</DialogTitle>
-            <DialogDescription>
-              Expose a port from this workspace. Enter a short name and the port number.
-            </DialogDescription>
+            <DialogDescription>Expose a port from this workspace.</DialogDescription>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -749,13 +738,13 @@ export function InstanceCard({
                   placeholder="e.g. 7681"
                 />
               </div>
-              <div className="flex items-start justify-between gap-4 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5">
+              <div className="flex items-start justify-between gap-4 rounded-xl bg-fill px-3.5 py-3">
                 <div className="grid gap-1">
                   <Label htmlFor="port-public">Public URL</Label>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[13px] leading-relaxed text-fg-3">
                     {openPortForm.isPublic
                       ? "Anyone with the URL can reach this port. Use this for APIs and webhooks."
-                      : "Only you can reach this port, from a browser signed in to GitTerm."}
+                      : "Only you can reach this port, from a browser signed in to Gitterm."}
                   </p>
                 </div>
                 <Switch
@@ -768,21 +757,12 @@ export function InstanceCard({
               </div>
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowOpenPortDialog(false)}
-                className="border-border/50"
-              >
+              <Button type="button" variant="outline" onClick={() => setShowOpenPortDialog(false)}>
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={openWorkspacePortMutation.isPending}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
+              <Button type="submit" disabled={openWorkspacePortMutation.isPending}>
                 {openWorkspacePortMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="size-4 animate-spin" />
                 ) : (
                   "Open port"
                 )}
@@ -792,12 +772,12 @@ export function InstanceCard({
         </DialogContent>
       </Dialog>
 
-      <div className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-card transition-all hover:border-line-2">
+      <div className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-card transition-colors hover:border-line-2">
         <div className="px-5 pt-5 pb-3">
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-fill">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill-2">
                   <Image
                     src={agentIcon}
                     alt={workspace.image.agentType.name}
@@ -807,10 +787,10 @@ export function InstanceCard({
                   />
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-semibold text-fg truncate">
+                  <span className="truncate text-[15px] font-semibold tracking-[-0.01em] text-fg">
                     {workspace.name || workspace.subdomain}
                   </span>
-                  <span className="text-xs text-fg-4 truncate">
+                  <span className="truncate text-[13px] text-fg-3">
                     {workspace.image.agentType.name}
                   </span>
                 </div>
@@ -825,17 +805,20 @@ export function InstanceCard({
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
                   title={`Open ${workspace.repositoryUrl} on GitHub`}
-                  className="flex items-center gap-2 text-xs text-fg-4 min-w-0 pl-12 transition-colors hover:text-fg-2"
+                  className="flex min-w-0 items-center gap-2 pl-12 text-[13px] text-fg-3 transition-colors hover:text-fg"
                 >
-                  <GitBranch className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate font-mono underline decoration-line-2 underline-offset-2 hover:decoration-line-2">
+                  <GitBranch className="size-3.5 shrink-0" />
+                  <span className="truncate font-mono text-[12.5px] underline decoration-line-2 underline-offset-2">
                     {getRepoName()}
                   </span>
                 </a>
               ) : (
-                <div className="flex items-center gap-2 text-xs text-fg-4 min-w-0 pl-12">
-                  <GitBranch className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate font-mono" title={workspace.repositoryUrl || ""}>
+                <div className="flex min-w-0 items-center gap-2 pl-12 text-[13px] text-fg-3">
+                  <GitBranch className="size-3.5 shrink-0" />
+                  <span
+                    className="truncate font-mono text-[12.5px]"
+                    title={workspace.repositoryUrl || ""}
+                  >
                     {getRepoName()}
                   </span>
                 </div>
@@ -843,10 +826,10 @@ export function InstanceCard({
           </div>
         </div>
         <div className="pb-4 px-5 flex-1">
-          <div className="grid gap-2.5 text-xs text-fg-4 pl-12">
+          <div className="grid gap-2 pl-12 text-[13px] text-fg-3">
             {regionInfo.name && (
               <div className="flex items-center gap-2">
-                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                <MapPin className="size-3.5 shrink-0" />
                 <span className="truncate">
                   {regionInfo.location
                     ? `${regionInfo.name} · ${regionInfo.location}`
@@ -861,15 +844,15 @@ export function InstanceCard({
                   alt=""
                   width={14}
                   height={14}
-                  className="h-3.5 w-3.5 shrink-0 object-contain"
+                  className="size-3.5 shrink-0 object-contain"
                 />
               ) : (
-                <Server className="h-3.5 w-3.5 shrink-0" />
+                <Server className="size-3.5 shrink-0" />
               )}
               <span className="truncate">{regionInfo.providerName}</span>
             </div>
             <div className="flex items-center gap-2">
-              <Clock className="h-3.5 w-3.5 shrink-0" />
+              <Clock className="size-3.5 shrink-0" />
               <span className="truncate">
                 {formatDistanceToNow(new Date(workspace.startedAt), {
                   addSuffix: true,
@@ -878,8 +861,8 @@ export function InstanceCard({
             </div>
             {workspace.lastActiveAt && isRunning && (
               <div className="flex items-center gap-2">
-                <HeartPlusIcon className="h-3.5 w-3.5 shrink-0 text-primary opacity-70" />
-                <span className="truncate text-primary/70">
+                <HeartPlusIcon className="size-3.5 shrink-0 text-primary" />
+                <span className="truncate text-[#e2c47c]">
                   Active{" "}
                   {formatDistanceToNow(new Date(workspace.lastActiveAt), {
                     addSuffix: true,
@@ -889,15 +872,15 @@ export function InstanceCard({
             )}
             {workspace.domain && isRunning && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                <Globe className="h-3.5 w-3.5 shrink-0 text-primary opacity-60" />
+                <Globe className="size-3.5 shrink-0 text-primary" />
                 <button
                   onClick={() => {
                     if (workspaceUrl) {
                       navigator.clipboard.writeText(workspaceUrl);
-                      toast.success("Domain copied!");
+                      toast.success("Domain copied");
                     }
                   }}
-                  className="text-xs font-mono text-primary/80 hover:text-primary truncate transition-colors cursor-pointer underline decoration-dotted underline-offset-2 text-left min-w-0"
+                  className="min-w-0 cursor-pointer truncate text-left font-mono text-[12.5px] text-[#e2c47c] underline decoration-dotted underline-offset-2 transition-colors hover:text-primary"
                   title={workspaceDisplayUrl || ""}
                 >
                   {workspaceDisplayUrl}
@@ -906,9 +889,9 @@ export function InstanceCard({
             )}
             {workspace.hasAccessCredential && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                <KeyRound className="h-3.5 w-3.5 shrink-0 text-amber-400 opacity-60" />
+                <KeyRound className="size-3.5 shrink-0" />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <span className="text-xs font-mono text-fg-4 tracking-widest select-none">
+                  <span className="select-none text-[13px] text-fg-3">
                     {isT3 ? "Pairing link" : "*".repeat(16)}
                   </span>
                   <button
@@ -920,16 +903,16 @@ export function InstanceCard({
                         navigator.clipboard.writeText(
                           getT3PairingUrl(workspace.subdomain, credential),
                         );
-                        toast.success("Pairing link copied! It can be used once.");
+                        toast.success("Pairing link copied. It works once.");
                       } else {
                         navigator.clipboard.writeText(credential);
-                        toast.success("Password copied to clipboard!");
+                        toast.success("Password copied");
                       }
                     }}
-                    className="shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-400/70 bg-amber-400/[0.06] border border-amber-400/[0.1] hover:bg-amber-400/[0.12] hover:text-amber-400 transition-colors cursor-pointer"
+                    className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md bg-fill-2 px-2 py-0.5 text-[12.5px] font-medium text-fg-2 transition-colors hover:bg-fill hover:text-fg"
                     title={isT3 ? "Copy one-time pairing link" : "Copy server password"}
                   >
-                    <Copy className="h-2.5 w-2.5 text-amber-400 opacity-70" />
+                    <Copy className="size-3" />
                     Copy
                   </button>
                   {isT3 && isRunning && (
@@ -939,13 +922,13 @@ export function InstanceCard({
                       onClick={() =>
                         regenerateAccessCredentialMutation.mutate({ workspaceId: workspace.id })
                       }
-                      className="shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-400/70 bg-amber-400/[0.06] border border-amber-400/[0.1] hover:bg-amber-400/[0.12] hover:text-amber-400 transition-colors cursor-pointer disabled:opacity-60"
+                      className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md bg-fill-2 px-2 py-0.5 text-[12.5px] font-medium text-fg-2 transition-colors hover:bg-fill hover:text-fg disabled:opacity-60"
                       title="Pairing links are one-time; generate a new one for another device"
                     >
                       {regenerateAccessCredentialMutation.isPending ? (
-                        <Loader2 className="h-2.5 w-2.5 animate-spin text-amber-400 opacity-70" />
+                        <Loader2 className="size-3 animate-spin" />
                       ) : (
-                        <Plus className="h-2.5 w-2.5 text-amber-400 opacity-70" />
+                        <Plus className="size-3" />
                       )}
                       New link
                     </button>
@@ -955,19 +938,19 @@ export function InstanceCard({
             )}
             {canPairOpencode && isRunning && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                <Link2 className="h-3.5 w-3.5 shrink-0 text-amber-400 opacity-60" />
+                <Link2 className="size-3.5 shrink-0" />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <span className="text-xs text-fg-4">Desktop pairing link</span>
+                  <span className="text-[13px] text-fg-3">Desktop pairing link</span>
                   <button
                     type="button"
                     onClick={() => {
                       trackConnection("desktop");
                       void copyOpencodePairingLink(workspace.id);
                     }}
-                    className="shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-400/70 bg-amber-400/[0.06] border border-amber-400/[0.1] hover:bg-amber-400/[0.12] hover:text-amber-400 transition-colors cursor-pointer"
+                    className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md bg-fill-2 px-2 py-0.5 text-[12.5px] font-medium text-fg-2 transition-colors hover:bg-fill hover:text-fg"
                     title="Copy a one-time link for Connect server in the OpenCode desktop app"
                   >
-                    <Copy className="h-2.5 w-2.5 text-amber-400 opacity-70" />
+                    <Copy className="size-3" />
                     Copy
                   </button>
                 </div>
@@ -975,10 +958,10 @@ export function InstanceCard({
             )}
             {isOpencode && isRunning && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                <Folder className="h-3.5 w-3.5 shrink-0" />
+                <Folder className="size-3.5 shrink-0" />
                 <button
-                  onClick={() => copyValue(projectPath, "Project path copied!")}
-                  className="text-xs font-mono text-fg-4 hover:text-fg-2 truncate transition-colors cursor-pointer underline decoration-dotted underline-offset-2 text-left min-w-0"
+                  onClick={() => copyValue(projectPath, "Project path copied")}
+                  className="min-w-0 cursor-pointer truncate text-left font-mono text-[12.5px] text-fg-3 underline decoration-dotted underline-offset-2 transition-colors hover:text-fg"
                   title="Copy project path and paste it into OpenCode when opening this workspace's project"
                 >
                   {projectPath}
@@ -987,14 +970,14 @@ export function InstanceCard({
             )}
             {workspace.editorAccessEnabled && (
               <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                <Monitor className="h-3.5 w-3.5 shrink-0" />
-                <span className="text-xs text-fg-4">Editor access enabled</span>
+                <Monitor className="size-3.5 shrink-0" />
+                <span>Editor access on</span>
               </div>
             )}
             {((workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0) ||
               isRunning) && (
               <div className="flex items-start gap-2 mt-0.5 min-w-0">
-                <EthernetPort className="h-3.5 w-3.5 shrink-0 mt-px" />
+                <EthernetPort className="size-3.5 shrink-0 mt-px" />
                 <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                   {workspace.exposedPorts &&
                     Object.entries(workspace.exposedPorts).map(([port, exposedPort]) => {
@@ -1007,17 +990,17 @@ export function InstanceCard({
                         setPortVisibilityMutation.variables?.port === portNum;
                       return (
                         <div key={port} className="flex items-center gap-1.5 min-w-0">
-                          <span className="flex items-center gap-1 text-xs min-w-0 truncate">
+                          <span className="flex min-w-0 items-center gap-1.5 truncate">
                             <Link
                               href={portUrl(portNum) ?? ("#" as any)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="bg-muted px-1.5 py-0.5 rounded font-mono text-primary/90 border border-border hover:bg-primary/10 transition-colors"
+                              className="rounded-md bg-fill-2 px-1.5 py-0.5 font-mono text-[12.5px] text-[#e2c47c] transition-colors hover:bg-primary/12"
                               title={`Open :${port} in browser`}
                             >
                               :{port}
                             </Link>
-                            <span className="text-muted-foreground">
+                            <span className="truncate text-fg-3">
                               {exposedPort.name ? `(${exposedPort.name})` : "(Port)"}
                             </span>
                           </span>
@@ -1031,7 +1014,7 @@ export function InstanceCard({
                               })
                             }
                             disabled={isUpdatingVisibility}
-                            className="shrink-0 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] text-muted-foreground/70 hover:text-primary hover:bg-primary/10 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[12.5px] text-fg-4 transition-colors hover:bg-fill-2 hover:text-fg-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-70"
                             title={
                               isPublic
                                 ? "Public: anyone with the URL can reach this port. Click to make private."
@@ -1042,11 +1025,11 @@ export function InstanceCard({
                             }
                           >
                             {isUpdatingVisibility ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <Loader2 className="size-3 animate-spin" />
                             ) : isPublic ? (
-                              <Globe className="h-3 w-3" />
+                              <Globe className="size-3" />
                             ) : (
-                              <Lock className="h-3 w-3" />
+                              <Lock className="size-3" />
                             )}
                             {isPublic ? "Public" : "Private"}
                           </button>
@@ -1060,13 +1043,13 @@ export function InstanceCard({
                               });
                             }}
                             disabled={isClosing}
-                            className="shrink-0 p-0.5 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-70"
+                            className="shrink-0 rounded-md p-1 text-fg-4 transition-colors hover:bg-red-500/10 hover:text-red-300 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-70"
                             aria-label={`Remove port ${port}`}
                           >
                             {isClosing ? (
-                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground opacity-50" />
+                              <Loader2 className="size-3 animate-spin" />
                             ) : (
-                              <X className="h-3 w-3 text-muted-foreground opacity-50" />
+                              <X className="size-3" />
                             )}
                           </button>
                         </div>
@@ -1079,14 +1062,14 @@ export function InstanceCard({
                         setShowOpenPortDialog(true);
                         setOpenPortForm(EMPTY_OPEN_PORT_FORM);
                       }}
-                      className={`inline-flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-primary transition-colors w-fit focus:outline-none focus:ring-1 focus:ring-ring focus:ring-offset-0 rounded ${
+                      className={`inline-flex w-fit items-center gap-1 rounded text-[13px] text-fg-3 transition-colors hover:text-fg focus:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
                         workspace.exposedPorts && Object.keys(workspace.exposedPorts).length > 0
                           ? "mt-0.5"
                           : ""
                       }`}
                       aria-label="Open port"
                     >
-                      <Plus className="h-3 w-3 text-muted-foreground opacity-70" />
+                      <Plus className="size-3.5" />
                       Open port
                     </button>
                   )}
@@ -1095,7 +1078,7 @@ export function InstanceCard({
             )}
           </div>
         </div>
-        <div className="flex gap-2 border-t border-line p-4">
+        <div className="flex gap-2 px-5 pt-1 pb-5">
           {isRunning &&
             workspaceUrl &&
             (workspace.serverOnly ? (
@@ -1103,7 +1086,7 @@ export function InstanceCard({
                 {isT3 ? (
                   <Button
                     size="sm"
-                    className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
+                    className="h-9 flex-1"
                     disabled={!workspace.hasAccessCredential}
                     title="Open in the T3 Code desktop app (one-time pairing link)"
                     onClick={async () => {
@@ -1117,13 +1100,13 @@ export function InstanceCard({
                       }
                     }}
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />
+                    <ExternalLink className="size-3.5" />
                     Open in T3
                   </Button>
                 ) : (
                   <Button
                     size="sm"
-                    className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
+                    className="h-9 flex-1"
                     title="Copy a command that opens this workspace in your local terminal UI"
                     onClick={async () => {
                       if (!workspace.subdomain) return;
@@ -1147,24 +1130,25 @@ export function InstanceCard({
                       });
                     }}
                   >
-                    <Copy className="h-3.5 w-3.5" />
+                    <Copy className="size-3.5" />
                     Attach TUI
                   </Button>
                 )}
                 {workspace.editorAccessEnabled && (
                   <Button
                     size="sm"
-                    className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
+                    variant="secondary"
+                    className="h-9 flex-1"
                     onClick={() => setShowConnectDialog(true)}
                   >
-                    <Terminal className="h-3.5 w-3.5" />
+                    <Terminal className="size-3.5" />
                     Editor
                   </Button>
                 )}
                 {isT3 ? (
                   <Button
                     size="sm"
-                    className="h-9 text-xs gap-2 border-border/50"
+                    className="h-9 px-3"
                     variant="outline"
                     disabled={!workspace.hasAccessCredential}
                     title="Open in the T3 web app (browser)"
@@ -1176,12 +1160,12 @@ export function InstanceCard({
                       }
                     }}
                   >
-                    <Globe className="h-3.5 w-3.5" />
+                    <Globe className="size-3.5" />
                   </Button>
                 ) : canPairOpencode ? (
                   <Button
                     size="sm"
-                    className="h-9 text-xs gap-2 border-border/50"
+                    className="h-9 px-3"
                     variant="outline"
                     title="Open the OpenCode web app, already signed in"
                     onClick={() => {
@@ -1189,12 +1173,12 @@ export function InstanceCard({
                       void openOpencodeInBrowser(workspace.id, workspaceUrl);
                     }}
                   >
-                    <Globe className="h-3.5 w-3.5" />
+                    <Globe className="size-3.5" />
                   </Button>
                 ) : (
                   <Button
                     size="sm"
-                    className="h-9 text-xs gap-2 border-border/50"
+                    className="h-9 px-3"
                     variant="outline"
                     title="Open workspace in browser"
                     asChild
@@ -1205,39 +1189,35 @@ export function InstanceCard({
                       rel="noreferrer"
                       onClick={() => trackConnection("browser")}
                     >
-                      <Globe className="h-3.5 w-3.5" />
+                      <Globe className="size-3.5" />
                     </a>
                   </Button>
                 )}
               </div>
             ) : (
-              <Button
-                size="sm"
-                className="h-9 flex-1 text-xs gap-2 bg-primary/80 text-primary-foreground hover:bg-primary/90"
-                asChild
-              >
+              <Button size="sm" className="h-9 flex-1" asChild>
                 <a
                   href={workspaceUrl}
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => trackConnection("browser")}
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Open Workspace
+                  <ExternalLink className="size-3.5" />
+                  Open workspace
                 </a>
               </Button>
             ))}
           {isPaused && (
             <Button
               size="sm"
-              className="h-9 flex-1 text-xs gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
+              className="h-9 flex-1"
               disabled={restartWorkspaceMutation.isPending}
               onClick={() => restartWorkspaceMutation.mutate({ workspaceId: workspace.id })}
             >
               {restartWorkspaceMutation.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" />
               ) : (
-                <PlayCircle className="h-3.5 w-3.5" />
+                <PlayCircle className="size-3.5" />
               )}
               Restart
             </Button>
@@ -1248,8 +1228,9 @@ export function InstanceCard({
               variant="outline"
               size="sm"
               className={cn(
-                "h-9 px-3 text-xs",
-                workspace.alwaysOn && "border-primary/40 bg-primary/10 text-primary",
+                "h-9 px-3",
+                workspace.alwaysOn &&
+                  "bg-primary/12 text-[#e2c47c] shadow-[inset_0_0_0_1px_rgba(211,173,85,0.3)] hover:bg-primary/20 hover:text-[#e2c47c]",
               )}
               title={
                 workspace.alwaysOn
@@ -1266,9 +1247,9 @@ export function InstanceCard({
               }
             >
               {setAlwaysOnMutation.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" />
               ) : (
-                <InfinityIcon className="h-3.5 w-3.5" />
+                <InfinityIcon className="size-3.5" />
               )}
             </Button>
           )}
@@ -1277,14 +1258,16 @@ export function InstanceCard({
             <Button
               variant="outline"
               size="sm"
-              className="h-9 px-3 text-xs"
+              className="h-9 px-3"
+              title="Pause"
+              aria-label="Pause workspace"
               disabled={pauseWorkspaceMutation.isPending}
               onClick={() => pauseWorkspaceMutation.mutate({ workspaceId: workspace.id })}
             >
               {pauseWorkspaceMutation.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" />
               ) : (
-                <PauseIcon className="h-3.5 w-3.5" />
+                <PauseIcon className="size-3.5" />
               )}
             </Button>
           )}
@@ -1292,14 +1275,16 @@ export function InstanceCard({
           <Button
             variant="outline"
             size="sm"
-            className="h-9 px-3 border-border/50 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/20"
+            className="h-9 px-3 hover:bg-red-500/10 hover:text-red-300"
+            title="Terminate"
+            aria-label="Terminate workspace"
             disabled={deleteServiceMutation.isPending}
             onClick={() => deleteServiceMutation.mutate({ workspaceId: workspace.id })}
           >
             {deleteServiceMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
             ) : (
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="size-4" />
             )}
           </Button>
         </div>

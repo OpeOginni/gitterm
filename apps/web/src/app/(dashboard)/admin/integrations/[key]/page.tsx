@@ -5,9 +5,10 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowUpRight, Clock, Power } from "lucide-react";
+import { ArrowUpRight, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardHeader, DashboardShell } from "@/components/dashboard/shell";
+import { SettingsGroup } from "@/components/dashboard/settings/settings-page";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,13 +42,8 @@ export default function AdminIntegrationDetailPage() {
   const meta = key ? INTEGRATION_META[key] : null;
 
   const backButton = (
-    <Button asChild variant="outline">
-      <Link
-        href={"/admin/integrations" as Route}
-        className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-      >
-        Back to Integrations
-      </Link>
+    <Button asChild variant="secondary">
+      <Link href={"/admin/integrations" as Route}>Back to integrations</Link>
     </Button>
   );
 
@@ -59,13 +55,13 @@ export default function AdminIntegrationDetailPage() {
         </DashboardHeader>
         <div className="space-y-4 pt-2">
           {error ? (
-            <p role="alert" className="text-sm text-red-400">
+            <p role="alert" className="text-[14px] text-destructive">
               Couldn’t load integration: {error.message}
             </p>
           ) : (
             <>
-              <Skeleton className="h-24 w-full rounded-2xl" />
-              <Skeleton className="h-64 w-full rounded-2xl" />
+              <Skeleton className="h-24 w-full rounded-2xl bg-fill" />
+              <Skeleton className="h-64 w-full rounded-2xl bg-fill" />
             </>
           )}
         </div>
@@ -115,10 +111,10 @@ export default function AdminIntegrationDetailPage() {
         icon={<IntegrationLogo meta={meta} />}
       >
         <div className="flex shrink-0 items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="ghost">
             <Link
               href={"/dashboard/integrations" as Route}
-              className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              className="gap-1.5 text-fg-3 hover:text-fg"
             >
               User view <ArrowUpRight className="size-3.5" />
             </Link>
@@ -127,23 +123,21 @@ export default function AdminIntegrationDetailPage() {
         </div>
       </DashboardHeader>
 
-      <div className="space-y-6 pt-2">
+      <div className="space-y-6">
         {item.ready ? (
-          <div className="rounded-2xl border border-border bg-card p-6">
+          <SettingsGroup>
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Power className="size-4 text-muted-foreground" />
-                  <Label
-                    htmlFor="integration-enabled"
-                    className="text-sm font-medium text-foreground/90"
-                  >
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Label htmlFor="integration-enabled" className="text-[15px] font-medium text-fg">
                     Available to users
                   </Label>
                   <StatusBadge status={status} />
                 </div>
-                <p className="max-w-2xl text-xs text-muted-foreground">{meta.description}</p>
-                <p className="text-xs text-muted-foreground/80">
+                <p className="max-w-2xl text-[13.5px] leading-relaxed text-fg-3">
+                  {meta.description}
+                </p>
+                <p className="text-[13px] text-fg-3">
                   {configured
                     ? `When enabled, users can connect ${item.name} from their Integrations page.`
                     : `Finish the configuration below before enabling ${item.name} for users.`}
@@ -156,17 +150,17 @@ export default function AdminIntegrationDetailPage() {
                 onCheckedChange={toggle}
               />
             </div>
-          </div>
+          </SettingsGroup>
         ) : (
-          <div className="rounded-2xl border border-dashed border-border bg-card/40 p-10 text-center">
+          <SettingsGroup bodyClassName="py-10 text-center">
             <IntegrationLogo meta={meta} size="lg" className="mx-auto" />
-            <div className="mt-4 flex items-center justify-center gap-2 text-sm font-medium text-foreground/90">
-              <Clock className="size-4 text-muted-foreground" /> Connector coming later
-            </div>
-            <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground">
+            <p className="mt-4 flex items-center justify-center gap-2 text-[15px] font-medium text-fg">
+              <Clock className="size-4 text-fg-3" /> Connector coming later
+            </p>
+            <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-fg-3">
               {meta.description}
             </p>
-          </div>
+          </SettingsGroup>
         )}
 
         {key === "github" ? <GithubConfig data={data} refresh={refresh} /> : null}

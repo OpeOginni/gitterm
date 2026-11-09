@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<!-- T3 Code Nightly app icon, composed from pingdotgg/t3code assets/nightly/app-icon.icon (MIT). -->
+<defs><clipPath id="t3n-frame"><rect width="1024" height="1024" rx="80"/></clipPath></defs>
+<g clip-path="url(#t3n-frame)">
+<svg x="-6.40" y="-8.57" width="1036.80" height="1036.80" viewBox="0 0 128 128" overflow="visible"><defs>
+    <linearGradient id="bg-night" x1="12" y1="6" x2="116" y2="124" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07152F"/>
+      <stop offset="0.5" stop-color="#151443"/>
+      <stop offset="1" stop-color="#32155B"/>
+    </linearGradient>
+    <radialGradient id="bg-skyGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(90 28) rotate(137) scale(78 70)">
+      <stop stop-color="#5165D8" stop-opacity="0.4"/>
+      <stop offset="0.5" stop-color="#283075" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#111635" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bg-horizonGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(42 127) rotate(-70) scale(68 96)">
+      <stop stop-color="#6646B6" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#352066" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="bg-frame">
+      <rect width="128" height="128" rx="10"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#bg-frame)">
+    <rect width="128" height="128" fill="url(#bg-night)"/>
+    <rect width="128" height="128" fill="url(#bg-skyGlow)"/>
+    <rect width="128" height="128" fill="url(#bg-horizonGlow)"/>
+    <g fill="#E4EAFF">
+      <circle cx="17" cy="18" r="0.55" fill-opacity="0.82"/>
+      <circle cx="54" cy="14" r="0.4" fill-opacity="0.65"/>
+      <circle cx="116" cy="42" r="0.45" fill-opacity="0.72"/>
+      <circle cx="10" cy="70" r="0.35" fill-opacity="0.56"/>
+      <circle cx="117" cy="88" r="0.4" fill-opacity="0.6"/>
+    </g>
+    <path d="M31 22V24.8M29.6 23.4H32.4" stroke="#EEF2FF" stroke-width="0.5" stroke-linecap="round" opacity="0.72"/>
+    <path d="M111 58V60M110 59H112" stroke="#CBD8FF" stroke-width="0.45" stroke-linecap="round" opacity="0.58"/>
+    <path d="M-12 119C14 99 39 99 63 110C87 121 110 116 140 96V140H-12V119Z" fill="#20184E" fill-opacity="0.42"/>
+    <path d="M-12 129C15 111 42 112 66 122C91 132 114 124 140 107V140H-12V129Z" fill="#6946B8" fill-opacity="0.22"/>
+  </g></svg>
+<svg x="-597.64" y="380.66" width="1600.00" height="800.00" viewBox="0 0 64 32" overflow="visible"><defs>
+    <linearGradient id="cl-cloud" x1="7" y1="10" x2="57" y2="25" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4EA4FF" stop-opacity="0.62"/>
+      <stop offset="0.52" stop-color="#696FEA" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#A85BEA" stop-opacity="0.58"/>
+    </linearGradient>
+    <radialGradient id="cl-highlight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(30 14) rotate(13) scale(27 10)">
+      <stop stop-color="#C8D7FF" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#8C8EF2" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="cl-soft" x="-8" y="-8" width="80" height="48" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="0.35"/>
+    </filter>
+  </defs>
+  <g filter="url(#cl-soft)">
+    <path d="M7 23.5C7 18.9 10.8 15.2 15.5 15.2C16.9 10.7 21.1 7.5 26.1 7.5C31 7.5 35.2 10.5 36.7 14.8C38.5 13.2 40.9 12.2 43.5 12.2C49.1 12.2 53.7 16.4 54.1 21.8C57 22.2 59.2 24 60 26.5H8.2C7.4 25.7 7 24.7 7 23.5Z" fill="url(#cl-cloud)"/>
+    <path d="M11 22.9C12.7 19.8 16 18 19.5 18.5C21 13.4 25.6 10 30.8 10.6C35 11 38.3 13.9 39.4 17.7C43.8 15.5 49 17.3 51.1 21.7C46.2 20.3 41.9 21 37.7 22.1C29.6 24.2 21.5 21.3 11 22.9Z" fill="url(#cl-highlight)"/>
+  </g></svg>
+<svg x="419.96" y="137.70" width="960.00" height="480.00" viewBox="0 0 64 32" overflow="visible"><defs>
+    <linearGradient id="cu-cloud" x1="7" y1="10" x2="57" y2="25" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4EA4FF" stop-opacity="0.62"/>
+      <stop offset="0.52" stop-color="#696FEA" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#A85BEA" stop-opacity="0.58"/>
+    </linearGradient>
+    <radialGradient id="cu-highlight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(30 14) rotate(13) scale(27 10)">
+      <stop stop-color="#C8D7FF" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#8C8EF2" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="cu-soft" x="-8" y="-8" width="80" height="48" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="0.35"/>
+    </filter>
+  </defs>
+  <g transform="translate(64 0) scale(-1 1)" filter="url(#cu-soft)">
+    <path d="M7 23.5C7 18.9 10.8 15.2 15.5 15.2C16.9 10.7 21.1 7.5 26.1 7.5C31 7.5 35.2 10.5 36.7 14.8C38.5 13.2 40.9 12.2 43.5 12.2C49.1 12.2 53.7 16.4 54.1 21.8C57 22.2 59.2 24 60 26.5H8.2C7.4 25.7 7 24.7 7 23.5Z" fill="url(#cu-cloud)"/>
+    <path d="M11 22.9C12.7 19.8 16 18 19.5 18.5C21 13.4 25.6 10 30.8 10.6C35 11 38.3 13.9 39.4 17.7C43.8 15.5 49 17.3 51.1 21.7C46.2 20.3 41.9 21 37.7 22.1C29.6 24.2 21.5 21.3 11 22.9Z" fill="url(#cu-highlight)"/>
+  </g></svg>
+<svg x="-32.00" y="-32.00" width="1088.00" height="1088.00" viewBox="0 0 128 128" overflow="visible"><path d="M33.4509 93V47.56H15.5309V37H64.3309V47.56H46.4109V93H33.4509ZM86.7253 93.96C82.832 93.96 78.9653 93.4533 75.1253 92.44C71.2853 91.3733 68.032 89.88 65.3653 87.96L70.4053 78.04C72.5386 79.5867 75.0186 80.8133 77.8453 81.72C80.672 82.6267 83.5253 83.08 86.4053 83.08C89.6586 83.08 92.2186 82.44 94.0853 81.16C95.952 79.88 96.8853 78.12 96.8853 75.88C96.8853 73.7467 96.0586 72.0667 94.4053 70.84C92.752 69.6133 90.0853 69 86.4053 69H80.4853V60.44L96.0853 42.76L97.5253 47.4H68.1653V37H107.365V45.4L91.8453 63.08L85.2853 59.32H89.0453C95.9253 59.32 101.125 60.8667 104.645 63.96C108.165 67.0533 109.925 71.0267 109.925 75.88C109.925 79.0267 109.099 81.9867 107.445 84.76C105.792 87.48 103.259 89.6933 99.8453 91.4C96.432 93.1067 92.0586 93.96 86.7253 93.96Z" fill="white"/></svg>
+</g>
+</svg>

@@ -22,7 +22,7 @@ import { track } from "@/lib/analytics";
 import { ProviderLogo } from "./provider-logo";
 import { isLabelTaken, suggestLabel, type ModelCredential, type ModelProvider } from "./types";
 
-const fieldLabelClass = "font-mono text-[10px] uppercase tracking-[0.22em] text-fg-4";
+const fieldLabelClass = "text-[13px] font-medium text-fg-2";
 
 function ProviderCombobox({
   providers,
@@ -141,7 +141,7 @@ function ProviderCombobox({
           {filtered.map((provider, index) => (
             <div key={provider.id}>
               {(index === 0 || index === featuredCount) && (
-                <p className="px-2.5 pb-1 pt-2 font-mono text-[9.5px] uppercase tracking-[0.2em] text-fg-4">
+                <p className="px-2.5 pb-1 pt-2 text-[12.5px] font-medium text-fg-4">
                   {provider.featured ? "Popular" : "More providers"}
                 </p>
               )}
@@ -160,7 +160,7 @@ function ProviderCombobox({
                 <ProviderLogo name={provider.name} displayName={provider.displayName} />
                 <span className="min-w-0 flex-1 truncate">{provider.displayName}</span>
                 {provider.fields.length > 0 && (
-                  <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-fg-4">
+                  <span className="text-[12.5px] text-fg-4">
                     + {provider.fields.map((field) => field.label).join(", ")}
                   </span>
                 )}
@@ -190,7 +190,7 @@ export function ApiKeyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         ref={setContainer}
-        className="gap-0 overflow-visible border-line bg-card p-0 sm:max-w-[560px]"
+        className="gap-0 overflow-visible bg-card p-0 sm:max-w-[560px]"
       >
         {/* Mounted per open, so every open starts from a clean form. */}
         <ApiKeyForm {...props} container={container} onClose={() => onOpenChange(false)} />
@@ -275,7 +275,7 @@ function ApiKeyForm({
 
   return (
     <>
-      <DialogHeader className="px-5 pt-5 pb-4">
+      <DialogHeader className="px-5 pt-5 sm:px-6">
         <DialogTitle>Add API key</DialogTitle>
         <DialogDescription>Keys are encrypted and only sent to your workspaces.</DialogDescription>
       </DialogHeader>
@@ -333,7 +333,7 @@ function ApiKeyForm({
                 href={provider.keyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] text-fg-3 transition-colors hover:text-fg"
+                className="inline-flex items-center gap-1 text-[13px] text-fg-3 transition-colors hover:text-fg"
               >
                 Get a key
                 <ExternalLink className="h-3 w-3" />
@@ -362,7 +362,7 @@ function ApiKeyForm({
             placeholder="default, work, personal"
             aria-invalid={labelTaken}
           />
-          <p className={cn("text-[11px] text-fg-4", labelTaken && "text-destructive")}>
+          <p className={cn("text-[12.5px] text-fg-4", labelTaken && "text-red-300")}>
             {labelTaken
               ? `You already have a ${provider?.displayName} key called "${label.trim()}".`
               : "Tells keys for the same provider apart in workspaces and the SDK."}
@@ -374,13 +374,8 @@ function ApiKeyForm({
         <Button variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="api-key-form"
-          disabled={!canSubmit || storeApiKey.isPending}
-          className="gap-2"
-        >
-          {storeApiKey.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+        <Button type="submit" form="api-key-form" disabled={!canSubmit || storeApiKey.isPending}>
+          {storeApiKey.isPending && <Loader2 className="size-4 animate-spin" />}
           {storeApiKey.isPending ? "Saving..." : "Save key"}
         </Button>
       </DialogFooter>

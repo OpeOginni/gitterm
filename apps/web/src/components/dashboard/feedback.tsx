@@ -50,22 +50,22 @@ export function FeedbackForm() {
         <Button
           type="button"
           size="icon"
-          className="size-10 rounded-full bg-primary text-primary-foreground shadow-lg transition-shadow hover:bg-primary/85 hover:shadow-xl"
+          aria-label="Send feedback"
+          className="size-11 rounded-full shadow-[0_10px_30px_-10px_rgba(0,0,0,0.8)]"
         >
           <MessageCircleMoreIcon className="size-5" />
         </Button>
       </DialogTrigger>
       {showThankYou ? (
         <DialogContent>
-          <div className="flex flex-col gap-4">
-            <h1 className="text-xl font-bold text-white">Thank you!</h1>
-            <p className="text-sm text-fg-4">
-              We appreciate your feedback and will use it to improve GitTerm.
-            </p>
-          </div>
+          <DialogHeader>
+            <DialogTitle>Thanks for the feedback</DialogTitle>
+            <DialogDescription>
+              We read every message and use it to improve Gitterm.
+            </DialogDescription>
+          </DialogHeader>
           <DialogFooter>
             <Button
-              className="bg-primary text-xs text-primary-foreground hover:bg-primary/85"
               onClick={() => {
                 setShowThankYou(false);
                 setOpen(false);
@@ -79,25 +79,24 @@ export function FeedbackForm() {
         <DialogContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <DialogHeader>
-              <DialogTitle className="text-white">Feedback</DialogTitle>
-              <DialogDescription>Share your thoughts and suggestions with us.</DialogDescription>
+              <DialogTitle>Feedback</DialogTitle>
+              <DialogDescription>
+                Tell us what works, what doesn't, or what you'd like next.
+              </DialogDescription>
             </DialogHeader>
 
             <div className="flex flex-col gap-4">
               <Textarea
                 ref={textareaRef}
                 name="feedback"
-                placeholder="What do you think about the product?"
+                placeholder="What's on your mind?"
+                className="min-h-28"
               />
             </div>
 
             <DialogFooter>
-              <Button
-                type="submit"
-                disabled={isPending}
-                className="bg-primary text-xs text-primary-foreground hover:bg-primary/85"
-              >
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : "Submit Feedback"}
+              <Button type="submit" disabled={isPending}>
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : "Send feedback"}
               </Button>
             </DialogFooter>
           </form>

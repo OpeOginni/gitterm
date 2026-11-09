@@ -9,6 +9,8 @@ import { EXECUTOR_MCP_URL, type McpAuthentication } from "@gitterm/schema/mcp";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { Seg } from "@/components/site/seg";
 import { queryClient, trpc } from "@/utils/trpc";
 import { track } from "@/lib/analytics";
 
@@ -79,7 +81,7 @@ function CopyConnectionId({ id, name }: { id: string; name: string }) {
       title={`Connection ID: ${id}`}
       className="text-fg-3 hover:bg-fill-2 hover:text-fg"
     >
-      {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+      {copied ? <Check className="size-4 text-[#6bd586]" /> : <Copy className="size-4" />}
       <span className="sr-only" aria-live="polite">
         {copied ? "Copied" : ""}
       </span>
@@ -98,9 +100,9 @@ function Field({
 }) {
   return (
     <label className="block space-y-1.5">
-      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-fg-4">{label}</span>
+      <span className="block text-[13px] font-medium text-fg-2">{label}</span>
       {children}
-      {hint ? <span className="block text-xs leading-relaxed text-fg-4">{hint}</span> : null}
+      {hint ? <span className="block text-[12.5px] leading-relaxed text-fg-4">{hint}</span> : null}
     </label>
   );
 }
@@ -132,9 +134,11 @@ function authentication(current: Form): McpAuthentication | undefined {
   return { type: "headers", headers: headers as Record<string, string> };
 }
 
-/** Matches the add buttons on the other integration rows. */
-const ADD_BUTTON_CLASS =
-  "h-9 gap-1.5 px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]";
+const AUTH_OPTIONS: { value: AuthMode; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "bearer", label: "Bearer token" },
+  { value: "headers", label: "Headers" },
+];
 
 export function McpConnections({
   allowCustom,
@@ -236,9 +240,9 @@ export function McpConnections({
   }
 
   const connectionForm = form ? (
-    <form onSubmit={submit} className="space-y-5 rounded-xl border border-line-2 bg-settings p-5">
-      <div className="flex items-center justify-between gap-3 border-b border-line pb-4">
-        <h3 className="text-sm font-semibold text-fg">
+    <form onSubmit={submit} className="space-y-5 rounded-xl bg-fill p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-[15px] font-semibold text-fg">
           {form.id
             ? "Edit connection"
             : form.integration === "executor"
@@ -249,6 +253,7 @@ export function McpConnections({
           type="button"
           variant="ghost"
           size="icon"
+          className="-my-2 -mr-2 text-fg-3"
           aria-label="Cancel connection form"
           disabled={saving}
           onClick={() => setForm(null)}
@@ -257,19 +262,19 @@ export function McpConnections({
         </Button>
       </div>
       {form.integration === "executor" ? (
-        <p className="text-xs leading-relaxed text-fg-3">
+        <p className="text-[13px] leading-relaxed text-fg-3">
           Configure your apps in{" "}
           <a
             href="https://executor.sh"
             target="_blank"
             rel="noreferrer"
-            className="underline underline-offset-2"
+            className="text-fg-2 underline decoration-line-2 underline-offset-2 hover:text-fg"
           >
             Executor
           </a>
-          , then copy your organization&apos;s MCP endpoint and PAT from its API keys page. Replace
-          the organization placeholder in the example URL below. Public HTTPS self-hosted endpoints
-          work too. Verify the permissions and approval behavior of your Executor deployment.
+          , then copy your organization&apos;s MCP endpoint and PAT from its API keys page and
+          replace the organization in the example URL below. Public HTTPS self-hosted endpoints work
+          too. Check the permissions and approval settings of your Executor deployment.
         </p>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -299,26 +304,25 @@ export function McpConnections({
           />
         </Field>
       </div>
-      <Field
-        label="Authentication"
-        hint={
-          form.id
-            ? "Leave credential fields blank to retain authentication when the endpoint is unchanged."
-            : "No auth, bearer tokens, and custom headers are supported. GitTerm-managed OAuth is not included."
-        }
-      >
-        <select
+      {/* A div, not Field's <label>: a label would forward clicks to the first switch option. */}
+      <div className="space-y-1.5">
+        <span className="block text-[13px] font-medium text-fg-2">Authentication</span>
+        <Seg
+          ariaLabel="Authentication"
+          options={AUTH_OPTIONS}
           value={form.authMode}
-          onChange={(event) => change("authMode", event.target.value as AuthMode)}
-          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-        >
-          <option value="none">No authentication</option>
-          <option value="bearer">Bearer token / API key</option>
-          <option value="headers">Custom authentication headers</option>
-        </select>
-      </Field>
+          onChange={(value) => change("authMode", value)}
+          fill
+          className="sm:w-auto"
+        />
+        <span className="block text-[12.5px] leading-relaxed text-fg-4">
+          {form.id
+            ? "Leave credential fields blank to keep the current authentication while the endpoint is unchanged."
+            : "Bearer tokens (API keys) and custom headers work. Gitterm doesn't manage OAuth."}
+        </span>
+      </div>
       {form.authMode === "bearer" ? (
-        <Field label="Bearer token">
+        <Field label="Bearer token or API key">
           <Input
             type="password"
             autoComplete="new-password"
@@ -333,7 +337,7 @@ export function McpConnections({
           label="Header JSON"
           hint="Values are encrypted; cookies and transport/proxy headers are not allowed."
         >
-          <textarea
+          <Textarea
             rows={3}
             autoComplete="off"
             spellCheck={false}
@@ -342,11 +346,11 @@ export function McpConnections({
             placeholder={
               form.id ? "Leave blank to keep existing headers" : '{"X-API-Key": "your-key"}'
             }
-            className="w-full rounded-md border border-input bg-background p-3 font-mono text-xs"
+            className="font-mono text-[13px]"
           />
         </Field>
       ) : null}
-      <label className="flex items-center gap-2 text-xs text-fg-3">
+      <label className="flex items-center gap-2.5 text-[13.5px] text-fg-2">
         <Checkbox
           checked={form.codemode}
           onCheckedChange={(checked) => change("codemode", checked === true)}
@@ -354,7 +358,7 @@ export function McpConnections({
         Use OpenCode Code Mode (recommended)
       </label>
       {form.id ? (
-        <p className="text-xs leading-relaxed text-fg-4">
+        <p className="text-[13px] leading-relaxed text-fg-3">
           Changes apply to newly created workspaces. Existing workspaces keep their configuration
           and credentials; revoke tokens at the provider to stop their access.
         </p>
@@ -364,7 +368,7 @@ export function McpConnections({
           Cancel
         </Button>
         <Button type="submit" disabled={saving} className="gap-2">
-          {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+          {saving ? <Loader2 className="size-4 animate-spin" /> : null}
           {form.id ? "Save changes" : "Save and test"}
         </Button>
       </div>
@@ -380,9 +384,9 @@ export function McpConnections({
           size="sm"
           onClick={() => setForm(emptyForm("executor"))}
           disabled={saving || busyId !== null}
-          className={ADD_BUTTON_CLASS}
+          className="h-9"
         >
-          <Plus className="size-3.5" />
+          <Plus className="size-4" />
           Connect Executor
         </Button>
       ) : null}
@@ -392,9 +396,9 @@ export function McpConnections({
           size="sm"
           onClick={() => setForm(emptyForm("mcp"))}
           disabled={saving || busyId !== null}
-          className={ADD_BUTTON_CLASS}
+          className="h-9"
         >
-          <Plus className="size-3.5" />
+          <Plus className="size-4" />
           Add MCP server
         </Button>
       ) : null}
@@ -414,9 +418,9 @@ export function McpConnections({
               <h2 className="text-base font-semibold tracking-tight text-fg">
                 Tools for your agent
               </h2>
-              <p className="mt-1 max-w-lg text-[12.5px] leading-relaxed text-fg-3">
+              <p className="mt-1 max-w-lg text-sm leading-relaxed text-fg-3">
                 Connect a remote MCP server, or bring your tool catalog through Executor. OpenCode
-                connects directly—GitTerm stays out of the tool traffic.
+                connects directly, so Gitterm never sees the tool traffic.
               </p>
             </div>
           )}
@@ -427,23 +431,23 @@ export function McpConnections({
       {form && !editingId ? connectionForm : null}
 
       {error ? (
-        <p role="alert" className="text-sm text-red-400">
+        <p role="alert" className="text-sm text-red-300">
           Couldn&apos;t load MCP connections: {error.message}
         </p>
       ) : null}
-      {isLoading ? <p className="text-xs text-fg-4">Loading connections…</p> : null}
+      {isLoading ? <p className="text-[13px] text-fg-4">Loading connections…</p> : null}
       {!isLoading && !error && !connections.length ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-dashed border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-xl bg-fill px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[13px] text-fg-3">
             {allowCustom ? (
               <>
-                <span className="text-fg-2">No MCP servers yet.</span> Start with a documentation
-                server, or any public HTTPS MCP endpoint.
+                <span className="font-medium text-fg-2">No MCP servers yet.</span> Add a
+                documentation server, or any public HTTPS MCP endpoint.
               </>
             ) : (
               <>
-                <span className="text-fg-2">No Executor catalog yet.</span> Connect your Executor
-                organization once and every tool in it reaches your agents.
+                <span className="font-medium text-fg-2">No Executor catalog yet.</span> Connect your
+                Executor organization once and every tool in it reaches your agents.
               </>
             )}
           </p>
@@ -451,7 +455,7 @@ export function McpConnections({
         </div>
       ) : null}
       {connections.length ? (
-        <div className="space-y-3">
+        <div className="max-h-[36rem] space-y-2 overflow-y-auto overscroll-contain">
           {connections.map((connection) => {
             const details = connection.details;
             if (details.integration !== "mcp" && details.integration !== "executor") return null;
@@ -459,10 +463,7 @@ export function McpConnections({
               return <div key={connection.id}>{connectionForm}</div>;
             }
             return (
-              <article
-                key={connection.id}
-                className="rounded-xl border border-line bg-settings p-4"
-              >
+              <article key={connection.id} className="rounded-xl bg-fill p-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex min-w-0 items-start gap-3">
                     <Image
@@ -473,32 +474,36 @@ export function McpConnections({
                       className="mt-0.5 shrink-0"
                     />
                     <div className="min-w-0">
-                      <h3 className="break-words text-sm font-medium text-fg">{connection.name}</h3>
-                      <p className="mt-1 break-all font-mono text-[11px] text-fg-4">
+                      <h3 className="break-words text-[14.5px] font-medium text-fg">
+                        {connection.name}
+                      </h3>
+                      <p className="mt-1 break-all font-mono text-[12.5px] text-fg-4">
                         {details.url}
                       </p>
-                      <p className="mt-2 text-xs text-fg-3">
+                      <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-fg-3">
                         <span
                           className={
                             connection.status === "connected"
-                              ? "text-emerald-400"
-                              : "text-amber-400"
+                              ? "rounded-md bg-[#6bd586]/10 px-2 py-0.5 text-[12.5px] font-medium text-[#6bd586]"
+                              : "rounded-md bg-[#fb923c]/10 px-2 py-0.5 text-[12.5px] font-medium text-[#fb923c]"
                           }
                         >
                           {statusLabels[connection.status]}
                         </span>
-                        {details.toolCount !== null ? ` · ${details.toolCount} tools` : ""} ·{" "}
-                        {details.authType === "none"
-                          ? "No auth"
-                          : details.authType === "bearer"
-                            ? "Bearer token"
-                            : "Encrypted headers"}
+                        <span>
+                          {details.toolCount !== null ? `${details.toolCount} tools · ` : ""}
+                          {details.authType === "none"
+                            ? "No auth"
+                            : details.authType === "bearer"
+                              ? "Bearer token"
+                              : "Encrypted headers"}
+                        </span>
                       </p>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {busyId === connection.id ? (
-                      <Loader2 className="mr-2 size-3.5 animate-spin text-fg-3" />
+                      <Loader2 className="mr-2 size-4 animate-spin text-fg-3" />
                     ) : null}
                     <Button
                       type="button"
@@ -530,7 +535,7 @@ export function McpConnections({
                         })
                       }
                     >
-                      <Pencil className="size-3.5" />
+                      <Pencil className="size-4" />
                     </Button>
                     <Button
                       type="button"
@@ -538,10 +543,10 @@ export function McpConnections({
                       variant="ghost"
                       disabled={busyId !== null || saving}
                       aria-label={`Remove ${connection.name}`}
-                      className="text-red-400/80 hover:bg-red-400/10 hover:text-red-300"
+                      className="text-fg-3 hover:bg-red-500/10 hover:text-red-300"
                       onClick={() => action(connection.id, "remove")}
                     >
-                      <Trash2 className="size-3.5" />
+                      <Trash2 className="size-4" />
                     </Button>
                   </div>
                 </div>

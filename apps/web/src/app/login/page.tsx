@@ -2,9 +2,10 @@
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { AuthForm } from "@/components/auth/auth-form";
-import { Terminal } from "lucide-react";
 import Link from "next/link";
+import { AuthForm } from "@/components/auth/auth-form";
+import { isSelfHosted } from "@gitterm/env/web";
+import { SiteShell } from "@/components/site/site-shell";
 
 function LoginContent() {
   const searchParams = useSearchParams();
@@ -12,68 +13,49 @@ function LoginContent() {
   const error = searchParams.get("error");
 
   return (
-    <div className="flex min-h-screen flex-col bg-background landing-grid dark">
-      {/* Minimal header */}
-      <header className="border-b border-line bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-[1120px] items-center px-6">
-          <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-70">
-            <Terminal className="h-5 w-5 text-primary" />
-            <span className="font-mono text-sm font-bold uppercase tracking-wider text-fg">
-              GitTerm
-            </span>
-          </Link>
-        </div>
-      </header>
-
-      {/* Center content */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm space-y-8">
-          {/* Brand mark */}
-          <div className="flex flex-col items-center gap-5">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
-              <Terminal className="h-7 w-7 text-primary" />
-            </div>
-            <div className="text-center">
-              <h1 className="text-2xl font-bold tracking-tight text-white">Sign in to GitTerm</h1>
-              <p className="mt-2 text-sm text-fg-4">Access your workspaces and start shipping.</p>
-            </div>
+    <SiteShell footer={false}>
+      <div className="flex min-h-[calc(100svh-65px)] flex-col items-center justify-center px-4 py-16 sm:px-6">
+        <div className="w-full max-w-[22rem]">
+          <div className="mb-9 text-center">
+            <h1 className="m-0 text-[clamp(2rem,4vw,2.5rem)] leading-[1.05] font-display font-semibold tracking-[-0.03em] text-fg">
+              Sign in to gitterm
+            </h1>
+            <p className="mt-3 text-[16px] leading-[1.6] text-fg-3">
+              Your sandboxes and workspaces are waiting.
+            </p>
           </div>
 
-          {/* Auth Form */}
           <AuthForm redirectUrl={redirect ?? undefined} authError={error} />
 
-          {/* Footer text */}
-          <p className="text-center text-xs text-fg-4">
-            By signing in, you agree to our{" "}
-            <Link
-              href="#"
-              className="text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
-            >
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link
-              href="#"
-              className="text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
-            >
-              Privacy Policy
-            </Link>
-          </p>
+          {/* gitterm.dev's terms; a self-hosted deployment has its own */}
+          {!isSelfHosted() && (
+            <p className="mt-9 text-center text-[13px] leading-[1.6] text-fg-4">
+              By signing in, you agree to our{" "}
+              <Link
+                href="/terms"
+                className="text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
+              >
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link
+                href="/privacy"
+                className="text-fg-3 underline decoration-line-2 underline-offset-2 hover:text-fg-2"
+              >
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          )}
         </div>
       </div>
-    </div>
+    </SiteShell>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <Terminal className="h-8 w-8 animate-pulse text-primary" />
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="dark min-h-screen bg-background" />}>
       <LoginContent />
     </Suspense>
   );

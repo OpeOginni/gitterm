@@ -72,6 +72,8 @@ const env = parseEnv(schema, rawEnv);
 export default env;
 
 export const isBillingEnabled = () => env.NEXT_PUBLIC_ENABLE_BILLING;
+/** Self-hosted deployments serve only the app: no landing page, marketing pages or docs. */
+export const isSelfHosted = () => env.NEXT_PUBLIC_DEPLOYMENT_MODE === "self-hosted";
 export const isEmailAuthEnabled = (config: WebEnv = env) =>
   config.NEXT_PUBLIC_DEPLOYMENT_MODE === "self-hosted" || config.NEXT_PUBLIC_ENABLE_EMAIL_AUTH;
 export const isGitHubAuthEnabled = (config: WebEnv = env) =>

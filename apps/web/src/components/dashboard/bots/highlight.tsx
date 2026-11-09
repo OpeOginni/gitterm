@@ -22,11 +22,11 @@ const PATTERNS: Record<CodeLanguage, { pattern: RegExp; kinds: string[] }> = {
 
 const TOKEN_CLASS: Record<string, string> = {
   comment: "text-fg-4",
-  key: "text-primary",
-  command: "text-primary",
-  keyword: "text-primary",
-  string: "text-emerald-700 dark:text-emerald-300/90",
-  flag: "text-sky-700 dark:text-sky-300/90",
+  key: "text-[#e2c47c]",
+  command: "text-[#e2c47c]",
+  keyword: "text-[#e2c47c]",
+  string: "text-[#b9d9a8]",
+  flag: "text-[#a9c1ff]",
   fn: "text-fg",
   punct: "text-fg-4",
 };

@@ -1,4 +1,5 @@
 import z from "zod";
+import { TRPCError } from "@trpc/server";
 import { sessionProcedure, router } from "../index";
 import { DeviceCodeRepository } from "@gitterm/redis";
 
@@ -23,14 +24,18 @@ export const deviceRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const userId = ctx.session.user.id;
+      const userCode = input.userCode.trim().toUpperCase();
+      const done =
+        input.action === "deny"
+          ? await deviceRepo.deny({ userCode })
+          : await deviceRepo.approve({ userCode, userId: ctx.session.user.id });
 
-      if (input.action === "deny") {
-        await deviceRepo.deny({ userCode: input.userCode });
-        return { ok: true };
+      if (!done) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "That code is wrong or has expired. Check your terminal for the current code.",
+        });
       }
-
-      await deviceRepo.approve({ userCode: input.userCode, userId });
       return { ok: true };
     }),
 });

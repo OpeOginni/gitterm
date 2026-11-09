@@ -50,34 +50,53 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [{ source: "/docs/:path*", headers: [{ key: "Vary", value: "Accept" }] }];
+  },
   async rewrites() {
-    return [
-      { source: "/favicon.ico", destination: "/favicon_io/favicon.ico" },
-      {
-        source: "/favicon-16x16.png",
-        destination: "/favicon_io/favicon-16x16.png",
-      },
-      {
-        source: "/favicon-32x32.png",
-        destination: "/favicon_io/favicon-32x32.png",
-      },
-      {
-        source: "/apple-touch-icon.png",
-        destination: "/favicon_io/apple-touch-icon.png",
-      },
-      {
-        source: "/android-chrome-192x192.png",
-        destination: "/favicon_io/android-chrome-192x192.png",
-      },
-      {
-        source: "/android-chrome-512x512.png",
-        destination: "/favicon_io/android-chrome-512x512.png",
-      },
-      {
-        source: "/site.webmanifest",
-        destination: "/favicon_io/site.webmanifest",
-      },
-    ];
+    // Agents that ask for markdown (Accept: text/markdown) get the page's markdown at its normal URL
+    const wantsMarkdown = [{ type: "header" as const, key: "accept", value: ".*text/markdown.*" }];
+    return {
+      beforeFiles: [
+        // Slugs have no dots, so /docs/<slug>.md still goes to its own rewrite below
+        {
+          source: "/docs/:a([^./]+)/:b([^./]+)",
+          has: wantsMarkdown,
+          destination: "/docs/raw/:a/:b",
+        },
+        { source: "/docs/:a([^./]+)", has: wantsMarkdown, destination: "/docs/raw/:a" },
+      ],
+      afterFiles: [
+        // Raw markdown for docs pages (/docs/<slug>.md), served by app/docs/raw.
+        { source: "/docs/:a.md", destination: "/docs/raw/:a" },
+        { source: "/docs/:a/:b.md", destination: "/docs/raw/:a/:b" },
+        { source: "/favicon.ico", destination: "/favicon_io/favicon.ico" },
+        {
+          source: "/favicon-16x16.png",
+          destination: "/favicon_io/favicon-16x16.png",
+        },
+        {
+          source: "/favicon-32x32.png",
+          destination: "/favicon_io/favicon-32x32.png",
+        },
+        {
+          source: "/apple-touch-icon.png",
+          destination: "/favicon_io/apple-touch-icon.png",
+        },
+        {
+          source: "/android-chrome-192x192.png",
+          destination: "/favicon_io/android-chrome-192x192.png",
+        },
+        {
+          source: "/android-chrome-512x512.png",
+          destination: "/favicon_io/android-chrome-512x512.png",
+        },
+        {
+          source: "/site.webmanifest",
+          destination: "/favicon_io/site.webmanifest",
+        },
+      ],
+    };
   },
 };
 

@@ -1,12 +1,13 @@
-![GitTerm](./apps/web/public/og-card/og-card-v4.png)
+![GitTerm](./apps/web/public/og-card/og-card-v5.png)
 
-Run your coding agent in the cloud. GitTerm runs OpenCode or T3Code in remote workspaces on the cloud provider or sandbox of your choice, so you can code from any device with your own model keys.
+Give your agents more computers, from the cloud provider you choose. GitTerm gives the agent on your laptop sandboxes for tests, builds and previews, or runs the whole agent (OpenCode, or T3 Code with Codex and Claude Code) in a cloud workspace. The machines come from providers such as E2B, Daytona, Vercel, Railway and AWS. GitTerm sits in between, with one plugin and one dashboard for all of them, so switching providers is easy. Open source, with your own keys.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/gitterm?referralCode=o9MFOP&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 ## What GitTerm does
 
-- Runs OpenCode or T3Code in cloud workspaces across multiple providers
+- Gives a local OpenCode agent remote sandboxes for tests, builds and previews (`@gitterm/opencode-sandbox`)
+- Runs OpenCode or T3 Code in cloud workspaces across multiple providers
 - Opens the agent TUI in your browser through TTYD
 - Gives you server-only agent URLs for desktop or local clients
 - Exposes any workspace port behind a shareable URL, so you can preview and test your app live

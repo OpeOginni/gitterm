@@ -3,12 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1200" />
-    <title>GitTerm OG Card</title>
+    <title>Gitterm OG card</title>
+    <!--
+      Source for /og-card/og-card-v5.png. Screenshot at 1200x630 with deviceScaleFactor 2.
+      Fonts match the site (see src/app/layout.tsx): the same width and size adjustments.
+    -->
     <style>
+      @font-face {
+        font-family: "Text";
+        src: url("../src/fonts/MartianGrotesk.woff2") format("woff2");
+        font-weight: 100 900;
+        font-stretch: 93%;
+        size-adjust: 86%;
+      }
+      @font-face {
+        font-family: "Display";
+        src: url("../src/fonts/HubotSans.woff2") format("woff2");
+        font-weight: 200 900;
+        font-stretch: 125%;
+        size-adjust: 86%;
+      }
       * {
         box-sizing: border-box;
       }
-
       html,
       body {
         width: 1200px;
@@ -16,143 +33,108 @@
         margin: 0;
         overflow: hidden;
       }
-
       body {
-        color: rgba(255, 255, 255, 0.9);
-        background-color: #09090b;
+        position: relative;
+        color: #f3f3f3;
+        background-color: #101014;
         background-image:
-          radial-gradient(circle at center, rgba(200, 164, 78, 0.075), transparent 56%),
-          radial-gradient(circle, rgba(255, 255, 255, 0.055) 1.2px, transparent 1.5px);
+          radial-gradient(circle at center, rgba(255, 255, 255, 0.11) 1.2px, transparent 1.5px),
+          radial-gradient(circle at center, rgba(255, 255, 255, 0.045) 1px, transparent 1.3px);
         background-size:
-          auto,
+          140px 140px,
           32px 32px;
-        font-family: Arial, sans-serif;
+        background-position:
+          0 0,
+          16px 16px;
+        font-family: "Text", sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
-
       .card {
-        width: 100%;
+        display: flex;
+        flex-direction: column;
         height: 100%;
-        padding: 52px 64px 48px;
+        padding: 56px 72px 52px;
       }
-
       header {
         display: flex;
         align-items: center;
         justify-content: space-between;
       }
-
       .brand {
         display: flex;
         align-items: center;
         gap: 14px;
-        font-family: monospace;
-        font-size: 17px;
-        font-weight: 700;
-        letter-spacing: 0.3em;
+        font-size: 30px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
       }
-
-      .brand img {
+      .brand svg {
         width: 28px;
         height: 28px;
+        color: #d3ad55;
       }
-
       .url {
-        color: rgba(255, 255, 255, 0.35);
-        font-family: monospace;
-        font-size: 13px;
+        color: #939395;
+        font-size: 20px;
       }
-
       main {
-        text-align: center;
-      }
-
-      h1 {
-        margin: 83px 0 0;
-        font-size: 62px;
-        font-weight: 400;
-        line-height: 1.05;
-        letter-spacing: -0.05em;
-      }
-
-      h1 span {
-        color: #c8a44e;
-      }
-
-      .label {
-        color: rgba(255, 255, 255, 0.35);
-        font-family: monospace;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-      }
-
-      .agents-label {
-        margin-top: 40px;
-      }
-
-      .agents {
-        display: flex;
-        justify-content: center;
-        gap: 64px;
-        margin-top: 24px;
-      }
-
-      .agent {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        color: rgba(255, 255, 255, 0.85);
-        font-size: 22px;
-      }
-
-      .agent img {
-        width: 42px;
-        height: 42px;
-        object-fit: contain;
-      }
-
-      .agent-divider {
-        width: 1px;
-        height: 34px;
-        align-self: center;
-        background: rgba(255, 255, 255, 0.16);
-      }
-
-      footer {
-        margin-top: 52px;
-        padding-top: 35px;
-        border-top: 1px solid rgba(255, 255, 255, 0.09);
-        text-align: center;
-      }
-
-      .providers {
-        display: flex;
-        align-items: stretch;
-        margin-top: 25px;
-      }
-
-      .provider {
         display: flex;
         flex: 1;
-        flex-direction: column;
         align-items: center;
-        gap: 10px;
-        color: rgba(255, 255, 255, 0.62);
-        font-size: 14px;
-        line-height: 1;
+        justify-content: space-between;
+        gap: 48px;
       }
-
-      .provider img {
-        display: block;
-        width: 24px;
-        height: 24px;
+      h1 {
+        margin: 0;
+        font-family: "Display", sans-serif;
+        font-size: 84px;
+        font-weight: 600;
+        line-height: 0.98;
+        letter-spacing: -0.035em;
+      }
+      p {
+        margin: 26px 0 0;
+        max-width: 700px;
+        color: #aeaeb0;
+        text-wrap: balance;
+        font-size: 25px;
+        line-height: 1.45;
+      }
+      .big {
+        flex: none;
+        width: 236px;
+        height: 236px;
+        margin-right: 8px;
+        color: #d3ad55;
+      }
+      footer {
+        display: flex;
+        align-items: center;
+        gap: 44px;
+        padding-top: 30px;
+        border-top: 1px solid rgba(255, 255, 255, 0.11);
+        color: #939395;
+        font-size: 19px;
+      }
+      .group {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .group img {
+        width: 30px;
+        height: 30px;
         object-fit: contain;
       }
-
-      .provider span {
-        display: block;
-        white-space: nowrap;
+      /* Provider marks mix photos, colour and white; grey keeps the row even */
+      .group.providers img {
+        filter: grayscale(1);
+        opacity: 0.85;
+      }
+      .rule {
+        width: 1px;
+        height: 30px;
+        background: rgba(255, 255, 255, 0.11);
       }
     </style>
   </head>
@@ -160,34 +142,45 @@
     <div class="card">
       <header>
         <div class="brand">
-          <img src="./gitterm-railway.svg" alt="" />
-          <span>GITTERM</span>
+          <svg viewBox="0 0 28 28" fill="currentColor" aria-hidden="true">
+            <path d="M0 7.5h13v7h7v13H0zM21 .5h7v7h-7z" />
+          </svg>
+          <span>gitterm</span>
         </div>
         <span class="url">gitterm.dev</span>
       </header>
 
       <main>
-        <h1>Cloud workspaces<br />for coding <span>agents.</span></h1>
-
-        <div class="label agents-label">Agent servers</div>
-        <div class="agents">
-          <div class="agent"><img src="./opencode.svg" alt="" /><span>OpenCode</span></div>
-          <div class="agent-divider" aria-hidden="true"></div>
-          <div class="agent"><img src="./t3.svg" alt="" /><span>T3 Code</span></div>
+        <div>
+          <h1>Give your agents<br />more room to work.</h1>
+          <p>
+            Cloud sandboxes for the agent on your laptop, or a cloud workspace for the whole agent.
+            From the provider you choose.
+          </p>
         </div>
+        <svg class="big" viewBox="0 0 28 28" fill="currentColor" aria-hidden="true">
+          <path d="M0 7.5h13v7h7v13H0zM21 .5h7v7h-7z" />
+        </svg>
       </main>
 
       <footer>
-        <div class="label">Runs on</div>
-        <div class="providers">
-          <div class="provider"><img src="./railway.svg" alt="" /><span>Railway</span></div>
-          <div class="provider"><img src="./EC2.svg" alt="" /><span>AWS</span></div>
-          <div class="provider"><img src="./E2B.svg" alt="" /><span>E2B</span></div>
-          <div class="provider"><img src="./daytona.svg" alt="" /><span>Daytona</span></div>
-          <div class="provider"><img src="./cloudflare.svg" alt="" /><span>Cloudflare</span></div>
-          <div class="provider"><img src="./vercel.svg" alt="" /><span>Vercel</span></div>
-          <div class="provider"><img src="./boat.svg" alt="" /><span>boat</span></div>
-          <div class="provider"><img src="./exe.png" alt="" /><span>exe.dev</span></div>
+        <div class="group">
+          <span>Works with</span>
+          <img src="./opencode.svg" alt="OpenCode" />
+          <img src="./t3-nightly.svg" alt="T3 Code" />
+          <img src="./openai-codex.svg" alt="Codex" />
+          <img src="./claude.svg" alt="Claude Code" />
+        </div>
+        <div class="rule"></div>
+        <div class="group providers">
+          <span>Runs on</span>
+          <img src="./E2B.svg" alt="E2B" />
+          <img src="./daytona.svg" alt="Daytona" />
+          <img src="./vercel.svg" alt="Vercel" />
+          <img src="./boat.svg" alt="Boat" />
+          <img src="./exe.png" alt="exe.dev" />
+          <img src="./railway.svg" alt="Railway" />
+          <img src="./aws.svg" alt="AWS" />
         </div>
       </footer>
     </div>

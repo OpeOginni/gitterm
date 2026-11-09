@@ -7,7 +7,7 @@ import { getIcon } from "../create-instance/types";
 export type ComputeOption = { key: string; name: string };
 
 const tileClass =
-  "flex min-w-0 items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors";
+  "flex min-w-0 items-center gap-3 rounded-xl bg-fill px-3.5 py-3 text-left transition-[background-color,box-shadow]";
 
 /** Where new sandboxes run. Your default is pre-selected; regions and sizes stay default. */
 export function ComputeStepBody({
@@ -35,11 +35,11 @@ export function ComputeStepBody({
             className={cn(
               tileClass,
               isSelected
-                ? "border-primary/60 bg-fill"
-                : "border-line hover:border-fg-4 hover:bg-fill",
+                ? "bg-fill-2 shadow-[inset_0_0_0_1px_rgba(211,173,85,0.5)]"
+                : "hover:bg-fill-2",
             )}
           >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-fill-2">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill-2">
               <Image
                 src={getIcon(option.key)}
                 alt=""
