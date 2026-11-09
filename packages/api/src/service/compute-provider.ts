@@ -1,7 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { and, db, eq, inArray, not } from "@gitterm/db";
 import { cloudProvider, image, machineProfile } from "@gitterm/db/schema/cloud";
+import { providerConfig, providerType } from "@gitterm/db/schema/provider-config";
 import env, { isComputeEnabled } from "@gitterm/env/server";
 import { getBilling } from "../billing";
+import { encryptionContext, getEncryptionService } from "./encryption";
 
 /** The provider key of gitterm.dev's own sandboxes. */
 export const COMPUTE_PROVIDER_KEY = "gitterm";
@@ -49,6 +52,7 @@ export async function ensureComputeProvider(): Promise<void> {
     .values({ name: "Gitterm", ...PROVIDER })
     .onConflictDoUpdate({ target: cloudProvider.name, set: { ...PROVIDER, updatedAt: new Date() } })
     .returning({ id: cloudProvider.id });
+  await ensureProviderConfig(provider!.id);
   for (const size of SIZES)
     await db
       .insert(machineProfile)
@@ -79,6 +83,43 @@ export async function ensureComputeProvider(): Promise<void> {
     );
   await warnUnpricedSizes(provider!.id);
   await markComputeImages();
+}
+
+/**
+ * An empty provider config, so admin and workspace creation treat Gitterm like any configured
+ * provider. Its real settings are the server's environment, so the config holds nothing.
+ */
+async function ensureProviderConfig(cloudProviderId: string): Promise<void> {
+  const [type] = await db
+    .insert(providerType)
+    .values({
+      name: COMPUTE_PROVIDER_KEY,
+      displayName: "Gitterm",
+      category: "both",
+      configSchema: {},
+    })
+    .onConflictDoUpdate({ target: providerType.name, set: { updatedAt: new Date() } })
+    .returning({ id: providerType.id });
+  const [row] = await db
+    .select({ providerConfigId: cloudProvider.providerConfigId })
+    .from(cloudProvider)
+    .where(eq(cloudProvider.id, cloudProviderId));
+  if (row?.providerConfigId) return;
+  const id = randomUUID();
+  await db.insert(providerConfig).values({
+    id,
+    providerTypeId: type!.id,
+    name: "Gitterm",
+    encryptedCredentials: getEncryptionService().encryptForRecord(
+      "{}",
+      encryptionContext("provider-config", id, type!.id),
+    ),
+    isDefault: true,
+  });
+  await db
+    .update(cloudProvider)
+    .set({ providerConfigId: id })
+    .where(eq(cloudProvider.id, cloudProviderId));
 }
 
 /** Prices are set in admin; until then a size can't start, which is easy to miss. */
