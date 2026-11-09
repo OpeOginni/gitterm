@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import Image from "next/image";
+import { KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { apiPath } from "@gitterm/schema/url";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,17 @@ export function GithubConfig({ data, refresh }: Props) {
   const [webhookSecret, setWebhookSecret] = useState("");
   const [pat, setPat] = useState("");
   const keyFile = useRef<HTMLInputElement>(null);
+  // The key is never shown once loaded, so it can't leak on a shared screen.
+  const [keySource, setKeySource] = useState<string | null>(null);
+  const loadKey = (key: string, source: string) => {
+    if (!key.trim()) return;
+    setPrivateKey(key.trim());
+    setKeySource(source);
+  };
+  const clearKey = () => {
+    setPrivateKey("");
+    setKeySource(null);
+  };
 
   const configureApp = useMutation(trpc.admin.integrations.configureGithubApp.mutationOptions());
   const configurePat = useMutation(trpc.admin.integrations.configureGithubPat.mutationOptions());
@@ -93,7 +105,7 @@ export function GithubConfig({ data, refresh }: Props) {
         webhookSecret,
         replace: mode === "pat",
       });
-      setPrivateKey("");
+      clearKey();
       setWebhookSecret("");
       await refresh();
       toast.success("GitHub App verified and saved");
@@ -191,19 +203,41 @@ export function GithubConfig({ data, refresh }: Props) {
                   className="hidden"
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
-                    if (file) setPrivateKey(await file.text());
+                    if (file) loadKey(await file.text(), `Loaded from ${file.name}`);
                     e.target.value = "";
                   }}
                 />
               </div>
-              <Textarea
-                id="gh-pem"
-                value={privateKey}
-                onChange={(e) => setPrivateKey(e.target.value)}
-                placeholder="Paste the .pem file's contents, or choose the file"
-                spellCheck={false}
-                className="min-h-28 font-mono text-[13px]"
-              />
+              {keySource ? (
+                <div className="flex items-center justify-between gap-3 rounded-lg bg-fill-2 py-1.5 pr-1.5 pl-3">
+                  <span className="flex min-w-0 items-center gap-2 text-[13px] text-fg-2">
+                    <KeyRound className="size-3.5 shrink-0 text-fg-3" />
+                    <span className="truncate">{keySource}</span>
+                  </span>
+                  <Button type="button" variant="ghost" size="sm" onClick={clearKey}>
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <Textarea
+                  id="gh-pem"
+                  value=""
+                  readOnly
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    loadKey(e.clipboardData.getData("text"), "Key pasted");
+                  }}
+                  onDrop={(e) => {
+                    const file = e.dataTransfer.files[0];
+                    if (!file) return;
+                    e.preventDefault();
+                    void file.text().then((text) => loadKey(text, `Loaded from ${file.name}`));
+                  }}
+                  placeholder="Paste the key here, or drop the .pem file"
+                  spellCheck={false}
+                  className="min-h-20 font-mono text-[13px]"
+                />
+              )}
             </div>
             <div className="space-y-1.5 rounded-xl bg-fill p-3.5 text-[13px] text-fg-3">
               <p>
