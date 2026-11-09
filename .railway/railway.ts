@@ -141,7 +141,12 @@ export default defineRailway((ctx) => {
     replicas: { "us-east4-eqdc4a": 1 },
     domains: [{ domain: "*.gitterm.dev", port: 80 }],
     networking: { privateNetworkEndpoint: "nginx-proxy" },
-    env: { INTERNAL_API_KEY: preserve(), SERVER_URL: preserve(), WORKSPACE_JWT_SECRET: preserve() },
+    env: {
+      COMPUTE_UPSTREAM: preserve(),
+      INTERNAL_API_KEY: preserve(),
+      SERVER_URL: preserve(),
+      WORKSPACE_JWT_SECRET: preserve(),
+    },
   });
   const Server = service("Server", {
     source: gitterm,
