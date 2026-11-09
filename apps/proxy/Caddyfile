@@ -21,6 +21,13 @@
 # Environment Variables:
 # - SERVER_URL       -> API server URL (e.g., server.railway.internal:8080)
 # - INTERNAL_API_KEY -> Shared key for internal API calls
+# - COMPUTE_UPSTREAM -> Compute's HTTPS origin, not its public proxy hostname
+
+http://compute.gitterm.dev {
+	reverse_proxy {$COMPUTE_UPSTREAM:localhost:4100} {
+		header_up Host {http.reverse_proxy.upstream.host}
+	}
+}
 
 # Listen on port 80 for all requests
 :80 {

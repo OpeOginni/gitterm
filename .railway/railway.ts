@@ -11,7 +11,7 @@ import {
   volume,
 } from "railway/iac";
 
-export default defineRailway(() => {
+export default defineRailway((ctx) => {
   const gitterm = github("OpeOginni/gitterm", { checkSuites: false });
 
   const Postgres = database("Postgres", "postgres", {
@@ -26,7 +26,7 @@ export default defineRailway(() => {
     startCommand:
       '/bin/sh -c "rm -rf $RAILWAY_VOLUME_MOUNT_PATH/lost+found/ && exec docker-entrypoint.sh redis-server --requirepass $REDIS_PASSWORD --save 60 1 --dir $RAILWAY_VOLUME_MOUNT_PATH"',
   };
-  Redis.networking = { privateNetworkEndpoint: "redis", tcpProxies: { "6379": {} } };
+  Redis.networking = { privateNetworkEndpoint: "redis" };
   const postgresVolume = volume("postgres-volume", {
     alerts: { usage: { "100": {}, "80": {}, "95": {} } },
     allowOnlineResize: true,
@@ -47,6 +47,11 @@ export default defineRailway(() => {
   });
 
   const rootWatch = ["turbo.json", "package.json", "bun.lock"];
+  // Hardened credential writes, set once as shared variables (docs/credential-security.md).
+  const credentialWrites = {
+    ENCRYPTION_WRITE_VERSION: ctx.shared.ENCRYPTION_WRITE_VERSION,
+    AUTH_ENCRYPT_OAUTH_TOKENS: ctx.shared.AUTH_ENCRYPT_OAUTH_TOKENS,
+  };
 
   const IdleInstanceReaper = service("Idle Instance Reaper", {
     source: gitterm,
@@ -73,7 +78,7 @@ export default defineRailway(() => {
       ENABLE_IDLE_REAPING: preserve(),
       ENABLE_QUOTA_ENFORCEMENT: preserve(),
       INTERNAL_API_KEY: preserve(),
-      REAP_INTERVAL_MINUTES: preserve(),
+      REAP_INTERVAL_MINUTES: "0",
       SERVER_URL: preserve(),
       WORKSPACE_JWT_SECRET: preserve(),
     },
@@ -136,7 +141,12 @@ export default defineRailway(() => {
     replicas: { "us-east4-eqdc4a": 1 },
     domains: [{ domain: "*.gitterm.dev", port: 80 }],
     networking: { privateNetworkEndpoint: "nginx-proxy" },
-    env: { INTERNAL_API_KEY: preserve(), SERVER_URL: preserve(), WORKSPACE_JWT_SECRET: preserve() },
+    env: {
+      COMPUTE_UPSTREAM: preserve(),
+      INTERNAL_API_KEY: preserve(),
+      SERVER_URL: preserve(),
+      WORKSPACE_JWT_SECRET: preserve(),
+    },
   });
   const Server = service("Server", {
     source: gitterm,
@@ -184,6 +194,7 @@ export default defineRailway(() => {
       ENABLE_GITHUB_AUTH: preserve(),
       ENCRYPTION_MASTER_KEY: preserve(),
       ENCRYPTION_MASTER_KEY_ID: preserve(),
+      ...credentialWrites,
       GITHUB_APP_CLIENT_ID: preserve(),
       GITHUB_APP_CLIENT_SECRET: preserve(),
       GITHUB_APP_ID: preserve(),
@@ -275,6 +286,7 @@ export default defineRailway(() => {
       BASE_DOMAIN: preserve(),
       BETTER_AUTH_SECRET: preserve(),
       DATABASE_URL: preserve(),
+      ...credentialWrites,
       DISCORD_DM_CHANNEL_ID: preserve(),
       DISCORD_TOKEN: preserve(),
       GITHUB_WEBHOOK_SECRET: preserve(),
