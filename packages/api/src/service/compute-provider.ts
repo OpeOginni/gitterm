@@ -81,7 +81,7 @@ export async function ensureComputeProvider(): Promise<void> {
   await markComputeImages();
 }
 
-/** Prices are set in admin; until then a size runs free, which is easy to miss. */
+/** Prices are set in admin; until then a size can't start, which is easy to miss. */
 async function warnUnpricedSizes(cloudProviderId: string): Promise<void> {
   const billing = await getBilling();
   if (!billing.enabled) return;
@@ -92,10 +92,10 @@ async function warnUnpricedSizes(cloudProviderId: string): Promise<void> {
       and(eq(machineProfile.cloudProviderId, cloudProviderId), eq(machineProfile.isEnabled, true)),
     );
   const prices = await billing.getMachinePrices(profiles.map((profile) => profile.id));
-  const unpriced = profiles.filter((profile) => !prices.get(profile.id));
+  const unpriced = profiles.filter((profile) => !prices.has(profile.id));
   if (unpriced.length)
     console.warn(
-      `Gitterm sizes without a price run free: ${unpriced.map((profile) => profile.key).join(", ")}. Set them in Admin → Providers → Gitterm.`,
+      `Gitterm sizes without a price can't start: ${unpriced.map((profile) => profile.key).join(", ")}. Set them in Admin → Providers → Gitterm.`,
     );
 }
 

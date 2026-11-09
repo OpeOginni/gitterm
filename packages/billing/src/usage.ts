@@ -63,7 +63,7 @@ export interface RetailUsage {
 /**
  * Retail compute value each user has used since their period start, priced at the machine
  * size's rate in effect when each session started. Running sessions count up
- * to now. Sizes without a price cost nothing.
+ * to now. Sessions on a size without a price (started before it could be refused) cost nothing.
  */
 export async function getRetailUsage(
   /** `end` bounds an ended period; without it usage counts up to now. */

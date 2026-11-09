@@ -579,24 +579,22 @@ function describeMachineProfiles(
     machineProfiles: MachineProfileType[];
   },
   entitlements: Entitlements,
-  /** Hourly price per profile id in millionths of a dollar; empty without billing. */
-  prices: Map<string, number>,
+  /** Hourly price per profile id in millionths of a dollar; null without billing. */
+  prices: Map<string, number> | null,
 ) {
   const mode = provider.machineSelectionPolicy.mode;
-  const selectable = getSelectableMachineProfiles(
-    provider.machineProfiles,
-    mode,
-    entitlements.machineAccess,
-  );
+  // With billing on, a size without a price can't start, so it isn't offered.
+  const profiles = provider.machineProfiles.filter((profile) => !prices || prices.has(profile.id));
+  const selectable = getSelectableMachineProfiles(profiles, mode, entitlements.machineAccess);
   const defaultProfile = getDefaultMachineProfile(selectable);
-  return getSelectableMachineProfiles(provider.machineProfiles, mode, "any").map((profile) => ({
+  return getSelectableMachineProfiles(profiles, mode, "any").map((profile) => ({
     id: profile.id,
     key: profile.key,
     name: profile.name,
     description: profile.description,
     vcpus: profile.vcpus,
     memoryGb: profile.memoryGb,
-    priceMicrosPerHour: prices.get(profile.id) ?? null,
+    priceMicrosPerHour: prices?.get(profile.id) ?? null,
     isDefault: profile === defaultProfile,
     available: selectable.includes(profile),
   }));
@@ -853,7 +851,12 @@ export const workspaceRouter = router({
                     )
                   : [],
               regions,
-              machineProfiles: describeMachineProfiles(provider, entitlements, prices),
+              // Local compute isn't billed, so its sizes need no price.
+              machineProfiles: describeMachineProfiles(
+                provider,
+                entitlements,
+                billing.enabled && provider.providerKey !== "local" ? prices : null,
+              ),
               sshAccessSupport: normalizeProvidersshAccessSupport(provider.sshAccessSupport),
             };
           }),
@@ -990,7 +993,7 @@ export const workspaceRouter = router({
             location: providerRegion.location,
           })),
           location: provider.location,
-          machines: describeMachineProfiles(provider, entitlements, prices)
+          machines: describeMachineProfiles(provider, entitlements, billing.enabled ? prices : null)
             .filter((profile) => profile.available)
             .map(({ available: _available, ...profile }) => profile),
           agentKeys,
