@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/cli",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Complete suit of gitterm tools in one CLI",
   "keywords": [
     "gitterm",
@@ -10,6 +10,11 @@
   "homepage": "https://gitterm.dev",
   "license": "MIT",
   "author": "Opeyemi Oginni",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OpeOginni/gitterm.git",
+    "directory": "packages/cli"
+  },
   "bin": {
     "gitterm": "dist/index.js"
   },
@@ -40,6 +45,6 @@
     "typescript": "^5.0.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12.0"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/bot",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Chat-platform-agnostic engine for GitTerm agent bots: one sandbox per repository, one agent session per thread",
   "keywords": [
     "agent",
@@ -11,6 +11,11 @@
   "homepage": "https://gitterm.dev",
   "license": "MIT",
   "author": "Opeyemi Oginni",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OpeOginni/gitterm.git",
+    "directory": "packages/bot"
+  },
   "files": [
     "dist",
     "README.md"

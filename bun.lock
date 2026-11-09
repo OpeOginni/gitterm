@@ -133,7 +133,7 @@
         "tailwind-merge": "^3.3.1",
         "tw-animate-css": "^1.3.4",
         "unified": "^11.0.5",
-        "uqr": "0.1.3",
+        "uqr": "^0.1.3",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -291,7 +291,7 @@
     },
     "packages/bot": {
       "name": "@gitterm/bot",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@gitterm/sdk": "workspace:^0.12.0",
       },
@@ -302,7 +302,7 @@
     },
     "packages/cli": {
       "name": "@gitterm/cli",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "bin": {
         "gitterm": "dist/index.js",
       },
@@ -343,7 +343,7 @@
     },
     "packages/discord-bot": {
       "name": "@gitterm/discord-bot",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "bin": {
         "gitterm-discord-bot": "dist/cli.js",
       },
@@ -432,7 +432,7 @@
     },
     "packages/sdk": {
       "name": "@gitterm/sdk",
-      "version": "0.12.1",
+      "version": "0.12.2",
       "dependencies": {
         "@asciidev/box-sdk": "^0.0.34",
         "@daytonaio/sdk": "^0.207.0",
@@ -452,7 +452,7 @@
     },
     "packages/slack-bot": {
       "name": "@gitterm/slack-bot",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "bin": {
         "gitterm-slack-bot": "dist/cli.js",
       },

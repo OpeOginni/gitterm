@@ -12,6 +12,11 @@
   "homepage": "https://gitterm.dev",
   "license": "MIT",
   "author": "Opeyemi Oginni",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OpeOginni/gitterm.git",
+    "directory": "packages/opencode-cloud"
+  },
   "files": [
     "dist",
     "README.md"
