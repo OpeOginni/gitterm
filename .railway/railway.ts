@@ -182,6 +182,8 @@ export default defineRailway((ctx) => {
       BETTER_AUTH_SECRET: preserve(),
       BETTER_AUTH_URL: preserve(),
       CLI_JWT_SECRET: preserve(),
+      COMPUTE_SERVICE_TOKEN: preserve(),
+      COMPUTE_URL: preserve(),
       CORS_ORIGIN: preserve(),
       DATABASE_URL: preserve(),
       DEPLOYMENT_MODE: preserve(),

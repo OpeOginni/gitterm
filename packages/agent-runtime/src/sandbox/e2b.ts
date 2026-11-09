@@ -8,6 +8,7 @@ import {
 } from "e2b";
 import {
   classifyFailure,
+  discardFailedCreate,
   SANDBOX_PROVIDER_PROFILES,
   SandboxProviderError,
   terminated,
@@ -54,6 +55,8 @@ function infoFrom(info: {
 export function createE2BSandboxTransport(config: {
   apiKey: string;
   template?: string;
+  /** A snapshot every sandbox starts from, unless the create call names another. */
+  snapshot?: string;
 }): SandboxTransport {
   const apiKey = config.apiKey?.trim();
   if (!apiKey) throw new SandboxProviderError("auth", "E2B apiKey is empty.");
@@ -104,11 +107,15 @@ export function createE2BSandboxTransport(config: {
       let sandbox: Sandbox;
       try {
         // E2B fixes resources per template; each size is its own `<template><suffix>`.
+        // A snapshot is a template too, with the size it was saved at.
         const template = input.template ?? config.template ?? DEFAULT_E2B_TEMPLATE;
-        sandbox = await Sandbox.create(`${template}${input.machine?.templateSuffix ?? ""}`, {
+        const source =
+          input.snapshot ?? config.snapshot ?? `${template}${input.machine?.templateSuffix ?? ""}`;
+        sandbox = await Sandbox.create(source, {
           ...opts,
           timeoutMs: input.timeoutMs,
           metadata: labels,
+          ...(input.env ? { envs: input.env } : {}),
           lifecycle: { onTimeout },
           network: { allowPublicTraffic: input.publicPreviews === true },
         });
@@ -120,8 +127,11 @@ export function createE2BSandboxTransport(config: {
         return infoFrom(await Sandbox.getInfo(sandbox.sandboxId, opts));
       } catch (error) {
         // Never leave a billable sandbox behind when setup after creation fails.
-        await Sandbox.kill(sandbox.sandboxId, opts).catch(() => {});
-        throw failure(error, "prepare the sandbox");
+        return discardFailedCreate(
+          (id) => Sandbox.kill(id, opts),
+          sandbox.sandboxId,
+          failure(error, "prepare the sandbox"),
+        );
       }
     },
 
@@ -220,6 +230,24 @@ export function createE2BSandboxTransport(config: {
       const token = sandbox.trafficAccessToken;
       const headers: Record<string, string> = token ? { "e2b-traffic-access-token": token } : {};
       return { url: `https://${sandbox.getHost(port)}`, headers };
+    },
+
+    snapshots: {
+      async create(id, name) {
+        try {
+          return (await Sandbox.createSnapshot(id, { ...opts, name })).snapshotId;
+        } catch (error) {
+          throw failure(error, "snapshot the sandbox");
+        }
+      },
+      async delete(snapshotId) {
+        try {
+          await Sandbox.deleteSnapshot(snapshotId, opts);
+        } catch (error) {
+          const classified = failure(error, "delete the snapshot");
+          if (classified.code !== "not_found") throw classified;
+        }
+      },
     },
   };
 }

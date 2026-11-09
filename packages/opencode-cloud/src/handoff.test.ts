@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OpenCodeClient } from "@opencode/client";
-import type { GittermClient } from "@gitterm/sdk";
+import { GittermError, type GittermClient } from "@gitterm/sdk";
 import {
   changePrompt,
   handoffSession,
@@ -45,6 +45,7 @@ function fixture(answers: Array<Record<string, boolean> | "cancelled">) {
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   };
   const local = {
+    experimental: { job: { list: async () => [] } },
     session: {
       active: async () => ({}),
       get: async () => session,
@@ -134,6 +135,26 @@ test("a running source session is rejected, not interrupted", async () => {
   expect(f.creates()).toBe(0);
 });
 
+test("background jobs prevent handoff even when the source session is idle", async () => {
+  const f = fixture([]);
+  f.local.experimental.job.list = async (input) => {
+    expect(input).toEqual({ sessionID: "ses_test", status: "running", descendants: true });
+    return [
+      {
+        kind: "shell",
+        id: "job_test",
+        sessionID: "ses_test",
+        status: "running",
+        time: { started: 1 },
+        shellID: "sh_test",
+        command: "sleep 60",
+      },
+    ];
+  };
+  await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("background jobs");
+  expect(f.creates()).toBe(0);
+});
+
 test("warns about another active session in a subdirectory of the same checkout", async () => {
   await mkdir(path.join(root, "nested"));
   const f = fixture([{ changes: false }, { create: false }]);
@@ -199,6 +220,22 @@ test("restores before importing, records ready state, and never stores credentia
   expect(f.terminates()).toBe(0);
 });
 
+test("a failed create says which step failed and GitTerm's reason", async () => {
+  const f = fixture([{ changes: false }, { create: true }]);
+  f.gitterm.workspaces.create = async () => {
+    throw new GittermError(
+      "SERVER_ERROR",
+      "Gitterm couldn't start a small machine. Reference: ws1",
+    );
+  };
+  const failure = handoffSession("ses_test", f.deps);
+  await expect(failure).rejects.toThrow(
+    "Cloud handoff failed while creating the cloud workspace (attempt",
+  );
+  await expect(failure).rejects.toThrow("Gitterm couldn't start a small machine. Reference: ws1");
+  expect(f.records.at(-1)?.phase).toBe("failed");
+});
+
 test("failed transfer retains recovery metadata without terminating the cloud or touching local work", async () => {
   server = Bun.serve({
     hostname: "127.0.0.1",
@@ -206,7 +243,11 @@ test("failed transfer retains recovery metadata without terminating the cloud or
     fetch: () => new Response("secret upstream body", { status: 500 }),
   });
   const f = fixture([{ changes: false }, { create: true }]);
-  await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("workspace-test");
+  const failure = handoffSession("ses_test", f.deps);
+  await expect(failure).rejects.toThrow(
+    "while restoring your checkout in the cloud for workspace workspace-test",
+  );
+  await expect(failure).rejects.not.toThrow("secret upstream body");
   expect(f.records.at(-1)?.phase).toBe("failed");
   expect(f.records.at(-1)?.workspaceID).toBe("workspace-test");
   expect(JSON.stringify(f.records)).not.toContain("secret upstream body");

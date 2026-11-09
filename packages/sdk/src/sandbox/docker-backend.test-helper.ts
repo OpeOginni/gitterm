@@ -90,6 +90,7 @@ export function createDockerSandboxBackend(account: string, runLabel: string): S
       previews: "private",
       pause: "stateful",
       maxLifetimeMs: 24 * 60 * 60_000,
+      snapshots: "none",
     },
     async create(input) {
       const labels = {
@@ -207,6 +208,7 @@ export function createExecServerDockerBackend(account: string, runLabel: string)
       previews: "private",
       pause: "state-losing",
       maxLifetimeMs: 86_400_000,
+      snapshots: "none",
     },
     async create(input) {
       const name = `gitterm-sbx-${randomBytes(4).toString("hex")}`;

@@ -77,7 +77,25 @@ const RUNNER = `J="$1"; T="$2"; C="$3"
 ${LIVENESS}
 echo $$ > "$J/runner.pid"
 exec > "$J/output.log" 2>&1 < /dev/null
-finish() { ${NOW} > "$J/finished"; echo "$1" > "$J/exit.tmp"; mv "$J/exit.tmp" "$J/exit"; exit "$1"; }
+# On gitterm.dev, Gitterm's own sandboxes have ~/.gitterm/callback.env, so a finished job is
+# reported at once instead of polled. No other sandbox has the file, so nothing is sent.
+report() {
+  F="$J/../../callback.env"
+  [ -r "$F" ] || return 0
+  ( . "$F"
+    S=failed; [ "$1" = 0 ] && S=succeeded
+    [ -e "$J/timed_out" ] && S=timed_out; [ -e "$J/cancelled" ] && S=cancelled
+    B="{\\"sandboxId\\":\\"$GITTERM_CALLBACK_SANDBOX\\",\\"jobId\\":\\"$(basename "$J")\\",\\"status\\":\\"$S\\",\\"exitCode\\":$1}"
+    for i in 1 2 3; do
+      if command -v curl >/dev/null 2>&1; then
+        curl -fsS -m 10 -H "authorization: Bearer $GITTERM_CALLBACK_TOKEN" -H "content-type: application/json" -d "$B" "$GITTERM_CALLBACK_URL" >/dev/null 2>&1 && break
+      elif command -v wget >/dev/null 2>&1; then
+        wget -q -T 10 -O /dev/null --header="authorization: Bearer $GITTERM_CALLBACK_TOKEN" --header="content-type: application/json" --post-data="$B" "$GITTERM_CALLBACK_URL" && break
+      else break; fi
+      sleep "$i"
+    done ) > /dev/null 2>&1 || true
+}
+finish() { ${NOW} > "$J/finished"; echo "$1" > "$J/exit.tmp"; mv "$J/exit.tmp" "$J/exit"; report "$1"; exit "$1"; }
 cd "$C" 2>/dev/null || { echo "gitterm: working directory not found: $C"; finish 127; }
 if [ -s "$J/secret-names" ]; then
   setsid -w sh -c 'echo $$ > "$0/pgid"; . "$0/env.sh"; { sh "$0/command.sh"; echo $? > "$0/command-exit"; } 2>&1 | awk -v names="$0/secret-names" -f "$0/redact.awk"; [ -e "$0/command-exit" ] && exit "$(cat "$0/command-exit")"; exit 143' "$J" &
@@ -170,6 +188,8 @@ export async function startJob(
       `[ ! -e started ] || { echo "job already started" >&2; exit 17; }`,
       `${NOW} > started`,
       `nohup setsid sh runner.sh ${q(dir)} ${seconds} ${q(input.cwd)} > /dev/null 2>&1 < /dev/null &`,
+      // Until the runner writes its pid, a read would take the job for lost; wait for it.
+      `i=0; until [ -s runner.pid ]; do i=$((i+1)); [ $i -le 100 ] || { echo "the job runner did not start" >&2; exit 1; }; sleep 0.1; done`,
       `echo started`,
     ].join("\n"),
     { timeoutMs: 30_000 },

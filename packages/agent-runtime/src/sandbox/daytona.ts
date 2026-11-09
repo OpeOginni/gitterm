@@ -1,6 +1,7 @@
 import { Daytona, Image, type Sandbox } from "@daytonaio/sdk";
 import {
   classifyFailure,
+  discardFailedCreate,
   SANDBOX_PROVIDER_PROFILES,
   SandboxProviderError,
   terminated,
@@ -40,6 +41,8 @@ export function createDaytonaSandboxTransport(config: {
   apiKey: string;
   target?: "us" | "eu";
   snapshot?: string;
+  /** Used when no machine profile is given. A snapshot carries its own size instead. */
+  resources?: { cpu?: number; memory?: number; disk?: number };
 }): SandboxTransport {
   if (!config.apiKey?.trim()) throw new SandboxProviderError("auth", "Daytona apiKey is empty.");
   const client = new Daytona({
@@ -69,20 +72,20 @@ export function createDaytonaSandboxTransport(config: {
       validateLifetime(input.timeoutMs, profile.capabilities.maxLifetimeMs);
       const minutes = Math.ceil(input.timeoutMs / 60_000);
       const kill = (input.onTimeout ?? "kill") === "kill";
+      const resources =
+        (input.machine?.resources as typeof config.resources | undefined) ?? config.resources;
       let sandbox: Sandbox;
       try {
         sandbox = await client.create(
           {
-            ...(config.snapshot
-              ? { snapshot: config.snapshot }
+            ...((input.snapshot ?? config.snapshot)
+              ? { snapshot: input.snapshot ?? config.snapshot }
               : {
                   image: Image.base(input.template ?? DEFAULT_DAYTONA_SANDBOX_IMAGE).entrypoint([
                     "sleep",
                     "infinity",
                   ]),
-                  ...(input.machine?.resources
-                    ? { resources: input.machine.resources as { cpu?: number; memory?: number } }
-                    : {}),
+                  ...(resources ? { resources } : {}),
                 }),
             labels: {
               ...input.labels,
@@ -107,8 +110,11 @@ export function createDaytonaSandboxTransport(config: {
         if (check.exitCode !== 0) throw new Error("sandbox did not run a command");
         return infoFrom(sandbox);
       } catch (error) {
-        await sandbox.delete().catch(() => {});
-        throw failure(error, "prepare the sandbox");
+        return discardFailedCreate(
+          () => sandbox.delete(),
+          sandbox.id,
+          failure(error, "prepare the sandbox"),
+        );
       }
     },
 
@@ -216,6 +222,26 @@ export function createDaytonaSandboxTransport(config: {
       } catch (error) {
         throw failure(error, "get a preview link");
       }
+    },
+
+    snapshots: {
+      async create(id, name) {
+        try {
+          // Large disks take a while; Daytona's default wait is one minute.
+          await (await running(id)).createSnapshot(name, 1800);
+          return name;
+        } catch (error) {
+          throw failure(error, "snapshot the sandbox");
+        }
+      },
+      async delete(snapshotId) {
+        try {
+          await client.snapshot.delete(await client.snapshot.get(snapshotId));
+        } catch (error) {
+          const classified = failure(error, "delete the snapshot");
+          if (classified.code !== "not_found") throw classified;
+        }
+      },
     },
   };
 }

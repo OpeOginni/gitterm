@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/sdk",
-  "version": "0.11.0",
+  "version": "0.12.1",
   "files": [
     "dist"
   ],
@@ -52,7 +52,7 @@
   "devDependencies": {
     "@gitterm/agent-runtime": "workspace:*",
     "@gitterm/api": "workspace:*",
-    "@opencode/client": "2.2.1",
+    "@opencode/client": "2.2.6",
     "@trpc/server": "catalog:",
     "@types/bun": "^1.2.6",
     "typescript": "^5.8.2"

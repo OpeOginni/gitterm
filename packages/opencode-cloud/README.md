@@ -9,6 +9,8 @@ session stays local? Use [`@gitterm/opencode-sandbox`](../opencode-sandbox/READM
 
 ## 1. Install
 
+Requires OpenCode 2.2.6 or newer.
+
 ```sh
 opencode plugin add @gitterm/opencode-cloud
 ```
@@ -24,7 +26,7 @@ In GitTerm, add your model credentials and repository access first.
 
 ## 3. Use it
 
-In a Git repository, stop the agent if it is running, then type:
+In a Git repository, stop the agent and finish or stop its background jobs, then type:
 
 ```text
 /cloud
@@ -63,7 +65,11 @@ All optional:
 | `persistent`  | Keep storage between restarts, where the provider allows                   |
 
 Self-hosting GitTerm? Sign in with `gitterm login --server https://gitterm.example.com`.
-Running a standalone OpenCode server? Set `localServerUrl` (and `localServerPassword`).
+`/cloud` talks to the OpenCode server that holds your session. It finds OpenCode's background
+service by itself. `opencode --standalone` uses a private server on a random port that `/cloud`
+can't reach; instead run `opencode serve --port 4096`, open it with
+`opencode --server http://127.0.0.1:4096`, and set `localServerUrl` to that address (and
+`localServerPassword` to its password).
 
 ## Good to know
 

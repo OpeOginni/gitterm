@@ -123,6 +123,20 @@ export class BeforeAgentSetupError extends Error {
   }
 }
 
+/**
+ * A provisioning failure whose message says what failed and what to do, and is safe to show
+ * the caller. The workspace router returns it with the reference instead of a generic error.
+ */
+export class WorkspaceProvisionError extends Error {
+  constructor(
+    readonly code: "BAD_REQUEST" | "SERVICE_UNAVAILABLE" | "INTERNAL_SERVER_ERROR",
+    message: string,
+  ) {
+    super(message);
+    this.name = "WorkspaceProvisionError";
+  }
+}
+
 // Compile-time guard: every SystemWorkspaceEnv key must appear above.
 type _MissingSystemEnvKeys = Exclude<
   keyof SystemWorkspaceEnv,
@@ -257,7 +271,7 @@ export interface WorkspaceProvisioningSpec {
 
 export interface WorkspaceConfig {
   /** Persist provider handles before readiness so failed attempts remain recoverable. */
-  onProvisioned?: (info: WorkspaceInfo) => Promise<void>;
+  onProvisioned?: (info: Pick<WorkspaceInfo, "externalServiceId">) => Promise<void>;
   /** Server-resolved role from the selected provider's approved access profiles. */
   awsTaskRoleArn?: string;
   workspaceId: string;

@@ -9,6 +9,8 @@ export const PROVIDER_KEYS = [
   "vercel",
   "boat",
   "exedev",
+  /** gitterm.dev's own sandboxes; configured by env, never in the admin panel. */
+  "gitterm",
 ] as const;
 
 export const providerKeySchema = z.enum(PROVIDER_KEYS);
@@ -75,6 +77,7 @@ export const providerMachineOptionsSchemas = {
       disk: z.string().trim().min(1).optional(),
     })
     .strict(),
+  gitterm: z.object({ size: z.enum(["small", "medium"]).optional() }).strict(),
 } satisfies Record<ProviderKey, z.ZodType<Record<string, unknown>>>;
 
 export type ProviderMachineOptions = {
@@ -112,8 +115,8 @@ export const workspaceProviderSelectionSchema = z.discriminatedUnion("type", [
       region: z.string().min(1).optional(),
     })
     .strict(),
-  ...(["e2b", "daytona", "cloudflare", "vercel", "boat", "exedev"] as const).map((type) =>
-    z.object({ type: z.literal(type), ...providerSelectionBase }).strict(),
+  ...(["e2b", "daytona", "cloudflare", "vercel", "boat", "exedev", "gitterm"] as const).map(
+    (type) => z.object({ type: z.literal(type), ...providerSelectionBase }).strict(),
   ),
 ]);
 

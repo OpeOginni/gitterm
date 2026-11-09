@@ -103,7 +103,9 @@ export type ProviderKey =
   | "cloudflare"
   | "vercel"
   | "boat"
-  | "exedev";
+  | "exedev"
+  /** gitterm.dev's own sandboxes: pick a size (`small` or `medium`) as the machine. */
+  | "gitterm";
 
 type ProviderSelectionBase = {
   /** Select a specific provider installation. Usually omitted. */
@@ -115,7 +117,7 @@ type ProviderSelectionBase = {
 export type WorkspaceProviderSelection =
   | { type: "railway"; providerId?: string; region?: string }
   | ({ type: "aws"; region?: string; accessProfile?: string } & ProviderSelectionBase)
-  | ({ type: "daytona" | "vercel" | "exedev" | "e2b" | "boat" } & ProviderSelectionBase)
+  | ({ type: "daytona" | "vercel" | "exedev" | "e2b" | "boat" | "gitterm" } & ProviderSelectionBase)
   | { type: "cloudflare"; providerId?: string };
 
 export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code";
@@ -754,13 +756,34 @@ export type ManagedSandbox = {
   machineProfileId: string | null;
 };
 
+/** A job finished in one of your sandboxes (Gitterm sandboxes on gitterm.dev only). */
+export type SandboxJobFinished = {
+  sandboxId: string;
+  jobId: string;
+  status: string;
+  exitCode: number | null;
+};
+
 export type ManagedSandboxCreateInput = {
   /** Defaults to e2b. Must be enabled for sandboxes on the deployment. */
   provider?: SandboxProviderKey;
   name?: string;
   lifetimeMinutes: number;
+  /** Machine profile key, e.g. `small` or `large`. Defaults to the plan's default size. */
+  machine?: string;
   /** Serve preview URLs without the access header. Cannot be changed later. */
   publicPreviews?: boolean;
   metadata?: Record<string, string>;
   idempotencyKey?: string;
+  /** Start from one of your snapshots (same provider). It keeps the size it was saved at. */
+  snapshotId?: string;
+};
+
+/** A managed sandbox saved as a snapshot, counted against your plan's snapshot limit. */
+export type ManagedSandboxSnapshot = {
+  id: string;
+  provider: SandboxProviderKey;
+  label: string;
+  machineProfileId: string | null;
+  createdAt: string;
 };

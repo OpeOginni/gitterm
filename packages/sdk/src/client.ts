@@ -59,6 +59,8 @@ import type {
   UpdateMcpConnectionInput,
   ManagedSandbox,
   ManagedSandboxCreateInput,
+  ManagedSandboxSnapshot,
+  SandboxJobFinished,
 } from "./types.js";
 import { createNoRedirectFetch, normalizeServerUrl, trpcEndpoint } from "./transport.js";
 import { runHelpers } from "./runs.js";
@@ -200,6 +202,20 @@ export type GittermClient = {
     /** Resume a sandbox paused for inactivity. Subject to the same quota checks as creation. */
     resume(sandboxId: string): Promise<void>;
     terminate(sandboxId: string): Promise<void>;
+    /**
+     * Save a running sandbox as a snapshot new sandboxes can start from (`snapshotId` on
+     * create). Counts against your plan's snapshot limit until deleted. On Vercel, saving
+     * stops the sandbox.
+     */
+    saveSnapshot(sandboxId: string, label: string): Promise<ManagedSandboxSnapshot>;
+    listSnapshots(): Promise<ManagedSandboxSnapshot[]>;
+    deleteSnapshot(snapshotId: string): Promise<void>;
+    /**
+     * Calls `listener` as jobs in your sandboxes finish. Only Gitterm sandboxes on gitterm.dev
+     * report jobs; elsewhere nothing arrives, so keep a slower check as well. Returns a stop
+     * function. The connection reconnects by itself.
+     */
+    onJobFinished(listener: (event: SandboxJobFinished) => void): () => void;
   };
   catalog: {
     agentTypes(input?: { serverOnly?: boolean }): Promise<AgentType[]>;
@@ -793,6 +809,21 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         run(async () => {
           await trpc.sandbox.terminate.mutate({ sandboxId });
         }),
+      saveSnapshot: (sandboxId, label) =>
+        run(() => trpc.sandbox.saveSnapshot.mutate({ sandboxId, label: label.slice(0, 120) })),
+      listSnapshots: () => run(() => trpc.sandbox.snapshots.query()),
+      deleteSnapshot: (snapshotId) =>
+        run(async () => {
+          await trpc.sandbox.deleteSnapshot.mutate({ snapshotId });
+        }),
+      onJobFinished: (listener) => {
+        const subscription = trpc.sandbox.jobEvents.subscribe(undefined, {
+          onData: (event) => listener(event as SandboxJobFinished),
+          // A dropped stream is reconnected by the link; polling covers any gap.
+          onError: () => {},
+        });
+        return () => subscription.unsubscribe();
+      },
     },
     runs: {
       create: (input: AgentRunCreateInput) =>

@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { on } from "node:events";
 import z from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, db, desc, eq, inArray, or, sql } from "@gitterm/db";
+import { and, db, desc, eq, gt, inArray, isNotNull, or, sql } from "@gitterm/db";
 import { agentType, cloudProvider, image, machineProfile } from "@gitterm/db/schema/cloud";
-import { workspace, workspaceTermination } from "@gitterm/db/schema/workspace";
+import { sandboxSnapshot, workspace, workspaceTermination } from "@gitterm/db/schema/workspace";
 import {
   GITTERM_PREVIEW_PROVIDERS,
   SANDBOX_PROVIDER_PROFILES,
@@ -37,6 +38,8 @@ import { getWorkspacePortUrl } from "../utils/routing";
 import type { ExposedPort } from "@gitterm/schema/workspace-ports";
 import { workspaceMetadataSchema } from "./workspace/managment";
 import { isAnonEmail } from "../service/anon/anon-user";
+import { proxyRouteHeaders } from "../service/proxy-route-headers";
+import { computeJobEvents, type SandboxJobFinished } from "../service/compute-events";
 
 /**
  * Managed sandboxes: plain provider sandboxes billed as Gitterm workspaces. Each is a
@@ -91,13 +94,45 @@ function toTRPCError(error: unknown): never {
             : error.code === "timeout"
               ? "TIMEOUT"
               : "BAD_GATEWAY",
+      // The message names the provider and the step; say whose key it was and who can fix it.
       message:
         error.code === "auth"
-          ? "The deployment's provider credential was rejected. Ask an admin to check it."
+          ? `${error.message} That key is set on the Gitterm server, not by you: ask an admin to check it under Admin → Providers.`
           : error.message,
     });
   }
   throw error;
+}
+
+/** A snapshot still being saved after this long was abandoned; it stops counting. */
+const SNAPSHOT_SAVE_WINDOW_MS = 60 * 60_000;
+
+function presentSnapshot(row: typeof sandboxSnapshot.$inferSelect, provider: SandboxProviderKey) {
+  return {
+    id: row.id,
+    provider,
+    label: row.label,
+    machineProfileId: row.machineProfileId,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** The user's saved snapshot, or NOT_FOUND for another user's or one still being saved. */
+async function loadSnapshot(userId: string, snapshotId: string) {
+  const [row] = await db
+    .select({ snapshot: sandboxSnapshot, provider: cloudProvider.providerKey })
+    .from(sandboxSnapshot)
+    .innerJoin(cloudProvider, eq(sandboxSnapshot.cloudProviderId, cloudProvider.id))
+    .where(
+      and(
+        eq(sandboxSnapshot.id, snapshotId),
+        eq(sandboxSnapshot.userId, userId),
+        isNotNull(sandboxSnapshot.externalSnapshotId),
+      ),
+    )
+    .limit(1);
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Snapshot not found" });
+  return row as { snapshot: typeof sandboxSnapshot.$inferSelect; provider: SandboxProviderKey };
 }
 
 const limitMessage = (limit: number | null) =>
@@ -192,27 +227,6 @@ async function loadRunningSandbox(userId: string, sandboxId: string) {
   return { ...(await transportFor(row)), row };
 }
 
-/**
- * Provider access headers renamed to what the Gitterm proxy forwards (the copy_headers
- * lists in apps/proxy/Caddyfile*). Boat's `_port_auth` cookie travels as a header there.
- */
-function proxyRouteHeaders(headers: Record<string, string>): Record<string, string> {
-  const forwarded = new Set([
-    "e2b-traffic-access-token",
-    "x-daytona-preview-token",
-    "x-daytona-skip-preview-warning",
-    "x-exedev-authorization",
-  ]);
-  const routed: Record<string, string> = {};
-  for (const [name, value] of Object.entries(headers)) {
-    const boat = name.toLowerCase() === "cookie" ? /^_port_auth=([^;]+)$/.exec(value)?.[1] : null;
-    if (boat) routed["X-GitTerm-Boat-Token"] = boat;
-    else if (forwarded.has(name.toLowerCase())) routed[name] = value;
-    else throw new Error(`The Gitterm proxy cannot forward the ${name} preview header`);
-  }
-  return routed;
-}
-
 export const sandboxRouter = router({
   create: accountProcedure("workspace:write")
     .input(
@@ -220,9 +234,13 @@ export const sandboxRouter = router({
         provider: z.enum(SANDBOX_PROVIDERS).default("e2b"),
         name: z.string().trim().min(1).max(120).optional(),
         lifetimeMinutes: z.number().int().min(1).max(MAX_LIFETIME_MINUTES),
+        /** Machine profile key; defaults to the plan's default size. */
+        machine: z.string().trim().min(1).max(64).optional(),
         publicPreviews: z.boolean().optional(),
         metadata: workspaceMetadataSchema.optional(),
         idempotencyKey: z.string().trim().min(1).max(255).optional(),
+        /** Start from one of your snapshots, saved from a sandbox on the same provider. */
+        snapshotId: z.uuid().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -275,6 +293,15 @@ export const sandboxRouter = router({
           message: `Your plan cannot use ${input.provider} compute.`,
         });
 
+      const snapshot = input.snapshotId
+        ? (await loadSnapshot(userId, input.snapshotId)).snapshot
+        : undefined;
+      if (snapshot && snapshot.cloudProviderId !== provider.id)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Snapshot ${snapshot.id} was saved on another provider; create the sandbox there.`,
+        });
+
       // The sandbox is provisioned at the machine profile it is billed at.
       const profiles = await db.query.machineProfile.findMany({
         where: and(
@@ -282,13 +309,36 @@ export const sandboxRouter = router({
           eq(machineProfile.isEnabled, true),
         ),
       });
-      const profile = getDefaultMachineProfile(
-        getSelectableMachineProfiles(
-          profiles,
-          provider.machineSelectionPolicy.mode,
-          entitlements.machineAccess,
-        ),
+      const selectable = getSelectableMachineProfiles(
+        profiles,
+        provider.machineSelectionPolicy.mode,
+        entitlements.machineAccess,
       );
+      // A snapshot keeps the size it was saved at, so the sandbox is billed at that size.
+      const snapshotProfile = snapshot?.machineProfileId
+        ? profiles.find((candidate) => candidate.id === snapshot.machineProfileId)
+        : undefined;
+      if (snapshotProfile && input.machine && input.machine !== snapshotProfile.key)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Snapshot ${snapshot!.id} was saved on a ${snapshotProfile.key} machine and starts at that size; leave out machine.`,
+        });
+      const wanted = snapshotProfile?.key ?? input.machine;
+      const profile = wanted
+        ? selectable.find((candidate) => candidate.key === wanted)
+        : getDefaultMachineProfile(selectable);
+      if (snapshot?.machineProfileId && (!snapshotProfile || !profile))
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Snapshot ${snapshot.id} was saved at a size your plan can no longer use.`,
+        });
+      if (input.machine && !profile)
+        throw new TRPCError({
+          code: profiles.some((candidate) => candidate.key === input.machine)
+            ? "FORBIDDEN"
+            : "BAD_REQUEST",
+          message: `Machine "${input.machine}" isn't available for ${provider.name} sandboxes on your plan. Choose one of: ${selectable.map((candidate) => candidate.key).join(", ")}.`,
+        });
 
       const allowance = await billing.checkRunAllowance(userId, {
         action: "create",
@@ -366,13 +416,35 @@ export const sandboxRouter = router({
               ? sandboxImage.image.providerMetadata?.e2b?.templateId
               : undefined,
           machine: profile?.providerOptions,
+          ...(snapshot?.externalSnapshotId ? { snapshot: snapshot.externalSnapshotId } : {}),
         });
         externalId = sandboxHandle(input.provider, created.id);
       } catch (error) {
-        await updateWorkspaceByIdAndInvalidate(id, {
-          status: "terminated",
+        const failed = {
+          status: "terminated" as const,
           terminatedAt: new Date(),
           updatedAt: new Date(),
+        };
+        const leftover = error instanceof SandboxProviderError ? error.leftoverId : undefined;
+        if (!leftover) {
+          await updateWorkspaceByIdAndInvalidate(id, failed);
+          toTRPCError(error);
+        }
+        // The provider made a sandbox it then couldn't delete. Publish it with a new cleanup
+        // generation, in one transaction: a cleanup already running saw no handle, and must not
+        // finish this one's queue entry.
+        await db.transaction(async (tx) => {
+          await tx
+            .update(workspace)
+            .set({ ...failed, externalInstanceId: sandboxHandle(input.provider, leftover) })
+            .where(eq(workspace.id, id));
+          await tx
+            .insert(workspaceTermination)
+            .values({ workspaceId: id })
+            .onConflictDoUpdate({
+              target: workspaceTermination.workspaceId,
+              set: { generation: randomUUID(), createdAt: new Date() },
+            });
         });
         toTRPCError(error);
       }
@@ -582,4 +654,126 @@ export const sandboxRouter = router({
         });
       return { success: true as const, deleted: true as const };
     }),
+
+  /**
+   * Saves a running sandbox as a snapshot in the deployment's provider account, counted
+   * against the plan's snapshot limit. Where saving stops the sandbox (Vercel), it ends.
+   */
+  saveSnapshot: accountProcedure("workspace:write")
+    .input(sandboxIdSchema.extend({ label: z.string().trim().min(1).max(120) }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      const { transport, id, row } = await loadRunningSandbox(userId, input.sandboxId);
+      if (!transport.snapshots)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `${row.provider} sandboxes can't be snapshotted.`,
+        });
+      const { maxSnapshots } = await (await getBilling()).getEntitlements(userId);
+      if (maxSnapshots === 0)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Your plan doesn't include sandbox snapshots. Upgrade to save them.",
+        });
+      // Counted and reserved under a per-user lock, so parallel saves can't pass the limit.
+      const pending = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`snapshot-quota:${userId}`}))`,
+        );
+        if (maxSnapshots !== null) {
+          const [{ count }] = (await tx
+            .select({ count: sql<number>`count(*)::int` })
+            .from(sandboxSnapshot)
+            .where(
+              and(
+                eq(sandboxSnapshot.userId, userId),
+                or(
+                  isNotNull(sandboxSnapshot.externalSnapshotId),
+                  gt(sandboxSnapshot.createdAt, new Date(Date.now() - SNAPSHOT_SAVE_WINDOW_MS)),
+                ),
+              ),
+            )) as [{ count: number }];
+          if (count >= maxSnapshots)
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `You've reached your plan limit of ${maxSnapshots} sandbox snapshots. Delete one first.`,
+            });
+        }
+        const [created] = await tx
+          .insert(sandboxSnapshot)
+          .values({
+            userId,
+            cloudProviderId: row.workspace.cloudProviderId!,
+            machineProfileId: row.workspace.machineProfileId,
+            label: input.label,
+          })
+          .returning();
+        return created!;
+      });
+      let external: string;
+      try {
+        // Provider snapshot names are shared across the deployment's account; ids are unique.
+        external = await transport.snapshots.create(id, `gitterm-${pending.id}`);
+      } catch (error) {
+        await db.delete(sandboxSnapshot).where(eq(sandboxSnapshot.id, pending.id));
+        toTRPCError(error);
+      }
+      const [saved] = await db
+        .update(sandboxSnapshot)
+        .set({ externalSnapshotId: external })
+        .where(eq(sandboxSnapshot.id, pending.id))
+        .returning();
+      if (SANDBOX_PROVIDER_PROFILES[row.provider].capabilities.snapshots === "stops")
+        await reconcile(row);
+      return presentSnapshot(saved!, row.provider);
+    }),
+
+  snapshots: accountProcedure("workspace:read").query(async ({ ctx }) => {
+    const rows = await db
+      .select({ snapshot: sandboxSnapshot, provider: cloudProvider.providerKey })
+      .from(sandboxSnapshot)
+      .innerJoin(cloudProvider, eq(sandboxSnapshot.cloudProviderId, cloudProvider.id))
+      .where(
+        and(
+          eq(sandboxSnapshot.userId, ctx.session.user.id),
+          isNotNull(sandboxSnapshot.externalSnapshotId),
+        ),
+      )
+      .orderBy(desc(sandboxSnapshot.createdAt));
+    return rows.map((row) => presentSnapshot(row.snapshot, row.provider as SandboxProviderKey));
+  }),
+
+  deleteSnapshot: accountProcedure("workspace:write")
+    .input(z.object({ snapshotId: z.uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const { snapshot, provider } = await loadSnapshot(ctx.session.user.id, input.snapshotId);
+      try {
+        const transport = await managedSandboxTransport(provider, snapshot.cloudProviderId);
+        await transport.snapshots?.delete(snapshot.externalSnapshotId!);
+      } catch (error) {
+        toTRPCError(error);
+      }
+      await db.delete(sandboxSnapshot).where(eq(sandboxSnapshot.id, snapshot.id));
+      return { success: true as const };
+    }),
+
+  /**
+   * Finished jobs in your sandboxes, as they happen. Only gitterm.dev's Gitterm sandboxes
+   * report jobs; elsewhere the stream stays open and quiet, and clients keep polling.
+   */
+  jobEvents: accountProcedure("workspace:read").subscription(async function* ({ ctx, signal }) {
+    const source = computeJobEvents();
+    if (!source) {
+      await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve()));
+      return;
+    }
+    const events = on(source, ctx.session.user.id, { signal }) as AsyncIterableIterator<
+      [SandboxJobFinished]
+    >;
+    try {
+      for await (const [event] of events) yield event;
+    } catch (error) {
+      if (!signal?.aborted) throw error;
+    }
+  }),
 });

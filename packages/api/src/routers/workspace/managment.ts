@@ -8,6 +8,7 @@ import {
   agentWorkspaceConfig,
   workspaceEnvironmentVariables,
   workspace,
+  workspaceTermination,
   usageSession,
 } from "@gitterm/db/schema/workspace";
 import { agentType, image, cloudProvider, machineProfile, region } from "@gitterm/db/schema/cloud";
@@ -26,11 +27,11 @@ import {
   getProviderByCloudProviderId,
   isProviderImplemented,
   type PersistentWorkspaceInfo,
-  type WorkspaceInfo,
 } from "../../providers";
 import {
   BeforeAgentSetupError,
   isReservedWorkspaceEnvKey,
+  WorkspaceProvisionError,
   type ComputeProvider,
   type WorkspaceResumeResult,
 } from "../../providers/compute";
@@ -122,9 +123,11 @@ import { normalizeBaseCommit } from "../../utils/workspace-base-commit";
 import {
   buildWorkspaceRuntimeAccess,
   isResumableWorkspaceStatus,
+  mayReconcilePending,
   resolveProjectDirectory,
 } from "../../service/workspace-runtime";
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
+import { holdWorkspaceOperation, operationLease } from "../../service/workspace-operation";
 import { pollHttpRuntimeHealth } from "../../utils/runtime-health";
 import {
   buildGitExcludeCommand,
@@ -576,24 +579,22 @@ function describeMachineProfiles(
     machineProfiles: MachineProfileType[];
   },
   entitlements: Entitlements,
-  /** Hourly price per profile id in millionths of a dollar; empty without billing. */
-  prices: Map<string, number>,
+  /** Hourly price per profile id in millionths of a dollar; null without billing. */
+  prices: Map<string, number> | null,
 ) {
   const mode = provider.machineSelectionPolicy.mode;
-  const selectable = getSelectableMachineProfiles(
-    provider.machineProfiles,
-    mode,
-    entitlements.machineAccess,
-  );
+  // With billing on, a size without a price can't start, so it isn't offered.
+  const profiles = provider.machineProfiles.filter((profile) => !prices || prices.has(profile.id));
+  const selectable = getSelectableMachineProfiles(profiles, mode, entitlements.machineAccess);
   const defaultProfile = getDefaultMachineProfile(selectable);
-  return getSelectableMachineProfiles(provider.machineProfiles, mode, "any").map((profile) => ({
+  return getSelectableMachineProfiles(profiles, mode, "any").map((profile) => ({
     id: profile.id,
     key: profile.key,
     name: profile.name,
     description: profile.description,
     vcpus: profile.vcpus,
     memoryGb: profile.memoryGb,
-    priceMicrosPerHour: prices.get(profile.id) ?? null,
+    priceMicrosPerHour: prices?.get(profile.id) ?? null,
     isDefault: profile === defaultProfile,
     available: selectable.includes(profile),
   }));
@@ -657,6 +658,16 @@ async function getConfiguredDefaultRegionIdentifier(
 
   return defaultRegionIdentifier || undefined;
 }
+
+/** Another call is restarting the workspace, or already has: join that instead of failing. */
+const joinRestart = (status: string) =>
+  status === "running" || status === "pending"
+    ? {
+        success: true,
+        message: status === "running" ? "Workspace is running" : "Workspace restarting",
+        status,
+      }
+    : null;
 
 export const workspaceRouter = router({
   ...opencodeConnectionProcedures,
@@ -840,7 +851,12 @@ export const workspaceRouter = router({
                     )
                   : [],
               regions,
-              machineProfiles: describeMachineProfiles(provider, entitlements, prices),
+              // Local compute isn't billed, so its sizes need no price.
+              machineProfiles: describeMachineProfiles(
+                provider,
+                entitlements,
+                billing.enabled && provider.providerKey !== "local" ? prices : null,
+              ),
               sshAccessSupport: normalizeProvidersshAccessSupport(provider.sshAccessSupport),
             };
           }),
@@ -977,7 +993,7 @@ export const workspaceRouter = router({
             location: providerRegion.location,
           })),
           location: provider.location,
-          machines: describeMachineProfiles(provider, entitlements, prices)
+          machines: describeMachineProfiles(provider, entitlements, billing.enabled ? prices : null)
             .filter((profile) => profile.available)
             .map(({ available: _available, ...profile }) => profile),
           agentKeys,
@@ -1940,7 +1956,8 @@ export const workspaceRouter = router({
           input,
         );
 
-        if (providerKey !== "local") {
+        // gitterm.dev's own provider is configured by env vars, not an admin provider config.
+        if (providerKey !== "local" && providerKey !== "gitterm") {
           if (!cloudProviderRecord.providerConfigId) {
             throw new TRPCError({
               code: "BAD_REQUEST",
@@ -3013,54 +3030,55 @@ export const workspaceRouter = router({
             ? railwayBootstrapEnvironment(DEFAULT_DOCKER_ENV_VARS)
             : DEFAULT_DOCKER_ENV_VARS;
 
-        const onProvisioned =
-          providerKey === "aws"
-            ? async (info: WorkspaceInfo) => {
-                await db
-                  .update(workspace)
-                  .set({ externalInstanceId: info.externalServiceId, updatedAt: new Date() })
-                  .where(eq(workspace.id, workspaceId));
-              }
-            : undefined;
+        // Providers that call this record their handle before setup, so a failure can clean it up.
+        const onProvisioned = async (info: { externalServiceId: string }) => {
+          await db
+            .update(workspace)
+            .set({ externalInstanceId: info.externalServiceId, updatedAt: new Date() })
+            .where(eq(workspace.id, workspaceId));
+        };
 
         // Create workspace via compute provider
         const workspaceInfo = await workspaceCreateLogger.step(
           `provision-workspace provider=${providerKey} persistent=${effectivePersistent}`,
+          // Held while the provider works: its handle may be published before it finishes.
           () =>
-            effectivePersistent
-              ? computeProvider.createPersistentWorkspace({
-                  onProvisioned,
-                  workspaceId,
-                  userId,
-                  imageId: providerImageId,
-                  imageProviderMetadata,
-                  awsTaskRoleArn,
-                  subdomain,
-                  repositoryUrl: input.repo,
-                  repositoryBranch: input.branch,
-                  repositoryBaseCommit: resolvedBaseCommit ?? undefined,
-                  repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
-                  regionIdentifier: regionRecord?.externalRegionIdentifier,
-                  environmentVariables: providerEnvironment,
-                  provisioningSpec,
-                  persistent: effectivePersistent,
-                })
-              : computeProvider.createWorkspace({
-                  onProvisioned,
-                  workspaceId,
-                  userId,
-                  imageId: providerImageId,
-                  imageProviderMetadata,
-                  awsTaskRoleArn,
-                  subdomain,
-                  repositoryUrl: input.repo,
-                  repositoryBranch: input.branch,
-                  repositoryBaseCommit: resolvedBaseCommit ?? undefined,
-                  repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
-                  regionIdentifier: regionRecord?.externalRegionIdentifier,
-                  environmentVariables: providerEnvironment,
-                  provisioningSpec,
-                }),
+            holdWorkspaceOperation(workspaceId, () =>
+              effectivePersistent
+                ? computeProvider.createPersistentWorkspace({
+                    onProvisioned,
+                    workspaceId,
+                    userId,
+                    imageId: providerImageId,
+                    imageProviderMetadata,
+                    awsTaskRoleArn,
+                    subdomain,
+                    repositoryUrl: input.repo,
+                    repositoryBranch: input.branch,
+                    repositoryBaseCommit: resolvedBaseCommit ?? undefined,
+                    repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
+                    regionIdentifier: regionRecord?.externalRegionIdentifier,
+                    environmentVariables: providerEnvironment,
+                    provisioningSpec,
+                    persistent: effectivePersistent,
+                  })
+                : computeProvider.createWorkspace({
+                    onProvisioned,
+                    workspaceId,
+                    userId,
+                    imageId: providerImageId,
+                    imageProviderMetadata,
+                    awsTaskRoleArn,
+                    subdomain,
+                    repositoryUrl: input.repo,
+                    repositoryBranch: input.branch,
+                    repositoryBaseCommit: resolvedBaseCommit ?? undefined,
+                    repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
+                    regionIdentifier: regionRecord?.externalRegionIdentifier,
+                    environmentVariables: providerEnvironment,
+                    provisioningSpec,
+                  }),
+            ),
         );
 
         // SDK providers may have captured the agent's own access credential
@@ -3272,7 +3290,7 @@ export const workspaceRouter = router({
             workspaceCreateLogger.redact(error instanceof Error ? error.message : String(error)),
           );
           // Keep the cause on the row so the reference ID in the client error resolves to something.
-          await db
+          const [failed] = await db
             .update(workspace)
             .set({
               status: "terminated",
@@ -3289,8 +3307,23 @@ export const workspaceRouter = router({
                       provisioningError: safeProvisioningError,
                     },
             })
-            .where(eq(workspace.id, workspaceId));
+            .where(eq(workspace.id, workspaceId))
+            .returning({ externalInstanceId: workspace.externalInstanceId });
           await closeOpenUsageSessions([workspaceId], "error");
+          // A provider resource was recorded before the failure: the cleanup queue deletes it
+          // and retries until the provider confirms, even if the provider's own cleanup failed.
+          if (failed?.externalInstanceId) {
+            await db
+              .insert(workspaceTermination)
+              .values({ workspaceId })
+              .onConflictDoUpdate({
+                target: workspaceTermination.workspaceId,
+                set: { generation: randomUUID(), createdAt: new Date() },
+              });
+            void processWorkspaceTermination(userId, workspaceId).catch((cleanupError) =>
+              console.error("Failed provisioning cleanup will be retried:", cleanupError),
+            );
+          }
           await db
             .delete(workspaceRuntimeBundle)
             .where(eq(workspaceRuntimeBundle.workspaceId, workspaceId));
@@ -3314,6 +3347,12 @@ export const workspaceRouter = router({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: redactSensitiveText(safeError.message),
+          });
+        }
+        if (error instanceof WorkspaceProvisionError) {
+          throw new TRPCError({
+            code: error.code,
+            message: `${redactSensitiveText(workspaceCreateLogger.redact(error).message)} Reference: ${workspaceId}`,
           });
         }
 
@@ -3405,14 +3444,14 @@ export const workspaceRouter = router({
             provider.id,
           );
           const live = await computeProvider.getStatus(workspaceRecord.externalInstanceId);
-          if (live.status === "running") {
+          if (live.status === "running" && mayReconcilePending(workspaceRecord, "running")) {
             const now = new Date();
-            // Guard on the stale status so a concurrent lifecycle transition
-            // (terminate, ensureRunning claim) is never overwritten.
+            // Only from the status checked above: a transition since (terminate, or a restart
+            // claiming it) owns the row now and must not be overwritten.
             const [reconciled] = await updateWorkspaceStatusAndInvalidate(
               and(
                 eq(workspace.id, workspaceRecord.id),
-                or(eq(workspace.status, "paused"), eq(workspace.status, "pending")),
+                eq(workspace.status, workspaceRecord.status),
               ),
               {
                 status: "running",
@@ -3528,6 +3567,7 @@ export const workspaceRouter = router({
         const live = await statusProvider.getStatus(workspaceRecord.externalInstanceId);
         const shouldUpdate =
           (workspaceRecord.status === "pending" || workspaceRecord.status === "running") &&
+          mayReconcilePending(workspaceRecord, live.status) &&
           (live.status !== workspaceRecord.status ||
             (live.externalRunningDeploymentId !== undefined &&
               live.externalRunningDeploymentId !== workspaceRecord.externalRunningDeploymentId));
@@ -3558,12 +3598,17 @@ export const workspaceRouter = router({
         existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
       };
 
+      // The provider may have paused it on its own (an idle timeout) without telling us. Check
+      // first, so a paused machine is resumed below instead of waited on.
+      if (existingWorkspace.status === "running") await reconcileProviderStatus();
+
       if (isResumableWorkspaceStatus(existingWorkspace.status)) {
-        // Atomically claim the restart. Concurrent callers observe pending and
-        // wait for the same provider operation instead of starting another one.
+        // Atomically claim the restart, with its operation lease. Concurrent callers observe
+        // pending and wait for the same provider operation instead of starting another one.
+        const claimLease = operationLease();
         const [claimedWorkspace] = await db
           .update(workspace)
-          .set({ status: "pending", updatedAt: new Date() })
+          .set({ status: "pending", updatedAt: new Date(), operationLeaseUntil: claimLease })
           .where(
             and(
               eq(workspace.id, input.workspaceId),
@@ -3618,7 +3663,7 @@ export const workspaceRouter = router({
             });
           }
 
-          let workspaceRegion;
+          let workspaceRegion: typeof region.$inferSelect | undefined;
           if (provider.supportsRegions && existingWorkspace.regionId) {
             [workspaceRegion] = await db
               .select()
@@ -3642,38 +3687,48 @@ export const workspaceRouter = router({
               latencyMs: Date.now() - resumeStartedAt,
               reasonCode: outcome === "failure" ? "provider_error" : undefined,
             });
-          try {
-            resumeResult = await computeProvider.resumeWorkspace(
-              existingWorkspace.externalInstanceId,
-              workspaceRegion?.externalRegionIdentifier,
-              existingWorkspace.externalRunningDeploymentId ?? undefined,
-            );
-            await relaunchWorkspaceSetup(computeProvider, claimedWorkspace, provider.providerKey);
-            void recordResume("success");
-          } catch (error) {
-            void recordResume("failure");
-            await updateWorkspaceByIdAndInvalidate(
-              input.workspaceId,
-              {
-                status: "paused",
-                updatedAt: new Date(),
-              },
-              existingWorkspace.subdomain,
-            );
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message: "WORKSPACE_RESTART_FAILED: provider could not restart the workspace",
-              cause: error,
-            });
-          }
+          await holdWorkspaceOperation(
+            input.workspaceId,
+            async () => {
+              try {
+                resumeResult = await computeProvider.resumeWorkspace(
+                  claimedWorkspace.externalInstanceId,
+                  workspaceRegion?.externalRegionIdentifier,
+                  claimedWorkspace.externalRunningDeploymentId ?? undefined,
+                );
+                await relaunchWorkspaceSetup(
+                  computeProvider,
+                  claimedWorkspace,
+                  provider.providerKey,
+                );
+                void recordResume("success");
+              } catch (error) {
+                void recordResume("failure");
+                await updateWorkspaceByIdAndInvalidate(
+                  input.workspaceId,
+                  {
+                    status: "paused",
+                    updatedAt: new Date(),
+                  },
+                  claimedWorkspace.subdomain,
+                );
+                throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: "WORKSPACE_RESTART_FAILED: provider could not restart the workspace",
+                  cause: error,
+                });
+              }
 
-          const restartWorkspaceStatus =
-            provider.restartSettlement === "immediate" ? "running" : "pending";
-          await completeWorkspaceRestart(
-            existingWorkspace,
-            restartWorkspaceStatus,
-            resumeResult,
-            ctx.botIdentity,
+              const restartWorkspaceStatus =
+                provider.restartSettlement === "immediate" ? "running" : "pending";
+              await completeWorkspaceRestart(
+                claimedWorkspace,
+                restartWorkspaceStatus,
+                resumeResult,
+                ctx.botIdentity,
+              );
+            },
+            claimLease,
           );
 
           existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
@@ -3972,6 +4027,9 @@ export const workspaceRouter = router({
           });
         }
 
+        const alreadyStarting = joinRestart(existingWorkspace.status);
+        if (alreadyStarting) return alreadyStarting;
+
         if (existingWorkspace.status !== "paused") {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -4005,7 +4063,7 @@ export const workspaceRouter = router({
           });
         }
 
-        let workspaceRegion;
+        let workspaceRegion: typeof region.$inferSelect | undefined;
         if (provider.supportsRegions && existingWorkspace.regionId) {
           // Get the region identifier
           [workspaceRegion] = await db
@@ -4027,12 +4085,20 @@ export const workspaceRouter = router({
           provider.providerKey,
           provider.id,
         );
+        const claimLease = operationLease();
         const [claimed] = await updateWorkspaceStatusAndInvalidate(
           and(eq(workspace.id, input.workspaceId), eq(workspace.status, "paused")),
-          { status: "pending", updatedAt: new Date() },
+          { status: "pending", updatedAt: new Date(), operationLeaseUntil: claimLease },
         );
-        if (!claimed)
+        if (!claimed) {
+          const [current] = await db
+            .select({ status: workspace.status })
+            .from(workspace)
+            .where(eq(workspace.id, input.workspaceId));
+          const startedElsewhere = joinRestart(current?.status ?? "");
+          if (startedElsewhere) return startedElsewhere;
           throw new TRPCError({ code: "CONFLICT", message: "Workspace is no longer paused" });
+        }
         let resumeResult: void | WorkspaceResumeResult;
         const resumeStartedAt = Date.now();
         const recordResume = async (outcome: "success" | "failure") =>
@@ -4045,31 +4111,37 @@ export const workspaceRouter = router({
             latencyMs: Date.now() - resumeStartedAt,
             reasonCode: outcome === "failure" ? "provider_error" : undefined,
           });
-        try {
-          resumeResult = await computeProvider.resumeWorkspace(
-            existingWorkspace.externalInstanceId,
-            workspaceRegion?.externalRegionIdentifier,
-            existingWorkspace.externalRunningDeploymentId ?? undefined,
-          );
-          void recordResume("success");
-        } catch (error) {
-          void recordResume("failure");
-          await updateWorkspaceByIdAndInvalidate(
-            input.workspaceId,
-            {
-              status: "paused",
-              updatedAt: new Date(),
-            },
-            existingWorkspace.subdomain,
-          );
-          throw error;
-        }
-        await relaunchWorkspaceSetup(computeProvider, existingWorkspace, provider.providerKey);
-        const restartWorkspaceStatus = await completeWorkspaceRestart(
-          existingWorkspace,
-          provider.restartSettlement === "immediate" ? "running" : "pending",
-          resumeResult,
-          ctx.botIdentity,
+        const restartWorkspaceStatus = await holdWorkspaceOperation(
+          input.workspaceId,
+          async () => {
+            try {
+              resumeResult = await computeProvider.resumeWorkspace(
+                existingWorkspace.externalInstanceId,
+                workspaceRegion?.externalRegionIdentifier,
+                existingWorkspace.externalRunningDeploymentId ?? undefined,
+              );
+              void recordResume("success");
+            } catch (error) {
+              void recordResume("failure");
+              await updateWorkspaceByIdAndInvalidate(
+                input.workspaceId,
+                {
+                  status: "paused",
+                  updatedAt: new Date(),
+                },
+                existingWorkspace.subdomain,
+              );
+              throw error;
+            }
+            await relaunchWorkspaceSetup(computeProvider, existingWorkspace, provider.providerKey);
+            return completeWorkspaceRestart(
+              existingWorkspace,
+              provider.restartSettlement === "immediate" ? "running" : "pending",
+              resumeResult,
+              ctx.botIdentity,
+            );
+          },
+          claimLease,
         );
 
         return {

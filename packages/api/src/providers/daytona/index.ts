@@ -387,6 +387,12 @@ export class DaytonaProvider implements ComputeProvider {
           },
         ),
     );
+    // Recorded first, so a sandbox whose setup fails is still deleted if its cleanup fails;
+    // the setup steps below delete it themselves only on a best-effort basis.
+    await config.onProvisioned?.({ externalServiceId: sandbox.id }).catch(async (error) => {
+      await sandbox.delete().catch(() => undefined);
+      throw error;
+    });
 
     if (spec?.repo) {
       const parsedGitRepoUrl = spec.repo.url.endsWith(".git")

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { SandboxProviderError } from "@gitterm/agent-runtime/sandbox/types";
 import {
   SandboxAccountError,
   type SandboxBackend,
@@ -15,6 +16,15 @@ import {
   startJob,
   type JobState,
 } from "./jobs.js";
+import {
+  changedSetupFiles,
+  createFileSetupSnapshotStore,
+  setupFingerprint,
+  setupSnapshotName,
+  type SetupSnapshotRecord,
+  type SetupSnapshotStatus,
+  type SetupSnapshotStore,
+} from "./setup-snapshots.js";
 import { projectDir, uploadSource, type CapturedSource } from "./source.js";
 import {
   createFileSandboxStore,
@@ -48,6 +58,8 @@ export type SandboxCreateOptions = {
   sessionId?: string | null;
   lifetimeMinutes?: number;
   publicPreviews?: boolean;
+  /** Start from this snapshot, e.g. the project's setup snapshot. */
+  snapshot?: string;
 };
 
 export type SandboxExecOptions = {
@@ -59,6 +71,8 @@ export type SandboxExecOptions = {
   env?: Record<string, string>;
   /** Wait up to this long for completion before returning a running job. */
   waitMs?: number;
+  /** The conversation that started the job; saved so it can be told when the job finishes. */
+  sessionId?: string;
 };
 
 export type JobLog = {
@@ -117,11 +131,13 @@ export type SandboxClient = ReturnType<typeof createSandboxClient>;
 export function createSandboxClient(options: {
   backend: SandboxBackend;
   store?: SandboxStore;
+  setupSnapshots?: SetupSnapshotStore;
   limits?: Partial<SandboxLimits>;
 }) {
   const { backend } = options;
   const identity = backend.identity;
   const store = options.store ?? createFileSandboxStore();
+  const setupSnapshots = options.setupSnapshots ?? createFileSetupSnapshotStore();
   const limits = { ...DEFAULT_SANDBOX_LIMITS, ...options.limits };
   // Values passed in this process, redacted from any output it returns.
   const secrets = new Set<string>();
@@ -181,7 +197,8 @@ export function createSandboxClient(options: {
     resume: (id: string) => Promise<void>,
   ): Promise<{ record: SandboxRecord; filesLost: boolean }> {
     await resume(ref.id);
-    const record = await load(ref);
+    // Resuming joins a restart already under way, so it may still be starting.
+    const record = await settled(ref);
     if (record.state !== "running" || backend.capabilities.pause !== "state-losing")
       return { record, filesLost: false };
     const cleared = await store.update(ref, (stored) => {
@@ -190,9 +207,20 @@ export function createSandboxClient(options: {
     return { record: cleared ?? record, filesLost: true };
   }
 
+  /** Loads the sandbox, waiting while it starts: e.g. a parallel call is resuming it. */
+  async function settled(ref: SandboxRef): Promise<SandboxRecord> {
+    const deadline = Date.now() + 120_000;
+    let record = await load(ref);
+    while (record.state === "pending" && Date.now() < deadline) {
+      await sleep(1_000);
+      record = await load(ref);
+    }
+    return record;
+  }
+
   /** A sandbox paused for inactivity is resumed on use. `sync` restores files itself. */
   async function running(ref: SandboxRef, use: "sync" | "other" = "other"): Promise<SandboxRecord> {
-    let record = await load(ref);
+    let record = await settled(ref);
     if (record.state === "paused" && backend.resume) {
       const resumed = await resumeSandbox(ref, backend.resume);
       record = resumed.record;
@@ -202,7 +230,10 @@ export function createSandboxClient(options: {
         );
     }
     if (record.state === "terminated")
-      throw new Error(`Sandbox ${ref.id} no longer exists (deleted or expired).`);
+      throw new SandboxProviderError(
+        "not_found",
+        `Sandbox ${ref.id} no longer exists (deleted or expired).`,
+      );
     if (record.state !== "running") throw new Error(`Sandbox ${ref.id} is ${record.state}.`);
     return record;
   }
@@ -273,6 +304,7 @@ export function createSandboxClient(options: {
       finishedAt: null,
       timeoutMs: Math.round(timeoutMinutes * 60_000),
       secretNames: Object.keys(input.env ?? {}),
+      sessionId: input.sessionId ?? null,
     };
     // Persist first so a crash after launch still leaves a reattachable record.
     await store.update(record, (stored) => {
@@ -294,6 +326,8 @@ export function createSandboxClient(options: {
     capabilities: backend.capabilities,
     limits,
     store,
+    /** Present when the backend pushes job completions; see `SandboxBackend.onJobFinished`. */
+    onJobFinished: backend.onJobFinished?.bind(backend),
 
     async create(input: SandboxCreateOptions): Promise<SandboxRecord> {
       const lifetimeMinutes = input.lifetimeMinutes ?? limits.defaultLifetimeMinutes;
@@ -312,6 +346,7 @@ export function createSandboxClient(options: {
         name: input.name,
         lifetimeMs: lifetimeMinutes * 60_000,
         publicPreviews: input.publicPreviews === true,
+        ...(input.snapshot ? { snapshot: input.snapshot } : {}),
         labels: {
           ...(input.purpose ? { gitterm_purpose: input.purpose.slice(0, 120) } : {}),
           ...(input.sessionId ? { gitterm_session: input.sessionId.slice(0, 120) } : {}),
@@ -585,6 +620,88 @@ export function createSandboxClient(options: {
       if (!backend.resume)
         throw new Error("Only managed sandboxes pause, so direct sandboxes cannot be resumed.");
       return (await resumeSandbox(ref, backend.resume)).record;
+    },
+
+    /** How saving a snapshot affects the sandbox, or null where this account cannot snapshot. */
+    snapshotEffect: backend.snapshots?.effect ?? null,
+
+    /**
+     * This account's setup snapshots, newest first. With `project`, only those tied to that
+     * checkout or to none, each with the dependency files changed since it was saved.
+     */
+    async setupSnapshots(project?: string): Promise<SetupSnapshotStatus[]> {
+      const records = (await setupSnapshots.list(identity)).filter(
+        (record) => !project || record.project === null || record.project === project,
+      );
+      return Promise.all(
+        records.map(async (record) => ({
+          record,
+          changed: record.project
+            ? changedSetupFiles(record.fingerprint, await setupFingerprint(record.project))
+            : [],
+        })),
+      );
+    },
+
+    /**
+     * Snapshots the sandbox. `project` ties it to a checkout, whose dependency files are then
+     * watched for changes; `replace` names a snapshot to delete once this one is saved. Where
+     * the provider stops the sandbox to snapshot it (Vercel), the sandbox is gone after.
+     */
+    async saveSetupSnapshot(
+      ref: SandboxRef,
+      input: { label: string; project?: string | null; note?: string; replace?: string },
+    ): Promise<{ record: SetupSnapshotRecord; replaced: string | null; leftover: string | null }> {
+      assertRef(ref);
+      if (!backend.snapshots)
+        throw new Error(
+          `${identity.mode === "managed" ? "Managed accounts" : `${identity.provider} sandboxes`} cannot be snapshotted.`,
+        );
+      const previous = input.replace
+        ? (await setupSnapshots.list(identity)).find(
+            (record) => record.snapshotId === input.replace,
+          )
+        : undefined;
+      if (input.replace && !previous) throw new Error(`No saved snapshot ${input.replace}.`);
+      await running(ref);
+      const project = input.project ?? null;
+      const fingerprint = project ? await setupFingerprint(project) : {};
+      const snapshotId = await backend.snapshots.create(
+        ref.id,
+        setupSnapshotName(input.label, project),
+      );
+      const record: SetupSnapshotRecord = {
+        ...identity,
+        snapshotId,
+        label: input.label.slice(0, 60),
+        project,
+        note: input.note?.slice(0, 500) ?? "",
+        fingerprint,
+        sandboxId: ref.id,
+        createdAt: new Date().toISOString(),
+      };
+      await setupSnapshots.put(record);
+      if (backend.snapshots.effect === "stops") await load(ref).catch(() => {});
+      let leftover: string | null = null;
+      if (previous && previous.snapshotId !== snapshotId) {
+        await setupSnapshots.remove(identity, previous.snapshotId);
+        await backend.snapshots.delete(previous.snapshotId).catch(() => {
+          leftover = previous.snapshotId;
+        });
+      }
+      return { record, replaced: previous?.snapshotId ?? null, leftover };
+    },
+
+    /** Deletes a setup snapshot from the provider and forgets it. */
+    async deleteSetupSnapshot(snapshotId: string): Promise<SetupSnapshotRecord> {
+      const record = (await setupSnapshots.list(identity)).find(
+        (item) => item.snapshotId === snapshotId,
+      );
+      if (!record) throw new Error(`No saved snapshot ${snapshotId}.`);
+      if (!backend.snapshots) throw new Error("This account cannot delete snapshots.");
+      await backend.snapshots.delete(snapshotId);
+      await setupSnapshots.remove(identity, snapshotId);
+      return record;
     },
 
     /** Deletes the sandbox and confirms with the provider that it is gone. */

@@ -40,6 +40,12 @@ export {
 } from "./config.js";
 export { jobRoot, type JobState, type JobStatus } from "./jobs.js";
 export {
+  createFileSetupSnapshotStore,
+  type SetupSnapshotRecord,
+  type SetupSnapshotStatus,
+  type SetupSnapshotStore,
+} from "./setup-snapshots.js";
+export {
   captureSource,
   MAX_SOURCE_BYTES,
   projectDir,

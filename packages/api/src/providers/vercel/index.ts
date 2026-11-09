@@ -283,6 +283,8 @@ export class VercelProvider implements ComputeProvider {
     );
 
     try {
+      // Recorded first, so a sandbox whose setup fails is still deleted if the cleanup below fails.
+      await config.onProvisioned?.({ externalServiceId: sandbox.name });
       await logger.step("create-workspace-directory", () =>
         sandbox.runCommand("mkdir", ["-p", repoDir]),
       );
