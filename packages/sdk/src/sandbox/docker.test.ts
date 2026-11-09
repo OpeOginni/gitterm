@@ -243,11 +243,12 @@ for (const [kind, createBackend] of Object.entries(backends))
         readyTimeoutMs: 30_000,
       });
       expect(preview.ready).toBe(true);
-      expect(await (await fetch(preview.url, { headers: preview.headers })).text()).toBe(
-        "hello preview",
-      );
+      expect(
+        await (await fetch(preview.access.url, { headers: preview.access.headers })).text(),
+      ).toBe("hello preview");
       // Behind the command server, a request without the token is rejected.
-      if (Object.keys(preview.headers).length) expect(preview.unauthenticatedStatus).toBe(401);
+      if (Object.keys(preview.access.headers).length)
+        expect(preview.unauthenticatedStatus).toBe(401);
 
       const built = await client.exec(sandbox, {
         command: "mkdir -p dist && head -c 300000 /dev/urandom > dist/app.bin",

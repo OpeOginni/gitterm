@@ -112,6 +112,17 @@ export interface SandboxTransport {
 /** Where commands run and what the provider guarantees. Shared by transports and clients. */
 export type SandboxProviderProfile = { home: string; capabilities: SandboxCapabilities };
 
+/**
+ * Managed sandboxes whose previews the Gitterm proxy serves, adding the provider's access
+ * header itself. Gitterm then decides who sees a preview, so any of them can be public.
+ */
+export const GITTERM_PREVIEW_PROVIDERS: readonly SandboxProviderKey[] = [
+  "e2b",
+  "daytona",
+  "boat",
+  "exedev",
+];
+
 const DAY = 24 * 60 * 60_000;
 export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProviderProfile> = {
   e2b: {

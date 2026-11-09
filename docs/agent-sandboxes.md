@@ -159,16 +159,17 @@ identical content keep separate baselines.
 status of a request made without the access header.
 
 - **Private (default where the provider allows it):** without the access header the provider answers 401 or 403 (E2B, Daytona, Boat, and the command server; see the provider table). Give it to tools through the loopback proxy (`startPreviewProxy`, the plugin's `localProxy`, or `gitterm sandbox preview --serve`), never to a model. Each preview gets its own hostname, `p-<random>.localhost` (browsers and Node resolve it to loopback), served from `/`, so root-relative assets and client-side routes work. Cookies are scoped by host, so the preview's cookies and its JavaScript never see those of other local apps or other previews, and the app's own cookie names keep working. Opening the returned URL exchanges its one-time token for an HttpOnly cookie; requests without it get 401, and requests for any other host (including plain `127.0.0.1`) get 421. Requests always go to the provider's host: a path that normalizes to `//other-host/...` cannot redirect the access headers. The proxy lasts as long as the process. It does not carry WebSockets.
-- **Public:** chosen at creation (`publicPreviews`) and fixed for the sandbox's life, because E2B cannot change it later. It needs a separate approval, unless `"publicPreviews": true` in the settings makes every sandbox public (the setting is the approval). Only E2B and Daytona can do both; Vercel is always public, and Boat, exe.dev, Railway, and AWS are always private.
+- **Public:** chosen at creation (`publicPreviews`) and fixed for the sandbox's life, because E2B cannot change it later. It needs a separate approval, unless `"publicPreviews": true` in the settings makes every sandbox public (the setting is the approval). In direct mode only E2B and Daytona can do both; Vercel is always public, and Boat, exe.dev, Railway, and AWS are always private. Managed sandboxes do better; see below.
 
-**Not yet: previews through Gitterm.** A managed preview works like a direct one today:
-the client gets the provider's URL and access header, so a Boat preview is still private.
-Gitterm already proxies workspace ports this way. The proxy adds the provider's access
-header itself, so every port can be public on any provider, or private behind the owner's
-Gitterm login. Managed sandboxes are already workspace rows; routing their previews
-through the proxy needs a subdomain and port entries. That would give managed sandboxes
-public previews on every provider (Boat included). Private previews would then open with a
-Gitterm login instead of a local proxy.
+**Managed previews go through Gitterm.** For managed E2B, Daytona, Boat, and exe.dev
+sandboxes, Gitterm serves each preview at `https://<port>-<subdomain>.<domain>` and adds
+the provider's access header itself, so the provider URL stays private. A sandbox created
+with public previews gets URLs anyone can open; otherwise they open only for the owner
+signed in to Gitterm in a browser. This works on Boat too, which has no public mode of its
+own. The result still carries the direct provider access, for the loopback proxy and
+browser automation. Managed Vercel, Railway, and AWS previews work as in direct mode.
+Preview URLs survive an idle pause and answer again once the sandbox resumes; if one
+does not, open the preview again to refresh its route.
 
 Closing the plugin closes its proxies only. Sandboxes and their preview servers keep
 running until destroyed or until the sandbox's lifetime ends. In a sandbox without a

@@ -450,8 +450,14 @@ test("a preview server is stopped with its sandbox, not at the job limit", async
 });
 
 describe("preview visibility", () => {
-  async function previewOn(previews: "private" | "either", publicPreviews: boolean) {
+  async function previewOn(
+    previews: "private" | "either",
+    publicPreviews: boolean,
+    viaGitterm = false,
+  ) {
+    const asked: unknown[] = [];
     const server = Bun.serve({ port: 0, fetch: () => new Response("ok") });
+    const gittermUrl = viaGitterm ? `http://127.0.0.1:${server.port}/gitterm` : undefined;
     const identity = { mode: "direct" as const, provider: "boat" as const, account: "a" };
     const backend = {
       identity,
@@ -466,7 +472,10 @@ describe("preview visibility", () => {
         expiresAt: null,
         labels: {},
       }),
-      preview: async () => ({ url: `http://localhost:${server.port}/`, headers: {} }),
+      preview: async (_id: string, _port: number, options: unknown) => {
+        asked.push(options);
+        return { url: `http://localhost:${server.port}/`, headers: { token: "t" }, gittermUrl };
+      },
     } as unknown as Parameters<typeof createSandboxClient>[0]["backend"];
     const store = createFileSandboxStore(await mkdtemp(path.join(tmpdir(), "gitterm-store-")));
     const ref = { ...identity, id: "sbx1" };
@@ -487,7 +496,10 @@ describe("preview visibility", () => {
     });
     try {
       const preview = await createSandboxClient({ backend, store }).preview(ref, { port: 3000 });
-      return { reported: preview.public, stored: (await store.get(ref))!.previews["3000"]!.public };
+      const stored = (await store.get(ref))!.previews["3000"]!;
+      return gittermUrl
+        ? { preview, stored, asked }
+        : { reported: preview.public, stored: stored.public };
     } finally {
       server.stop(true);
     }
@@ -495,6 +507,23 @@ describe("preview visibility", () => {
 
   test("a provider without a public mode never reports a preview as public", async () => {
     expect(await previewOn("private", true)).toEqual({ reported: false, stored: false });
+  });
+
+  test("a preview served by Gitterm is the URL to open; direct access stays for proxies", async () => {
+    const { preview, stored, asked } = (await previewOn("either", true, true)) as {
+      preview: Awaited<ReturnType<ReturnType<typeof createSandboxClient>["preview"]>>;
+      stored: { url: string };
+      asked: unknown[];
+    };
+    expect(asked).toEqual([{ public: true }]);
+    expect(preview).toMatchObject({
+      public: true,
+      viaGitterm: true,
+      access: { headers: { token: "t" } },
+    });
+    expect(preview.url).toEndWith("/gitterm");
+    expect(preview.access.url).toStartWith("http://localhost:");
+    expect(stored.url).toBe(preview.url);
   });
 
   test("a provider that can do either follows the sandbox's choice", async () => {

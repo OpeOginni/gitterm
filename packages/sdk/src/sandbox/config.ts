@@ -4,6 +4,7 @@ import { createGittermClient } from "../client.js";
 import {
   createDirectSandboxBackend,
   createManagedSandboxBackend,
+  managedCapabilities,
   validateAccountName,
   type SandboxBackend,
   type SandboxMode,
@@ -148,7 +149,10 @@ function directCredential(config: DirectCredential) {
 }
 
 export function describeLimitations(provider: SandboxProviderKey, mode: SandboxMode): string[] {
-  const { capabilities } = SANDBOX_PROVIDER_PROFILES[provider];
+  const capabilities =
+    mode === "managed"
+      ? managedCapabilities(provider)
+      : SANDBOX_PROVIDER_PROFILES[provider].capabilities;
   const name = PROVIDER_NAMES[provider];
   return [
     mode === "managed"
@@ -161,7 +165,9 @@ export function describeLimitations(provider: SandboxProviderKey, mode: SandboxM
             ? `${name} stops and archives the sandbox at its lifetime; the archived storage remains until you destroy it.`
             : `${name} never deletes an abandoned sandbox. Destroy it yourself; a crash leaves it running and billing.`,
     capabilities.previews === "either"
-      ? "Previews are private unless created with public previews."
+      ? mode === "managed"
+        ? "Gitterm serves previews: private to your Gitterm login unless created with public previews."
+        : "Previews are private unless created with public previews."
       : capabilities.previews === "private"
         ? `${name} previews are always private: they need an access header.`
         : capabilities.previews === "public"
@@ -181,7 +187,10 @@ export function describeSandboxAccount(
   const base = {
     name,
     provider,
-    capabilities: SANDBOX_PROVIDER_PROFILES[provider].capabilities,
+    capabilities:
+      config.mode === "managed"
+        ? managedCapabilities(provider)
+        : SANDBOX_PROVIDER_PROFILES[provider].capabilities,
     limitations: describeLimitations(provider, config.mode),
   };
   if (config.mode === "direct") {

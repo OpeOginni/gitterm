@@ -1,10 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import z from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, db, desc, eq, inArray, or } from "@gitterm/db";
+import { and, db, desc, eq, inArray, or, sql } from "@gitterm/db";
 import { agentType, cloudProvider, image, machineProfile } from "@gitterm/db/schema/cloud";
 import { workspace, workspaceTermination } from "@gitterm/db/schema/workspace";
 import {
+  GITTERM_PREVIEW_PROVIDERS,
   SANDBOX_PROVIDER_PROFILES,
   SANDBOX_PROVIDERS,
   SandboxProviderError,
@@ -27,9 +28,13 @@ import { recordWorkspaceActivity } from "../service/workspace-activity";
 import { getWorkspaceIdleTimeoutMs } from "../service/workspace-timeouts";
 import { processWorkspaceTermination } from "../service/workspace-termination";
 import {
+  invalidateWorkspaceCacheAfterMutation,
   updateWorkspaceByIdAndInvalidate,
   updateWorkspaceStatusAndInvalidate,
 } from "../service/workspace-mutations";
+import { upsertWorkspaceRouteAccess } from "../service/workspace-route-access";
+import { getWorkspacePortUrl } from "../utils/routing";
+import type { ExposedPort } from "@gitterm/schema/workspace-ports";
 import { workspaceMetadataSchema } from "./workspace/managment";
 import { isAnonEmail } from "../service/anon/anon-user";
 
@@ -184,7 +189,28 @@ async function loadRunningSandbox(userId: string, sandboxId: string) {
     });
   // Calls through this API are the sandbox's activity: they hold off idle pausing.
   await recordWorkspaceActivity(record.id);
-  return transportFor(row);
+  return { ...(await transportFor(row)), row };
+}
+
+/**
+ * Provider access headers renamed to what the Gitterm proxy forwards (the copy_headers
+ * lists in apps/proxy/Caddyfile*). Boat's `_port_auth` cookie travels as a header there.
+ */
+function proxyRouteHeaders(headers: Record<string, string>): Record<string, string> {
+  const forwarded = new Set([
+    "e2b-traffic-access-token",
+    "x-daytona-preview-token",
+    "x-daytona-skip-preview-warning",
+    "x-exedev-authorization",
+  ]);
+  const routed: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    const boat = name.toLowerCase() === "cookie" ? /^_port_auth=([^;]+)$/.exec(value)?.[1] : null;
+    if (boat) routed["X-GitTerm-Boat-Token"] = boat;
+    else if (forwarded.has(name.toLowerCase())) routed[name] = value;
+    else throw new Error(`The Gitterm proxy cannot forward the ${name} preview header`);
+  }
+  return routed;
 }
 
 export const sandboxRouter = router({
@@ -330,7 +356,10 @@ export const sandboxRouter = router({
             Math.min(lifetimeMs, await getWorkspaceIdleTimeoutMs(userId)),
           ),
           onTimeout: "pause",
-          publicPreviews: input.publicPreviews,
+          // Where Gitterm proxies previews, it decides who sees them; the provider URL stays private.
+          publicPreviews: GITTERM_PREVIEW_PROVIDERS.includes(input.provider)
+            ? false
+            : input.publicPreviews,
           // E2B sizes are separate templates named after the sandbox image's template.
           template:
             input.provider === "e2b"
@@ -471,15 +500,56 @@ export const sandboxRouter = router({
       }
     }),
 
+  /**
+   * Returns the provider URL and access headers (for local proxies and readiness checks)
+   * and, where Gitterm proxies previews, `gittermUrl`: open to anyone when `public`, else
+   * only to the owner signed in to Gitterm.
+   */
   preview: accountProcedure("workspace:access")
-    .input(sandboxIdSchema.extend({ port: z.number().int().min(1).max(65535) }))
+    .input(
+      sandboxIdSchema.extend({
+        port: z.number().int().min(1).max(65535),
+        public: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
-      const { transport, id } = await loadRunningSandbox(ctx.session.user.id, input.sandboxId);
+      const { transport, id, row } = await loadRunningSandbox(ctx.session.user.id, input.sandboxId);
+      let access;
       try {
-        return await transport.preview(id, input.port);
+        access = await transport.preview(id, input.port);
       } catch (error) {
         toTRPCError(error);
       }
+      if (!GITTERM_PREVIEW_PROVIDERS.includes(row.provider))
+        return { ...access, gittermUrl: undefined };
+
+      const entry: ExposedPort = {
+        port: input.port,
+        upstreamUrl: access.url,
+        visibility: input.public ? "public" : "private",
+      };
+      // One statement, so concurrent previews of the same sandbox share a subdomain and keep each other's ports.
+      const [routed] = await db
+        .update(workspace)
+        .set({
+          subdomain: sql`coalesce(${workspace.subdomain}, ${randomBytes(10).toString("hex")})`,
+          exposedPorts: sql`coalesce(${workspace.exposedPorts}, '{}'::jsonb) || ${JSON.stringify({ [input.port]: entry })}::jsonb`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(workspace.id, row.workspace.id), eq(workspace.status, "running")))
+        .returning({ subdomain: workspace.subdomain });
+      if (!routed?.subdomain)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Sandbox stopped while opening the preview",
+        });
+      await upsertWorkspaceRouteAccess(
+        row.workspace.id,
+        input.port,
+        proxyRouteHeaders(access.headers),
+      );
+      await invalidateWorkspaceCacheAfterMutation(row.workspace.id, routed.subdomain);
+      return { ...access, gittermUrl: getWorkspacePortUrl(routed.subdomain, input.port) };
     }),
 
   terminate: accountProcedure("workspace:write")

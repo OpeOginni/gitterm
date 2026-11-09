@@ -530,17 +530,14 @@ export const proxyResolverRouter = async (c: Context) => {
       return htmlError(c, "unavailable", 403);
     }
 
-    if (!ws.upstreamUrl) {
+    // A port has its own upstream; sandboxes have no workspace-level one.
+    const target = extractedPort ? portUpstream : ws.upstreamUrl;
+    if (!target) {
       return htmlError(c, "error", 500);
     }
 
-    let upstreamUrl = new URL(ws.upstreamUrl);
-    let port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
-    if (extractedPort && portUpstream) {
-      const portUrl = new URL(portUpstream);
-      port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
-      upstreamUrl = portUrl;
-    }
+    const upstreamUrl = new URL(target);
+    const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
 
     debugProxyResolve("[PROXY-RESOLVE] Cloud workspace routing:", {
       upstreamUrl: ws.upstreamUrl,
