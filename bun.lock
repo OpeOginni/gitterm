@@ -296,7 +296,7 @@
       "name": "@gitterm/bot",
       "version": "0.2.1",
       "dependencies": {
-        "@gitterm/sdk": "workspace:^0.11.0",
+        "@gitterm/sdk": "workspace:^0.12.0",
       },
       "devDependencies": {
         "@types/bun": "^1.2.6",
@@ -305,7 +305,7 @@
     },
     "packages/cli": {
       "name": "@gitterm/cli",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "bin": {
         "gitterm": "dist/index.js",
       },
@@ -352,7 +352,7 @@
       },
       "dependencies": {
         "@gitterm/bot": "workspace:^",
-        "@gitterm/sdk": "workspace:^0.11.0",
+        "@gitterm/sdk": "workspace:^0.12.0",
         "discord.js": "^14.27.0",
       },
       "devDependencies": {
@@ -435,7 +435,7 @@
     },
     "packages/sdk": {
       "name": "@gitterm/sdk",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "dependencies": {
         "@asciidev/box-sdk": "^0.0.34",
         "@daytonaio/sdk": "^0.207.0",
@@ -461,7 +461,7 @@
       },
       "dependencies": {
         "@gitterm/bot": "workspace:^",
-        "@gitterm/sdk": "workspace:^0.11.0",
+        "@gitterm/sdk": "workspace:^0.12.0",
         "@slack/bolt": "^5.1.0",
       },
       "devDependencies": {
