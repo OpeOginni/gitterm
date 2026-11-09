@@ -186,6 +186,11 @@ export const dashboardDefinitions = [
         "New saved Slack and Discord bot configurations. Does not imply bot deployment or message activity.",
         trends([event("bot_created")], "platform"),
       ),
+      insight(
+        "Install commands copied",
+        "Plugin install commands copied on the site, by plugin. Intent only: a copy is not an install, and this path needs no account.",
+        trends([event("install_command_copied")], "plugin"),
+      ),
     ],
   },
 ];

@@ -20,17 +20,18 @@ To keep usage down, let idle workspaces pause and terminate the ones you're done
 
 ## Plans
 
-|                                              | Free                      | Pro                       | Growth                                                            |
-| -------------------------------------------- | ------------------------- | ------------------------- | ----------------------------------------------------------------- |
-| Compute                                      | A daily runtime allowance | A monthly compute balance | A larger monthly compute balance, and a discount on extra compute |
-| Providers                                    | E2B and Boat              | Every enabled provider    | Every enabled provider                                            |
-| Machine sizes                                | Smallest                  | Any                       | Any                                                               |
-| Workspaces kept (running, pending or paused) | 2                         | 15                        | 50                                                                |
-| Persistent storage where optional            | No                        | Yes                       | Yes                                                               |
-| Custom subdomain                             | No                        | Yes                       | Yes                                                               |
-| Keep running when idle                       | No                        | Yes                       | Yes                                                               |
-| Idle time before pausing                     | 10 minutes                | 30 minutes                | 30 minutes                                                        |
-| Paused workspaces kept for                   | 2 days                    | 15 days                   | 30 days                                                           |
+|                                                            | Free                      | Pro                       | Growth                                                            |
+| ---------------------------------------------------------- | ------------------------- | ------------------------- | ----------------------------------------------------------------- |
+| Compute                                                    | A daily runtime allowance | A monthly compute balance | A larger monthly compute balance, and a discount on extra compute |
+| Providers                                                  | E2B and Boat              | Every enabled provider    | Every enabled provider                                            |
+| Machine sizes                                              | Smallest                  | Any                       | Any                                                               |
+| Workspaces kept (running, pending or paused)               | 2                         | 15                        | 50                                                                |
+| Persistent storage where optional                          | No                        | Yes                       | Yes                                                               |
+| Custom subdomain                                           | No                        | Yes                       | Yes                                                               |
+| Keep running when idle                                     | No                        | Yes                       | Yes                                                               |
+| Idle time before pausing                                   | 10 minutes                | 30 minutes                | 30 minutes                                                        |
+| Paused workspaces kept for                                 | 2 days                    | 15 days                   | 30 days                                                           |
+| [Sandbox snapshots](/docs/sandboxes/setup#setup-snapshots) | No                        | 20                        | 100                                                               |
 
 Managed sandboxes count toward the workspace limit. A paused workspace is deleted when its retention period ends.
 

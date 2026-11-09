@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { trackInstallCopied } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 /** Small "Copy" button. Shows "Copied" for a moment after a successful copy. */
@@ -10,12 +11,15 @@ export function CopyButton({
   label = "Copy",
   className,
   icon = false,
+  installLocation,
 }: {
   value: string;
   label?: string;
   className?: string;
   /** Show a copy icon (a check once copied) before the label. */
   icon?: boolean;
+  /** Set on plugin install commands, so a copy is counted as a first step. */
+  installLocation?: "hero" | "cta";
 }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -24,6 +28,7 @@ export function CopyButton({
       onClick={() => {
         navigator.clipboard?.writeText(value).then(() => {
           setCopied(true);
+          if (installLocation) trackInstallCopied(value, installLocation);
           setTimeout(() => setCopied(false), 1400);
         });
       }}

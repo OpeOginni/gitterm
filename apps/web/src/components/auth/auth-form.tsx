@@ -117,6 +117,9 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
             )}
             {isPending ? "Loading..." : "Continue with GitHub"}
           </button>
+          <p className="text-center text-[13px] text-fg-4">
+            New here? Continuing with GitHub creates your account.
+          </p>
           {emailAuthEnabled && (
             <div className="flex items-center gap-4 py-1">
               <div className="h-px flex-1 bg-line" />
@@ -174,9 +177,11 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
             </button>
           </form>
 
-          <p className="text-center text-[13px] text-fg-4">
-            Want to sign up? Contact the administrator.
-          </p>
+          {!githubAuthEnabled && (
+            <p className="text-center text-[13px] text-fg-4">
+              Want to sign up? Contact the administrator.
+            </p>
+          )}
         </>
       )}
 

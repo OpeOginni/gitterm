@@ -11,6 +11,7 @@ const LINKS: { label: string; href: string; external?: boolean }[] = [
   { label: "Privacy", href: "/privacy" },
   { label: "Terms", href: "/terms" },
   { label: "GitHub", href: GITHUB_URL, external: true },
+  { label: "Contact", href: "mailto:help@gitterm.dev", external: true },
 ];
 
 export function SiteFooter({ wide = false }: { wide?: boolean }) {

@@ -25,6 +25,8 @@ export interface AnalyticsEvents {
   /** Browser return only. Payment/revenue must be verified by a billing webhook. */
   checkout_returned: { plan: "pro" | "growth" };
   bot_created: { platform: "slack" | "discord" };
+  /** Intent only: a copied command is not an installed plugin. */
+  install_command_copied: { plugin: "sandbox" | "cloud"; location: "hero" | "cta" };
 }
 
 export interface WorkspaceProperties {
@@ -59,6 +61,7 @@ export const EVENT_PROPERTIES: Record<keyof AnalyticsEvents, readonly string[]> 
   checkout_started: ["plan", "source"],
   checkout_returned: ["plan"],
   bot_created: ["platform"],
+  install_command_copied: ["plugin", "location"],
 };
 
 /** Routes are allowlisted: unknown paths and resource IDs never reach analytics. */
@@ -69,8 +72,10 @@ export function analyticsPath(value: string): string {
     if (/^\/dashboard\/bots\/[^/]+$/.test(pathname) && pathname !== "/dashboard/bots/new") {
       return "/dashboard/bots/:id";
     }
+    // Docs are one bucket: which page is read is not a funnel step.
+    if (/^\/docs(?:\/|$)/.test(pathname)) return "/docs";
     if (
-      /^\/(?:|login|pricing|privacy|terms|self-host|checkout\/success|dashboard|dashboard\/(?:compute|integrations|models|bots|bots\/new|settings(?:\/(?:account|agent-defaults|api|billing|history|privacy|providers|ssh|usage|workspace))?))\/?$/.test(
+      /^\/(?:|login|pricing|privacy|terms|self-host|checkout\/success|dashboard|dashboard\/(?:sandboxes|compute|integrations|models|bots|bots\/new|settings(?:\/(?:account|agent-defaults|api|billing|history|privacy|providers|ssh|usage|workspace))?))\/?$/.test(
         pathname,
       )
     ) {
