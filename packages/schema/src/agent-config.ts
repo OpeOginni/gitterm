@@ -46,7 +46,7 @@ export const AGENT_CONFIG_KIND_META: Record<AgentConfigKind, AgentConfigKindMeta
     description: "OpenCode V2 settings and theme for OpenCode and T3Code workspaces.",
     appliesTo: ["opencode", "t3code"],
     icon: "/opencode.svg",
-    docsUrl: "https://opencode.ai/v2/docs/config/",
+    docsUrl: "https://opencode.ai/docs/config",
     testHint: "opencode.json",
     example: {
       $schema: "https://opencode.ai/config.json",

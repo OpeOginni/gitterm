@@ -49,6 +49,9 @@ jobs:
         run: |
           VERSION=$(bun -p 'require("./packages/agent-runtime/package.json").dependencies["@opencode/client"]')
           npm install --prefix "$RUNNER_TEMP/opencode" "@opencode/cli@$VERSION" --no-audit --fund=false
+      # The smoke imports opencode-cloud, which resolves @gitterm/sdk from its built dist.
+      - name: Build SDK
+        run: bunx turbo -F @gitterm/sdk build
       - name: Test real OpenCode server
         run: bun run test:opencode
         env:

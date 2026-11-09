@@ -9,6 +9,8 @@ session stays local? Use [`@gitterm/opencode-sandbox`](../opencode-sandbox/READM
 
 ## 1. Install
 
+Requires OpenCode 2.2.6 or newer.
+
 ```sh
 opencode plugin add @gitterm/opencode-cloud
 ```
@@ -24,7 +26,7 @@ In GitTerm, add your model credentials and repository access first.
 
 ## 3. Use it
 
-In a Git repository, stop the agent if it is running, then type:
+In a Git repository, stop the agent and finish or stop its background jobs, then type:
 
 ```text
 /cloud

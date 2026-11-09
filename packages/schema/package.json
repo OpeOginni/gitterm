@@ -15,8 +15,8 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@opencode/schema": "2.2.5",
-    "effect": "4.0.6",
+    "@opencode/schema": "2.2.6",
+    "effect": "4.1.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {

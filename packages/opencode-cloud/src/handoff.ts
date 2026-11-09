@@ -102,6 +102,14 @@ async function assertIdle(client: OpenCodeClient, sessionID: string, signal: Abo
       "Stop this session's running agent before continuing in the cloud. Other sessions will not be interrupted.",
     );
   }
+  const jobs = await client.experimental.job.list(
+    { sessionID, status: "running", descendants: true },
+    { signal },
+  );
+  if (jobs.length > 0)
+    throw new Error(
+      "This session has running background jobs. Let them finish or stop them before continuing in the cloud; running processes cannot be transferred.",
+    );
   if ((await client.session.inbox.list({ sessionID }, { signal })).length > 0) {
     throw new Error(
       "This session has pending input. Finish or cancel it before continuing in the cloud.",
