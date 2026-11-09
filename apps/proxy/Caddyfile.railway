@@ -31,9 +31,16 @@
 # - INTERNAL_API_KEY -> Shared key for internal API calls
 # - ROUTING_MODE    -> path | subdomain
 # - BASE_DOMAIN     -> e.g., gitterm.dev
+# - COMPUTE_UPSTREAM -> Compute's HTTPS origin, not its public proxy hostname
 #
 # IMPORTANT: For Railway internal networking, service names must match exactly.
 # The format is: <service-name>.railway.internal (no port needed for internal)
+
+http://compute.{$BASE_DOMAIN:gitterm.dev} {
+	reverse_proxy {$COMPUTE_UPSTREAM:localhost:4100} {
+		header_up Host {http.reverse_proxy.upstream.host}
+	}
+}
 
 :80 {
 	# Health check endpoint
