@@ -2,15 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import type { Route } from "next";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertTriangle,
-  CalendarDays,
+  ArrowRight,
   Check,
   Copy,
   ExternalLink,
-  GitBranch,
   Loader2,
   Plus,
   RefreshCw,
@@ -19,6 +20,11 @@ import {
 import { apiPath } from "@gitterm/schema/url";
 import { GitHub as Github } from "@/components/logos/Github";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CopyField } from "@/components/dashboard/copy-field";
+import { SettingsEmpty } from "@/components/dashboard/settings/settings-page";
+import { Panel, PanelRow, SectionHeading, StatusDot } from "@/components/dashboard/kit";
+import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { queryClient, trpc } from "@/utils/trpc";
 import env from "@gitterm/env/web";
@@ -32,17 +38,6 @@ export function githubInstallUrl(slug: string): string {
 /** Remembered across the GitHub round trip so the callback can return the user to this page. */
 export const GITHUB_RETURN_TO_KEY = "gitterm:github-return-to";
 
-async function copyIntegrationId(integrationId: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(integrationId);
-    toast.success("Integration ID copied");
-    return true;
-  } catch {
-    toast.error("Couldn't copy the integration ID");
-    return false;
-  }
-}
-
 type Installation = {
   id: string;
   integrationId: string;
@@ -53,251 +48,167 @@ type Installation = {
   suspended: boolean;
 };
 
-function StatusIndicator({ suspended }: { suspended: boolean }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[12.5px] font-medium",
-        suspended ? "bg-red-500/10 text-red-300" : "bg-[#6bd586]/10 text-[#6bd586]",
-      )}
-    >
-      {suspended ? "Suspended" : "Connected"}
-    </span>
-  );
-}
-
-function ProfileDetail({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: typeof GitBranch;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="min-w-0 space-y-1.5">
-      <span className="flex items-center gap-1.5 text-[12.5px] text-fg-4">
-        <Icon className="size-3.5" />
-        {label}
-      </span>
-      <div className="truncate text-sm text-fg-2">{children}</div>
-    </div>
-  );
-}
-
-function GitHubProfileCard({
-  installation,
-  isDisconnecting,
-  onCopy,
-  onDisconnect,
-}: {
-  installation: Installation;
-  isDisconnecting: boolean;
-  onCopy: (id: string) => Promise<boolean>;
-  onDisconnect: (id: string) => void;
-}) {
+/** Copies a connection ID for the SDK, with a brief check mark. */
+function CopyIdButton({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
-  const copiedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
-      if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
+      if (timeout.current) clearTimeout(timeout.current);
     },
     [],
   );
 
-  async function handleCopy() {
-    if (!(await onCopy(installation.integrationId))) return;
-
-    setCopied(true);
-    if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
-    copiedTimeout.current = setTimeout(() => setCopied(false), 1800);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(true);
+      if (timeout.current) clearTimeout(timeout.current);
+      timeout.current = setTimeout(() => setCopied(false), 1600);
+    } catch {
+      toast.error("Couldn't copy the integration ID");
+    }
   }
 
   return (
-    <article className="rounded-2xl border border-line bg-card p-4 sm:p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3.5">
-          <Image
-            src={`https://github.com/${installation.accountLogin}.png`}
-            alt={`${installation.accountLogin} GitHub profile`}
-            width={44}
-            height={44}
-            className="size-11 shrink-0 rounded-full object-cover"
-          />
-          <div className="min-w-0">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-base font-semibold tracking-tight text-fg">
-                @{installation.accountLogin}
-              </h3>
-              <StatusIndicator suspended={installation.suspended} />
-            </div>
-            <p className="text-[13px] text-fg-3">GitHub {installation.accountType.toLowerCase()}</p>
-          </div>
-        </div>
-
-        <a
-          href={`https://github.com/settings/installations/${installation.id}`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-md px-2 text-[13px] font-medium text-fg-3 transition-colors hover:bg-fill-2 hover:text-fg"
-        >
-          Manage on GitHub
-          <ExternalLink className="size-3.5" />
-        </a>
-      </div>
-
-      {installation.suspended ? (
-        <div className="mt-4 flex items-start gap-2.5 text-red-300">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-300" />
-          <p className="text-[13px] leading-relaxed">
-            Git operations are paused. Resolve this installation on GitHub to reconnect it.
-          </p>
-        </div>
-      ) : null}
-
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 sm:gap-8">
-        <div>
-          <ProfileDetail icon={GitBranch} label="Repository access">
-            {installation.repositorySelection === "all"
-              ? "All repositories"
-              : "Selected repositories"}
-          </ProfileDetail>
-        </div>
-        <div>
-          <ProfileDetail icon={CalendarDays} label="Connected">
-            {new Date(installation.installedAt).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </ProfileDetail>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={handleCopy}
-          aria-label={copied ? "Integration ID copied" : "Copy integration ID"}
-          className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-fg-3 transition-colors hover:bg-fill-2 hover:text-fg"
-        >
-          <span className="relative size-3.5" aria-hidden="true">
-            <Copy
-              className={cn(
-                "absolute inset-0 size-3.5 transition-all duration-200 motion-reduce:transition-none",
-                copied ? "scale-50 rotate-12 opacity-0" : "scale-100 rotate-0 opacity-100",
-              )}
-            />
-            <Check
-              className={cn(
-                "absolute inset-0 size-3.5 text-[#6bd586] transition-all duration-200 motion-reduce:transition-none",
-                copied ? "scale-100 rotate-0 opacity-100" : "scale-50 -rotate-12 opacity-0",
-              )}
-            />
-          </span>
-          <span className="relative grid overflow-hidden">
-            <span
-              className={cn(
-                "col-start-1 row-start-1 transition-all duration-200 motion-reduce:transition-none",
-                copied ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100",
-              )}
-            >
-              Copy integration ID
-            </span>
-            <span
-              aria-live="polite"
-              className={cn(
-                "col-start-1 row-start-1 text-[#6bd586] transition-all duration-200 motion-reduce:transition-none",
-                copied ? "translate-y-0 opacity-100" : "translate-y-full opacity-0",
-              )}
-            >
-              Copied
-            </span>
-          </span>
-        </button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => onDisconnect(installation.integrationId)}
-          disabled={isDisconnecting}
-          className="ml-auto text-fg-3 hover:bg-red-500/10 hover:text-red-300"
-        >
-          {isDisconnecting ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Trash2 className="size-3.5" />
-          )}
-          Disconnect
-        </Button>
-      </div>
-    </article>
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={copy}
+      title={`Connection ID: ${id}`}
+      className={cn("gap-1.5 text-fg-3 hover:text-fg", copied && "text-primary hover:text-primary")}
+    >
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      <span aria-live="polite">{copied ? "Copied" : "Copy ID"}</span>
+    </Button>
   );
 }
 
-function SharedGitHubWelcome({
+function InstallationRow({
+  installation,
+  isDisconnecting,
+  onDisconnect,
+}: {
+  installation: Installation;
+  isDisconnecting: boolean;
+  onDisconnect: (id: string) => void;
+}) {
+  const connected = new Date(installation.installedAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return (
+    <li className="px-4 py-4 sm:px-5">
+      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-3">
+        <Image
+          src={`https://github.com/${installation.accountLogin}.png`}
+          alt=""
+          width={36}
+          height={36}
+          className="size-9 shrink-0 rounded-full object-cover"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-0.5">
+            <span className="truncate text-[14px] font-medium text-fg">
+              @{installation.accountLogin}
+            </span>
+            <StatusDot tone={installation.suspended ? "danger" : "ok"}>
+              {installation.suspended ? "Suspended" : "Connected"}
+            </StatusDot>
+          </div>
+          <p className="mt-0.5 text-[12.5px] text-fg-3">
+            {installation.accountType === "Organization" ? "Organization" : "Personal account"}
+            <span className="text-fg-4"> · </span>
+            {installation.repositorySelection === "all"
+              ? "All repositories"
+              : "Selected repositories"}
+            <span className="text-fg-4"> · Since {connected}</span>
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-1 max-sm:-ml-2.5 max-sm:w-full">
+          <Button asChild variant="ghost" size="sm" className="gap-1.5 text-fg-3 hover:text-fg">
+            <a
+              href={`https://github.com/settings/installations/${installation.id}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Manage
+              <ExternalLink className="size-3" />
+            </a>
+          </Button>
+          <CopyIdButton id={installation.integrationId} />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onDisconnect(installation.integrationId)}
+            disabled={isDisconnecting}
+            className="gap-1.5 text-fg-3 hover:bg-destructive/10 hover:text-destructive"
+          >
+            {isDisconnecting ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="size-3.5" />
+            )}
+            Disconnect
+          </Button>
+        </div>
+      </div>
+      {installation.suspended ? (
+        <p className="mt-3 flex items-start gap-2 text-[13px] leading-relaxed text-destructive sm:pl-[3.125rem]">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          Git operations are paused. Resolve this installation on GitHub to reconnect it.
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+/** Repository access the admin set up with a token: shared by everyone, nothing to connect. */
+function SharedGitHub({
   accountLogin,
   patSuffix,
 }: {
   accountLogin: string;
   patSuffix: string | null;
 }) {
-  const [copied, setCopied] = useState(false);
-  const copiedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
-    },
-    [],
-  );
-
-  async function handleCopy() {
-    if (!(await copyIntegrationId("github:shared"))) return;
-
-    setCopied(true);
-    if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
-    copiedTimeout.current = setTimeout(() => setCopied(false), 1800);
-  }
-
   return (
-    <article className="rounded-2xl border border-line bg-card p-4 sm:p-5">
-      <div className="flex items-center gap-3">
+    <Panel>
+      <PanelRow className="flex-wrap gap-y-3 py-4">
         <Image
           src={`https://github.com/${accountLogin}.png`}
-          alt={`${accountLogin} GitHub profile`}
-          width={40}
-          height={40}
-          className="size-10 shrink-0 rounded-full object-cover"
+          alt=""
+          width={36}
+          height={36}
+          className="size-9 shrink-0 rounded-full object-cover"
         />
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-fg">@{accountLogin}</h3>
-            <span className="rounded-md bg-fill-2 px-2 py-0.5 text-[12.5px] text-fg-3">
-              Admin{patSuffix ? ` · ••••${patSuffix}` : ""}
-            </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+            <span className="truncate text-[14px] font-medium text-fg">@{accountLogin}</span>
+            <StatusDot tone="ok">Shared by your admin</StatusDot>
           </div>
-          <p className="mt-0.5 text-[13px] text-fg-3">Shared GitHub access for your workspaces.</p>
+          <p className="mt-0.5 text-[12.5px] text-fg-3">
+            Every workspace uses this access
+            {patSuffix ? <span className="font-mono text-fg-4"> · token …{patSuffix}</span> : null}
+          </p>
         </div>
-      </div>
-      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-3">
-        <span>Connection ID for the SDK</span>
-        <button
-          type="button"
-          onClick={handleCopy}
-          aria-label="Copy connection ID github:shared"
-          className="inline-flex items-center gap-1.5 rounded-md bg-fill px-2 py-1 font-mono text-[12.5px] text-fg transition-colors hover:bg-fill-2"
-        >
-          github:shared
-          {copied ? <Check className="size-3.5 text-[#6bd586]" /> : <Copy className="size-3.5" />}
-        </button>
-        <span aria-live="polite" className="text-[12.5px] text-[#6bd586]">
-          {copied ? "Copied" : ""}
-        </span>
-      </div>
-    </article>
+      </PanelRow>
+      <PanelRow className="block py-4">
+        <CopyField label="Connection ID for the SDK" value="github:shared" />
+      </PanelRow>
+    </Panel>
+  );
+}
+
+export function GitHubTitle() {
+  return (
+    <span className="inline-flex items-center gap-2.5">
+      <Github className="size-5 shrink-0 text-fg" fill="currentColor" />
+      GitHub
+    </span>
   );
 }
 
@@ -305,9 +216,12 @@ export function GitHubConnection() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const { data: session } = authClient.useSession();
   const { data, isLoading, refetch } = useQuery(trpc.github.getInstallationStatus.queryOptions());
   const { data: integrationCatalog } = useQuery(trpc.integrations.list.queryOptions());
-  const { data: appAvailability } = useQuery(trpc.github.appAvailability.queryOptions());
+  const { data: appAvailability, isLoading: isLoadingAvailability } = useQuery(
+    trpc.github.appAvailability.queryOptions(),
+  );
   const isEnabled =
     integrationCatalog?.find((integration) => integration.key === "github")?.enabled === true;
   const disconnectMutation = useMutation(trpc.github.disconnectApp.mutationOptions());
@@ -346,89 +260,102 @@ export function GitHubConnection() {
     }
   }
 
-  return (
-    <section className="space-y-5">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <Github className="size-7 shrink-0 text-fg" fill="currentColor" />
-          <div className="min-w-0">
-            <div className="flex items-center gap-2.5">
-              <h2 className="text-base font-semibold tracking-tight text-fg">GitHub</h2>
-              {installations.length > 0 ? (
-                <span className="text-[12.5px] text-fg-4">
-                  {installations.length} {installations.length === 1 ? "account" : "accounts"}
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-0.5 text-sm text-fg-3">Repository access for your workspaces.</p>
-          </div>
-        </div>
+  const notSetUp = isEnabled && appAvailability && !appAvailability.mode;
 
-        <div className="flex items-center gap-2">
-          {installations.length > 0 ? (
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              aria-label="Refresh GitHub connections"
-              className="inline-flex size-9 items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-fill-2 hover:text-fg disabled:opacity-50"
-            >
-              <RefreshCw className={cn("size-4", isRefreshing && "animate-spin")} />
-            </button>
-          ) : null}
-          {appAvailability?.configured ? (
-            <Button
-              type="button"
-              onClick={handleConnect}
-              disabled={isConnecting || !isEnabled}
-              className="h-9"
-            >
-              {isConnecting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Plus className="size-4" />
-              )}
-              {installations.length > 0 ? "Add account" : "Connect"}
-            </Button>
-          ) : null}
-        </div>
-      </header>
-      {isEnabled && appAvailability?.mode === "pat" && appAvailability.accountLogin ? (
-        <SharedGitHubWelcome
+  return (
+    <section className="space-y-4">
+      <SectionHeading
+        title={<GitHubTitle />}
+        description={
+          installations.length > 0 || appAvailability?.mode === "pat"
+            ? undefined
+            : "Repository access for your workspaces."
+        }
+        action={
+          installations.length > 0 || appAvailability?.configured ? (
+            <>
+              {installations.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  aria-label="Refresh GitHub connections"
+                  className="text-fg-3 hover:text-fg"
+                >
+                  <RefreshCw className={cn("size-4", isRefreshing && "animate-spin")} />
+                </Button>
+              ) : null}
+              {appAvailability?.configured ? (
+                <Button
+                  type="button"
+                  onClick={handleConnect}
+                  disabled={isConnecting || !isEnabled}
+                  className="gap-1.5"
+                >
+                  {isConnecting ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Plus className="size-4" />
+                  )}
+                  {installations.length > 0 ? "Add account" : "Connect GitHub"}
+                </Button>
+              ) : null}
+            </>
+          ) : undefined
+        }
+      />
+
+      {isLoading || isLoadingAvailability ? (
+        <Skeleton className="h-[88px] w-full rounded-xl bg-fill" />
+      ) : isEnabled && appAvailability?.mode === "pat" && appAvailability.accountLogin ? (
+        <SharedGitHub
           accountLogin={appAvailability.accountLogin}
           patSuffix={appAvailability.patSuffix}
         />
+      ) : notSetUp ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-line px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <SettingsEmpty
+            icon={<Github fill="currentColor" />}
+            title={
+              <span className="flex flex-wrap items-center gap-x-2.5">
+                Not set up yet
+                <StatusDot tone="muted">Waiting on admin</StatusDot>
+              </span>
+            }
+            description="An admin adds a GitHub App or token first. Until then, workspaces can clone public repositories."
+          />
+          {session?.user.role === "admin" ? (
+            <Link
+              href={"/admin/integrations/github" as Route}
+              className="inline-flex shrink-0 items-center gap-1 text-[13.5px] font-medium text-primary hover:underline max-sm:pl-12"
+            >
+              Set up GitHub
+              <ArrowRight className="size-3.5" />
+            </Link>
+          ) : null}
+        </div>
+      ) : installations.length > 0 ? (
+        <ul className="max-h-[44rem] divide-y divide-line overflow-y-auto overscroll-contain rounded-xl border border-line">
+          {installations.map((installation) => (
+            <InstallationRow
+              key={installation.integrationId}
+              installation={installation}
+              isDisconnecting={disconnectingId === installation.integrationId}
+              onDisconnect={handleDisconnect}
+            />
+          ))}
+        </ul>
+      ) : appAvailability?.configured ? (
+        <div className="rounded-xl border border-line px-4 py-4 sm:px-5">
+          <SettingsEmpty
+            icon={<Github fill="currentColor" />}
+            title="No GitHub account yet"
+            description="Connect a personal or organization account, then choose which repositories GitTerm can reach."
+          />
+        </div>
       ) : null}
-      {isEnabled && appAvailability && !appAvailability.mode ? (
-        <p className="rounded-xl bg-fill px-4 py-3.5 text-[13px] text-fg-3">
-          Your admin has not configured repository access yet.
-        </p>
-      ) : null}
-
-      <div>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="size-5 animate-spin text-fg-4" />
-          </div>
-        ) : installations.length > 0 ? (
-          <div className="grid max-h-[44rem] gap-3 overflow-y-auto overscroll-contain">
-            {installations.map((installation) => (
-              <GitHubProfileCard
-                key={installation.integrationId}
-                installation={installation}
-                isDisconnecting={disconnectingId === installation.integrationId}
-                onCopy={copyIntegrationId}
-                onDisconnect={handleDisconnect}
-              />
-            ))}
-          </div>
-        ) : appAvailability?.configured ? (
-          <p className="rounded-xl bg-fill px-4 py-3.5 text-[13px] leading-relaxed text-fg-3">
-            <span className="font-medium text-fg-2">No GitHub account yet.</span> Connect a personal
-            or organization account, then choose which repositories Gitterm can reach.
-          </p>
-        ) : null}
-      </div>
     </section>
   );
 }

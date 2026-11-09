@@ -33,11 +33,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BOT_TOKEN_SCOPES } from "@gitterm/schema";
 import { cn } from "@/lib/utils";
 import { Seg } from "@/components/site/seg";
-import {
-  SettingsEmpty,
-  SettingsGroup,
-  settingsLabel,
-} from "@/components/dashboard/settings/settings-page";
+import { SettingsEmpty, settingsLabel } from "@/components/dashboard/settings/settings-page";
+import { SectionHeading } from "@/components/dashboard/kit";
 
 /** Most tokens are one of these; Custom keeps per-permission control for the rest. */
 const TOKEN_PRESETS = [
@@ -88,6 +85,9 @@ function formatDate(value: Date | string | null): string {
     day: "numeric",
   });
 }
+
+const isExpired = (token: { expiresAt: Date | string | null }) =>
+  !!token.expiresAt && new Date(token.expiresAt).getTime() <= Date.now();
 
 function accessSummary(scopes: readonly string[]): string {
   return API_TOKEN_SCOPES.every((scope) => scopes.includes(scope))
@@ -160,33 +160,30 @@ export function ApiTokensSection() {
     toast.success("Token copied to clipboard");
   };
 
-  const tokens = data?.tokens ?? [];
+  // Expired tokens sink below the ones still in use.
+  const tokens = (data?.tokens ?? []).toSorted(
+    (a, b) => Number(isExpired(a)) - Number(isExpired(b)),
+  );
 
   return (
-    <section>
-      <SettingsGroup
-        title={
-          <>
-            Tokens
-            {tokens.length ? (
-              <span className="ml-2 font-normal text-fg-3 tabular-nums">{tokens.length}</span>
-            ) : null}
-          </>
-        }
+    <section className="space-y-4">
+      <SectionHeading
+        title="Tokens"
+        count={tokens.length || undefined}
         action={
           <Button className="gap-1.5" onClick={() => handleOpenChange(true)}>
             <Plus className="size-4" />
             New token
           </Button>
         }
-        bodyClassName="pt-2"
-      >
-        {isLoading ? (
-          <div className="space-y-2 pt-2">
-            <Skeleton className="h-12 w-full bg-fill" />
-            <Skeleton className="h-12 w-full bg-fill" />
-          </div>
-        ) : tokens.length === 0 ? (
+      />
+      {isLoading ? (
+        <div className="space-y-px overflow-hidden rounded-xl border border-line">
+          <Skeleton className="h-[74px] w-full rounded-none bg-fill" />
+          <Skeleton className="h-[74px] w-full rounded-none bg-fill" />
+        </div>
+      ) : tokens.length === 0 ? (
+        <div className="rounded-xl border border-line px-4 py-4 sm:px-5">
           <SettingsEmpty
             icon={<Braces />}
             title="No tokens yet"
@@ -197,11 +194,14 @@ export function ApiTokensSection() {
               </>
             }
           />
-        ) : (
-          <div className="-mx-5 max-h-[640px] divide-y divide-line overflow-y-auto sm:-mx-6">
-            {tokens.map((token) => (
-              <div key={token.id} className="flex items-start gap-3 px-5 py-4 sm:px-6">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fill">
+        </div>
+      ) : (
+        <ul className="max-h-[640px] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+          {tokens.map((token) => {
+            const expired = isExpired(token);
+            return (
+              <li key={token.id} className="flex items-start gap-3.5 px-4 py-4 sm:px-5">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill">
                   {token.bot ? (
                     <Image src={`/${token.bot.platform}.svg`} alt="" width={16} height={16} />
                   ) : (
@@ -209,18 +209,33 @@ export function ApiTokensSection() {
                   )}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-[14px] font-medium text-fg">{token.name}</span>
-                    <span className="font-mono text-[12.5px] text-fg-4">{token.tokenPrefix}…</span>
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <span
+                      className={cn(
+                        "truncate text-[14px] font-medium",
+                        expired ? "text-fg-3" : "text-fg",
+                      )}
+                    >
+                      {token.name}
+                    </span>
+                    <span className="shrink-0 font-mono text-[12.5px] text-fg-4">
+                      {token.tokenPrefix}…
+                    </span>
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-fg-3">
                     <span className="flex items-center gap-1.5">
                       <Clock className="size-3.5" />
                       {token.lastUsedAt ? `Used ${formatDate(token.lastUsedAt)}` : "Never used"}
                     </span>
-                    <span className="flex items-center gap-1.5">
+                    <span
+                      className={cn("flex items-center gap-1.5", expired && "text-destructive")}
+                    >
                       <CalendarClock className="size-3.5" />
-                      {token.expiresAt ? `Expires ${formatDate(token.expiresAt)}` : "No expiry"}
+                      {!token.expiresAt
+                        ? "No expiry"
+                        : expired
+                          ? `Expired on ${formatDate(token.expiresAt)}`
+                          : `Expires ${formatDate(token.expiresAt)}`}
                     </span>
                     <button
                       type="button"
@@ -262,7 +277,7 @@ export function ApiTokensSection() {
                       {revokeMutation.isPending ? (
                         <Loader2 className="size-3.5 animate-spin" />
                       ) : null}
-                      Revoke
+                      {expired ? "Remove" : "Revoke"}
                     </Button>
                     <Button size="sm" variant="secondary" onClick={() => setConfirmingId(null)}>
                       Keep
@@ -275,14 +290,14 @@ export function ApiTokensSection() {
                     className="shrink-0"
                     onClick={() => setConfirmingId(token.id)}
                   >
-                    Revoke
+                    {expired ? "Remove" : "Revoke"}
                   </Button>
                 )}
-              </div>
-            ))}
-          </div>
-        )}
-      </SettingsGroup>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto border-line bg-card p-0 sm:max-w-[560px]">

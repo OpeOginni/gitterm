@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Seg } from "@/components/site/seg";
+import { StatusDot } from "@/components/dashboard/kit";
 import { queryClient, trpc } from "@/utils/trpc";
 import { track } from "@/lib/analytics";
 
@@ -81,7 +82,7 @@ function CopyConnectionId({ id, name }: { id: string; name: string }) {
       title={`Connection ID: ${id}`}
       className="text-fg-3 hover:bg-fill-2 hover:text-fg"
     >
-      {copied ? <Check className="size-4 text-[#6bd586]" /> : <Copy className="size-4" />}
+      {copied ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}
       <span className="sr-only" aria-live="polite">
         {copied ? "Copied" : ""}
       </span>
@@ -240,7 +241,7 @@ export function McpConnections({
   }
 
   const connectionForm = form ? (
-    <form onSubmit={submit} className="space-y-5 rounded-xl bg-fill p-4 sm:p-5">
+    <form onSubmit={submit} className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-[15px] font-semibold text-fg">
           {form.id
@@ -364,7 +365,7 @@ export function McpConnections({
         </p>
       ) : null}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" disabled={saving} onClick={() => setForm(null)}>
+        <Button type="button" variant="secondary" disabled={saving} onClick={() => setForm(null)}>
           Cancel
         </Button>
         <Button type="submit" disabled={saving} className="gap-2">
@@ -409,21 +410,15 @@ export function McpConnections({
 
   return (
     <section className="space-y-5">
-      {addInEmptyState ? null : (
-        <header
-          className={`flex flex-wrap items-start gap-4 ${embedded ? "justify-end" : "justify-between"}`}
-        >
-          {embedded ? null : (
-            <div>
-              <h2 className="text-base font-semibold tracking-tight text-fg">
-                Tools for your agent
-              </h2>
-              <p className="mt-1 max-w-lg text-sm leading-relaxed text-fg-3">
-                Connect a remote MCP server, or bring your tool catalog through Executor. OpenCode
-                connects directly, so Gitterm never sees the tool traffic.
-              </p>
-            </div>
-          )}
+      {embedded ? null : (
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight text-fg">Tools for your agent</h2>
+            <p className="mt-1 max-w-lg text-sm leading-relaxed text-fg-3">
+              Connect a remote MCP server, or bring your tool catalog through Executor. OpenCode
+              connects directly, so Gitterm never sees the tool traffic.
+            </p>
+          </div>
           {addButtons}
         </header>
       )}
@@ -431,14 +426,14 @@ export function McpConnections({
       {form && !editingId ? connectionForm : null}
 
       {error ? (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-[13.5px] text-destructive">
           Couldn&apos;t load MCP connections: {error.message}
         </p>
       ) : null}
       {isLoading ? <p className="text-[13px] text-fg-4">Loading connections…</p> : null}
       {!isLoading && !error && !connections.length ? (
-        <div className="flex flex-col gap-3 rounded-xl bg-fill px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[13px] text-fg-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[13.5px] leading-relaxed text-fg-3">
             {allowCustom ? (
               <>
                 <span className="font-medium text-fg-2">No MCP servers yet.</span> Add a
@@ -455,15 +450,19 @@ export function McpConnections({
         </div>
       ) : null}
       {connections.length ? (
-        <div className="max-h-[36rem] space-y-2 overflow-y-auto overscroll-contain">
+        <div className="max-h-[36rem] divide-y divide-line overflow-y-auto overscroll-contain">
           {connections.map((connection) => {
             const details = connection.details;
             if (details.integration !== "mcp" && details.integration !== "executor") return null;
             if (connection.id === editingId) {
-              return <div key={connection.id}>{connectionForm}</div>;
+              return (
+                <div key={connection.id} className="py-4 first:pt-0 last:pb-0">
+                  {connectionForm}
+                </div>
+              );
             }
             return (
-              <article key={connection.id} className="rounded-xl bg-fill p-4">
+              <article key={connection.id} className="py-4 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex min-w-0 items-start gap-3">
                     <Image
@@ -474,22 +473,24 @@ export function McpConnections({
                       className="mt-0.5 shrink-0"
                     />
                     <div className="min-w-0">
-                      <h3 className="break-words text-[14.5px] font-medium text-fg">
+                      <h3 className="break-words text-[14px] font-medium text-fg">
                         {connection.name}
                       </h3>
                       <p className="mt-1 break-all font-mono text-[12.5px] text-fg-4">
                         {details.url}
                       </p>
-                      <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-fg-3">
-                        <span
-                          className={
+                      <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-fg-3">
+                        <StatusDot
+                          tone={
                             connection.status === "connected"
-                              ? "rounded-md bg-[#6bd586]/10 px-2 py-0.5 text-[12.5px] font-medium text-[#6bd586]"
-                              : "rounded-md bg-[#fb923c]/10 px-2 py-0.5 text-[12.5px] font-medium text-[#fb923c]"
+                              ? "ok"
+                              : connection.status === "untested"
+                                ? "muted"
+                                : "warn"
                           }
                         >
                           {statusLabels[connection.status]}
-                        </span>
+                        </StatusDot>
                         <span>
                           {details.toolCount !== null ? `${details.toolCount} tools · ` : ""}
                           {details.authType === "none"
@@ -508,7 +509,7 @@ export function McpConnections({
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       disabled={busyId !== null || saving}
                       onClick={() => action(connection.id, "test")}
                     >
@@ -543,7 +544,7 @@ export function McpConnections({
                       variant="ghost"
                       disabled={busyId !== null || saving}
                       aria-label={`Remove ${connection.name}`}
-                      className="text-fg-3 hover:bg-red-500/10 hover:text-red-300"
+                      className="text-fg-3 hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => action(connection.id, "remove")}
                     >
                       <Trash2 className="size-4" />
@@ -554,6 +555,10 @@ export function McpConnections({
             );
           })}
         </div>
+      ) : null}
+      {/* Embedded: adding sits under the list, so the connections lead. */}
+      {embedded && !addInEmptyState && !form && !isLoading && !error ? (
+        <div className="flex justify-end border-t border-line pt-4">{addButtons}</div>
       ) : null}
     </section>
   );

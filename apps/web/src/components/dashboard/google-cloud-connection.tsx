@@ -5,7 +5,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import {
-  Check,
   ChevronDown,
   ExternalLink,
   KeyRound,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CopyField } from "@/components/dashboard/copy-field";
+import { StatusDot } from "@/components/dashboard/kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { queryClient, trpc } from "@/utils/trpc";
@@ -204,10 +204,10 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
   const addButton = (
     <Button
       type="button"
-      variant={adding ? "outline" : "default"}
+      variant={adding ? "secondary" : "default"}
       onClick={() => setAdding((value) => !value)}
       disabled={!isAvailable || isLoadingAvailability}
-      className="h-9 shrink-0"
+      className="h-9 shrink-0 self-start sm:self-auto"
     >
       {adding ? <X className="size-4" /> : <Plus className="size-4" />}
       {adding ? "Cancel" : "Add identity"}
@@ -255,7 +255,7 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
       )}
 
       {adding && isAvailable ? (
-        <form onSubmit={submit} className="rounded-xl bg-fill p-4 sm:p-5">
+        <form onSubmit={submit}>
           <div className="mb-6 flex gap-3">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-fg-3" />
             <p className="text-[13px] leading-relaxed text-fg-3">
@@ -426,20 +426,18 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
           <Loader2 className="size-5 animate-spin text-fg-4" />
         </div>
       ) : error ? (
-        <div className="rounded-xl bg-[#fb923c]/10 px-4 py-3.5 text-[13px] text-[#fb923c]">
-          Couldn’t load your Google Cloud identities. Try again in a moment.
-        </div>
+        <p className="text-[13.5px] text-[#fb923c]">
+          Couldn&apos;t load your Google Cloud identities. Try again in a moment.
+        </p>
       ) : integrations.length ? (
-        <div className="grid max-h-[48rem] gap-3 overflow-y-auto overscroll-contain">
+        <div className="max-h-[48rem] divide-y divide-line overflow-y-auto overscroll-contain">
           {integrations.map((integration) => (
-            <article key={integration.id} className="rounded-xl bg-fill p-4 sm:p-5">
+            <article key={integration.id} className="py-5 first:pt-0 last:pb-0">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="text-[14.5px] font-semibold text-fg">{integration.name}</h3>
-                    <span className="inline-flex items-center gap-1 rounded-md bg-[#6bd586]/10 px-2 py-0.5 text-[12.5px] font-medium text-[#6bd586]">
-                      <Check className="size-3.5" /> Keyless
-                    </span>
+                    <StatusDot tone="ok">Keyless</StatusDot>
                   </div>
                   <p className="mt-1 truncate font-mono text-[12.5px] text-fg-3">
                     {integration.serviceAccountEmail}
@@ -450,7 +448,7 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
                   aria-label={`Disconnect ${integration.name}`}
                   disabled={removingId === integration.id}
                   onClick={() => remove(integration.id)}
-                  className="-m-1 rounded-lg p-2 text-fg-3 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
+                  className="-m-1 rounded-lg p-2 text-fg-3 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                 >
                   {removingId === integration.id ? (
                     <Loader2 className="size-4 animate-spin" />
@@ -497,8 +495,8 @@ export function GoogleCloudConnection({ embedded = false }: { embedded?: boolean
           ))}
         </div>
       ) : (
-        <div className="flex flex-col gap-3 rounded-xl bg-fill px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[13px] text-fg-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[13.5px] leading-relaxed text-fg-3">
             <span className="font-medium text-fg-2">No Google Cloud identity yet.</span> Add one to
             give workspaces a narrowly scoped service account, with no JSON key stored.
           </p>

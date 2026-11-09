@@ -6,7 +6,7 @@ import { CommitAttributionSection } from "./commit-attribution-section";
 
 export function AgentDefaultsSection() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-12">
       <div id="configurations" className="scroll-mt-8">
         <AgentConfigSection />
       </div>
