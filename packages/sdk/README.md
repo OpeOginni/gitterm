@@ -683,7 +683,8 @@ async function askHuman(request: AgentRunInputRequest): Promise<AgentRunReply> {
 ```
 
 Rejecting a permission or dismissing a question
-ends the turn: OpenCode records a failed tool call and the run finishes. A run left
+ends the turn: OpenCode records a failed tool call and the run finishes as `completed` or
+`failed` with what it managed to do. A run left
 `awaiting_input` keeps its workspace awake until the run's execution deadline, when it is
 cancelled. If the workspace stops anyway (paused or deleted), the run is cancelled with
 `"Workspace paused while waiting for input"`.
@@ -831,7 +832,7 @@ need GitTerm's API package or tRPC server types.
 ## Versioning
 
 `@gitterm/sdk` follows semver. Before 1.0, a minor bump (`0.1` → `0.2`) may contain breaking
-changes; patch releases never change public types or behaviour. Pin `~0.2.0` if you want patches only.
+changes; patch releases never change public types or behaviour. Pin `~0.12.0` if you want patches only.
 
 ## Obtaining a token programmatically
 

@@ -372,7 +372,7 @@
     },
     "packages/opencode-cloud": {
       "name": "@gitterm/opencode-cloud",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@opencode/client": "^2.2.6",
       },
@@ -388,7 +388,7 @@
     },
     "packages/opencode-sandbox": {
       "name": "@gitterm/opencode-sandbox",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "devDependencies": {
         "@gitterm/sdk": "workspace:*",
         "@opencode/plugin": "^2.2.6",

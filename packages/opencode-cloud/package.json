@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/opencode-cloud",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Continue OpenCode sessions and local checkout changes in GitTerm cloud workspaces with /cloud",
   "keywords": [
     "gitterm",

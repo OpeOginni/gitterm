@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/opencode-sandbox",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Let your OpenCode agent run builds, tests, and previews in remote sandboxes while the session stays local",
   "keywords": [
     "e2b",
