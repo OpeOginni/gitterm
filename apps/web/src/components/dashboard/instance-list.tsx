@@ -31,6 +31,7 @@ import {
   Infinity as InfinityIcon,
 } from "lucide-react";
 import Image from "next/image";
+import { CopyField } from "@/components/dashboard/copy-field";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -492,13 +493,11 @@ export function InstanceCard({
             label: "Install websocat",
             help: "Required locally so OpenSSH can tunnel through E2B.",
             value: "brew install websocat",
-            copied: "Install command copied",
           },
           {
             label: "Add this to ~/.ssh/config",
             help: "Paste the snippet into the SSH config file on your machine.",
             value: access.sshConfigSnippet,
-            copied: "SSH config copied",
           },
         ]
       : [];
@@ -508,17 +507,7 @@ export function InstanceCard({
         {!needsSshConfig && (
           <div className="grid gap-2">
             <p className="text-[13px] font-medium text-fg-2">SSH command</p>
-            <div
-              className="group relative cursor-pointer rounded-xl bg-fill px-4 py-3 transition-colors hover:bg-fill-2"
-              onClick={() => copyValue(access.sshCommand, "SSH command copied")}
-            >
-              <code className="block break-all pr-8 font-mono text-[13px] text-fg">
-                {access.sshCommand}
-              </code>
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-4 transition-colors group-hover:text-fg-2">
-                <Copy className="size-3.5" />
-              </div>
-            </div>
+            <CopyField value={access.sshCommand} />
           </div>
         )}
 
@@ -531,16 +520,7 @@ export function InstanceCard({
                 <code>~/.ssh/config</code>, then use the editor buttons below.
               </p>
             </div>
-            <button
-              type="button"
-              className="group relative w-full cursor-pointer rounded-xl bg-fill px-3 py-2.5 text-left transition-colors hover:bg-fill-2"
-              onClick={() => copyValue(access.sshConfigSnippet, "SSH config copied")}
-            >
-              <code className="block max-h-24 overflow-y-auto whitespace-pre-wrap break-all pr-7 font-mono text-[12.5px] text-fg">
-                {access.sshConfigSnippet}
-              </code>
-              <Copy className="absolute right-2.5 top-2.5 size-3.5 text-fg-4 transition-colors group-hover:text-fg-2" />
-            </button>
+            <CopyField multiline value={access.sshConfigSnippet} />
           </div>
         )}
 
@@ -563,16 +543,7 @@ export function InstanceCard({
                     <p className="text-[13px] text-fg-3">{step.help}</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="group relative w-full cursor-pointer rounded-xl bg-fill px-3 py-2.5 text-left transition-colors hover:bg-fill-2"
-                  onClick={() => copyValue(step.value, step.copied)}
-                >
-                  <code className="block max-h-24 overflow-y-auto whitespace-pre-wrap break-all pr-7 font-mono text-[12.5px] text-fg">
-                    {step.value}
-                  </code>
-                  <Copy className="absolute right-2.5 top-2.5 size-3.5 text-fg-4 transition-colors group-hover:text-fg-2" />
-                </button>
+                <CopyField multiline={step.value.includes("\n")} value={step.value} />
               </div>
             ))}
           </div>
@@ -608,16 +579,7 @@ export function InstanceCard({
             <summary className="cursor-pointer list-none font-medium text-fg-3 transition-colors hover:text-fg">
               Manual SSH command
             </summary>
-            <button
-              type="button"
-              className="group/copy relative mt-2 w-full cursor-pointer rounded-xl bg-fill px-3 py-2.5 text-left transition-colors hover:bg-fill-2"
-              onClick={() => copyValue(access.sshCommand, "SSH command copied")}
-            >
-              <code className="block max-h-24 overflow-y-auto break-all pr-7 font-mono text-[12.5px] text-fg">
-                {access.sshCommand}
-              </code>
-              <Copy className="absolute right-2.5 top-2.5 size-3.5 text-fg-4 transition-colors group-hover/copy:text-fg-2" />
-            </button>
+            <CopyField value={access.sshCommand} className="mt-2" />
           </details>
         )}
 
@@ -626,17 +588,7 @@ export function InstanceCard({
           <p className="text-[13px] font-medium text-fg-2">
             SSH target for Neovim and other editors
           </p>
-          <div
-            className="group relative cursor-pointer rounded-xl bg-fill px-4 py-3 transition-colors hover:bg-fill-2"
-            onClick={() => copyValue(access.sshConnectionString, "Connection string copied")}
-          >
-            <code className="block break-all pr-8 font-mono text-[13px] text-fg">
-              {access.sshConnectionString}
-            </code>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-4 transition-colors group-hover:text-fg-2">
-              <Copy className="size-3.5" />
-            </div>
-          </div>
+          <CopyField value={access.sshConnectionString} />
         </div>
 
         <p className="text-[13px] text-fg-3">

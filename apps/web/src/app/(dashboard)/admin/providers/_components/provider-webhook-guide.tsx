@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Check, Copy, Radio } from "lucide-react";
-import { toast } from "sonner";
+import { Radio } from "lucide-react";
 import env from "@gitterm/env/web";
-import { cn } from "@/lib/utils";
+import { CopyField } from "@/components/dashboard/copy-field";
 
 type WebhookSetup = {
   route: string;
@@ -51,50 +49,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="grid gap-1.5 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-baseline sm:gap-4">
       <dt className="text-[13px] font-medium text-fg-2">{label}</dt>
       <dd className="min-w-0 space-y-1.5 text-[13px] text-fg-3">{children}</dd>
-    </div>
-  );
-}
-
-function CopyField({ value, placeholder }: { value: string; placeholder: boolean }) {
-  const [copied, setCopied] = useState(false);
-  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (timeout.current) clearTimeout(timeout.current);
-    },
-    [],
-  );
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      if (timeout.current) clearTimeout(timeout.current);
-      timeout.current = setTimeout(() => setCopied(false), 1800);
-    } catch {
-      toast.error("Couldn't copy the webhook URL");
-    }
-  }
-
-  return (
-    <div className="flex items-stretch overflow-hidden rounded-lg bg-fill-2">
-      <code
-        className={cn(
-          "min-w-0 flex-1 overflow-x-auto px-3 py-2 font-mono text-[12.5px] leading-relaxed whitespace-nowrap",
-          placeholder ? "text-fg-4" : "text-fg-2",
-        )}
-      >
-        {value}
-      </code>
-      <button
-        type="button"
-        onClick={handleCopy}
-        aria-label={copied ? "Webhook URL copied" : "Copy webhook URL"}
-        className="flex w-10 shrink-0 items-center justify-center text-fg-3 transition-colors hover:bg-fill-2 hover:text-fg"
-      >
-        {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
-      </button>
     </div>
   );
 }

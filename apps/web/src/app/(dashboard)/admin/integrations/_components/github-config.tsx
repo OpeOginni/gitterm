@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import Image from "next/image";
 import { toast } from "sonner";
 import { apiPath } from "@gitterm/schema/url";
+import { CopyField } from "@/components/dashboard/copy-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -205,15 +206,11 @@ export function GithubConfig({ data, refresh }: Props) {
                 className="min-h-28 font-mono text-[13px]"
               />
             </div>
-            <div className="space-y-1.5 rounded-xl bg-fill p-3.5 text-[13px] text-fg-3">
-              <p>
-                Setup URL: <code className="break-all font-mono text-fg-2">{callbackUrl}</code>
-              </p>
-              <p>
-                Webhook URL: <code className="break-all font-mono text-fg-2">{webhookUrl}</code>
-              </p>
-              <p>Grant only the repository permissions your users need.</p>
-            </div>
+            <CopyField label="Setup URL" value={callbackUrl} />
+            <CopyField label="Webhook URL" value={webhookUrl} />
+            <p className="text-[13px] text-fg-3">
+              Grant only the repository permissions your users need.
+            </p>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-[13px] text-[#fb923c]">
                 The API and webhook listener must share the same encryption master key.
