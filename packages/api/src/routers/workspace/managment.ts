@@ -1956,8 +1956,7 @@ export const workspaceRouter = router({
           input,
         );
 
-        // gitterm.dev's own provider is configured by env vars, not an admin provider config.
-        if (providerKey !== "local" && providerKey !== "gitterm") {
+        if (providerKey !== "local") {
           if (!cloudProviderRecord.providerConfigId) {
             throw new TRPCError({
               code: "BAD_REQUEST",
