@@ -785,7 +785,7 @@ const FEATURES = [
     "Open it in your local OpenCode TUI with one command, or in the T3 Code desktop app.",
   ],
   ["Connect from any device", "Same workspace in your browser, OpenCode desktop or your phone."],
-  ["Set keys once", "Model and environment keys are reused across workspaces, never pasted again."],
+  ["Set keys once", "Model keys are saved once and reused in every workspace, never pasted again."],
   ["Script it", "Create workspaces with the SDK. Manage them with the CLI or the SDK."],
 ] as const;
 

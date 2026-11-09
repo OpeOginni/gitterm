@@ -1,41 +1,51 @@
 ---
 title: Connect to a workspace
 nav: Connect
-description: Open a running cloud workspace in the browser, the OpenCode desktop app, a local terminal, or the T3 Code apps.
+description: Open a running cloud workspace in the browser, the OpenCode phone or desktop app, a local terminal, or the T3 Code apps.
 ---
 
-A running workspace's card in the dashboard has the controls to connect to it. Which ones you see depends on the agent. Use this page to find the right control for your client, and to understand pairing links.
+Each workspace is a row under **Workspaces** in the dashboard. A running row has one main button, and clicking the row opens its details with the other ways to connect. Which controls you see depends on the agent. Use this page to find the right one for your client, and to understand pairing.
 
 Editor and SSH access are not offered. Connect through the agent's own clients below.
 
 ## Before you start
 
-- The workspace is running. A paused workspace's card shows **Restart** instead. See [Lifecycle](/docs/workspaces/lifecycle).
-- For the local TUI or desktop app, your OpenCode is version 2 and up to date.
+- The workspace is running. A paused workspace's row shows **Restart** instead. See [Lifecycle](/docs/workspaces/lifecycle).
+- For the local TUI, desktop app or phone app, your OpenCode is version 2 and up to date.
 
 ## OpenCode workspaces
 
-A running OpenCode workspace's card has:
+| Control                  | Where   | What it does                                                                                   |
+| ------------------------ | ------- | ---------------------------------------------------------------------------------------------- |
+| **Attach TUI**           | Row     | Copies a command. Paste it into your terminal to open the workspace in your local OpenCode TUI |
+| **Open in browser**      | Details | Opens the workspace's OpenCode web app in a new tab. With subdomain routing you are signed in  |
+| **Connect OpenCode app** | Details | Shows a QR code and a one-time link for the OpenCode phone and desktop apps                    |
+| **URL**                  | Details | The workspace's address, for any client that asks for a server URL                             |
+| **Server password**      | Details | Copies the server password, for any client that asks for one                                   |
+| **Project path**         | Details | Copies the path to paste when OpenCode asks which project to open                              |
 
-| Control                            | What it does                                                                                   |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **Attach TUI**                     | Copies a command. Paste it into your terminal to open the workspace in your local OpenCode TUI |
-| Globe button                       | Opens the workspace's OpenCode web app. With subdomain routing you are signed in already       |
-| **Desktop pairing link**, **Copy** | Copies a one-time link for **Connect server** in the OpenCode desktop app                      |
-| Project path                       | Click to copy it. Paste it when OpenCode asks which project to open                            |
-| Key row, **Copy**                  | Copies the server password, for any client that asks for one                                   |
+### Connect the OpenCode phone app
 
-### Open in the OpenCode desktop app
+1. Click the workspace's row, then **Connect OpenCode app**.
+2. In the OpenCode app on your phone, add a server and scan the QR code.
 
-1. On the workspace card, click **Copy** next to **Desktop pairing link**.
+You should see the workspace's project and sessions in the app.
+
+If Gitterm is open on the same phone as the app, there is nothing to scan. The pairing link is copied when the dialog opens, so switch to the app and paste it. **Show QR code** is there if you want to scan from another device.
+
+### Connect the OpenCode desktop app
+
+1. Click the workspace's row, then **Connect OpenCode app**. The pairing link is copied when the dialog opens.
 2. In the OpenCode desktop app, choose **Connect server** and paste the link.
-3. Open the workspace's project. If the app asks for a path, paste the project path from the card.
+3. Open the workspace's project. If the app asks for a path, paste the **Project path** from the details.
 
-You should see the workspace's project and sessions in the desktop app. A pairing link works once and expires after five minutes, so copy a new one for each device.
+You should see the workspace's project and sessions in the desktop app.
+
+A code works once and expires after five minutes. For another device, or after it expires, click **New code**.
 
 ### Attach the local TUI
 
-1. On the workspace card, click **Attach TUI**.
+1. On the workspace's row, click **Attach TUI**.
 2. Paste the copied command into your terminal and press Enter.
 
 You should see the OpenCode TUI, connected to the workspace.
@@ -48,26 +58,26 @@ Without pairing, the command passes the server password in `OPENCODE_PASSWORD`:
 OPENCODE_PASSWORD='<password>' opencode --server https://<workspace-url>
 ```
 
-`<password>` is the server password from the card, and `<workspace-url>` is the workspace's host name.
+`<password>` is the **Server password** from the details, and `<workspace-url>` is the workspace's host name.
 
 ### When pairing isn't available
 
-Pairing needs subdomain routing, because OpenCode expects `/auth/connect` at the root of the server URL. With path routing, or on older workspace servers, **Attach TUI** uses the server password and the web app asks you to sign in. Every connection goes through Gitterm's HTTPS workspace proxy, so you don't need a tunnel.
+Pairing needs subdomain routing, because OpenCode expects `/auth/connect` at the root of the server URL. With path routing, **Connect OpenCode app** is not shown, **Attach TUI** uses the server password and the web app asks you to sign in. An older workspace server behaves the same way, except that **Connect OpenCode app** is shown and reports that the server does not support pairing yet. Every connection goes through Gitterm's HTTPS workspace proxy, so you don't need a tunnel.
 
 ## OpenCode (TTYD) workspaces
 
-Click **Open workspace**. The OpenCode TUI opens in a terminal in your browser, with no local client.
+Click **Open terminal** on the row. The OpenCode TUI opens in a terminal in a new browser tab, with no local client.
 
 ## T3 Code workspaces
 
-T3 Code signs you in with one-time pairing links, not a password. A running T3 Code workspace's card has:
+T3 Code signs you in with one-time pairing links, not a password.
 
-| Control                    | What it does                                            |
-| -------------------------- | ------------------------------------------------------- |
-| **Open in T3**             | Opens the workspace in the T3 Code desktop app          |
-| Globe button               | Opens the workspace in the T3 Code web app              |
-| **Pairing link**, **Copy** | Copies a one-time link for another device               |
-| **New link**               | Makes a new pairing link after the current one was used |
+| Control             | Where   | What it does                                             |
+| ------------------- | ------- | -------------------------------------------------------- |
+| **Open in T3**      | Row     | Opens the workspace in the T3 Code desktop app           |
+| **Open in browser** | Details | Opens the workspace in the T3 Code web app, in a new tab |
+| **Pairing link**    | Details | Copies a one-time link for another device                |
+| **New link**        | Details | Makes a new pairing link after the current one was used  |
 
 Each link works once. For another device, click **New link**, or create a link under **Connections** in T3 Code's settings. On Railway and AWS, **New link** isn't available; restart the workspace to get a fresh link.
 

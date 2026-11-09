@@ -65,7 +65,7 @@ Run `/cloud` again in the same session. After a successful move it:
 
 It does not create another workspace or upload newer local edits.
 
-Links work once and expire after five minutes; run `/cloud` again for a new one. If pairing isn't available, use the connection details on the workspace card in the dashboard. See [Connect to a workspace](/docs/workspaces/connect).
+Links work once and expire after five minutes; run `/cloud` again for a new one. If pairing isn't available, use the connection details on the workspace's row in the dashboard. See [Connect to a workspace](/docs/workspaces/connect).
 
 ## Choose the provider and connections
 

@@ -44,7 +44,7 @@ Steps:
 6. Optional: turn on **Keep running when idle**. See [Lifecycle](/docs/workspaces/lifecycle#keep-running-when-idle).
 7. Click **Create workspace**.
 
-You should see the new workspace's card under **Workspaces**. Once it is running, the card shows buttons to connect. See [Connect to a workspace](/docs/workspaces/connect).
+You should see the new workspace as a row under **Workspaces**. Once it is running, the row shows a button to connect, and clicking the row shows the rest. See [Connect to a workspace](/docs/workspaces/connect).
 
 ## Create a workspace from the SDK
 

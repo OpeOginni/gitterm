@@ -72,7 +72,9 @@ A cloud workspace runs the agent itself in the cloud.
 
 ### Before you start
 
-- A Gitterm account, with your model credentials and repository access set up in the dashboard.
+- A Gitterm account. Sign in with GitHub.
+- A model credential, added under **Models** in the dashboard, so the agent can call a model as soon as it starts.
+- For a private repository, GitHub connected under **Integrations**. See [Connections](/docs/integrations/connections#github). Public repositories need nothing.
 
 ### Steps
 
