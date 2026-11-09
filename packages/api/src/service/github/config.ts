@@ -1,6 +1,5 @@
 import { db, eq } from "@gitterm/db";
 import { githubRepositoryConfig } from "@gitterm/db/schema/integrations";
-import env from "@gitterm/env/server";
 import { EncryptionService } from "../encryption";
 
 async function storedGithubConfig() {
@@ -29,13 +28,7 @@ export async function githubRepositoryMode() {
       source: "database" as const,
     };
   }
-  if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) return null;
-  return {
-    mode: "app" as const,
-    appId: env.GITHUB_APP_ID,
-    slug: "",
-    source: "environment" as const,
-  };
+  return null;
 }
 
 export async function githubRepositoryAppConfig() {
@@ -51,14 +44,7 @@ export async function githubRepositoryAppConfig() {
       source: "database" as const,
     };
   }
-  if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) return null;
-  return {
-    appId: env.GITHUB_APP_ID,
-    slug: "",
-    privateKey: env.GITHUB_APP_PRIVATE_KEY,
-    webhookSecret: env.GITHUB_WEBHOOK_SECRET,
-    source: "environment" as const,
-  };
+  return null;
 }
 
 export async function githubGlobalPat() {
@@ -72,5 +58,5 @@ export async function githubWebhookSecret(): Promise<string> {
   if (stored?.mode === "pat") return "";
   return stored?.encryptedWebhookSecret
     ? new EncryptionService().decrypt(stored.encryptedWebhookSecret, "github:app:webhook")
-    : env.GITHUB_WEBHOOK_SECRET;
+    : "";
 }

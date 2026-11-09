@@ -70,16 +70,9 @@ Only these names reach the containers. Adding any other variable to `.env.selfho
 
 Set both to create the first admin. Without them the admin step is skipped: there is no admin, and nobody can enable a provider.
 
-### GitHub App from the environment
+### GitHub
 
-Optional and older. Save the GitHub App or a shared token under **Admin → Integrations** instead; a saved App takes precedence. Use these only to keep an existing setup.
-
-| Variable                 | Required                       | Default | What it does                                    |
-| ------------------------ | ------------------------------ | ------- | ----------------------------------------------- |
-| `GITHUB_APP_ID`          | No                             | None    | App ID. Set together with the private key       |
-| `GITHUB_APP_PRIVATE_KEY` | Only if `GITHUB_APP_ID` is set | None    | App private key (PEM)                           |
-| `GITHUB_APP_NAME`        | No                             | None    | App name, for the install link in the dashboard |
-| `GITHUB_WEBHOOK_SECRET`  | Only if the App sends webhooks | Empty   | Verifies GitHub installation webhooks           |
+Set up the GitHub App, or a shared token, under **Admin → Integrations**. There are no environment variables for it. If an earlier version read `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` from the environment, save that App there once; the variables are no longer read.
 
 ### Workspace pausing
 
@@ -156,7 +149,6 @@ Use the same value for a variable on every service that reads it.
 | `EMAIL_PROVIDER`, `EMAIL_FROM`, `RESEND_API_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | No                       | See [Email](#email)                   | See [Email](#email). The server's own default for `EMAIL_FROM` is `GitTerm <no-reply@gitterm.dev>`                               |
 | `EMAIL_REPLY_TO`                                                                                     | No                       | None                                  | Reply-to address. Not passed by the Compose file                                                                                 |
 | `SMTP_SECURE`                                                                                        | No                       | Chosen by port                        | `true` or `false` to force TLS. Not passed by the Compose file                                                                   |
-| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`                                   | No                       | None                                  | See [GitHub App from the environment](#github-app-from-the-environment)                                                          |
 | `WORKLOAD_IDENTITY_ISSUER`, `WORKLOAD_IDENTITY_PRIVATE_KEY`, `WORKLOAD_IDENTITY_KEY_ID`              | No                       | Key id `gitterm-workload-identity-v1` | Older Google Cloud setup. Generate the key under **Admin → Integrations → Google Cloud** instead; the saved one takes precedence |
 | `INTERNAL_API_URL`                                                                                   | No                       | None                                  | Older name, used only when `WORKSPACE_API_URL` is unset                                                                          |
 | `SKIP_MIGRATIONS`, `SKIP_SEED`, `SKIP_ADMIN_SEED`                                                    | No                       | `false`                               | See [Startup steps](#startup-steps). Read by the server image's start script                                                     |
@@ -165,18 +157,17 @@ Use the same value for a variable on every service that reads it.
 
 ### listener
 
-| Variable                                                                                                  | Required                                            | Default                 | What it does                                                                                                          |
-| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                                                                                                | Yes                                                 | `development`           | Set `production`. The published image sets it                                                                         |
-| `SERVER_URL`                                                                                              | Yes                                                 | `http://localhost:3000` | Server URL including `/api`, on the private network. Compose: `http://server:8080/api`                                |
-| `INTERNAL_API_KEY`                                                                                        | Yes                                                 | None                    | Same value as on the server                                                                                           |
-| `WORKSPACE_JWT_SECRET`                                                                                    | Yes                                                 | None                    | Same value as on the server. The listener does not start in production without it                                     |
-| `BASE_DOMAIN`                                                                                             | Yes                                                 | `gitterm.dev`           | Browser origins allowed to call the listener. Compose: `PUBLIC_HOST`                                                  |
-| `CORS_ORIGIN`                                                                                             | No                                                  | None                    | Compose: `PUBLIC_URL`                                                                                                 |
-| `DATABASE_URL`, `BETTER_AUTH_SECRET`                                                                      | Yes                                                 | None                    | Checks the dashboard's session for live status updates, and reads the GitHub App saved under **Admin → Integrations** |
-| `ENCRYPTION_MASTER_KEY`, `ENCRYPTION_MASTER_KEY_ID`, `ENCRYPTION_MASTER_KEYS`, `ENCRYPTION_WRITE_VERSION` | Yes, same as the server                             | See server              | Decrypts the saved GitHub App webhook secret                                                                          |
-| `GITHUB_WEBHOOK_SECRET`                                                                                   | Only for an App configured by environment variables | None                    | Same value as on the server                                                                                           |
-| `PORT`                                                                                                    | No                                                  | `8080` in the image     | Listen port                                                                                                           |
+| Variable                                                                                                  | Required                | Default                 | What it does                                                                                                          |
+| --------------------------------------------------------------------------------------------------------- | ----------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                                                                                | Yes                     | `development`           | Set `production`. The published image sets it                                                                         |
+| `SERVER_URL`                                                                                              | Yes                     | `http://localhost:3000` | Server URL including `/api`, on the private network. Compose: `http://server:8080/api`                                |
+| `INTERNAL_API_KEY`                                                                                        | Yes                     | None                    | Same value as on the server                                                                                           |
+| `WORKSPACE_JWT_SECRET`                                                                                    | Yes                     | None                    | Same value as on the server. The listener does not start in production without it                                     |
+| `BASE_DOMAIN`                                                                                             | Yes                     | `gitterm.dev`           | Browser origins allowed to call the listener. Compose: `PUBLIC_HOST`                                                  |
+| `CORS_ORIGIN`                                                                                             | No                      | None                    | Compose: `PUBLIC_URL`                                                                                                 |
+| `DATABASE_URL`, `BETTER_AUTH_SECRET`                                                                      | Yes                     | None                    | Checks the dashboard's session for live status updates, and reads the GitHub App saved under **Admin → Integrations** |
+| `ENCRYPTION_MASTER_KEY`, `ENCRYPTION_MASTER_KEY_ID`, `ENCRYPTION_MASTER_KEYS`, `ENCRYPTION_WRITE_VERSION` | Yes, same as the server | See server              | Decrypts the saved GitHub App webhook secret                                                                          |
+| `PORT`                                                                                                    | No                      | `8080` in the image     | Listen port                                                                                                           |
 
 > [!NOTE]
 > The bundled `docker-compose.selfhost.yml` doesn't pass `DATABASE_URL` or `BETTER_AUTH_SECRET` to `listener`.
@@ -206,7 +197,6 @@ The published `web` image replaces these when the container starts. If you build
 | `NEXT_PUBLIC_BASE_DOMAIN`     | Yes      | `gitterm.dev`     | Public host, for workspace URLs. Compose: `PUBLIC_HOST`                                          |
 | `NEXT_PUBLIC_ROUTING_MODE`    | No       | `path`            | Must match the server's `ROUTING_MODE`                                                           |
 | `NEXT_PUBLIC_DEPLOYMENT_MODE` | No       | `self-hosted`     | Leave as `self-hosted`                                                                           |
-| `NEXT_PUBLIC_GITHUB_APP_NAME` | No       | None              | Compose: `GITHUB_APP_NAME`                                                                       |
 | `PORT`, `HOSTNAME`            | No       | `8080`, `0.0.0.0` | Listen address, set in the image                                                                 |
 
 ### proxy

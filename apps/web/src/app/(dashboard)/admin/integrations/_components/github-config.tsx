@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import Image from "next/image";
 import { toast } from "sonner";
@@ -52,6 +52,7 @@ export function GithubConfig({ data, refresh }: Props) {
   const [privateKey, setPrivateKey] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
   const [pat, setPat] = useState("");
+  const keyFile = useRef<HTMLInputElement>(null);
 
   const configureApp = useMutation(trpc.admin.integrations.configureGithubApp.mutationOptions());
   const configurePat = useMutation(trpc.admin.integrations.configureGithubPat.mutationOptions());
@@ -75,9 +76,7 @@ export function GithubConfig({ data, refresh }: Props) {
       ? `Shared PAT active for @${stored.accountLogin} (ending in ${stored.patSuffix}).`
       : stored?.mode === "app"
         ? `App connected: ${stored.slug} (ID ${stored.appId}).`
-        : mode === "app"
-          ? "Using the legacy env-configured GitHub App. Save an App here to move repository access into GitTerm."
-          : "No repository credentials configured. Save either an App or a shared PAT, then enable GitHub for users.";
+        : "No repository credentials configured. Save either an App or a shared PAT, then enable GitHub for users.";
 
   async function saveApp() {
     if (
@@ -173,14 +172,35 @@ export function GithubConfig({ data, refresh }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="gh-pem" className={settingsLabel}>
-                Private key (PEM)
-              </Label>
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="gh-pem" className={settingsLabel}>
+                  Private key
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => keyFile.current?.click()}
+                >
+                  Choose .pem file
+                </Button>
+                <input
+                  ref={keyFile}
+                  type="file"
+                  accept=".pem,.key,text/plain"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) setPrivateKey(await file.text());
+                    e.target.value = "";
+                  }}
+                />
+              </div>
               <Textarea
                 id="gh-pem"
                 value={privateKey}
                 onChange={(e) => setPrivateKey(e.target.value)}
-                placeholder="-----BEGIN RSA PRIVATE KEY-----"
+                placeholder="Paste the .pem file's contents, or choose the file"
                 spellCheck={false}
                 className="min-h-28 font-mono text-[13px]"
               />

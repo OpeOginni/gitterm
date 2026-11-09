@@ -8,6 +8,7 @@ import {
 } from "@gitterm/db/schema/integrations";
 import { logger } from "../../utils/logger";
 import { githubRepositoryAppConfig } from "./config";
+import { decodePrivateKey } from "./private-key";
 import { githubCommitIdentity, type GitIdentity } from "../git-commit-identity";
 
 // The app's bot account never changes; only its public name and noreply address are kept.
@@ -31,25 +32,6 @@ export class GitHubAPIError extends Error {
     super(message);
     this.name = "GitHubAPIError";
   }
-}
-
-/**
- * Decode the private key if it's base64 encoded
- */
-function decodePrivateKey(key: string): string {
-  // Check if the key is base64 encoded (doesn't start with -----)
-  if (!key.startsWith("-----BEGIN")) {
-    try {
-      // Decode base64 to get the actual PEM key
-      const decoded = Buffer.from(key, "base64").toString("utf-8");
-      return decoded;
-    } catch (error) {
-      throw new Error("Invalid GitHub App private key format", { cause: error });
-    }
-  }
-
-  // Key is already in PEM format, just handle escaped newlines
-  return key.replace(/\\n/g, "\n");
 }
 
 /**

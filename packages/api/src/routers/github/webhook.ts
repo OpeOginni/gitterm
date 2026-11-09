@@ -45,7 +45,7 @@ export const githubWebhookRouter = router({
       if (!secret || secret.trim() === "") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "GitHub webhooks are not configured. GITHUB_WEBHOOK_SECRET is required.",
+          message: "GitHub webhooks are not configured. Save a GitHub App in Admin → Integrations.",
         });
       }
 
