@@ -24,6 +24,7 @@ const paidEntitlements: Omit<Entitlements, "plan"> = {
   providerKeys: null,
   machineAccess: "any",
   maxWorkspaces: 15,
+  maxSnapshots: 20,
   persistence: true,
   customSubdomain: true,
   alwaysOn: true,
@@ -39,9 +40,10 @@ export const PLANS: Record<PlanId, Plan> = {
     includedComputeCents: null,
     overageDiscountPercent: 0,
     entitlements: {
-      providerKeys: ["e2b", "boat"],
+      providerKeys: ["e2b", "boat", "gitterm"],
       machineAccess: "smallest",
       maxWorkspaces: 2,
+      maxSnapshots: 0,
       persistence: false,
       customSubdomain: false,
       alwaysOn: false,
@@ -63,7 +65,7 @@ export const PLANS: Record<PlanId, Plan> = {
     dailyMinutes: null,
     includedComputeCents: 25000,
     overageDiscountPercent: 10,
-    entitlements: { ...paidEntitlements, maxWorkspaces: 50, retentionDays: 30 },
+    entitlements: { ...paidEntitlements, maxWorkspaces: 50, maxSnapshots: 100, retentionDays: 30 },
   },
   /** Legacy plan; not offered at checkout. */
   starter: {
@@ -72,7 +74,7 @@ export const PLANS: Record<PlanId, Plan> = {
     dailyMinutes: null,
     includedComputeCents: 1000,
     overageDiscountPercent: 0,
-    entitlements: { ...paidEntitlements, maxWorkspaces: 5, retentionDays: 7 },
+    entitlements: { ...paidEntitlements, maxWorkspaces: 5, maxSnapshots: 5, retentionDays: 7 },
   },
 };
 

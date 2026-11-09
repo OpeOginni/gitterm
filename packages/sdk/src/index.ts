@@ -93,4 +93,8 @@ export type {
   GitHubRepository,
   GitHubBranch,
   GoogleSetup,
+  ManagedSandbox,
+  ManagedSandboxCreateInput,
+  ManagedSandboxSnapshot,
+  SandboxJobFinished,
 } from "./types.js";

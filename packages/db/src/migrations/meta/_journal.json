@@ -313,8 +313,29 @@
     {
       "idx": 44,
       "version": "7",
-      "when": 1793798018620,
-      "tag": "0044_remove_anonymous_trials",
+      "when": 1793372196498,
+      "tag": "0044_sandbox_workload",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793784778078,
+      "tag": "0045_sandbox_e2b_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1793961087522,
+      "tag": "0046_workspace_operation_lease",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1794227694280,
+      "tag": "0047_remove_anonymous_trials",
       "breakpoints": true
     }
   ]

@@ -11,31 +11,39 @@ async function main() {
   const agent = args[0] === "--agent" ? args[1] : undefined;
   if (
     args[0] === "--agent" &&
-    (args.length !== 2 || !["opencode", "t3code"].includes(agent ?? ""))
+    (args.length !== 2 || !["opencode", "t3code", "sandbox"].includes(agent ?? ""))
   ) {
-    throw new Error("Use --agent opencode or --agent t3code");
+    throw new Error("Use --agent opencode, --agent t3code, or --agent sandbox");
   }
-  const [opencodeVersion, t3Version] = await Promise.all([
-    getLatestOpencodeVersion(),
-    agent === "opencode" ? undefined : getLatestT3Version(),
-  ]);
-  if (opencodeVersion) console.log(`[e2b-template] pinning opencode version ${opencodeVersion}`);
-  if (t3Version) console.log(`[e2b-template] pinning t3 version ${t3Version}`);
-
   const baseTemplates: Array<{ name: string; template: TemplateClass }> = [];
-  if (agent !== "t3code")
-    baseTemplates.push(
-      { name: "gitterm-opencode-server", template: createOpencodeServerTemplate(opencodeVersion) },
-      {
-        name: "gitterm-opencode-server-with-ssh",
-        template: createOpencodeServerWithSSHTemplate(opencodeVersion),
-      },
-    );
-  if (t3Version)
-    baseTemplates.push({
-      name: "gitterm-t3code-server",
-      template: createT3CodeServerTemplate(t3Version, opencodeVersion),
-    });
+  // Sandbox templates install no agent, so they need no versions.
+  if (agent !== "sandbox") {
+    const [opencodeVersion, t3Version] = await Promise.all([
+      getLatestOpencodeVersion(),
+      agent === "opencode" ? undefined : getLatestT3Version(),
+    ]);
+    if (opencodeVersion) console.log(`[e2b-template] pinning opencode version ${opencodeVersion}`);
+    if (t3Version) console.log(`[e2b-template] pinning t3 version ${t3Version}`);
+    if (agent !== "t3code")
+      baseTemplates.push(
+        {
+          name: "gitterm-opencode-server",
+          template: createOpencodeServerTemplate(opencodeVersion),
+        },
+        {
+          name: "gitterm-opencode-server-with-ssh",
+          template: createOpencodeServerWithSSHTemplate(opencodeVersion),
+        },
+      );
+    if (t3Version)
+      baseTemplates.push({
+        name: "gitterm-t3code-server",
+        template: createT3CodeServerTemplate(t3Version, opencodeVersion),
+      });
+  }
+  // Managed sandboxes: E2B's base image, no agent. The sandbox image's templateId.
+  if (!agent || agent === "sandbox")
+    baseTemplates.push({ name: "gitterm-sandbox", template: Template().fromBaseImage() });
   // E2B fixes resources per template, so each machine profile size is its own
   // template named `<base><suffix>`. Must match the E2B machine profiles in the seed.
   // Large is capped at the account's maximum supported memory.

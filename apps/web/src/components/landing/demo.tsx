@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Wrap } from "@/components/site/section";
 import { Logo } from "./logo";
 import { ModeSwitch } from "./mode-switch";
+import { SoundToggle } from "./sound-toggle";
 import { Mark } from "@/components/site/mark";
 
 /*
@@ -119,7 +120,7 @@ export function Demo() {
                 <span className="t-caret" />
               </div>
               <div className="t-meta">
-                <b>Build</b> · <span>Claude Sonnet 5.5</span> Anthropic
+                <b>Build</b> · <span>Claude Opus 5.5</span> Anthropic
               </div>
             </div>
             <div className="t-hints" id="hints" />
@@ -477,7 +478,10 @@ export function Demo() {
 
         <div className="mx-auto mt-[18px] flex min-h-10 max-w-[840px] items-center justify-end gap-4 max-[560px]:justify-between">
           <span className="text-[14px] text-fg-4" id="benchnote" aria-live="polite" />
-          <ReplayButton id="replay" />
+          <span className="flex items-center gap-2">
+            <SoundToggle />
+            <ReplayButton id="replay" />
+          </span>
         </div>
         <noscript>
           <p className="mt-6 text-center text-fg-3">

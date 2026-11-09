@@ -86,6 +86,11 @@ const baseSchema = z
     // Routing
     ROUTING_MODE: routingMode,
 
+    // gitterm.dev's own sandboxes (managed mode only). Self-hosted deployments leave these
+    // unset and use their own providers.
+    COMPUTE_URL: optional,
+    COMPUTE_SERVICE_TOKEN: optional,
+
     // Discord (optional unless ENABLE_DISCORD_NOTIFICATIONS is true)
     DISCORD_TOKEN: optional,
     DISCORD_DM_CHANNEL_ID: optional,
@@ -245,6 +250,9 @@ export const isGitHubAuthEnabled = () => isManaged() && env.ENABLE_GITHUB_AUTH;
 export const isEmailAuthEnabled = () => isSelfHosted() || env.ENABLE_EMAIL_AUTH;
 export const isSubdomainRouting = () => env.ROUTING_MODE === "subdomain";
 export const isPathRouting = () => env.ROUTING_MODE === "path";
+/** gitterm.dev's own sandboxes; never on a self-hosted deployment. */
+export const isComputeEnabled = () =>
+  isManaged() && !!env.COMPUTE_URL && !!env.COMPUTE_SERVICE_TOKEN;
 
 /**
  * Check if admin bootstrap is configured and applicable.

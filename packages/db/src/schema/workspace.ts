@@ -7,6 +7,7 @@ import {
   pgEnum,
   integer,
   boolean,
+  index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import type { ExposedPort } from "@gitterm/schema/workspace-ports";
@@ -145,6 +146,11 @@ export const workspace = pgTable(
     metadata: jsonb("metadata").$type<Record<string, string>>().notNull().default({}),
     /** When set, the reaper terminates the workspace at this time regardless of activity. */
     autoTerminateAt: timestamp("auto_terminate_at"),
+    /**
+     * Held by the create or restart working on a `pending` workspace, renewed while it runs.
+     * Reconciling with the provider leaves the workspace to it until this passes.
+     */
+    operationLeaseUntil: timestamp("operation_lease_until"),
     /** Caller-supplied public image (registry reference or E2B template) used instead of the catalog image. */
     customImage: text("custom_image"),
     reservedSubdomain: text("reserved_subdomain"), // paid feature for custom subdomains
@@ -180,6 +186,31 @@ export const volume = pgTable("volume", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * A snapshot of a managed sandbox, saved in the deployment's provider account so new
+ * sandboxes can start from it. Counted against the owner's plan limit. A row without
+ * `externalSnapshotId` is being saved. Rows outlive a deleted user (`userId` null) so the
+ * provider snapshot can still be found and removed.
+ */
+export const sandboxSnapshot = pgTable(
+  "sandbox_snapshot",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    cloudProviderId: uuid("cloud_provider_id")
+      .notNull()
+      .references(() => cloudProvider.id, { onDelete: "cascade" }),
+    /** The size it was saved at; sandboxes started from it are billed at this size. */
+    machineProfileId: uuid("machine_profile_id").references(() => machineProfile.id, {
+      onDelete: "set null",
+    }),
+    externalSnapshotId: text("external_snapshot_id"),
+    label: text("label").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("sandbox_snapshot_user_idx").on(table.userId)],
+);
 
 /** Durable teardown intent. Kept until provider and local cleanup both succeed. */
 export const workspaceTermination = pgTable("workspace_termination", {

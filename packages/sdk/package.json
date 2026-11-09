@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/sdk",
-  "version": "0.11.0",
+  "version": "0.12.1",
   "files": [
     "dist"
   ],
@@ -19,13 +19,25 @@
       "bun": "./dist/direct/index.js",
       "import": "./dist/direct/index.js",
       "default": "./dist/direct/index.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox/index.d.ts",
+      "bun": "./dist/sandbox/index.js",
+      "import": "./dist/sandbox/index.js",
+      "default": "./dist/sandbox/index.js"
+    },
+    "./sandbox/store": {
+      "types": "./dist/sandbox/store.d.ts",
+      "bun": "./dist/sandbox/store.js",
+      "import": "./dist/sandbox/store.js",
+      "default": "./dist/sandbox/store.js"
     }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts --outdir dist --target node --format esm --external @trpc/client --external eventsource --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts src/sandbox/index.ts src/sandbox/store.ts --outdir dist --target node --format esm --external @trpc/client --external eventsource --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run check-types && bun run build",
     "check-types": "tsc --noEmit"
   },
@@ -40,7 +52,7 @@
   "devDependencies": {
     "@gitterm/agent-runtime": "workspace:*",
     "@gitterm/api": "workspace:*",
-    "@opencode/client": "2.2.1",
+    "@opencode/client": "2.2.6",
     "@trpc/server": "catalog:",
     "@types/bun": "^1.2.6",
     "typescript": "^5.8.2"

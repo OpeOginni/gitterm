@@ -27,9 +27,13 @@ import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
 import { daytonaWebhookSchema, verifyDaytonaWebhookSignature } from "../daytona/webhook";
 import type { DaytonaConfig } from "../../providers/daytona/types";
 import { boatWebhookBoxId, boatWebhookSchema, verifyBoatWebhookSignature } from "../boat/webhook";
+import { externalIdMatches, sandboxHandle } from "../../service/sandbox-transport";
 import type { BoatConfig } from "../../providers/boat/types";
 import { getProviderConfigService } from "../../service/config/provider-config";
-import { deleteAllWorkspaceRouteAccess } from "../../service/workspace-route-access";
+import {
+  deleteAllWorkspaceRouteAccess,
+  deleteRouteAccessOnPause,
+} from "../../service/workspace-route-access";
 import {
   updateWorkspaceByIdAndInvalidate,
   updateWorkspaceStatusAndInvalidate,
@@ -38,7 +42,27 @@ import { filterIdleWorkspacesByRedisActivityWith } from "../../service/workspace
 import type { E2BConfig } from "../../providers/e2b";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
-import { retryWorkspaceTerminations } from "../../service/workspace-termination";
+import {
+  deleteWorkspaceForUser,
+  retryWorkspaceTerminations,
+} from "../../service/workspace-termination";
+import type { ComputeProvider } from "../../providers/compute";
+
+/**
+ * A provider call on a running workspace failed. The provider may have paused or lost it on
+ * its own (an idle timeout, an outage) without telling us; then every later call fails the
+ * same way while the workspace stays running and metered here. Returns what the provider
+ * reports so the caller can settle it, or rethrows when it's neither paused nor gone.
+ */
+async function providerStateAfterFailure(
+  provider: ComputeProvider,
+  externalId: string,
+  error: unknown,
+): Promise<"paused" | "terminated"> {
+  const live = await provider.getStatus(externalId).catch(() => null);
+  if (live?.status === "paused" || live?.status === "terminated") return live.status;
+  throw error;
+}
 
 /**
  * Internal router for service-to-service communication
@@ -96,6 +120,7 @@ export const internalRouter = router({
         externalInstanceId: workspace.externalInstanceId,
         cloudProviderId: workspace.cloudProviderId,
         providerKey: cloudProvider.providerKey,
+        domain: workspace.domain,
       })
       .from(workspace)
       .innerJoin(cloudProvider, eq(workspace.cloudProviderId, cloudProvider.id))
@@ -116,8 +141,29 @@ export const internalRouter = router({
       try {
         const provider = await getProviderByCloudProviderId(ws.providerKey, ws.cloudProviderId);
         if (!provider.keepAliveWorkspace) continue;
-        await provider.keepAliveWorkspace(ws.externalInstanceId, ALWAYS_ON_LEASE_MS);
-        renewed++;
+        const live = await provider
+          .keepAliveWorkspace(ws.externalInstanceId, ALWAYS_ON_LEASE_MS)
+          .then(
+            () => "running" as const,
+            (error: unknown) => providerStateAfterFailure(provider, ws.externalInstanceId, error),
+          );
+        if (live === "running") renewed++;
+        else if (live === "terminated") await deleteWorkspaceForUser(ws.userId, ws.id);
+        else {
+          const now = new Date();
+          const [paused] = await updateWorkspaceStatusAndInvalidate(
+            and(eq(workspace.id, ws.id), eq(workspace.status, "running")),
+            { status: "paused", pausedAt: now, updatedAt: now },
+          );
+          if (paused)
+            WORKSPACE_EVENTS.emitStatus({
+              workspaceId: ws.id,
+              status: "paused",
+              updatedAt: now,
+              userId: ws.userId,
+              workspaceDomain: ws.domain,
+            });
+        }
       } catch (error) {
         console.error(`[always-on] Failed to renew lease for workspace ${ws.id}`, error);
       }
@@ -261,17 +307,28 @@ export const internalRouter = router({
       // Pause via provider
       const computeProvider = await getProviderByCloudProviderId(provider.providerKey, provider.id);
       await finalizeWorkspaceAgentRuns(input.workspaceId, ws.userId);
-      await computeProvider.pauseWorkspace(
-        ws.externalInstanceId,
-        workspaceRegion?.externalRegionIdentifier,
-        ws.externalRunningDeploymentId || undefined,
-      );
+      const live = await computeProvider
+        .pauseWorkspace(
+          ws.externalInstanceId,
+          workspaceRegion?.externalRegionIdentifier,
+          ws.externalRunningDeploymentId || undefined,
+        )
+        .then(
+          () => "paused" as const,
+          (error: unknown) =>
+            providerStateAfterFailure(computeProvider, ws.externalInstanceId, error),
+        );
 
       // Close usage session
       const { durationMinutes } = await closeUsageSession(
         input.workspaceId,
         input.stopSource as SessionStopSource,
       );
+      if (live === "terminated") {
+        // Gone at the provider: end it here too, and queue the provider cleanup.
+        await deleteWorkspaceForUser(ws.userId, ws.id);
+        return { success: true, durationMinutes };
+      }
       if (input.stopSource === "quota_exhausted") {
         await (
           await getBilling()
@@ -503,7 +560,7 @@ export const internalRouter = router({
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, railwayProvider.id),
-            eq(workspace.externalInstanceId, serviceId),
+            externalIdMatches("railway", serviceId),
             or(
               eq(workspace.status, "pending"),
               and(eq(workspace.status, "running"), isNull(workspace.externalRunningDeploymentId)),
@@ -537,7 +594,7 @@ export const internalRouter = router({
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, railwayProvider.id),
-            eq(workspace.externalInstanceId, serviceId),
+            externalIdMatches("railway", serviceId),
             // A late failure webhook must not undo explicit deletion.
             sql`${workspace.status} <> 'terminated'`,
           ),
@@ -608,7 +665,7 @@ export const internalRouter = router({
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, e2bProvider.id),
-            eq(workspace.externalInstanceId, serviceId),
+            externalIdMatches("e2b", serviceId),
             or(eq(workspace.status, "paused"), eq(workspace.status, "pending")),
           ),
           {
@@ -638,7 +695,7 @@ export const internalRouter = router({
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, e2bProvider.id),
-            eq(workspace.externalInstanceId, serviceId),
+            externalIdMatches("e2b", serviceId),
             eq(workspace.status, "running"),
             or(
               isNull(workspace.lastActiveAt),
@@ -655,7 +712,7 @@ export const internalRouter = router({
           updatedWorkspaces.map((updatedWorkspace) =>
             Promise.all([
               closeUsageSession(updatedWorkspace.id, "provider_auto"),
-              deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+              deleteRouteAccessOnPause(updatedWorkspace.id),
               finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
             ]),
           ),
@@ -679,10 +736,7 @@ export const internalRouter = router({
         }
 
         const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
-          and(
-            eq(workspace.cloudProviderId, e2bProvider.id),
-            eq(workspace.externalInstanceId, serviceId),
-          ),
+          and(eq(workspace.cloudProviderId, e2bProvider.id), externalIdMatches("e2b", serviceId)),
           {
             status: "terminated",
             updatedAt: new Date(input.timestamp),
@@ -787,7 +841,7 @@ export const internalRouter = router({
         const updated = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, daytonaProvider.id),
-            eq(workspace.externalInstanceId, sandboxId),
+            externalIdMatches("daytona", sandboxId),
             or(eq(workspace.status, "paused"), eq(workspace.status, "pending")),
           ),
           { status: "running", updatedAt: eventDate },
@@ -800,7 +854,7 @@ export const internalRouter = router({
         const updated = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, daytonaProvider.id),
-            eq(workspace.externalInstanceId, sandboxId),
+            externalIdMatches("daytona", sandboxId),
             eq(workspace.status, "running"),
           ),
           { status: "paused", updatedAt: eventDate },
@@ -810,7 +864,7 @@ export const internalRouter = router({
           updated.map((updatedWorkspace) =>
             Promise.all([
               closeUsageSession(updatedWorkspace.id, "provider_auto"),
-              deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+              deleteRouteAccessOnPause(updatedWorkspace.id),
               finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
             ]),
           ),
@@ -827,7 +881,7 @@ export const internalRouter = router({
         const updated = await updateWorkspaceStatusAndInvalidate(
           and(
             eq(workspace.cloudProviderId, daytonaProvider.id),
-            eq(workspace.externalInstanceId, sandboxId),
+            externalIdMatches("daytona", sandboxId),
             // Don't churn already-terminated rows on the second event.
             or(
               eq(workspace.status, "running"),
@@ -921,6 +975,7 @@ export const internalRouter = router({
         );
       const ids = candidates
         .filter((candidate) => {
+          if (candidate.externalInstanceId === sandboxHandle("boat", boxId)) return true;
           try {
             return JSON.parse(candidate.externalInstanceId).boxId === boxId;
           } catch {
@@ -938,7 +993,7 @@ export const internalRouter = router({
         updated.map((updatedWorkspace) =>
           Promise.all([
             closeUsageSession(updatedWorkspace.id, event === "error" ? "error" : "provider_auto"),
-            deleteAllWorkspaceRouteAccess(updatedWorkspace.id),
+            deleteRouteAccessOnPause(updatedWorkspace.id),
             finalizeWorkspaceAgentRuns(updatedWorkspace.id, updatedWorkspace.userId),
           ]),
         ),

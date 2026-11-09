@@ -23,7 +23,7 @@ function base32Alphabet(): string {
 
 function generateUserCode(): string {
   const alphabet = base32Alphabet();
-  const bytes = randomBytes(6);
+  const bytes = randomBytes(8);
   let out = "";
   for (let i = 0; i < bytes.length; i++) {
     out += alphabet[bytes[i]! % alphabet.length];

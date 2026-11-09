@@ -12,6 +12,7 @@ Give your agents more computers, from the cloud provider you choose. GitTerm giv
 - Gives you server-only agent URLs for desktop or local clients
 - Exposes any workspace port behind a shareable URL, so you can preview and test your app live
 - Keeps your model keys yours (bring your own keys, no markup)
+- Gives a local agent remote sandboxes for builds, tests, and previews, either on your Gitterm plan or with your own provider account ([Agent sandboxes](docs/agent-sandboxes.md))
 
 ## Sandbox lifecycle
 

@@ -7,6 +7,8 @@ import { daytonaProvider } from "./daytona";
 import { e2bProvider } from "./e2b";
 import { railwayProvider } from "./railway";
 import { vercelProvider } from "./vercel";
+import { gittermProvider } from "./gitterm";
+import { withSandboxHandles } from "./sandbox-handles";
 
 export * from "./compute";
 export { awsProvider } from "./aws";
@@ -16,6 +18,7 @@ export { cloudflareComputeProvider } from "./cloudflare/compute-provider";
 export { boatProvider } from "./boat";
 export { exeDevProvider } from "./exedev";
 export { vercelProvider } from "./vercel";
+export { gittermProvider } from "./gitterm";
 
 /**
  * All available provider implementations
@@ -32,6 +35,8 @@ const availableProviders: Record<string, ComputeProvider> = {
   daytona: daytonaProvider,
   cloudflare: cloudflareComputeProvider,
   vercel: vercelProvider,
+  // gitterm.dev only: there is no cloud provider row for it elsewhere, so nothing offers it.
+  gitterm: gittermProvider,
   // Future providers:
   // docker: dockerProvider,
   // kubernetes: kubernetesProvider,
@@ -81,6 +86,7 @@ export async function getProviderByCloudProviderId(
   cloudProviderKey: string,
   providerId?: string,
 ): Promise<ComputeProvider> {
-  if (cloudProviderKey === "aws" && providerId) return new AwsProvider(providerId);
-  return getProvider(cloudProviderKey);
+  if (cloudProviderKey === "aws" && providerId)
+    return withSandboxHandles(new AwsProvider(providerId), providerId);
+  return withSandboxHandles(getProvider(cloudProviderKey), providerId);
 }

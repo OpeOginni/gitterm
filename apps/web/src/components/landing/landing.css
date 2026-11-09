@@ -547,6 +547,10 @@
   .lp .t-inline.first {
     margin-top: 10px;
   }
+  /* Martian Mono draws → and ✓ nearly three cells wide; the system mono keeps them in one, like a terminal */
+  .lp .t-inline > span:first-child {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
   .lp .tui-scroll.free {
     overflow-y: auto;
   }
@@ -2096,6 +2100,18 @@
   .lp .si.flash .si-lbl i {
     box-shadow: 0 0 0 5px rgba(211, 173, 85, 0.22);
   }
+  /* A dev server job is running in the sandbox: the dot beats with it (BEAT in sound.ts) */
+  .lp .si.live .si-lbl i {
+    animation: lp-beat 0.5s ease-out infinite;
+  }
+  @keyframes lp-beat {
+    from {
+      box-shadow: 0 0 0 0 rgba(211, 173, 85, 0.55);
+    }
+    to {
+      box-shadow: 0 0 0 7px rgba(211, 173, 85, 0);
+    }
+  }
   .lp .si-val {
     display: flex;
     align-items: center;
@@ -2516,6 +2532,27 @@
   /* Without Gitterm, when the Mac runs out of memory: everything shakes once */
   .lp .demo-stage.quake {
     animation: lp-quake 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  }
+  /* ...then keeps rumbling until the power cuts */
+  .lp .demo-stage.rumble {
+    animation:
+      lp-quake 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97),
+      lp-rumble 0.16s linear 0.6s infinite;
+  }
+  @keyframes lp-rumble {
+    0%,
+    100% {
+      transform: translate(0, 0);
+    }
+    25% {
+      transform: translate(-2px, 1px);
+    }
+    50% {
+      transform: translate(2px, -1px);
+    }
+    75% {
+      transform: translate(-1px, -1px);
+    }
   }
   @keyframes lp-quake {
     10%,

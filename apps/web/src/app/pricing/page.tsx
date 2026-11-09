@@ -51,6 +51,7 @@ const PLANS: PlanCard[] = [
       "**Always-on** workspaces, no daily limit",
       "Pay-as-you-go with **your** spending cap",
       "**15** workspaces · **15-day** retention",
+      "**20** sandbox snapshots",
       "Custom subdomains and persistence",
     ],
     cta: "Get Pro",
@@ -67,6 +68,7 @@ const PLANS: PlanCard[] = [
       "**Every** machine size",
       "**Always-on** workspaces, no daily limit",
       "**50** workspaces · **30-day** retention",
+      "**100** sandbox snapshots",
       "Custom subdomains and persistence",
     ],
     cta: "Get Growth",
@@ -92,6 +94,7 @@ const COMPARISON_ROWS: Array<{
   { label: "Always-on workspaces", free: false, pro: true, growth: true },
   { label: "Workspaces", free: "**2**", pro: "**15**", growth: "**50**" },
   { label: "Idle retention", free: "2 days", pro: "15 days", growth: "30 days" },
+  { label: "Sandbox snapshots", free: false, pro: "**20**", growth: "**100**" },
   { label: "Persistent workspaces", free: false, pro: true, growth: true },
   { label: "Custom subdomains", free: false, pro: true, growth: true },
 ];

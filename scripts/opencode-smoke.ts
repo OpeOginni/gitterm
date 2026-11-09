@@ -14,6 +14,7 @@ import { createDirectGittermClient } from "../packages/sdk/src/direct/client";
 import type { DirectProviderAdapter } from "../packages/sdk/src/direct/types";
 import runtimePackage from "../packages/agent-runtime/package.json";
 import { validateOpenCodeConfig } from "../packages/schema/src/agent-config";
+import { handoffSession } from "../packages/opencode-cloud/src/handoff";
 
 const binary = process.env.OPENCODE_SMOKE_BINARY;
 if (!binary) throw new Error("Set OPENCODE_SMOKE_BINARY to an OpenCode 2 executable");
@@ -55,8 +56,9 @@ const model = Bun.serve({
     modelCalls++;
     if (input.smoke_variant) variantCalls++;
     const last = input.messages.findLast((message) => message.role === "user");
+    const background = JSON.stringify(last?.content).includes("background-smoke");
     if (
-      JSON.stringify(last?.content).includes("tool-smoke") &&
+      (JSON.stringify(last?.content).includes("tool-smoke") || background) &&
       !input.messages.some((message) => message.role === "tool")
     ) {
       return new Response(
@@ -69,7 +71,11 @@ const model = Bun.serve({
               type: "function",
               function: {
                 name: "shell",
-                arguments: JSON.stringify({ command: "printf tool-smoke" }),
+                arguments: JSON.stringify(
+                  background
+                    ? { command: "sleep 60", background: true }
+                    : { command: "printf tool-smoke" },
+                ),
               },
             },
           ],
@@ -507,6 +513,52 @@ try {
     ),
     "The SDK lost the actual shell tool output",
   );
+  const backgroundRun = await sdk.runs.create({
+    workspace,
+    prompt: "background-smoke",
+    model: "smoke/fixture",
+  });
+  const backgroundPermission = await until(
+    () => sdk.runs.get(backgroundRun),
+    (current) => current.status === "awaiting_input",
+    "Background shell did not request permission",
+  );
+  await sdk.runs.respond(backgroundRun, {
+    requestId: backgroundPermission.pendingInputs[0]!.id,
+    reply: { type: "permission", response: "once" },
+  });
+  await sdk.runs.wait(backgroundRun, { signal });
+  const jobs = await direct.client.experimental.job.list(
+    { sessionID: backgroundRun.sessionId, status: "running", descendants: true },
+    { signal },
+  );
+  check(
+    jobs.some((job) => job.kind === "shell"),
+    "Background job discovery lost the running shell",
+  );
+  try {
+    let rejected = false;
+    try {
+      await handoffSession(backgroundRun.sessionId, {
+        local: direct.client,
+        gitterm: {} as never,
+        options: {},
+        signal,
+        save: async () => {},
+        progress: async () => {},
+      });
+    } catch (error) {
+      rejected = error instanceof Error && error.message.includes("background jobs");
+    }
+    check(rejected, "Cloud handoff accepted an idle session with a running background job");
+  } finally {
+    for (const job of jobs)
+      if (job.kind === "shell")
+        await direct.client.shell.remove(
+          { id: job.shellID, location: { directory: direct.target.directory } },
+          { signal },
+        );
+  }
   const held = await sdk.runs.create({ workspace, prompt: "hold-smoke", model: "smoke/fixture" });
   await until(
     () => sdk.runs.messages(held),
@@ -527,7 +579,7 @@ try {
   check(modelCalls >= 5, "The real model dispatch path was not exercised");
   check(variantCalls > 0, "The selected model variant was not applied to the model request");
   console.log(
-    `OpenCode ${version} smoke passed: config validation, hosted/direct provisioning, plugin options, credential import/managed OAuth refresh, service discovery, browser/TUI pairing, forms, permissions, PTY setup, SDK execution/SSE, model variants, shell tool output, continuation, cancellation, deletion. Model responses were loopback fixtures; no paid provider calls.`,
+    `OpenCode ${version} smoke passed: config validation, hosted/direct provisioning, plugin options, credential import/managed OAuth refresh, service discovery, browser/TUI pairing, forms, permissions, PTY setup, SDK execution/SSE, model variants, shell tool output, background-job handoff protection, continuation, cancellation, deletion. Model responses were loopback fixtures; no paid provider calls.`,
   );
 } finally {
   for (const server of servers) {

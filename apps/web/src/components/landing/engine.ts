@@ -13,6 +13,7 @@ import {
   type SandboxProvider,
   type SandboxProviderId,
 } from "@/lib/site/providers";
+import { createSfx } from "./sound";
 
 export type DemoMode = "with" | "without";
 /** Fired on the landing root by the mode switch. */
@@ -301,8 +302,13 @@ function withSteps(P: SandboxProvider, id: SandboxProviderId): Script {
         name: "sandbox_job",
         args: `command="bun run dev" port=3000`,
         res: "job_2 running, listening on :3000",
-        dur: 1200,
-        term: ["$ bun run dev   job_2, background", "Ready on http://0.0.0.0:3000"],
+        term: [
+          "$ bun run dev   job_2, background",
+          "  compiling src/app/checkout…",
+          "  compiled 312 modules in 840ms",
+          "Ready on http://0.0.0.0:3000",
+        ],
+        stream: true,
       },
       {
         tool: "plugin",
@@ -516,6 +522,8 @@ export function startLanding(root: HTMLElement): () => void {
   const hints = $("hints");
   const term = $("term");
   const stage = $("bench");
+  let benchVisible = false;
+  const sfx = createSfx(() => benchVisible);
   const tui = need(".tui.main", stage);
   const benchNote = $("benchnote");
   const sbar = need(".sbar", stage);
@@ -613,10 +621,13 @@ export function startLanding(root: HTMLElement): () => void {
 
   // Without Gitterm the run ends here: OpenCode dies in place and the card comes up over it
   function crash() {
+    stopRumble();
+    sfx.stop();
     stage.classList.remove("quake");
     void stage.offsetWidth;
     stage.classList.add("quake");
     tui.classList.add("dead");
+    sfx.crash();
     for (const e of eyes) Object.assign(e, { x: 0, y: -EYE_MAX, vx: 0, vy: 0 });
     later(() => jiggle(22), 750);
   }
@@ -679,6 +690,7 @@ export function startLanding(root: HTMLElement): () => void {
     if (!eyesRaf && !reduce) eyesRaf = requestAnimationFrame(eyesTick);
   };
   function jiggle(power: number) {
+    sfx.boing();
     for (const e of eyes) {
       e.vx += (Math.random() - 0.5) * power;
       e.vy += (Math.random() - 0.5) * power;
@@ -715,19 +727,33 @@ export function startLanding(root: HTMLElement): () => void {
       const step = text.length > 30 ? 18 : 60;
       for (let i = 1; i <= text.length; i++) {
         input.innerHTML = `${esc(text.slice(0, i))}<span class="t-caret"></span>`;
+        sfx.key(text[i - 1] === " " ? "space" : "key");
         if (!(await wait(step, id))) return false;
       }
       if (!(await wait(350, id))) return false;
+      sfx.key("enter");
     }
     input.innerHTML = '<span class="t-caret"></span>';
     return true;
   }
 
   async function streamTerm(lines: string[], id: number, stream: boolean) {
+    let passes = 0;
+    let compiles = 0;
     for (const line of lines) {
       addLine(term, color(line));
       while (term.children.length > 40) term.firstElementChild?.remove();
-      if (stream && !(await wait(260, id))) return false;
+      if (!stream) continue;
+      // Every streamed line has a sound, so a test run plays as a little melody
+      const l = line.trim();
+      if (/^pass\b/.test(l)) sfx.pass(passes++);
+      else if (/^fail\b/.test(l)) sfx.fail();
+      else if (/\bfailed,/.test(l)) sfx.verdict(false);
+      else if (/^\d+ passed/.test(l)) sfx.verdict(true);
+      else if (l.startsWith("Ready")) sfx.ready();
+      else if (l.startsWith("compil")) sfx.compile(compiles++);
+      // One line per eighth note, in time with the sounds
+      if (!(await wait(250, id))) return false;
     }
     return true;
   }
@@ -735,7 +761,18 @@ export function startLanding(root: HTMLElement): () => void {
   const diffHtml = () =>
     `<div class="t-diff">${DIFF.map(([c, n, l]) => `<div class="${c}"><span class="ln">${n}</span>${esc(l)}</div>`).join("")}</div>`;
 
+  // The dev server job's beat, from sandbox_job until the session leaves for the cloud
+  const quiet = { open() {}, stop() {} };
+  let server = quiet;
+  function stopServer() {
+    server.stop();
+    server = quiet;
+    items.sandbox.classList.remove("live");
+  }
+
   async function play(m: DemoMode) {
+    sfx.stop();
+    stopServer();
     const id = ++run;
     mode = m;
     const P = PROVIDERS[prov];
@@ -746,6 +783,8 @@ export function startLanding(root: HTMLElement): () => void {
     scroll.classList.remove("free");
     closeAll();
     fqShown = false;
+    fanned = false;
+    stopRumble();
     stage.classList.remove("busy", "quake");
     tui.classList.remove("dead");
     fqPending = false;
@@ -785,12 +824,13 @@ export function startLanding(root: HTMLElement): () => void {
         addEl(
           `<p class="t-text">${md(st.text).replace(/\{P\}/g, `<span data-pname>${esc(PROVIDERS[prov].name)}</span>`)}</p>`,
         );
+        sfx.say();
         setLaptop(st.laptop);
         if (!(await wait(1000, id))) return;
         continue;
       }
       if (st.foot) {
-        addEl(`<div class="t-foot"><b>▣ Build</b> · Claude Sonnet 5.5 · ${esc(st.foot)}</div>`);
+        addEl(`<div class="t-foot"><b>▣ Build</b> · Claude Opus 5.5 · ${esc(st.foot)}</div>`);
         setHints(false);
         if (!(await wait(700, id))) return;
         continue;
@@ -841,6 +881,17 @@ export function startLanding(root: HTMLElement): () => void {
           if (st.term) await streamTerm(st.term, id, false);
         }
         need(".g", el).textContent = "✓";
+        // Each finished tool plays its own short motif
+        if (st.name === "sandbox_create") sfx.boot();
+        else if (st.name === "sandbox_sync") sfx.transfer("up");
+        else if (st.name === "sandbox_apply") sfx.transfer("down");
+        else if (st.name === "sandbox_preview") sfx.ping();
+        if (st.name === "sandbox_job") {
+          server = sfx.server();
+          items.sandbox.classList.add("live");
+        }
+        // The preview is on screen now, so the server is heard clearly instead of through a wall
+        if (st.name === "sandbox_preview") server.open();
         addLine(el, st.resHtml ?? esc(st.res ?? ""), "res");
         if (st.attach) slots[st.attach].classList.add("on", "fresh");
         if (!(await wait(420, id))) return;
@@ -853,12 +904,15 @@ export function startLanding(root: HTMLElement): () => void {
         );
         const o = need(".o", el);
         setLaptop(st.laptop);
+        stopServer();
         const lines = st.lines ?? [];
-        for (const [k, v] of lines) {
+        for (const [i, [k, v]] of lines.entries()) {
           addLine(o, `${esc(pad(k))}<span style="color:var(--t-text)">${esc(v)}</span>`);
+          sfx.beam(i);
           if (!(await wait((st.dur ?? 0) / (lines.length + 1), id))) return;
         }
         need(".hd", el).textContent = "# Cloud handoff";
+        sfx.teleport();
         addLine(
           o,
           `<br><span class="hl">→ <span data-pname>${esc(PROVIDERS[prov].name)}</span> workspace ready on gitterm/checkout-coupons</span>\n${esc(pad("Pair your phone"))}<span class="url">gitterm.dev/pair/7QK-4M2</span>`,
@@ -869,7 +923,7 @@ export function startLanding(root: HTMLElement): () => void {
       }
       if (st.crash) {
         // Give Force Quit a moment on screen before OpenCode goes
-        if (!(await wait(2400, id))) return;
+        if (!(await wait(1675, id))) return;
         crash();
         setLaptop(st.laptop);
         continue;
@@ -880,6 +934,7 @@ export function startLanding(root: HTMLElement): () => void {
       }
     }
     setHints(false);
+    if (m === "with") sfx.done();
     // Let the last line finish growing, land on it, then hand scrolling to the reader
     later(
       () => {
@@ -898,7 +953,6 @@ export function startLanding(root: HTMLElement): () => void {
   let loopTimer = 0;
   let finished = false;
   let readerScrolled = false;
-  let benchVisible = false;
   function scheduleNext() {
     cancel(loopTimer);
     if (reduce || !finished || readerScrolled || !benchVisible || mode !== "with") return;
@@ -1014,6 +1068,7 @@ export function startLanding(root: HTMLElement): () => void {
   const hoLink = $("ho-link");
   let hoRun = 0;
   let hoVisible = false;
+  const hoSfx = createSfx(() => hoVisible);
   let hoTimer = 0;
   let hoDone = false;
   const hoWait = (ms: number, id: number) =>
@@ -1047,6 +1102,7 @@ export function startLanding(root: HTMLElement): () => void {
   }
   function card(s: Sess, fresh = false) {
     const [pn, pl] = s.prov ?? ["", ""];
+    hoSfx.pop(hoCards.children.length);
     hoCards.insertAdjacentHTML(
       "beforeend",
       `<div class="card${fresh ? " fresh" : ""}" data-c="${s.id}"><div class="c-top">${agIcon(s)}<b>${esc(s.title)}</b><span class="c-tag">${fresh ? "New" : "/cloud"}</span><span class="c-prov"><img src="${pl}" alt="">${pn}</span></div><div class="c-st"><i class="spin2"></i><span>${esc(s.agent)}: ${esc(s.work ?? "")}</span></div></div>`,
@@ -1056,9 +1112,11 @@ export function startLanding(root: HTMLElement): () => void {
     const el = need(`[data-c="${id}"]`, hoCards);
     el.classList.add("done");
     need(".c-st span", el).textContent = text;
+    hoSfx.done();
   }
 
   async function playHandoff() {
+    hoSfx.stop();
     const id = ++hoRun;
     cancel(hoTimer);
     hoDone = false;
@@ -1129,6 +1187,7 @@ export function startLanding(root: HTMLElement): () => void {
       (es) => {
         hoVisible = es.some((e) => e.isIntersecting);
         if (!hoVisible) {
+          hoSfx.stop();
           cancel(hoTimer);
           return;
         }
@@ -1147,6 +1206,14 @@ export function startLanding(root: HTMLElement): () => void {
   // version of the problem instead.
   let zTop = 10;
   let fqShown = false;
+  let fanned = false;
+  // From the out-of-memory moment until the power cuts, the Mac keeps shaking and rattling
+  let stopRattle = () => {};
+  function stopRumble() {
+    stage.classList.remove("rumble");
+    stopRattle();
+    stopRattle = () => {};
+  }
   const narrowStage = () => innerWidth <= 760;
   type Spot = [number, number, string?, string?];
 
@@ -1259,6 +1326,8 @@ export function startLanding(root: HTMLElement): () => void {
     }
     place(w, openSpot(name, w));
     w.classList.add("open");
+    // Force Quit isn't a happy window
+    if (!w.dataset.alert) sfx.windowOpen();
     front(w);
     syncExpanded(name);
     cancel(loopTimer);
@@ -1568,12 +1637,19 @@ export function startLanding(root: HTMLElement): () => void {
     $("sb-meter").classList.toggle("hot", l.cpu >= 70);
     items.laptop.classList.toggle("hot", l.cpu >= 70);
     stage.classList.toggle("busy", mode === "without" && l.cpu >= 90);
+    // Docker starts the fan; it builds through app startup and the test run.
+    if (mode === "without" && l.cpu >= 50 && !l.oom && !fanned) {
+      fanned = true;
+      // The power cut interrupts the fan just before it finishes spinning up.
+      sfx.fan(8.9);
+    }
     // Without Gitterm the Mac runs out of memory once: the stage shakes and Force Quit opens
     if (mode === "without" && l.oom && !fqShown && !reduce) {
       fqShown = true;
       stage.classList.remove("quake");
       void stage.offsetWidth;
-      stage.classList.add("quake");
+      stage.classList.add("rumble");
+      stopRattle = sfx.rattle(3);
       fqPending = true;
       items.laptop.classList.add("warned");
       showCoach("laptop");
@@ -1675,6 +1751,7 @@ export function startLanding(root: HTMLElement): () => void {
       (entries) => {
         benchVisible = entries.some((e) => e.isIntersecting);
         if (!benchVisible) {
+          sfx.stop();
           cancel(loopTimer);
           benchNote.textContent = "";
           return;
@@ -1691,11 +1768,15 @@ export function startLanding(root: HTMLElement): () => void {
   if (reduce) {
     started = true;
     void play(mode);
-  } else io.observe(stage);
+  }
+  io.observe(stage);
 
   return () => {
     run = -1;
     hoRun = -1;
+    stopRattle();
+    sfx.dispose();
+    hoSfx.dispose();
     ac.abort();
     for (const t of timeouts) clearTimeout(t);
     timeouts.clear();

@@ -265,6 +265,8 @@ export interface DaytonaImageProviderMetadata {
 }
 
 export interface AwsImageProviderMetadata {
+  /** Overrides the image's default command (plain sandboxes start a command server). */
+  command?: string[];
   cpu?: number;
   memory?: number;
   containerPort?: number;
@@ -328,6 +330,8 @@ export interface ImageProviderMetadata {
   vercel?: VercelImageProviderMetadata;
   boat?: BoatImageProviderMetadata;
   exedev?: ExeDevImageProviderMetadata;
+  /** gitterm.dev's own sandboxes: the image name the sandbox service knows; set at startup. */
+  gitterm?: { image?: string; size?: string };
   /** Present when `imageId` is a registry image Railway can pull. E2B-only template records omit it. */
   railway?: Record<string, never>;
   [provider: string]: unknown;

@@ -676,8 +676,9 @@ duplicate and blank labels are dropped. Hosted users need the API redeployed for
 
 The quick start above shows a complete relay. Rejecting a permission or dismissing a question
 ends the turn: OpenCode records a failed tool call and the run finishes. A run left
-`awaiting_input` does not keep its workspace awake; if nobody answers before the workspace's
-idle timeout pauses it, the run is cancelled with `"Workspace paused while waiting for input"`.
+`awaiting_input` keeps its workspace awake until the run's execution deadline, when it is
+cancelled. If the workspace stops anyway (paused or deleted), the run is cancelled with
+`"Workspace paused while waiting for input"`.
 To avoid prompts entirely in headless runs, allow the relevant tools in
 `opencode.config.permission` when creating the workspace.
 
@@ -852,6 +853,39 @@ await saveConfig({
 
 Device-code logins produce the same revocable `gt_...` API token as the dashboard;
 they appear under **API tokens** in the dashboard and can be revoked there.
+
+## Sandboxes
+
+`@gitterm/sdk/sandbox` runs commands in a plain remote sandbox, with no coding agent
+inside, on behalf of a local agent or script. The same client works against your
+Gitterm plan (`managed`) or your own provider account (`direct`, no Gitterm login needed).
+Direct mode supports E2B, Daytona, Vercel, Boat, exe.dev, and Railway; managed mode also AWS:
+
+```ts
+import { captureSource, createSandboxBackend, createSandboxClient } from "@gitterm/sdk/sandbox";
+
+const settings = {
+  account: "e2b",
+  accounts: {
+    e2b: { mode: "direct" as const, provider: "e2b" as const, apiKeyEnv: "E2B_API_KEY" },
+  },
+};
+const sandboxes = createSandboxClient({ backend: createSandboxBackend(settings) });
+
+const sandbox = await sandboxes.create({ name: "ci", lifetimeMinutes: 30 });
+await sandboxes.sync(sandbox, await captureSource(process.cwd())); // includes uncommitted changes
+const run = await sandboxes.exec(sandbox, { command: "npm test", waitMs: 300_000 });
+console.log(run.state.status, run.state.exitCode, run.job.snapshotDigest);
+console.log(run.log.text); // last 8 KiB; page with sandboxes.job(sandbox, run.job.id, { offset })
+await sandboxes.destroy(sandbox);
+```
+
+Jobs are durable: their state lives in the sandbox, so another process can reattach with
+`sandboxes.job()` or stop the whole process group with `sandboxes.cancel()`. A non-zero
+exit is a `failed` job; a provider failure throws `SandboxProviderError`. Managed
+primitives are also available directly as `client.sandboxes.*`. See
+[Agent sandboxes](../../docs/agent-sandboxes.md) for modes, credentials, charges, and
+cleanup.
 
 ## Direct provider mode
 
