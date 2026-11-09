@@ -59,9 +59,6 @@ const baseSchema = z
     GITHUB_APP_CLIENT_SECRET: optional,
 
     // GitHub App (either both or neither)
-    GITHUB_APP_ID: optional,
-    GITHUB_APP_PRIVATE_KEY: optional,
-    GITHUB_WEBHOOK_SECRET: z.string().optional().default(""),
 
     // Polar (conditionally required in managed mode)
     POLAR_ACCESS_TOKEN: optional,
@@ -191,16 +188,6 @@ const baseSchema = z
           message: "DISCORD_DM_CHANNEL_ID is required when DISCORD_TOKEN is set",
         });
       }
-    }
-
-    // GitHub App integration: either both or neither
-    const hasAppId = !!data.GITHUB_APP_ID;
-    const hasPrivateKey = !!data.GITHUB_APP_PRIVATE_KEY;
-    if ((hasAppId && !hasPrivateKey) || (!hasAppId && hasPrivateKey)) {
-      errors.push({
-        path: "GITHUB_APP_ID",
-        message: "Both GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY must be set together (or neither)",
-      });
     }
 
     // Admin credentials: either both or neither (for self-hosted bootstrap)

@@ -207,9 +207,10 @@ export function RepositoryStepBody({
       : null;
 
   const connect = () => {
+    if (!availability?.slug) return;
     setConnecting(true);
     sessionStorage.setItem(GITHUB_RETURN_TO_KEY, "/dashboard/bots");
-    window.location.href = githubInstallUrl(availability?.slug);
+    window.location.href = githubInstallUrl(availability.slug);
   };
 
   const githubIcon = <Github className="size-[18px]" fill="currentColor" />;

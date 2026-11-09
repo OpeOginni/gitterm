@@ -23,12 +23,10 @@ import { cn } from "@/lib/utils";
 import { queryClient, trpc } from "@/utils/trpc";
 import env from "@gitterm/env/web";
 
-const GITHUB_APP_NAME = env.NEXT_PUBLIC_GITHUB_APP_NAME || "gitterm-dev";
-
 /** Where GitHub sends the user after they install the app; the server stores the installation. */
-export function githubInstallUrl(slug: string | null | undefined): string {
+export function githubInstallUrl(slug: string): string {
   const redirectUrl = apiPath(env.NEXT_PUBLIC_SERVER_URL || "", "github/callback");
-  return `https://github.com/apps/${slug ?? GITHUB_APP_NAME}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
+  return `https://github.com/apps/${slug}/installations/new?redirect_uri=${encodeURIComponent(redirectUrl)}`;
 }
 
 /** Remembered across the GitHub round trip so the callback can return the user to this page. */
@@ -316,7 +314,7 @@ export function GitHubConnection() {
   const installations = data?.installations ?? [];
 
   function handleConnect() {
-    if (!appAvailability?.enabled || !appAvailability.configured) return;
+    if (!appAvailability?.enabled || !appAvailability.configured || !appAvailability.slug) return;
     setIsConnecting(true);
     window.location.href = githubInstallUrl(appAvailability.slug);
   }

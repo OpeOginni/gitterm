@@ -165,17 +165,9 @@ or an admin-shared fine-grained PAT that users explicitly select when creating a
 The two modes are mutually exclusive. Neither requires GitHub login: email-only self-hosted
 deployments work with either method. GitHub login remains a separate setting.
 
-Legacy GitHub App environment setup remains supported when no App has been saved in the admin panel.
-Set these env vars on the `server` service if using that legacy route:
-
-- `GITHUB_APP_ID`
-- `GITHUB_APP_PRIVATE_KEY`
-- `GITHUB_APP_CLIENT_ID` (for login with the same GitHub App)
-- `GITHUB_APP_CLIENT_SECRET` (for login with the same GitHub App)
-
-Set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` together for repo integration. Set
-`GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` if GitHub login is enabled.
-A separate GitHub OAuth App is not required.
+The GitHub App is only set up in the admin panel. GitHub login on a managed deployment uses the
+same App's `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`; a separate GitHub OAuth App is
+not required.
 
 For GitHub sign-in on a **managed** deployment, configure both services:
 
