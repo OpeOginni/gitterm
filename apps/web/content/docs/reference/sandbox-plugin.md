@@ -59,6 +59,7 @@ These go directly in the plugin's `options`. Without `accounts`, the tools repor
 | `limits`         | object   | No       | See [limits](#limits) | Caps on what the agent can start.                                                                                                                                                                                                                             |
 | `exclude`        | string[] | No       | None                  | Extra glob patterns `sandbox_sync` never uploads. Secret-like files are always left out.                                                                                                                                                                      |
 | `publicPreviews` | boolean  | No       | `false`               | Creates every sandbox with public previews, without asking. Setting it is your approval. Whether a preview can be public depends on the provider and the kind of account; see [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider). |
+| `snapshots`      | boolean  | No       | `false`               | Lets the agent save a set-up sandbox as a snapshot, so the project's next sandboxes start from it. See [Setup snapshots](/docs/sandboxes/setup#setup-snapshots).                                                                                              |
 
 Account names use letters, digits, `_`, `.`, and `-`, start with a letter or digit, and are at most 63 characters.
 
@@ -111,7 +112,7 @@ Set variables before OpenCode starts. This includes variables you reference with
 
 ## Tools
 
-The plugin adds nine tools. You ask in plain words and the agent picks them; their arguments are in [Tools](/docs/sandboxes/tools).
+The plugin adds nine tools, and a tenth when `snapshots` is on. You ask in plain words and the agent picks them; their arguments are in [Tools](/docs/sandboxes/tools).
 
 | Tool               | What it does                                                      |
 | ------------------ | ----------------------------------------------------------------- |
@@ -124,6 +125,7 @@ The plugin adds nine tools. You ask in plain words and the agent picks them; the
 | `sandbox_artifact` | Downloads a file a job produced                                   |
 | `sandbox_apply`    | Copies a downloaded file into the checkout                        |
 | `sandbox_destroy`  | Deletes a sandbox                                                 |
+| `sandbox_snapshot` | Saves or deletes the project's setup snapshot (with `snapshots`)  |
 
 Which tools ask for approval, and how to pre-approve them: [Approvals](/docs/sandboxes/setup#approvals).
 

@@ -14,6 +14,10 @@ describe("analytics privacy policy", () => {
     ["/dashboard/bots/new", "/dashboard/bots/new"],
     ["/dashboard/bots/new/", "/dashboard/bots/new"],
     ["/dashboard/bots/private-name", "/dashboard/bots/:id"],
+    ["/dashboard/sandboxes", "/dashboard/sandboxes"],
+    ["/docs", "/docs"],
+    ["/docs/workspaces/connect", "/docs"],
+    ["/docsx", "/other"],
     ["/admin/users/private-id", "/other"],
     ["/unknown/private-repository", "/other"],
   ])("sanitizes %s", (input, expected) => expect(analyticsPath(input)).toBe(expected));

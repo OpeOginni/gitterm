@@ -88,7 +88,16 @@ export function CodeBlock({
 }
 
 /** One-line shell command with a "$" prompt and a copy button. */
-export function InstallCommand({ command, className }: { command: string; className?: string }) {
+export function InstallCommand({
+  command,
+  className,
+  location,
+}: {
+  command: string;
+  className?: string;
+  /** Where on the site this sits, for the copy event. */
+  location: "hero" | "cta";
+}) {
   // One line always. On phones the command scrolls in its box and Copy sits below it;
   // from `sm` up, Copy sits inside the box.
   return (
@@ -102,7 +111,7 @@ export function InstallCommand({ command, className }: { command: string; classN
         <span className="text-fg-4">$ </span>
         {command}
       </span>
-      <CopyButton value={command} />
+      <CopyButton value={command} installLocation={location} />
     </div>
   );
 }

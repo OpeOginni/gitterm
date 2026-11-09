@@ -67,6 +67,10 @@ export function InstanceList({ kind }: { kind: "agents" | "sandboxes" }) {
   });
   const providersQuery = useQuery(trpc.workspace.listCloudProviders.queryOptions());
   const snapshotsQuery = useQuery(trpc.sandbox.snapshots.queryOptions());
+  // An agent with no model key starts but cannot answer, so the empty list points there first.
+  const credentialsQuery = useQuery(trpc.modelCredentials.listMyCredentials.queryOptions());
+  const needsModelKey =
+    credentialsQuery.data && !credentialsQuery.data.credentials.some((c) => c.isActive);
 
   // The filters and search, shown while loading too so the list doesn't jump when it arrives.
   const toolbar = (counts?: Record<StatusFilter, number>, hourly = 0) => (
@@ -183,6 +187,11 @@ export function InstanceList({ kind }: { kind: "agents" | "sandboxes" }) {
         <p className="mt-1.5 max-w-sm text-[13.5px] leading-relaxed text-fg-3">
           Start one from a GitHub repo, or from a blank terminal.
         </p>
+        {needsModelKey && (
+          <Button size="sm" variant="secondary" className="mt-5" asChild>
+            <Link href={"/dashboard/models" as Route}>Add a model key first</Link>
+          </Button>
+        )}
       </div>
     );
   }

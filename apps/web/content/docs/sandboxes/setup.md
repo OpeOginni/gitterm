@@ -125,6 +125,26 @@ The provider must be enabled on the deployment and allowed by your plan. Creatio
 
 The values above are the defaults. What each limit does is in [Limits](/docs/reference/sandbox-plugin#limits).
 
+## Setup snapshots
+
+For a project with a slow setup, let the agent save a sandbox once dependencies are installed. The project's next sandboxes start from it, ready to run.
+
+```jsonc
+"options": { "account": "e2b", "accounts": { "...": {} }, "snapshots": true }
+```
+
+- Works on E2B, Daytona, Vercel and Boat, with your own key or a Gitterm plan. On a plan, snapshots need Pro or Growth; see [Plans](/docs/account/plans-and-billing#plans).
+- The agent gets a `sandbox_snapshot` tool. OpenCode asks before each save or delete; allow `gitterm.sandbox.snapshot` under [Approvals](#approvals) to skip the prompt.
+- A project can have several snapshots, such as one with dependencies and one with dependencies and a database. New sandboxes start from the project's newest one unless the agent picks another.
+- When a lockfile changed since a snapshot, the agent is told, so it can save a new one. The old one is deleted.
+- Snapshots stay in the provider account until deleted. On a Gitterm plan they are listed under **Agent sandboxes** in the dashboard, where you can delete them.
+
+To start every sandbox from a snapshot you made yourself, set `snapshot` on the account instead. The agent then does not manage snapshots for that account.
+
+```jsonc
+"e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "snapshot": "my-snapshot:latest" }
+```
+
 ## Approvals
 
 OpenCode asks you before each of these actions. The resource is what a saved rule matches.

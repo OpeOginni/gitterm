@@ -44,6 +44,7 @@ function Command({ value }: { value: string }) {
       <CopyButton
         value={value}
         icon
+        installLocation="hero"
         className="size-8 justify-center bg-transparent px-0 hover:bg-fill-2 [&_[data-label]]:sr-only"
       />
     </div>
@@ -254,7 +255,8 @@ const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }
     body: (
       <>
         The agent starts a sandbox on the provider you set and syncs your working tree. Ignored
-        files like <code>.env</code> stay home.
+        files like <code>.env</code> stay home. With setup snapshots on, the next sandbox starts
+        with dependencies already installed.
       </>
     ),
     used: ["sandbox_create", "sandbox_sync"],
@@ -626,8 +628,8 @@ export function Anywhere() {
           <div className={cell}>
             <h3 className={h3}>Your phone or browser</h3>
             <p className={cn(cellText, "mb-5")}>
-              Open the workspace&apos;s pairing link on your phone, your laptop or any browser.
-              Pause it when you are done and pick up later.
+              Scan a QR code to open the workspace in the OpenCode app on your phone, or open it in
+              any browser. Pause it when you are done and pick up later.
             </p>
             <WorkspacesCard />
           </div>
@@ -822,7 +824,7 @@ export function Cta() {
         <p className="mx-auto mt-[18px] max-w-[34rem] text-fg-3">
           Add the plugin to OpenCode, or start a cloud workspace. Open source and self-hostable.
         </p>
-        <InstallCommand command={INSTALL_SANDBOX} className="mt-[18px]" />
+        <InstallCommand command={INSTALL_SANDBOX} className="mt-[18px]" location="cta" />
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
             href="/dashboard"
