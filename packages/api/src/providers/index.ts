@@ -7,6 +7,7 @@ import { daytonaProvider } from "./daytona";
 import { e2bProvider } from "./e2b";
 import { railwayProvider } from "./railway";
 import { vercelProvider } from "./vercel";
+import { withSandboxHandles } from "./sandbox-handles";
 
 export * from "./compute";
 export { awsProvider } from "./aws";
@@ -81,6 +82,7 @@ export async function getProviderByCloudProviderId(
   cloudProviderKey: string,
   providerId?: string,
 ): Promise<ComputeProvider> {
-  if (cloudProviderKey === "aws" && providerId) return new AwsProvider(providerId);
-  return getProvider(cloudProviderKey);
+  if (cloudProviderKey === "aws" && providerId)
+    return withSandboxHandles(new AwsProvider(providerId), providerId);
+  return withSandboxHandles(getProvider(cloudProviderKey), providerId);
 }

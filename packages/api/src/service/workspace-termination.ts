@@ -184,6 +184,61 @@ export async function processWorkspaceTermination(userId: string, workspaceId: s
   }
 }
 
+/**
+ * A user's delete request. The intent is queued before any provider call, so a failed or
+ * interrupted provider deletion is retried by the worker instead of being forgotten:
+ * - Our queue entry is leased while this request works on it, so the worker does not race us.
+ * - Success removes the entry (only our generation; a late provisioning requeue survives).
+ * - Failure releases the lease for an immediate worker retry; the workspace is already
+ *   terminated for the user and for billing, so the request reports background cleanup.
+ * - AWS cleanup runs in the background as before; its lease simply expires and the worker
+ *   confirms or retries it.
+ * A second request for a workspace whose cleanup is still pending retries it immediately.
+ */
+export async function deleteWorkspaceForUser(userId: string, workspaceId: string) {
+  const owned = await db.query.workspace.findFirst({
+    columns: { id: true },
+    where: and(eq(workspace.id, workspaceId), eq(workspace.userId, userId)),
+  });
+  if (!owned) throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+
+  const leaseUntil = new Date(Date.now() + CLEANUP_LEASE_MS);
+  const [claimed] = await db
+    .insert(workspaceTermination)
+    .values({ workspaceId, leaseUntil })
+    .onConflictDoUpdate({
+      target: workspaceTermination.workspaceId,
+      set: { leaseUntil },
+      setWhere: available(),
+    })
+    .returning();
+  const current = () => db.query.workspace.findFirst({ where: eq(workspace.id, workspaceId) });
+  // The worker holds it and is terminating it right now.
+  if (!claimed)
+    return { workspace: await current(), success: true as const, cleanupInBackground: true };
+
+  const ours = and(
+    eq(workspaceTermination.workspaceId, workspaceId),
+    eq(workspaceTermination.generation, claimed.generation),
+    eq(workspaceTermination.leaseUntil, leaseUntil),
+  );
+  try {
+    const result = await terminateWorkspace(userId, workspaceId);
+    if (!result.cleanupInBackground) await db.delete(workspaceTermination).where(ours);
+    return result;
+  } catch (error) {
+    await db.update(workspaceTermination).set({ leaseUntil: null }).where(ours);
+    console.error(
+      `Workspace ${workspaceId} provider cleanup failed; the worker will retry:`,
+      error,
+    );
+    const workspaceRow = await current();
+    // Before marking (e.g. a database error), nothing was terminated: report the failure.
+    if (workspaceRow?.status !== "terminated") throw error;
+    return { workspace: workspaceRow, success: true as const, cleanupInBackground: true };
+  }
+}
+
 /** Bound provider concurrency so deleting a large bot does not overwhelm the DB or provider. */
 export async function processWorkspaceTerminations(rows: { id: string; userId: string }[]) {
   let terminated = 0;

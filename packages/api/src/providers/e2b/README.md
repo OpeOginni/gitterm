@@ -27,6 +27,15 @@ Subscribe to at least these events:
 - `sandbox.lifecycle.resumed`
 - `sandbox.lifecycle.killed`
 
+## Templates
+
+E2B fixes a sandbox's size per template, so every machine size is its own template
+(`<name>`, `<name>-sm`, `<name>-lg`). Build them into your E2B account with
+`E2B_API_KEY=... bun run e2b:template-build`. This includes the `gitterm-sandbox`
+templates that managed sandboxes start from; build only those with
+`bun run e2b:build --agent sandbox` in `packages/api`, or the `sandbox` option of the
+Publish Workspace Runtime Images workflow.
+
 ## Reference
 
 Field definitions live in `packages/schema/src/provider-registry.ts`.
