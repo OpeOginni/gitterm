@@ -4,6 +4,17 @@ TypeScript SDK for the [GitTerm](https://gitterm.dev) API: create sandboxed work
 repository, run an agent in them, and relay the questions it asks back to a human. Used by the
 `gitterm` CLI, the OpenCode plugin, and integrations such as Slack bots.
 
+## What is in the package
+
+| Import                 | Use it to                                                                          | Needs                  |
+| ---------------------- | ---------------------------------------------------------------------------------- | ---------------------- |
+| `@gitterm/sdk`         | Create cloud workspaces, run an agent in them, and answer its questions            | A GitTerm API token    |
+| `@gitterm/sdk/sandbox` | Run commands in a plain remote sandbox for a local agent or script                 | A plan or provider key |
+| `@gitterm/sdk/direct`  | Use the workspace and run API on your own provider account, with no GitTerm server | A provider key         |
+
+Most of this document covers the first. Jump to [Sandboxes](#sandboxes) or
+[Direct provider mode](#direct-provider-mode) for the other two.
+
 ## Install
 
 ```sh
@@ -45,78 +56,13 @@ try {
 }
 ```
 
-Every integration you can attach, personal or admin-provided, is a **connection** with one shape.
-Reference each one the way you remember it:
-
-```ts
-await client.workspaces.create({
-  repo: "https://github.com/acme/product",
-  connections: [
-    "github", // integration key: the GitHub connection that covers acme, or the shared one
-    "Linear", // a connection name, as shown under Integrations (case-insensitive)
-    "3f7d0c2e-…", // or an id from connections.list()
-  ],
-});
-```
-
-An integration key works when it is unambiguous: `github` picks by the repository's owner;
-`google`, `mcp`, and `executor` need exactly one connection of that kind. Names are not unique, so
-a name shared by two connections is rejected with both ids; use the id or rename one. At most one
-GitHub and one Google connection can be attached; MCP and Executor connections are unlimited.
-
-GitHub tokens and Google workload credentials are issued inside the workspace; the SDK caller does
-not receive or forward them.
-
 `result()` returns only on successful completion. If the agent asks something and no handler is
 registered, it throws `AgentRunError` with code `INPUT_REQUIRED` and the current `error.run`.
 Register `onPermission` / `onQuestion` handlers for interactive runs, or use the event relay below.
 The quick start's `finally` deliberately terminates the workspace on any error; omit that cleanup
 if your application needs to keep a blocked run available for a later answer.
 
-`askHuman` is your side of an event relay: show the request, wait for an answer, and return an
-`AgentRunReply`. This terminal example gives up after ten minutes:
-
-```ts
-import { createInterface } from "node:readline/promises";
-import type { AgentRunInputRequest, AgentRunReply } from "@gitterm/sdk";
-
-async function prompt(text: string, signal: AbortSignal): Promise<string | null> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return (await rl.question(text, { signal })).trim();
-  } catch {
-    return null; // the deadline passed
-  } finally {
-    rl.close();
-  }
-}
-
-async function askHuman(request: AgentRunInputRequest): Promise<AgentRunReply> {
-  const deadline = AbortSignal.timeout(10 * 60_000);
-  if (request.kind === "permission") {
-    // request.title, e.g. "bash: rm -rf dist"
-    const answer = await prompt(`Allow ${request.title}? [yes/always/no] `, deadline);
-    if (answer === null) return { type: "permission", response: "reject" };
-    return {
-      type: "permission",
-      response: answer === "always" ? "always" : answer === "yes" ? "once" : "reject",
-    };
-  }
-  const answers: Record<string, string[]> = {};
-  for (const question of request.questions) {
-    const labels = question.options.map((option) => option.label).join(" | ");
-    const answer = await prompt(`${question.header}: ${question.question} [${labels}] `, deadline);
-    if (answer === null) return { type: "question", reject: true }; // nobody answered in time
-    answers[question.key] = question.multiple ? answer.split(",").map((s) => s.trim()) : [answer];
-  }
-  return { type: "question", answers };
-}
-```
-
-Rejecting a permission or a question ends the agent's turn; the run then finishes as
-`completed` or `failed` with what it managed to do. The rest of this document explains each
-step in depth. Direct provider mode, which runs the same API against your own cloud account
-without a GitTerm server, is described at the [end](#direct-provider-mode).
+See [Questions and permission prompts](#questions-and-permission-prompts) for a complete relay.
 
 ## Configuration
 
@@ -193,6 +139,28 @@ finishes tearing down resources after the call returns.
 ## Workspaces
 
 ### Integrations and connections
+
+Every integration you can attach, personal or admin-provided, is a **connection** with one shape.
+Reference each one the way you remember it:
+
+```ts
+await client.workspaces.create({
+  repo: "https://github.com/acme/product",
+  connections: [
+    "github", // integration key: the GitHub connection that covers acme, or the shared one
+    "Linear", // a connection name, as shown under Integrations (case-insensitive)
+    "3f7d0c2e-…", // or an id from connections.list()
+  ],
+});
+```
+
+An integration key works when it is unambiguous: `github` picks by the repository's owner;
+`google`, `mcp`, and `executor` need exactly one connection of that kind. Names are not unique, so
+a name shared by two connections is rejected with both ids; use the id or rename one. At most one
+GitHub and one Google connection can be attached; MCP and Executor connections are unlimited.
+
+GitHub tokens and Google workload credentials are issued inside the workspace; the SDK caller does
+not receive or forward them.
 
 `client.integrations` works the same way for every provider. `catalog()` tells you which
 integrations the admin has enabled and whether each allows **personal** connections (you create
@@ -674,8 +642,49 @@ Question options are normalised at the runtime boundary: labels and descriptions
 OpenCode's copied "Type your own answer" entry is removed and enables `custom: true`, and
 duplicate and blank labels are dropped. Hosted users need the API redeployed for this to take effect.
 
-The quick start above shows a complete relay. Rejecting a permission or dismissing a question
-ends the turn: OpenCode records a failed tool call and the run finishes. A run left
+`askHuman` is your side of an event relay: show the request, wait for an answer, and return an
+`AgentRunReply`. This terminal example gives up after ten minutes:
+
+```ts
+import { createInterface } from "node:readline/promises";
+import type { AgentRunInputRequest, AgentRunReply } from "@gitterm/sdk";
+
+async function prompt(text: string, signal: AbortSignal): Promise<string | null> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return (await rl.question(text, { signal })).trim();
+  } catch {
+    return null; // the deadline passed
+  } finally {
+    rl.close();
+  }
+}
+
+async function askHuman(request: AgentRunInputRequest): Promise<AgentRunReply> {
+  const deadline = AbortSignal.timeout(10 * 60_000);
+  if (request.kind === "permission") {
+    // request.title, e.g. "bash: rm -rf dist"
+    const answer = await prompt(`Allow ${request.title}? [yes/always/no] `, deadline);
+    if (answer === null) return { type: "permission", response: "reject" };
+    return {
+      type: "permission",
+      response: answer === "always" ? "always" : answer === "yes" ? "once" : "reject",
+    };
+  }
+  const answers: Record<string, string[]> = {};
+  for (const question of request.questions) {
+    const labels = question.options.map((option) => option.label).join(" | ");
+    const answer = await prompt(`${question.header}: ${question.question} [${labels}] `, deadline);
+    if (answer === null) return { type: "question", reject: true }; // nobody answered in time
+    answers[question.key] = question.multiple ? answer.split(",").map((s) => s.trim()) : [answer];
+  }
+  return { type: "question", answers };
+}
+```
+
+Rejecting a permission or dismissing a question
+ends the turn: OpenCode records a failed tool call and the run finishes as `completed` or
+`failed` with what it managed to do. A run left
 `awaiting_input` keeps its workspace awake until the run's execution deadline, when it is
 cancelled. If the workspace stops anyway (paused or deleted), the run is cancelled with
 `"Workspace paused while waiting for input"`.
@@ -823,8 +832,7 @@ need GitTerm's API package or tRPC server types.
 ## Versioning
 
 `@gitterm/sdk` follows semver. Before 1.0, a minor bump (`0.1` → `0.2`) may contain breaking
-changes and lists them in [CHANGELOG.md](./CHANGELOG.md) with a migration note; patch releases
-never change public types or behaviour. Pin `~0.2.0` if you want patches only.
+changes; patch releases never change public types or behaviour. Pin `~0.12.0` if you want patches only.
 
 ## Obtaining a token programmatically
 

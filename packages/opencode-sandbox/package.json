@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/opencode-sandbox",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Let your OpenCode agent run builds, tests, and previews in remote sandboxes while the session stays local",
   "keywords": [
     "e2b",
@@ -14,6 +14,11 @@
   "homepage": "https://gitterm.dev",
   "license": "MIT",
   "author": "Opeyemi Oginni",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OpeOginni/gitterm.git",
+    "directory": "packages/opencode-sandbox"
+  },
   "files": [
     "dist",
     "README.md"

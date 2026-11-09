@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/discord-bot",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Discord bot that runs a coding agent on your repository in a GitTerm sandbox",
   "keywords": [
     "agent",
@@ -12,6 +12,11 @@
   "homepage": "https://gitterm.dev",
   "license": "MIT",
   "author": "Opeyemi Oginni",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OpeOginni/gitterm.git",
+    "directory": "packages/discord-bot"
+  },
   "bin": {
     "gitterm-discord-bot": "dist/cli.js"
   },

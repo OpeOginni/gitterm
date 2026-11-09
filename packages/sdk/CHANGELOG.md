@@ -4,6 +4,12 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.12.2
+
+### Changed
+
+- Package metadata only: license, repository and homepage on npm. No code changes.
+
 ## 0.12.1
 
 ### Changed
