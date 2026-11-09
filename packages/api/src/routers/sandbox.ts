@@ -381,6 +381,7 @@ export const sandboxRouter = router({
           metadata: input.metadata ?? {},
           idempotencyKey: input.idempotencyKey ?? null,
           autoTerminateAt: new Date(now.getTime() + lifetimeMs),
+          snapshotId: snapshot?.id ?? null,
           startedAt: now,
           updatedAt: now,
         },

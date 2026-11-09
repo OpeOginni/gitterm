@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   jsonb,
   pgTable,
   text,
@@ -146,6 +147,10 @@ export const workspace = pgTable(
     metadata: jsonb("metadata").$type<Record<string, string>>().notNull().default({}),
     /** When set, the reaper terminates the workspace at this time regardless of activity. */
     autoTerminateAt: timestamp("auto_terminate_at"),
+    /** The snapshot an agent sandbox started from; cleared when the snapshot is deleted. */
+    snapshotId: uuid("snapshot_id").references((): AnyPgColumn => sandboxSnapshot.id, {
+      onDelete: "set null",
+    }),
     /**
      * Held by the create or restart working on a `pending` workspace, renewed while it runs.
      * Reconciling with the provider leaves the workspace to it until this passes.
