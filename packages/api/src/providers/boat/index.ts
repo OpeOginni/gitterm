@@ -1,4 +1,4 @@
-import { BoxApi, Configuration, waitUntilReady } from "@asciidev/box-sdk";
+import { BoatApi, Configuration, waitUntilReady } from "@boatdev/sdk";
 import env from "@gitterm/env/server";
 import type { BoatImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
@@ -38,6 +38,7 @@ const DEFAULT_AGENT_SERVE = {
 } as const;
 
 type BoatHandle = {
+  // Keep the stored key so existing workspaces remain accessible.
   boxId: string;
   repoDir: string;
   serve: { command: string; port: number };
@@ -92,12 +93,12 @@ export class BoatProvider implements ComputeProvider {
     return config as BoatConfig;
   }
 
-  private async getClient(): Promise<BoxApi> {
+  private async getClient(): Promise<BoatApi> {
     const { apiKey } = await this.getConfig();
     if (!apiKey) throw new Error("Boat API key is not configured.");
-    return new BoxApi(
+    return new BoatApi(
       new Configuration({
-        basePath: "https://ascii.dev/api/box/v1",
+        basePath: "https://boat.dev/api/v1",
         accessToken: apiKey,
         middleware: [{ post: rejectWithBoatError }],
       }),
@@ -129,14 +130,14 @@ export class BoatProvider implements ComputeProvider {
   }
 
   private async runCommand(
-    client: BoxApi,
+    client: BoatApi,
     boxId: string,
     command: string,
     cwd?: string,
     timeoutSeconds = 60,
   ): Promise<string> {
     const result = await client.command({
-      boxId,
+      sandboxId: boxId,
       commandRequest: { command, cwd, timeoutSeconds },
     });
     if (result.type !== "command.finished") {
@@ -149,7 +150,7 @@ export class BoatProvider implements ComputeProvider {
   }
 
   private async writeAgentFiles(
-    client: BoxApi,
+    client: BoatApi,
     boxId: string,
     spec: WorkspaceProvisioningSpec | null,
     repoDir: string,
@@ -175,7 +176,7 @@ export class BoatProvider implements ComputeProvider {
         continue;
       }
       await client.writeFile({
-        boxId,
+        sandboxId: boxId,
         fileWriteRequest: { path, content: file.contentBase64, encoding: "base64" },
       });
       if (file.mode)
@@ -184,7 +185,7 @@ export class BoatProvider implements ComputeProvider {
   }
 
   private async setupAgent(
-    client: BoxApi,
+    client: BoatApi,
     boxId: string,
     commands: string[] | undefined,
   ): Promise<void> {
@@ -193,7 +194,7 @@ export class BoatProvider implements ComputeProvider {
     }
   }
 
-  private async startAgentServer(client: BoxApi, handle: BoatHandle): Promise<void> {
+  private async startAgentServer(client: BoatApi, handle: BoatHandle): Promise<void> {
     const escaped = handle.serve.command.replace(/'/g, `'"'"'`);
     await this.runCommand(
       client,
@@ -204,7 +205,7 @@ export class BoatProvider implements ComputeProvider {
   }
 
   private async getPrivateUrl(
-    client: BoxApi,
+    client: BoatApi,
     boxId: string,
     port: number,
   ): Promise<{
@@ -238,7 +239,7 @@ export class BoatProvider implements ComputeProvider {
     const repoDir = spec?.repo?.name ?? "workspace";
     const created = await logger.step("create-box", () =>
       client.create({
-        createBoxRequest: {
+        createSandboxRequest: {
           type: metadata.size,
           ttlSeconds: null,
           noEnv: true,
@@ -247,7 +248,7 @@ export class BoatProvider implements ComputeProvider {
       }),
     );
     const handle: BoatHandle = {
-      boxId: created.box.id,
+      boxId: created.sandbox.id,
       repoDir,
       serve,
       sshPublicKey: spec?.sshPublicKey,
@@ -257,8 +258,8 @@ export class BoatProvider implements ComputeProvider {
       await logger.step("wait-for-box", () => waitUntilReady(client, handle.boxId));
       await logger.step("name-box", () =>
         client.update({
-          boxId: handle.boxId,
-          updateBoxRequest: { name: `gitterm-${config.workspaceId}` },
+          sandboxId: handle.boxId,
+          updateSandboxRequest: { name: `gitterm-${config.workspaceId}` },
         }),
       );
       await logger.step("create-workspace-directory", () =>
@@ -351,7 +352,7 @@ export class BoatProvider implements ComputeProvider {
       return { ...workspaceInfo, externalVolumeId: handle.boxId, volumeCreatedAt: now };
     } catch (error) {
       await client
-        .stop({ boxId: handle.boxId, stopRequest: { force: true } })
+        .stop({ sandboxId: handle.boxId, stopRequest: { force: true } })
         .catch(() => undefined);
       throw error;
     }
@@ -374,7 +375,7 @@ export class BoatProvider implements ComputeProvider {
     const handle = parseHandle(externalId);
     const client = await this.getClient();
     const result = await client.command({
-      boxId: handle.boxId,
+      sandboxId: handle.boxId,
       commandRequest: { command, cwd: handle.repoDir, timeoutSeconds: 60 },
     });
     if (result.type !== "command.finished") {
@@ -385,13 +386,13 @@ export class BoatProvider implements ComputeProvider {
 
   async pauseWorkspace(externalId: string): Promise<void> {
     const handle = parseHandle(externalId);
-    await (await this.getClient()).stop({ boxId: handle.boxId });
+    await (await this.getClient()).stop({ sandboxId: handle.boxId });
   }
 
   async resumeWorkspace(externalId: string): Promise<void> {
     const handle = parseHandle(externalId);
     const client = await this.getClient();
-    await client.resume({ boxId: handle.boxId, resumeRequest: { noEnv: true } });
+    await client.resume({ sandboxId: handle.boxId, resumeRequest: { noEnv: true } });
     await waitUntilReady(client, handle.boxId);
     await this.startAgentServer(client, handle);
   }
@@ -400,10 +401,13 @@ export class BoatProvider implements ComputeProvider {
     const handle = parseHandle(externalId);
     const { apiKey } = await this.getConfig();
     // boat requires the target id as an explicit delete confirmation (409 without it).
-    const response = await fetch(`https://ascii.dev/api/box/v1/boxes/${handle.boxId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${apiKey}`, "X-Ascii-Confirm-Delete": handle.boxId },
-    });
+    const response = await fetch(
+      `https://boat.dev/api/v1/sandboxes/${encodeURIComponent(handle.boxId)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${apiKey}`, "X-Ascii-Confirm-Delete": handle.boxId },
+      },
+    );
     // 404: the box is already gone, so the workspace can be marked terminated.
     if (!response.ok && response.status !== 404) {
       throw new Error(`Boat deletion failed (${response.status}).`);
@@ -413,7 +417,7 @@ export class BoatProvider implements ComputeProvider {
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {
     try {
       const handle = parseHandle(externalId);
-      const box = (await (await this.getClient()).get({ boxId: handle.boxId })).box;
+      const box = (await (await this.getClient()).get({ sandboxId: handle.boxId })).sandbox;
       if (box.state === "ready" || box.state === "idle" || box.state === "running") {
         return { status: "running", lastActiveAt: box.updatedAt ?? undefined };
       }
@@ -433,8 +437,8 @@ export class BoatProvider implements ComputeProvider {
     await (
       await this.getClient()
     ).update({
-      boxId: handle.boxId,
-      updateBoxRequest: { ttlSeconds: Math.ceil(timeoutMs / 1000) },
+      sandboxId: handle.boxId,
+      updateSandboxRequest: { ttlSeconds: Math.ceil(timeoutMs / 1000) },
     });
   }
 
@@ -456,7 +460,7 @@ export class BoatProvider implements ComputeProvider {
     if (!handle.sshPublicKey) throw new Error("Boat SSH requires a user SSH public key.");
     const client = await this.getClient();
     const response = await client.sshKey({
-      boxId: handle.boxId,
+      sandboxId: handle.boxId,
       sshKeyRequest: { key: handle.sshPublicKey },
     });
     const host = response.machineIp;

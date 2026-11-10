@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { BoxApi, Configuration, waitUntilReady, type Box } from "@asciidev/box-sdk";
+import { BoatApi, Configuration, waitUntilReady, type Sandbox } from "@boatdev/sdk";
 import {
   accountHash,
   classifyFailure,
@@ -15,13 +15,13 @@ import {
 } from "./types";
 
 const profile = SANDBOX_PROVIDER_PROFILES.boat;
-const BASE_URL = "https://ascii.dev/api/box/v1";
+const BASE_URL = "https://boat.dev/api/v1";
 const NAME_PREFIX = "gitterm-sbx-";
 /** Boat's file write limit is unpublished; larger uploads are split and joined in the box. */
 const WRITE_CHUNK_BYTES = 4 * 1024 * 1024;
 const failure = (error: unknown, action: string) => classifyFailure("Boat", error, action);
 
-function infoFrom(box: Box): SandboxProviderInfo {
+function infoFrom(box: Sandbox): SandboxProviderInfo {
   const match = new RegExp(`^${NAME_PREFIX}([a-f0-9]{10})-`).exec(box.name ?? "");
   return {
     id: box.id,
@@ -50,11 +50,11 @@ export function createBoatSandboxTransport(config: {
   snapshot?: string;
 }): SandboxTransport {
   if (!config.apiKey?.trim()) throw new SandboxProviderError("auth", "Boat apiKey is empty.");
-  const client = new BoxApi(new Configuration({ basePath: BASE_URL, accessToken: config.apiKey }));
+  const client = new BoatApi(new Configuration({ basePath: BASE_URL, accessToken: config.apiKey }));
 
   const get = async (id: string) => {
     try {
-      return (await client.get({ boxId: id })).box;
+      return (await client.get({ sandboxId: id })).sandbox;
     } catch (error) {
       throw failure(error, "read the sandbox");
     }
@@ -68,7 +68,7 @@ export function createBoatSandboxTransport(config: {
   async function command(id: string, script: string, timeoutMs = 60_000) {
     try {
       const result = (await client.command({
-        boxId: id,
+        sandboxId: id,
         commandRequest: {
           command: script,
           timeoutSeconds: Math.min(600, Math.max(1, Math.ceil(timeoutMs / 1000))),
@@ -85,7 +85,7 @@ export function createBoatSandboxTransport(config: {
   }
 
   async function destroy(id: string) {
-    const response = await fetch(`${BASE_URL}/boxes/${encodeURIComponent(id)}`, {
+    const response = await fetch(`${BASE_URL}/sandboxes/${encodeURIComponent(id)}`, {
       method: "DELETE",
       // Boat requires the box id again as an explicit confirmation.
       headers: { Authorization: `Bearer ${config.apiKey}`, "X-Ascii-Confirm-Delete": id },
@@ -116,7 +116,7 @@ export function createBoatSandboxTransport(config: {
       try {
         id = (
           await client.create({
-            createBoxRequest: {
+            createSandboxRequest: {
               type: (input.machine?.size as typeof config.size) ?? config.size,
               ttlSeconds: Math.ceil(input.timeoutMs / 1000),
               noEnv: true,
@@ -126,13 +126,13 @@ export function createBoatSandboxTransport(config: {
               ...(input.env ? { env: input.env } : {}),
             },
           })
-        ).box.id;
+        ).sandbox.id;
       } catch (error) {
         throw failure(error, "create a sandbox");
       }
       try {
         await waitUntilReady(client, id);
-        await client.update({ boxId: id, updateBoxRequest: { name } });
+        await client.update({ sandboxId: id, updateSandboxRequest: { name } });
         return infoFrom(await get(id));
       } catch (error) {
         return discardFailedCreate(destroy, id, failure(error, "prepare the sandbox"));
@@ -141,7 +141,7 @@ export function createBoatSandboxTransport(config: {
 
     async info(id) {
       try {
-        return infoFrom((await client.get({ boxId: id })).box);
+        return infoFrom((await client.get({ sandboxId: id })).sandbox);
       } catch (error) {
         const classified = failure(error, "read the sandbox");
         if (classified.code === "not_found") return terminated(id);
@@ -154,8 +154,8 @@ export function createBoatSandboxTransport(config: {
       let cursor: string | null | undefined;
       try {
         do {
-          const page = await client.boxes({ limit: 100, cursor });
-          for (const box of page.boxes) {
+          const page = await client.sandboxes({ limit: 100, cursor });
+          for (const box of page.sandboxes) {
             const info = infoFrom(box);
             if (info.labels.gitterm_workload !== "sandbox" || info.state === "terminated") continue;
             const wanted = labels.gitterm_account ? accountHash(labels.gitterm_account) : undefined;
@@ -174,7 +174,7 @@ export function createBoatSandboxTransport(config: {
 
     async pause(id) {
       try {
-        await client.stop({ boxId: id });
+        await client.stop({ sandboxId: id });
       } catch (error) {
         throw failure(error, "stop the sandbox");
       }
@@ -189,7 +189,7 @@ export function createBoatSandboxTransport(config: {
 
     async resume(id) {
       try {
-        await client.resume({ boxId: id, resumeRequest: { noEnv: true } });
+        await client.resume({ sandboxId: id, resumeRequest: { noEnv: true } });
         await waitUntilReady(client, id);
       } catch (error) {
         throw failure(error, "resume the sandbox");
@@ -199,8 +199,8 @@ export function createBoatSandboxTransport(config: {
     async keepAlive(id, timeoutMs) {
       try {
         await client.update({
-          boxId: id,
-          updateBoxRequest: { ttlSeconds: Math.ceil(timeoutMs / 1000) },
+          sandboxId: id,
+          updateSandboxRequest: { ttlSeconds: Math.ceil(timeoutMs / 1000) },
         });
       } catch (error) {
         throw failure(error, "extend the sandbox lifetime");
@@ -228,7 +228,7 @@ export function createBoatSandboxTransport(config: {
         for (let offset = 0; offset < Math.max(1, data.byteLength); offset += WRITE_CHUNK_BYTES) {
           const part = data.byteLength <= WRITE_CHUNK_BYTES ? path : `${path}.part${parts.length}`;
           await client.writeFile({
-            boxId: id,
+            sandboxId: id,
             fileWriteRequest: {
               path: part,
               content: Buffer.from(data.subarray(offset, offset + WRITE_CHUNK_BYTES)).toString(
@@ -254,7 +254,7 @@ export function createBoatSandboxTransport(config: {
       await running(id);
       try {
         // Boat returns files up to 5 MiB through this API.
-        const result = await client.readFile({ boxId: id, path, encoding: "base64" });
+        const result = await client.readFile({ sandboxId: id, path, encoding: "base64" });
         return new Uint8Array(Buffer.from(result.content, "base64"));
       } catch (error) {
         throw failure(error, "download a file");
@@ -280,7 +280,7 @@ export function createBoatSandboxTransport(config: {
     snapshots: {
       async create(id, name) {
         try {
-          await client.saveNamedSnapshot({ namedSnapshotSaveRequest: { boxId: id, name } });
+          await client.saveNamedSnapshot({ namedSnapshotSaveRequest: { sandboxId: id, name } });
           // Saving runs in the background; the name is usable once it is ready.
           const deadline = Date.now() + 30 * 60_000;
           while (true) {

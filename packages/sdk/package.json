@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/sdk",
-  "version": "0.12.2",
+  "version": "0.13.1",
   "description": "TypeScript SDK for GitTerm: cloud workspaces, agent runs, and remote sandboxes",
   "homepage": "https://gitterm.dev",
   "license": "MIT",
@@ -45,12 +45,12 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts src/sandbox/index.ts src/sandbox/store.ts --outdir dist --target node --format esm --external @trpc/client --external eventsource --external e2b --external @asciidev/box-sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/direct/index.ts src/sandbox/index.ts src/sandbox/store.ts --outdir dist --target node --format esm --external @trpc/client --external eventsource --external e2b --external @boatdev/sdk --external @daytonaio/sdk --external @vercel/sandbox && tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run check-types && bun run build",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@asciidev/box-sdk": "^0.0.34",
+    "@boatdev/sdk": "^1.13.0",
     "@daytonaio/sdk": "^0.207.0",
     "@trpc/client": "^11.8.1",
     "@vercel/sandbox": "^3.2.1",

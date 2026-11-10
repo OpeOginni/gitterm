@@ -48,4 +48,4 @@ Update registered webhook URLs from `ascii.handleWebhook` to `boat.handleWebhook
 
 Deploy the proxy alongside the API to use the renamed `X-GitTerm-Boat-Token` routing header.
 
-The upstream SDK (`@asciidev/box-sdk`), API hostname, and `X-Ascii-*` headers retain their upstream names; these are not GitTerm provider aliases.
+The upstream SDK is `@boatdev/sdk`, using `https://boat.dev/api/v1`. The delete-confirmation header remains `X-Ascii-Confirm-Delete`. Stored workspace handles retain their `boxId` key so existing workspaces remain accessible.
