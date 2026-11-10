@@ -160,6 +160,11 @@ export type GittermClient = {
     list(workspace: WorkspaceRef, options?: AgentRunListOptions): Promise<AgentRunListResult>;
     get(run: RunRef): Promise<AgentRun>;
     messages(run: RunRef): Promise<AgentRunMessage[]>;
+    /**
+     * A file from the run's workspace, by path relative to the checkout (e.g. a report the agent
+     * wrote). The workspace must be running. At most 25 MB.
+     */
+    readFile(run: RunRef, path: string): Promise<Uint8Array>;
     cancel(run: RunRef): Promise<{ cancelled: boolean }>;
     /** Answer the permission prompt or question a run is `awaiting_input` on. */
     respond(run: RunRef, input: { requestId: string; reply: AgentRunReply }): Promise<AgentRun>;
@@ -869,6 +874,11 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
             Omit<AgentRunMessage, "parts"> & { parts?: AgentRunMessage["parts"] }
           >;
           return messages.map((message) => ({ ...message, parts: message.parts ?? [] }));
+        }),
+      readFile: (ref: RunRef, path: string) =>
+        run(async () => {
+          const result = await trpc.run.readFile.query({ ...runTargetOf(ref), path });
+          return Buffer.from(result?.contentBase64 ?? "", "base64");
         }),
       cancel: (ref: RunRef) => run(async () => trpc.run.cancel.mutate(runTargetOf(ref))),
       respond,

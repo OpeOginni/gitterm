@@ -7,13 +7,13 @@ import type { ChatAdapter, ChatThread } from "./types.js";
  */
 export type StatusText = { message: string; indicator: string };
 
-export const WORKING: StatusText = { message: "Working on it…", indicator: "is working on it…" };
+export const WORKING: StatusText = { message: "On it…", indicator: "is on it…" };
 export const WAITING_FOR_APPROVAL: StatusText = {
-  message: "Waiting for approval below…",
+  message: "Waiting for your OK below…",
   indicator: "",
 };
 export const WAITING_FOR_ANSWER: StatusText = {
-  message: "Waiting for an answer below…",
+  message: "Waiting for your answer below…",
   indicator: "",
 };
 
@@ -50,26 +50,20 @@ export async function openStatusLine(
       ? await adapter.indicate(thread, WORKING.indicator).catch(() => false)
       : false;
   const id = native ? undefined : (messageId ?? (await adapter.post(thread, WORKING.message)));
-  const startedAt = Date.now();
   let current = WORKING;
   let done = false;
-
-  const elapsed = () => {
-    const ms = Date.now() - startedAt;
-    return ms >= TICK_MS ? ` (${minutes(ms)} min)` : "";
-  };
   // Updates go out one at a time, so a late "working" can't land after the final line.
   let queue: Promise<unknown> = Promise.resolve();
   const send = (update: () => Promise<unknown> | undefined) =>
     (queue = queue.then(update).catch(noop));
   const render = () =>
     send(() => {
-      if (id) return adapter.edit(thread, id, `${current.message}${elapsed()}`);
-      const text = current.indicator && `${current.indicator}${elapsed()}`;
-      return adapter.indicate?.(thread, text);
+      if (id) return adapter.edit(thread, id, current.message);
+      return adapter.indicate?.(thread, current.indicator);
     });
+  // Only the native indicator needs re-showing; a status message stays put.
   const timer = setInterval(() => {
-    if (id || current.indicator) void render();
+    if (!id && current.indicator) void render();
   }, TICK_MS);
   // Prompts can close after the run ended; nothing may overwrite the final line.
   const end = () => {

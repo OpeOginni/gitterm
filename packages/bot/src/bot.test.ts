@@ -173,6 +173,10 @@ function fakeGitterm(
         calls.responses.push(input);
         return run("x", "running");
       },
+      readFile: async (_ref: unknown, path: string) => {
+        if (path === "missing.pdf") throw new GittermError("NOT_FOUND", "File not found");
+        return new Uint8Array(path === "huge.bin" ? 2_000_000 : 3);
+      },
       cancel: async (ref: { id: string }) => {
         calls.cancelled.push(ref.id);
         streamFor(ref.id).push({ type: "run.cancelled", run: run(ref.id, "cancelled") });
@@ -189,11 +193,13 @@ function fakeAdapter(history: HistoryMessage[] = [], indicator?: boolean) {
     posts: [] as string[],
     edits: new Map<string, string>(),
     removed: [] as string[],
-    replies: [] as Array<{ markdown: string; footer: string }>,
+    replies: [] as Array<{ markdown: string }>,
     prompts: [] as ChatPrompt[],
     settled: [] as string[],
     indicators: [] as string[],
     marks: [] as string[],
+    uploads: [] as string[][],
+    reactions: [] as string[],
   };
   const adapter: ChatAdapter = {
     platform: "test",
@@ -216,8 +222,14 @@ function fakeAdapter(history: HistoryMessage[] = [], indicator?: boolean) {
     async remove(_thread, id) {
       log.removed.push(id);
     },
-    async reply(_thread, markdown, footer) {
-      log.replies.push({ markdown, footer });
+    async reply(_thread, markdown) {
+      log.replies.push({ markdown });
+    },
+    uploads: {
+      maxBytes: 1_000_000,
+      async send(_thread, files) {
+        log.uploads.push(files.map((file) => `${file.name}:${file.data.byteLength}`));
+      },
     },
     async ask(_thread, prompt) {
       log.prompts.push(prompt);
@@ -225,6 +237,9 @@ function fakeAdapter(history: HistoryMessage[] = [], indicator?: boolean) {
     },
     async settle(_thread, _id, _prompt, outcome) {
       log.settled.push(outcome);
+    },
+    async react(message, reaction) {
+      log.reactions.push(`${message.id}:${reaction}`);
     },
     async mark(message, state) {
       log.marks.push(`${message.id}:${state}`);
@@ -306,9 +321,9 @@ describe("createBot", () => {
       await until(() => gitterm.calls.created.length === 1);
       chat.send({ id: "101", text: "queued", inThread: true });
       chat.send({ id: "102", text: "stop", inThread: true });
-      await until(() => [...chat.log.edits.values()].includes("Stopped by Alice."));
+      await until(() => [...chat.log.edits.values()].includes("Stopped, as Alice asked."));
       // The queued request says so too, rather than leave its 👀 hanging.
-      await until(() => chat.log.posts.includes("Stopped by Alice."), "queued stop reply");
+      await until(() => chat.log.posts.includes("Stopped, as Alice asked."), "queued stop reply");
       expect(chat.log.marks).toContain("101:failed");
       resume();
       await tick();
@@ -344,7 +359,7 @@ describe("createBot", () => {
       await bot.start();
       chat.send({ id: "100", text: "first" });
       await until(() =>
-        [...chat.log.edits.values()].some((text) => text.includes("took too long")),
+        [...chat.log.edits.values()].some((text) => text.includes("ran out of time")),
       );
       resume();
       await tick();
@@ -388,7 +403,7 @@ describe("createBot", () => {
     const chat = fakeAdapter();
     const file = await stateFile();
     let attempts = 0;
-    chat.adapter.reply = async (_thread, _text, _footer, delivery) => {
+    chat.adapter.reply = async (_thread, _text, delivery) => {
       attempts++;
       await delivery!.recordSent(1);
       throw new Error("chat unavailable");
@@ -410,9 +425,9 @@ describe("createBot", () => {
     await bot.stop();
     const next = fakeAdapter();
     let resumedAt = -1;
-    next.adapter.reply = async (_thread, text, _footer, delivery) => {
+    next.adapter.reply = async (_thread, text, delivery) => {
       resumedAt = delivery!.sent;
-      next.log.replies.push({ markdown: text, footer: "" });
+      next.log.replies.push({ markdown: text });
     };
     const restarted = createBot({ ...options, adapter: next.adapter });
     try {
@@ -468,8 +483,63 @@ describe("createBot", () => {
     });
     await until(() => chat.log.replies.length === 1, "reply");
     expect(chat.log.replies[0]?.markdown).toBe("Opened #12");
-    expect(chat.log.replies[0]?.footer).toContain("acme/app");
     await until(() => chat.log.removed.includes("s1"), "status removal");
+  });
+
+  test("sends the files the agent attached and says which could not be sent", async () => {
+    const gitterm = fakeGitterm({ connections: [github] });
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "chart the latency" });
+    await until(() => gitterm.calls.runs.length === 1, "run");
+    expect(gitterm.calls.created[0]?.additionalAgentInstructions).toContain("[attach:");
+
+    gitterm.stream("run1").push({
+      type: "run.completed",
+      run: run("run1", "completed", {
+        finalText:
+          "Here is the chart.\n\n[attach: .gitterm-files/chart.png]\n[attach: missing.pdf]\n[attach: huge.bin]",
+      }),
+    });
+    await until(() => chat.log.uploads.length === 1, "upload");
+    expect(chat.log.replies[0]?.markdown).toBe("Here is the chart.");
+    expect(chat.log.uploads[0]).toEqual(["chart.png:3"]);
+    await until(
+      () => chat.log.posts.some((post) => post.includes("couldn't attach everything")),
+      "note",
+    );
+    const note = chat.log.posts.find((post) => post.includes("couldn't attach everything"))!;
+    expect(note).toContain("I couldn't find missing.pdf");
+    expect(note).toContain("huge.bin is over Test's 1 MB limit");
+  });
+
+  test("a reaction can be the whole reply, like a person's", async () => {
+    const gitterm = fakeGitterm({ connections: [github] });
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "thanks, that fixed it!" });
+    await until(() => gitterm.calls.runs.length === 1, "run");
+    gitterm.stream("run1").push({
+      type: "run.completed",
+      run: run("run1", "completed", { finalText: "[react: heart]" }),
+    });
+    await until(() => chat.log.marks.includes("100:done"), "done");
+    expect(chat.log.reactions).toEqual(["100:heart"]);
+    expect(chat.log.replies).toEqual([]);
   });
 
   test("uses your own GitHub token instead of a GitHub connection", async () => {
@@ -657,9 +727,9 @@ describe("createBot", () => {
     await until(() => chat.log.prompts.length === 1);
 
     chat.send({ id: "101", text: "stop", inThread: true });
-    await until(() => chat.log.edits.get("s1") === "Stopped by Alice.", "stopped status");
+    await until(() => chat.log.edits.get("s1") === "Stopped, as Alice asked.", "stopped status");
     expect(gitterm.calls.cancelled).toEqual(["run1"]);
-    expect(chat.log.settled).toEqual(["The run ended before anyone answered."]);
+    expect(chat.log.settled).toEqual(["I finished before anyone answered."]);
     expect(gitterm.calls.responses).toEqual([]);
   });
 
@@ -817,7 +887,7 @@ describe("createBot", () => {
       // Three tries, a second apart and then two.
       for (let i = 0; i < 100 && !chat.log.posts.some((text) => text.includes("run1")); i++)
         await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(chat.log.posts.join("\n")).toContain("couldn't post its reply here");
+      expect(chat.log.posts.join("\n")).toContain("couldn't post my answer here");
       chat.send({ id: "101", text: "more", inThread: true });
       await until(() => gitterm.calls.runs.length === 2, "next run in the thread");
     } finally {
@@ -840,10 +910,10 @@ describe("createBot", () => {
       chat.send({ id: "100", text: "work" });
       await until(() => gitterm.calls.runs.length === 1);
       chat.send({ id: "101", text: "reset", inThread: true });
-      await until(() => chat.log.posts.some((text) => text.includes("before resetting")));
+      await until(() => chat.log.posts.some((text) => text.includes("let me finish first")));
       // Another channel has its own sandbox, so its reset goes ahead.
       chat.send({ id: "200", text: "reset", thread: { channel: "C2", thread: "200" } });
-      await until(() => chat.log.posts.some((text) => text.includes("no acme/app sandbox yet")));
+      await until(() => chat.log.posts.some((text) => text.includes("haven't set up acme/app")));
     } finally {
       await bot.stop();
     }
@@ -879,7 +949,7 @@ describe("createBot", () => {
     try {
       await bot.start();
       chat.send({ id: "300", text: "reset", thread: { channel: "C1", thread: "300" } });
-      await until(() => chat.log.posts.some((text) => text.includes("before resetting")));
+      await until(() => chat.log.posts.some((text) => text.includes("let me finish first")));
       // Once the recovered run finishes, the sandbox is free again.
       gitterm.stream("run7").push({
         type: "run.completed",
@@ -893,7 +963,7 @@ describe("createBot", () => {
         return !state.inFlight["C1:100"];
       }, "recovered run cleanup");
       chat.send({ id: "301", text: "reset", thread: { channel: "C1", thread: "301" } });
-      await until(() => chat.log.posts.some((text) => text.includes("no acme/app sandbox yet")));
+      await until(() => chat.log.posts.some((text) => text.includes("haven't set up acme/app")));
     } finally {
       await bot.stop();
     }
@@ -956,11 +1026,11 @@ describe("createBot", () => {
 
     expect(chat.log.posts).toEqual([]);
     expect(chat.log.indicators).toEqual([
-      "is working on it…",
-      "is creating a sandbox for acme/app (the first start takes a few minutes)…",
-      "is working on it…",
+      "is on it…",
+      "is getting set up on acme/app (the first time takes a few minutes)…",
+      "is on it…",
       "", // hidden while the approval prompt waits
-      "is working on it…",
+      "is on it…",
       "", // cleared once the answer is posted
     ]);
   });
@@ -978,7 +1048,7 @@ describe("createBot", () => {
     await bot.start();
     chat.send({ id: "100", text: "hello" });
     await until(() => gitterm.calls.runs.length === 1);
-    expect(chat.log.posts[0]).toBe("Working on it…");
+    expect(chat.log.posts[0]).toBe("On it…");
     gitterm.stream("run1").push({
       type: "run.failed",
       run: run("run1", "failed", { error: "model unavailable" }),
@@ -1004,7 +1074,7 @@ describe("createBot", () => {
     await bot.stop();
     await tick();
     expect(gitterm.calls.cancelled).toEqual([]);
-    expect(chat.log.edits.get("s1")).toBe("Working on it…");
+    expect(chat.log.edits.get("s1")).toBe("On it…");
 
     await bot.start();
     gitterm.stream("run1").push({
@@ -1056,7 +1126,7 @@ describe("createBot", () => {
 
     chat.send({ id: "100", text: "why is login slow?" });
     await until(() => chat.log.posts.length === 1, "repository question");
-    expect(chat.log.posts[0]).toContain("Which repository?");
+    expect(chat.log.posts[0]).toContain("Which repository");
     expect(gitterm.calls.runs).toEqual([]);
 
     chat.send({ id: "101", text: "in acme/api, why is login slow?", inThread: true });
@@ -1092,7 +1162,9 @@ describe("createBot", () => {
       author: { id: "U1", name: "Alice", guest: true },
     });
     await until(() => chat.log.posts.length === 2, "refusals");
-    expect(chat.log.posts.every((post) => post.includes("only take requests"))).toBe(true);
+    expect(chat.log.posts.every((post) => post.includes("can't take requests from you yet"))).toBe(
+      true,
+    );
     expect(gitterm.calls.runs).toEqual([]);
   });
 
@@ -1208,7 +1280,7 @@ describe("saved settings changed while the bot runs", () => {
       await change({ allowedUsers: ["U2"] });
       chat.send({ id: "100", text: "hello" });
       await until(() => chat.log.posts.length === 1);
-      expect(chat.log.posts[0]).toContain("only take requests");
+      expect(chat.log.posts[0]).toContain("can't take requests from you yet");
       expect(gitterm.calls.created).toHaveLength(0);
     } finally {
       await bot.stop();

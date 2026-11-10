@@ -11,6 +11,12 @@ export class RuntimeHttpError extends Error {
   }
 }
 
+export class FileTooLargeError extends Error {
+  constructor(readonly maxBytes: number) {
+    super(`File is larger than ${maxBytes} bytes`);
+  }
+}
+
 export function isSessionNotFound(error: unknown): boolean {
   return error instanceof RuntimeHttpError && error.status === 404;
 }

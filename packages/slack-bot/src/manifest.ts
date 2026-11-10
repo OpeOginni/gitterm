@@ -22,6 +22,7 @@ export function slackManifest(name = "GitTerm Agent") {
           "im:history",
           "chat:write",
           "files:read",
+          "files:write",
           "reactions:write",
           "users:read",
         ],

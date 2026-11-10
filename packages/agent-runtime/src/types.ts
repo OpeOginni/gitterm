@@ -70,6 +70,11 @@ export interface OpencodeRuntime {
     answers: string[][],
   ): Promise<void>;
   rejectQuestion(sessionId: string, requestId: string): Promise<void>;
+  /**
+   * A file inside the workspace directory, by path relative to it. Throws `FileTooLargeError`
+   * once more than `maxBytes` arrive, so a huge file is never held in memory.
+   */
+  readFile(path: string, maxBytes: number): Promise<Uint8Array>;
 }
 
 export function parseModelRef(model: string | undefined) {

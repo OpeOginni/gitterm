@@ -17,6 +17,8 @@ import {
   buildPrompt,
   interpretPermissionReply,
   interpretTypedAnswer,
+  megabytes,
+  readAnswer,
 } from "./prompt.js";
 import { checkSetup } from "./preflight.js";
 import { applySavedConfig } from "./saved.js";
@@ -39,6 +41,7 @@ import type {
   ChatPrompt,
   ChatThread,
   ChatUser,
+  OutgoingFile,
 } from "./types.js";
 import {
   createWorkspaceManager,
@@ -123,15 +126,16 @@ function describeFailure(
   error: unknown,
   outcome: { stoppedBy?: ChatUser; timedOut?: boolean } = {},
 ): string {
-  if (outcome.stoppedBy) return `Stopped by ${outcome.stoppedBy.name}.`;
-  if (outcome.timedOut) return "This took too long, so I stopped the agent. Try a smaller request.";
+  if (outcome.stoppedBy) return `Stopped, as ${outcome.stoppedBy.name} asked.`;
+  if (outcome.timedOut)
+    return "I ran out of time on this one. Could you break it into smaller pieces?";
   if (error instanceof AgentRunError) {
-    if (error.code === "RUN_CANCELLED") return "The run was cancelled.";
-    const reason = error.run.error ? `: ${error.run.error.slice(0, ERROR_PREVIEW)}` : ".";
-    return `The agent failed${reason}`;
+    if (error.code === "RUN_CANCELLED") return "This was cancelled before I finished.";
+    const reason = error.run.error ? ` (${error.run.error.slice(0, ERROR_PREVIEW)})` : "";
+    return `I hit a problem and couldn't finish${reason}. Mention me to try again.`;
   }
   const message = error instanceof Error ? error.message : String(error);
-  return `Something went wrong: ${message.slice(0, ERROR_PREVIEW)}`;
+  return `I hit a problem: ${message.slice(0, ERROR_PREVIEW)}`;
 }
 
 async function attachmentsFor(files: ChatFile[], signal: AbortSignal) {
@@ -309,7 +313,7 @@ export function createBot(initial: BotOptions): Bot {
       ? `${result.by.name}: ${describeAnswer(result.answer)}`
       : signal.aborted
         ? String(signal.reason)
-        : `No answer within ${minutes(inputTimeoutMs)} min, so the agent moved on.`;
+        : `No answer within ${minutes(inputTimeoutMs)} min, so I carried on without it.`;
     if (result)
       log.info("Agent input answered", {
         botId: options.botId,
@@ -335,13 +339,13 @@ export function createBot(initial: BotOptions): Bot {
     if (open.prompt.kind === "permission") {
       const response = interpretPermissionReply(message.text);
       if (!response) {
-        void say(message.thread, "Reply *yes*, *always*, or *no*, or use the buttons above.");
+        void say(message.thread, "Just reply *yes*, *always*, or *no*, or use the buttons above.");
         return true;
       }
       if (response === "always" && !options.allowAlways) {
         void say(
           message.thread,
-          "Persistent approvals are disabled. Reply yes for this request only, or no.",
+          "I can't take a standing approval here. Reply *yes* for this time only, or *no*.",
         );
         return true;
       }
@@ -352,7 +356,7 @@ export function createBot(initial: BotOptions): Bot {
     if (!labels) {
       void say(
         message.thread,
-        "That does not match any option. Press a button or reply with the option's number.",
+        "I didn't catch which option you meant. Press a button or reply with its number.",
       );
       return true;
     }
@@ -397,6 +401,39 @@ export function createBot(initial: BotOptions): Bot {
       answers[question.key] = answer.labels;
     }
     return { type: "question", answers };
+  }
+
+  /** The files the agent listed, read from its sandbox; problems are said in the thread. */
+  async function sendFiles(job: Job, run: RunRef, paths: string[]) {
+    const { uploads } = adapter;
+    if (!uploads) return;
+    const files: OutgoingFile[] = [];
+    const problems: string[] = [];
+    for (const path of paths) {
+      const name = path.split("/").pop() || path;
+      try {
+        // One at a time: together they would arrive as a single batched response.
+        const data = await gitterm.runs.readFile(run, path);
+        if (data.byteLength > uploads.maxBytes)
+          problems.push(
+            `${name} is over ${adapter.displayName}'s ${megabytes(uploads.maxBytes)} MB limit`,
+          );
+        else files.push({ name, data: Buffer.from(data.buffer, data.byteOffset, data.byteLength) });
+      } catch (error) {
+        log.warn("Could not read a file the agent attached", { thread: job.key, path }, error);
+        problems.push(`I couldn't find ${path}`);
+      }
+    }
+    if (files.length > 0) {
+      await uploads.send(job.thread, files).catch((error: unknown) => {
+        log.warn("Could not upload the agent's files", { thread: job.key }, error);
+        problems.push(
+          `${adapter.displayName} didn't accept the upload: ${error instanceof Error ? error.message.slice(0, ERROR_PREVIEW) : error}`,
+        );
+      });
+    }
+    if (problems.length > 0)
+      await say(job.thread, `I couldn't attach everything:\n• ${problems.join("\n• ")}`);
   }
 
   async function follow(
@@ -446,7 +483,7 @@ export function createBot(initial: BotOptions): Bot {
               seen.add(event.request.id);
               void relay(event.request);
             } else if (event.type === "input.resolved") {
-              relays.get(event.requestId)?.abort("Answered outside this thread.");
+              relays.get(event.requestId)?.abort("Answered elsewhere.");
             } else if (event.type === "run.completed") {
               completed = event.run;
               break;
@@ -471,30 +508,35 @@ export function createBot(initial: BotOptions): Bot {
       try {
         if (completed.outputAvailable === false && completed.finalText === null)
           throw new Error("The run's output is unavailable");
-        for (let attempt = 0; ; attempt++) {
-          const request = store.inFlight()[job.key];
-          try {
-            await adapter.reply(
-              job.thread,
-              completed.finalText?.trim() || "Done. The agent finished without a written reply.",
-              `${repoLabel(job.repo)} · GitTerm`,
-              {
+        const answer = readAnswer(completed.finalText ?? "");
+        // Reacting needs the request's message, which a run reattached after a restart lacks.
+        const reaction = job.message && adapter.react ? answer.reaction : undefined;
+        // A reaction or files can be the whole reply, as from a person.
+        const files = adapter.uploads ? answer.paths : [];
+        const text = answer.text || (reaction || files.length > 0 ? "" : "Done.");
+        if (text) {
+          for (let attempt = 0; ; attempt++) {
+            const request = store.inFlight()[job.key];
+            try {
+              await adapter.reply(job.thread, text, {
                 sent: request?.deliveredParts ?? 0,
                 async recordSent(sent) {
                   if (request)
                     await store.setInFlight(job.key, { ...request, deliveredParts: sent });
                 },
-              },
-            );
-            break;
-          } catch (error) {
-            if (attempt >= 2) throw error;
-            await cancellable(
-              new Promise((resolve) => setTimeout(resolve, 1_000 * (attempt + 1))),
-              stopping,
-            );
+              });
+              break;
+            } catch (error) {
+              if (attempt >= 2) throw error;
+              await cancellable(
+                new Promise((resolve) => setTimeout(resolve, 1_000 * (attempt + 1))),
+                stopping,
+              );
+            }
           }
         }
+        if (files.length > 0) await sendFiles(job, run, files);
+        if (reaction) await adapter.react?.(job.message!, reaction).catch(noop);
       } catch (error) {
         // Stopping keeps the result for the next start; otherwise say so once and move on,
         // rather than hold the thread until a restart.
@@ -502,7 +544,7 @@ export function createBot(initial: BotOptions): Bot {
         log.error("Could not post the agent's reply", { thread: job.key, run: run.id }, error);
         await say(
           job.thread,
-          `The agent finished, but I couldn't post its reply here. Open run ${run.id} in GitTerm to see it.`,
+          `I finished, but couldn't post my answer here. It's saved in GitTerm as run ${run.id}.`,
         );
       }
       delivered = true;
@@ -528,8 +570,8 @@ export function createBot(initial: BotOptions): Bot {
       for (const controller of relays.values()) {
         controller.abort(
           stopping.aborted
-            ? "The bot stopped before anyone answered; it asks again when it is back."
-            : "The run ended before anyone answered.",
+            ? "I had to step away before anyone answered. I'll ask again when I'm back."
+            : "I finished before anyone answered.",
         );
       }
       status.stop();
@@ -690,7 +732,7 @@ export function createBot(initial: BotOptions): Bot {
   const askForRepo = (thread: ChatThread) =>
     say(
       thread,
-      `Which repository? Mention me again and name one of: ${knownRepos.map(repoLabel).join(", ")}.`,
+      `Which repository should I look at? Mention me again with one of: ${knownRepos.map(repoLabel).join(", ")}.`,
     );
 
   async function command(name: string, message: ChatMessage, repo: Repo | undefined) {
@@ -698,7 +740,8 @@ export function createBot(initial: BotOptions): Bot {
     if (name === "stop") {
       const jobs = pending.get(key);
       const current = active.get(key);
-      if (!jobs?.size && !current) return say(message.thread, "Nothing is running in this thread.");
+      if (!jobs?.size && !current)
+        return say(message.thread, "I'm not working on anything in this thread.");
       const stopping = new Set([...(jobs ?? []), ...(current ? [current] : [])]);
       for (const job of stopping) {
         job.stoppedBy = message.author;
@@ -715,13 +758,13 @@ export function createBot(initial: BotOptions): Bot {
         message.thread,
         [
           repo
-            ? `I run a coding agent on ${repoLabel(repo)} in a GitTerm sandbox.`
-            : "I run a coding agent in a GitTerm sandbox.",
+            ? `Hi! I work on ${repoLabel(repo)}. Mention me with a question or a task and I'll pick it up here in the thread.`
+            : "Hi! Mention me with a question or a task and I'll pick it up here in the thread.",
           others.length
-            ? `Name a repository in a thread's first message to work on it instead: ${others.map(repoLabel).join(", ")}.`
+            ? `I can also work on ${others.map(repoLabel).join(", ")}; just name it when you start a thread.`
             : "",
-          "Mention me with a question or a task; every thread is its own session, so follow up in the thread.",
-          "Commands: *stop* cancels the work in this thread, *status* shows what I can access, *reset* replaces the sandbox with a fresh one.",
+          "Keep talking to me in the same thread and I'll remember what we did.",
+          "Say *stop* to have me drop what I'm doing, *status* to see what I can reach, or *reset* to give me a clean copy of the repository.",
         ]
           .filter(Boolean)
           .join("\n"),
@@ -741,7 +784,10 @@ export function createBot(initial: BotOptions): Bot {
             job.sandbox === sandbox || (current !== null && job.run?.workspaceId === current.id),
         )
       ) {
-        return say(message.thread, "Stop or finish the work in this sandbox before resetting it.");
+        return say(
+          message.thread,
+          "I'm still working on something there. Stop it or let me finish first.",
+        );
       }
       const terminated = await lock(`repo:${space}:${repoKey(repo)}`, () =>
         workspaces.reset(repo, space),
@@ -749,8 +795,8 @@ export function createBot(initial: BotOptions): Bot {
       return say(
         message.thread,
         terminated
-          ? `Terminated the ${repoLabel(repo)} sandbox. The next message creates a fresh one; threads start new sessions.`
-          : `There is no ${repoLabel(repo)} sandbox yet; the next message creates one.`,
+          ? `Done. I'll start from a clean copy of ${repoLabel(repo)} next time, so earlier threads won't carry over.`
+          : `There's nothing to reset yet: I haven't set up ${repoLabel(repo)}.`,
       );
     }
     // status: what this thread can reach, so people can check before asking.
@@ -766,7 +812,7 @@ export function createBot(initial: BotOptions): Bot {
         message.direct
           ? "This conversation has its own sandbox."
           : `Who can use me: ${allowedUsers ? `${allowedUsers.size} allowed people` : "everyone in this channel"}${options.allowGuests ? "" : ", no guests"}`,
-        active.has(key) ? "An agent is working in this thread right now." : "",
+        active.has(key) ? "I'm working on something in this thread right now." : "",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -780,7 +826,10 @@ export function createBot(initial: BotOptions): Bot {
     if (!allowed(message.author)) {
       if (answerTyped(key, message)) return;
       if (message.mentioned) {
-        void say(message.thread, "Sorry, I only take requests from people my admin allowed.");
+        void say(
+          message.thread,
+          "Sorry, I can't take requests from you yet. Ask whoever set me up to add you.",
+        );
       }
       return;
     }
@@ -816,7 +865,7 @@ export function createBot(initial: BotOptions): Bot {
     ) {
       void say(
         message.thread,
-        "The request queue is full. Please try again after existing work finishes.",
+        "I've got too much on right now. Try me again once I've finished something.",
       );
       return;
     }
@@ -965,7 +1014,10 @@ export function createBot(initial: BotOptions): Bot {
       env: options.env ?? {},
       setup: options.setup ?? [],
       model,
-      instructions: agentInstructions(adapter.displayName, options.instructions),
+      instructions: agentInstructions(adapter.displayName, options.instructions, {
+        uploadLimit: adapter.uploads?.maxBytes,
+        react: Boolean(adapter.react),
+      }),
       overrides: options.workspace,
       log,
     });

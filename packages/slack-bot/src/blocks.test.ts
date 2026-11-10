@@ -25,11 +25,12 @@ describe("slack blocks", () => {
     );
   });
 
-  test("long answers split across sections with the footer on the last message", () => {
-    const messages = answerMessages("word ".repeat(8000), "acme/app · GitTerm");
+  test("long answers split across messages of plain sections, without a signature", () => {
+    const messages = answerMessages("word ".repeat(8000));
     expect(messages.length).toBeGreaterThan(1);
-    expect(JSON.stringify(messages.at(-1)?.blocks.at(-1))).toContain("acme/app · GitTerm");
-    expect(JSON.stringify(messages[0]?.blocks)).not.toContain("GitTerm");
+    expect(
+      messages.flatMap((message) => message.blocks).every((block) => block.type === "section"),
+    ).toBe(true);
   });
 
   test("question buttons carry the prompt id and wrap at five per row", () => {
@@ -42,7 +43,5 @@ describe("slack blocks", () => {
 });
 
 test("agent output cannot ping the whole channel", () => {
-  expect(JSON.stringify(answerMessages("hey <!channel> and <!here|here>", "f"))).not.toContain(
-    "<!",
-  );
+  expect(JSON.stringify(answerMessages("hey <!channel> and <!here|here>"))).not.toContain("<!");
 });

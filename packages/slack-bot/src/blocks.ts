@@ -62,22 +62,15 @@ export function toMrkdwn(markdown: string): string {
     .join("\n");
 }
 
-/** The agent's answer as messages of section blocks; the last one carries the footer. */
-export function answerMessages(
-  markdown: string,
-  footer: string,
-): Array<{ text: string; blocks: Block[] }> {
+/** The agent's answer as messages of section blocks. */
+export function answerMessages(markdown: string): Array<{ text: string; blocks: Block[] }> {
   // Agent output never pings a whole channel.
   const quiet = markdown.replace(/<!(channel|here|everyone)[^>]*>/g, "@$1");
   const sections = splitMessage(toMrkdwn(tablesToCode(quiet)), SECTION_LIMIT);
   const messages: Array<{ text: string; blocks: Block[] }> = [];
   for (let index = 0; index < sections.length; index += SECTIONS_PER_MESSAGE) {
     const group = sections.slice(index, index + SECTIONS_PER_MESSAGE);
-    const last = index + SECTIONS_PER_MESSAGE >= sections.length;
-    messages.push({
-      text: group.join("\n\n"),
-      blocks: [...group.map(section), ...(last ? [{ type: "divider" }, context(footer)] : [])],
-    });
+    messages.push({ text: group.join("\n\n"), blocks: group.map(section) });
   }
   return messages;
 }

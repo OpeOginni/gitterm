@@ -38,7 +38,11 @@ for (const directory of ["sdk", "bot", "slack-bot", "discord-bot"]) {
         );
   const tarball = resolve(consumer, packed.split("\n").at(-1)!);
   const packaged = JSON.parse(run("tar", ["-xOf", tarball, "package/package.json"], consumer));
-  if (directory !== "sdk" && packaged.dependencies["@gitterm/sdk"] !== "^0.9.0") {
+  if (
+    directory !== "sdk" &&
+    packaged.dependencies["@gitterm/sdk"] !==
+      manifest.dependencies["@gitterm/sdk"].replace("workspace:", "")
+  ) {
     throw new Error(`${manifest.name} does not require the new SDK`);
   }
   tarballs.push(tarball);
@@ -57,7 +61,7 @@ import { createBot, downloadImage } from '@gitterm/bot';
 import * as slack from '@gitterm/slack-bot';
 import * as discord from '@gitterm/discord-bot';
 const client = createGittermClient({ token: 'gt_smoke', serverUrl: 'https://example.com' });
-for (const value of [client.bots.self, client.bots.acquireLease, client.bots.releaseLease,
+for (const value of [client.runs.readFile, client.bots.self, client.bots.acquireLease, client.bots.releaseLease,
   client.integrations.connections.resolve, createBot, downloadImage]) assert.equal(typeof value, 'function');
 assert.ok(Object.keys(slack).length); assert.ok(Object.keys(discord).length);
 console.log('Packed SDK and Slack/Discord packages import successfully in a clean npm consumer.');
