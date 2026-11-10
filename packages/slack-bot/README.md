@@ -55,6 +55,9 @@ Slack over Socket Mode, so it needs no public URL.
 - **Native progress.** While it works, Slack shows _“Acme Agent is on it…”_ under the thread, the
   same indicator Slack's AI apps use. Workspaces that refuse it get a status message the bot keeps
   up to date instead.
+- **Native Stop.** Slack's Stop button cancels work in that thread with the same access checks as
+  `@Acme Agent stop`. Existing apps must add the `agent_session_stopped` bot event under
+  _Event Subscriptions_ and restart the bot on the updated SDK. No new scope is needed.
 - **Talks like a teammate.** Answers are plain messages in the first person, with no signature
   line, and the agent may react to a message (❤️ on a thank-you) instead of replying.
 - **Private DMs.** Message the bot directly, no mention needed. Each DM gets its own sandbox, so

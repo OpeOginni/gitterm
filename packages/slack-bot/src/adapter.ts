@@ -184,6 +184,26 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
         });
       });
 
+      app.event("agent_session_stopped", async ({ event, context }) => {
+        if (!sameTeam(context.teamId)) return;
+        // Bolt's event types do not include Slack's native Stop event yet.
+        const stopped = event as typeof event & {
+          channel: string;
+          thread_ts: string;
+          event_ts: string;
+          user: string;
+        };
+        events.message({
+          id: `stop:${stopped.event_ts}`,
+          thread: { channel: stopped.channel, thread: stopped.thread_ts },
+          author: await user(stopped.user),
+          text: "stop",
+          files: [],
+          mentioned: true,
+          inThread: true,
+        });
+      });
+
       // Plain thread replies only matter as answers to an open question; mentions arrive
       // through app_mention above.
       app.message(async ({ message, context }) => {
