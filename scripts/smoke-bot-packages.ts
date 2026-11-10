@@ -16,30 +16,28 @@ function run(command: string, args: string[], cwd: string) {
   return result.stdout.trim();
 }
 const tarballs: string[] = [];
-for (const directory of ["sdk", "bot", "slack-bot", "discord-bot"]) {
+for (const directory of ["agent-runtime", "sdk", "bot", "slack-bot", "discord-bot"]) {
   const manifest = JSON.parse(
     await readFile(join(root, "packages", directory, "package.json"), "utf8"),
   );
-  // Match release tooling: npm packs the SDK; Bun rewrites workspace runtime dependencies
-  // for bots. SDK devDependencies include private, intentionally unversioned packages.
-  const packed =
-    directory === "sdk"
-      ? JSON.parse(
-          run(
-            "npm",
-            ["pack", "--ignore-scripts", "--json", "--pack-destination", consumer],
-            join(root, "packages", directory),
-          ),
-        )[0].filename
-      : run(
-          "bun",
-          ["pm", "pack", "--ignore-scripts", "--quiet", "--destination", consumer],
+  // Match release tooling: npm packs the runtime and SDK; Bun rewrites bot workspace dependencies.
+  const packed = !directory.endsWith("bot")
+    ? JSON.parse(
+        run(
+          "npm",
+          ["pack", "--ignore-scripts", "--json", "--pack-destination", consumer],
           join(root, "packages", directory),
-        );
+        ),
+      )[0].filename
+    : run(
+        "bun",
+        ["pm", "pack", "--ignore-scripts", "--quiet", "--destination", consumer],
+        join(root, "packages", directory),
+      );
   const tarball = resolve(consumer, packed.split("\n").at(-1)!);
   const packaged = JSON.parse(run("tar", ["-xOf", tarball, "package/package.json"], consumer));
   if (
-    directory !== "sdk" &&
+    directory.endsWith("bot") &&
     packaged.dependencies["@gitterm/sdk"] !==
       manifest.dependencies["@gitterm/sdk"].replace("workspace:", "")
   ) {
@@ -57,14 +55,20 @@ await writeFile(
   `
 import assert from 'node:assert/strict';
 import { createGittermClient } from '@gitterm/sdk';
+import { getRuntime } from '@gitterm/agent-runtime';
+import { createSandboxTransport, SandboxProviderError as indexError } from '@gitterm/agent-runtime/sandbox/index';
+import { SandboxProviderError } from '@gitterm/agent-runtime/sandbox/types';
 import { createBot, downloadImage } from '@gitterm/bot';
 import * as slack from '@gitterm/slack-bot';
 import * as discord from '@gitterm/discord-bot';
+assert.equal(indexError, SandboxProviderError);
+assert.equal(typeof getRuntime, 'function');
+assert.equal(createSandboxTransport({ provider: 'boat', apiKey: 'boat_smoke' }).provider, 'boat');
 const client = createGittermClient({ token: 'gt_smoke', serverUrl: 'https://example.com' });
 for (const value of [client.runs.readFile, client.bots.self, client.bots.acquireLease, client.bots.releaseLease,
   client.integrations.connections.resolve, createBot, downloadImage]) assert.equal(typeof value, 'function');
 assert.ok(Object.keys(slack).length); assert.ok(Object.keys(discord).length);
-console.log('Packed SDK and Slack/Discord packages import successfully in a clean npm consumer.');
+console.log('Packed runtime, SDK and Slack/Discord packages import successfully in a clean npm consumer.');
 `,
 );
 console.log(run("node", ["smoke.mjs"], consumer));

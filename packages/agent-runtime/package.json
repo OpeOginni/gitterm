@@ -1,13 +1,36 @@
 {
   "name": "@gitterm/agent-runtime",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Agent runtime and sandbox transports for GitTerm",
+  "homepage": "https://gitterm.dev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OpeOginni/gitterm.git",
+    "directory": "packages/agent-runtime"
+  },
+  "files": [
+    "dist"
+  ],
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./*": "./src/*.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
+    "build": "rm -rf dist && bun build $(find src -name '*.ts' ! -name '*.test.ts') --root src --outdir dist --target node --format esm --splitting --packages external && tsc -p tsconfig.build.json",
+    "prepublishOnly": "bun run check-types && bun run build",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
@@ -20,5 +43,8 @@
   "devDependencies": {
     "@gitterm/config": "workspace:*",
     "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

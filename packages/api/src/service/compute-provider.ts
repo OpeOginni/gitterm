@@ -45,7 +45,7 @@ const PROVIDER = {
 export async function ensureComputeProvider(): Promise<void> {
   if (!isComputeEnabled())
     throw new Error(
-      "Gitterm Compute is not configured: set DEPLOYMENT_MODE=managed, COMPUTE_URL and COMPUTE_SERVICE_TOKEN.",
+      "The managed provider is not configured: set DEPLOYMENT_MODE=managed, COMPUTE_URL and COMPUTE_SERVICE_TOKEN.",
     );
   const [provider] = await db
     .insert(cloudProvider)

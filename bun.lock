@@ -166,7 +166,7 @@
     },
     "packages/agent-runtime": {
       "name": "@gitterm/agent-runtime",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@boatdev/sdk": "^1.13.0",
         "@daytonaio/sdk": "^0.207.0",

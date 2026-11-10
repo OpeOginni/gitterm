@@ -1,7 +1,6 @@
 /**
- * gitterm.dev only: registers Gitterm Compute as a provider with its sizes (small, medium) and
- * marks the images Compute can run. Not part of the seed, so self-hosted deployments never
- * get it. Safe to rerun, e.g. after Compute gains an image.
+ * Registers the managed provider's sizes and supported images. Not part of the self-hosted
+ * seed. Safe to rerun after adding an image.
  */
 import { db, eq } from "@gitterm/db";
 import { cloudProvider, image, machineProfile } from "@gitterm/db/schema/cloud";
@@ -32,6 +31,6 @@ try {
   console.log(`  images: ${images.join(", ") || "none"}`);
   process.exit(0);
 } catch (error) {
-  console.error("Gitterm Compute setup failed:", error instanceof Error ? error.message : error);
+  console.error("Managed provider setup failed:", error instanceof Error ? error.message : error);
   process.exit(1);
 }
