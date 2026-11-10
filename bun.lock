@@ -452,7 +452,7 @@
     },
     "packages/slack-bot": {
       "name": "@gitterm/slack-bot",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "bin": {
         "gitterm-slack-bot": "dist/cli.js",
       },
