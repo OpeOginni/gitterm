@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/bot",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Chat-platform-agnostic engine for GitTerm agent bots: one sandbox per repository, one agent session per thread",
   "keywords": [
     "agent",

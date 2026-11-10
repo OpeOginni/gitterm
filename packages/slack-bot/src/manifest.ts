@@ -22,6 +22,7 @@ export function slackManifest(name = "GitTerm Agent") {
           "im:history",
           "chat:write",
           "files:read",
+          "files:write",
           "reactions:write",
           "users:read",
         ],
@@ -29,7 +30,13 @@ export function slackManifest(name = "GitTerm Agent") {
     },
     settings: {
       event_subscriptions: {
-        bot_events: ["app_mention", "message.channels", "message.groups", "message.im"],
+        bot_events: [
+          "app_mention",
+          "message.channels",
+          "message.groups",
+          "message.im",
+          "agent_session_stopped",
+        ],
       },
       interactivity: { is_enabled: true },
       socket_mode_enabled: true,

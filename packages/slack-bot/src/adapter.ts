@@ -1,4 +1,5 @@
 import type {
+  Reaction,
   ChatAdapter,
   ChatEvents,
   ChatFile,
@@ -59,6 +60,15 @@ type SlackFile = {
 };
 
 const HISTORY_LIMIT = 200;
+const SLACK_REACTIONS: Record<Reaction, string> = {
+  heart: "heart",
+  thumbsup: "+1",
+  tada: "tada",
+  smile: "smile",
+  pray: "pray",
+  rocket: "rocket",
+  fire: "fire",
+};
 
 function required(value: string | undefined, name: string): string {
   if (!value?.trim()) throw new Error(`${name} is required`);
@@ -171,6 +181,26 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
           files: ((event as { files?: SlackFile[] }).files ?? []).map(file),
           mentioned: true,
           inThread: Boolean(event.thread_ts),
+        });
+      });
+
+      app.event("agent_session_stopped", async ({ event, context }) => {
+        if (!sameTeam(context.teamId)) return;
+        // Bolt's event types do not include Slack's native Stop event yet.
+        const stopped = event as typeof event & {
+          channel: string;
+          thread_ts: string;
+          event_ts: string;
+          user: string;
+        };
+        events.message({
+          id: `stop:${stopped.event_ts}`,
+          thread: { channel: stopped.channel, thread: stopped.thread_ts },
+          author: await user(stopped.user),
+          text: "stop",
+          files: [],
+          mentioned: true,
+          inThread: true,
         });
       });
 
@@ -390,8 +420,8 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
       await client.chat.delete({ channel: thread.channel, ts: messageId });
     },
 
-    async reply(thread, markdown, footer, delivery) {
-      const messages = answerMessages(markdown, footer);
+    async reply(thread, markdown, delivery) {
+      const messages = answerMessages(markdown);
       for (let index = delivery?.sent ?? 0; index < messages.length; index++) {
         await client.chat.postMessage({
           channel: thread.channel,
@@ -400,6 +430,18 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
         });
         await delivery?.recordSent(index + 1);
       }
+    },
+
+    uploads: {
+      // Slack takes files up to 1 GB; GitTerm returns run files up to 25 MB.
+      maxBytes: 25_000_000,
+      async send(thread, files) {
+        await client.files.uploadV2({
+          channel_id: thread.channel,
+          thread_ts: thread.thread,
+          file_uploads: files.map((entry) => ({ file: entry.data, filename: entry.name })),
+        });
+      },
     },
 
     async ask(thread: ChatThread, prompt: ChatPrompt) {
@@ -446,6 +488,14 @@ export function createSlackAdapter(options: SlackAdapterOptions = {}): ChatAdapt
         }
         return false;
       }
+    },
+
+    async react(message, reaction) {
+      await client.reactions.add({
+        channel: message.thread.channel,
+        timestamp: message.id,
+        name: SLACK_REACTIONS[reaction],
+      });
     },
 
     async mark(message, state) {

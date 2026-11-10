@@ -40,7 +40,7 @@ Discord's gateway, so it needs no public URL.
 
 4. **Invite it.** Open the invite link the bot prints on startup and pick your server. It asks
    only for what it uses: view channels, send messages, create and post in threads, read history,
-   add reactions, and embed links.
+   add reactions, embed links, and attach files.
 
 5. **Mention it** in a channel: `@Acme Agent why does the login page flash on load?`
 
@@ -57,6 +57,8 @@ Discord's gateway, so it needs no public URL.
 - **Pick a repository per thread.** With `repos`, people name one in a thread's first message
   (`@Acme Agent in acme/api, why is login slow?`); a channel without a repository asks which one.
   The thread stays on that repository.
+- **Talks like a teammate.** Answers are plain messages in the first person, with no signature
+  line, and the agent may react to a message (❤️ on a thank-you) instead of replying.
 - **Credited pull requests.** The agent opens pull requests that start with "Requested by <name> in Discord", without linking the conversation (the repository may be public). The request gets 👀 when picked up, then ✅ or ❌.
 - **It asks back.** Agent questions appear as a card with a button per option (a menu for
   multiple choice or long lists, a dialog for a written answer). Tool approvals show _Allow
@@ -64,6 +66,9 @@ Discord's gateway, so it needs no public URL.
   option number, `yes`, or `no`.
 - **Images reach the agent.** PNG, JPEG, GIF, and WebP files up to 5 MB, posted with the mention
   or earlier in the thread, are attached to the run. Other files are only named.
+- **The agent can send files.** Screenshots, PDFs, CSVs, and other files the agent makes are
+  posted in the thread after its answer, up to 10 per answer and 10 MB each (Discord's limit for
+  bots). A bot invited before this needs the _Attach Files_ permission.
 - **Restarts are safe.** Runs live in GitTerm, not in the bot. A restarted bot reattaches to
   running work and posts the result. The state file only holds thread → run ids, so losing it
   costs thread continuity, never sandboxes (they are found by their tags).

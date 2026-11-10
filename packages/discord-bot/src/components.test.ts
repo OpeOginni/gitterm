@@ -36,9 +36,9 @@ describe("discord components", () => {
     expect(multi[0]?.components[0]).toMatchObject({ type: 3, max_values: 2 });
   });
 
-  test("answers fit messages and end with the footer as subtext", () => {
-    const contents = answerContents("x".repeat(5000), "acme/app · GitTerm");
+  test("answers fit messages and carry no signature", () => {
+    const contents = answerContents("x".repeat(5000));
     expect(contents.every((content) => content.length <= 2000)).toBe(true);
-    expect(contents.at(-1)).toEndWith("-# acme/app · GitTerm");
+    expect(contents.join("")).toBe("x".repeat(5000));
   });
 });

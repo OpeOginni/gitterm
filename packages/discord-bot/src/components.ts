@@ -29,11 +29,9 @@ export function parseCustomId(id: string) {
   return prefix === "gt" && promptId && control ? { promptId, control, value } : null;
 }
 
-/** The agent's answer as message contents; the last carries the footer as subtext. */
-export function answerContents(markdown: string, footer: string): string[] {
-  const chunks = splitMessage(tablesToCode(markdown), MESSAGE_LIMIT);
-  const last = chunks.length - 1;
-  return chunks.map((chunk, index) => (index === last ? `${chunk}\n-# ${footer}` : chunk));
+/** The agent's answer as message contents. */
+export function answerContents(markdown: string): string[] {
+  return splitMessage(tablesToCode(markdown), MESSAGE_LIMIT);
 }
 
 function embed(prompt: ChatPrompt, color: number): EmbedBuilder {

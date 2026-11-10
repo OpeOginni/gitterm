@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { questionAnswers } from "@gitterm/agent-runtime/replies";
-import { RuntimeHttpError } from "@gitterm/agent-runtime/http";
+import { FileTooLargeError, RuntimeHttpError } from "@gitterm/agent-runtime/http";
 import { and, db, desc, eq, inArray, sql } from "@gitterm/db";
 import { agentRun, type AgentRun, type AgentRunInputRequest } from "@gitterm/db/schema/agent-run";
 import { TRPCError } from "@trpc/server";
@@ -485,6 +485,31 @@ export async function getAgentRunMessages(workspaceId: string, runId: string, us
     if (live) return live.messages;
   }
   return [];
+}
+
+/** Largest file a run hands back, e.g. a report or screenshot for a chat thread. */
+const MAX_RUN_FILE_BYTES = 25_000_000;
+
+/** A file the run made, by path relative to the workspace checkout. */
+export async function readAgentRunFile(
+  workspaceId: string,
+  runId: string,
+  path: string,
+  userId: string,
+) {
+  await getOwnedRun(workspaceId, runId, userId);
+  const runtime = getRuntime(await getRuntimeTarget(workspaceId, userId));
+  const bytes = await runtime.readFile(path, MAX_RUN_FILE_BYTES).catch((error: unknown) => {
+    if (error instanceof FileTooLargeError)
+      throw new TRPCError({
+        code: "PAYLOAD_TOO_LARGE",
+        message: `Run files are returned up to ${MAX_RUN_FILE_BYTES / 1_000_000} MB`,
+      });
+    if (error instanceof RuntimeHttpError && (error.status === 404 || error.status === 400))
+      throw new TRPCError({ code: "NOT_FOUND", message: `File not found: ${path}` });
+    throw error;
+  });
+  return { contentBase64: Buffer.from(bytes).toString("base64") };
 }
 
 export async function respondToAgentRun(

@@ -29,6 +29,13 @@ export type ChatFile = {
   download(signal?: AbortSignal): Promise<string>;
 };
 
+/** Emoji the agent may react with, by name; adapters map them to the platform's own. */
+export const REACTIONS = ["heart", "thumbsup", "tada", "smile", "pray", "rocket", "fire"] as const;
+export type Reaction = (typeof REACTIONS)[number];
+
+/** A file the agent made, sent to the thread after its answer. */
+export type OutgoingFile = { name: string; data: Buffer };
+
 export type ChatMessage = {
   /** Platform message id (Slack `ts`, Discord snowflake). */
   id: string;
@@ -118,9 +125,17 @@ export interface ChatAdapter {
   reply(
     thread: ChatThread,
     markdown: string,
-    footer: string,
     delivery?: { sent: number; recordSent(sent: number): Promise<void> },
   ): Promise<void>;
+  /** Sending files the agent made. Optional; without it the agent is told it cannot send files. */
+  readonly uploads?: {
+    /** Largest file the platform takes from the bot, in bytes. */
+    maxBytes: number;
+    /** Post the files into the thread, after the agent's answer. */
+    send(thread: ChatThread, files: OutgoingFile[]): Promise<void>;
+  };
+  /** React to a message the way a person would, e.g. ❤️ on a thank-you. Optional. */
+  react?(message: ChatMessage, reaction: Reaction): Promise<void>;
   /** Show a prompt with controls that call `ChatEvents.answer`; resolves with its message id. */
   ask(thread: ChatThread, prompt: ChatPrompt): Promise<string>;
   /** Replace the prompt's controls with its outcome once it is answered or abandoned. */

@@ -5,6 +5,7 @@ export { BOT_ENV_HELP, botOptionsFromEnv, cliOptions, hasRepository } from "./en
 export { BOT_TOKEN_SCOPES } from "./preflight.js";
 export { splitMessage, tablesToCode } from "./markdown.js";
 export { interpretTypedAnswer } from "./prompt.js";
+export { REACTIONS } from "./types.js";
 export type {
   Bot,
   BotLogger,
@@ -19,6 +20,8 @@ export type {
   ChatUser,
   HistoryMessage,
   ModelChoice,
+  OutgoingFile,
+  Reaction,
   RepoTarget,
   WorkspaceOverrides,
 } from "./types.js";

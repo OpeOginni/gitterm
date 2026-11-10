@@ -6,6 +6,7 @@ import type {
   ChatFile,
   ChatUser,
   HistoryMessage,
+  Reaction,
 } from "@gitterm/bot";
 import { downloadImage } from "@gitterm/bot";
 import {
@@ -51,6 +52,17 @@ const THREAD_NAME_LIMIT = 90;
 const HISTORY_LIMIT = 100;
 const RECENT_MESSAGES = 500;
 const NO_MENTIONS = { parse: [] };
+const EMOJI: Record<Reaction, string> = {
+  heart: "❤️",
+  thumbsup: "👍",
+  tada: "🎉",
+  smile: "😄",
+  pray: "🙏",
+  rocket: "🚀",
+  fire: "🔥",
+};
+/** What a bot may upload in any server; boosted servers allow more. */
+const UPLOAD_LIMIT = 10 * 1024 * 1024;
 
 /** What the bot needs in a server, for the invite link it logs at startup. */
 const INVITE_PERMISSIONS = new PermissionsBitField([
@@ -61,6 +73,7 @@ const INVITE_PERMISSIONS = new PermissionsBitField([
   "ReadMessageHistory",
   "AddReactions",
   "EmbedLinks",
+  "AttachFiles",
 ]);
 
 const userOf = (message: Message): ChatUser => ({
@@ -181,7 +194,9 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
     } else {
       // Outside threads only mentions matter, and each one opens a thread for its session.
       if (!mentioned || !events.accepts(channel.id) || !("threads" in channel)) return;
-      const name = stripMention(message.content).slice(0, THREAD_NAME_LIMIT) || "GitTerm agent";
+      const name =
+        stripMention(message.content).slice(0, THREAD_NAME_LIMIT) ||
+        `Chat with ${userOf(message).name}`;
       const opened = await message.startThread({
         name,
         autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
@@ -273,14 +288,38 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
       await (await thread(location.thread)).messages.delete(messageId);
     },
 
-    async reply(location, markdown, footer, delivery) {
+    async reply(location, markdown, delivery) {
       const channel = await thread(location.thread);
       // Agent output never pings anyone.
-      const contents = answerContents(markdown, footer);
+      const contents = answerContents(markdown);
       for (let index = delivery?.sent ?? 0; index < contents.length; index++) {
         await channel.send({ content: contents[index], allowedMentions: NO_MENTIONS });
         await delivery?.recordSent(index + 1);
       }
+    },
+
+    uploads: {
+      maxBytes: UPLOAD_LIMIT,
+      async send(location, files) {
+        const channel = await thread(location.thread);
+        // One message per batch that fits the limit, which applies to a whole message's files.
+        const batches: (typeof files)[] = [];
+        let size = Infinity;
+        for (const entry of files) {
+          if (size + entry.data.byteLength > UPLOAD_LIMIT) {
+            batches.push([]);
+            size = 0;
+          }
+          batches.at(-1)!.push(entry);
+          size += entry.data.byteLength;
+        }
+        for (const batch of batches) {
+          await channel.send({
+            files: batch.map((entry) => ({ attachment: entry.data, name: entry.name })),
+            allowedMentions: NO_MENTIONS,
+          });
+        }
+      },
     },
 
     async ask(location, prompt) {
@@ -292,6 +331,10 @@ export function createDiscordAdapter(options: DiscordAdapterOptions = {}): ChatA
       await (
         await thread(location.thread)
       ).messages.edit(messageId, settledMessage(prompt, outcome));
+    },
+
+    async react(message, reaction) {
+      await recent.get(message.id)?.react(EMOJI[reaction]);
     },
 
     async mark(message, state) {

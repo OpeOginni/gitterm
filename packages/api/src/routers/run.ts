@@ -10,6 +10,7 @@ import {
   getAgentRun,
   getAgentRunMessages,
   listAgentRuns,
+  readAgentRunFile,
   respondToAgentRun,
 } from "../service/agent-run";
 import { isTerminalRunStatus } from "@gitterm/agent-runtime";
@@ -115,6 +116,15 @@ export const runRouter = router({
     .query(async ({ input, ctx }) =>
       translateAgentError(() =>
         getAgentRunMessages(input.workspaceId, input.runId, ctx.session.user.id),
+      ),
+    ),
+
+  /** A file from the run's workspace, by path relative to the checkout; base64, up to 25 MB. */
+  readFile: accountProcedure("run:read")
+    .input(runTargetSchema.extend({ path: z.string().trim().min(1).max(1024) }))
+    .query(async ({ input, ctx }) =>
+      translateAgentError(() =>
+        readAgentRunFile(input.workspaceId, input.runId, input.path, ctx.session.user.id),
       ),
     ),
 

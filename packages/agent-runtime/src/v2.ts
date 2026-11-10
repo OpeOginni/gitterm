@@ -10,6 +10,7 @@ import {
   asStringArray,
   call,
   createOpencodeClient,
+  FileTooLargeError,
   isSessionNotFound,
   requestTimeout,
   unwrapClientError,
@@ -196,6 +197,39 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
 
     async rejectQuestion(sessionID, formID) {
       await call(client.session.form.cancel({ sessionID, formID }, options()));
+    },
+
+    async readFile(path, maxBytes) {
+      const send = target.fetch ?? fetch;
+      let size = 0;
+      // The client buffers the whole body, so the limit is enforced on the stream under it.
+      const bounded = createOpencodeClient({
+        ...target,
+        fetch: (async (input, init) => {
+          const response = await send(input, init);
+          if (!response.body) return response;
+          const counted = response.body.pipeThrough(
+            new TransformStream<Uint8Array, Uint8Array>({
+              transform(chunk, controller) {
+                size += chunk.byteLength;
+                if (size > maxBytes) controller.error(new FileTooLargeError(maxBytes));
+                else controller.enqueue(chunk);
+              },
+            }),
+          );
+          return new Response(counted, response);
+        }) as typeof fetch,
+      });
+      try {
+        return await call(
+          bounded.file.read(
+            { location: { directory: target.directory }, path },
+            requestTimeout(target.signal, 60_000),
+          ),
+        );
+      } catch (error) {
+        throw size > maxBytes ? new FileTooLargeError(maxBytes) : error;
+      }
     },
   };
 

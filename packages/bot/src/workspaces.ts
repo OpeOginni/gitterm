@@ -192,12 +192,15 @@ export function createWorkspaceManager(input: {
       }
       if (!workspace) {
         progress({
-          message: `Creating a sandbox for ${repoLabel(repo)}. The first start takes a few minutes…`,
-          indicator: `is creating a sandbox for ${repoLabel(repo)} (the first start takes a few minutes)…`,
+          message: `Getting set up on ${repoLabel(repo)}. The first time takes a few minutes…`,
+          indicator: `is getting set up on ${repoLabel(repo)} (the first time takes a few minutes)…`,
         });
         workspace = await create(repo, space);
       } else if (workspace.status === "paused") {
-        progress({ message: "Waking up the sandbox…", indicator: "is waking up the sandbox…" });
+        progress({
+          message: `Opening ${repoLabel(repo)}…`,
+          indicator: `is opening ${repoLabel(repo)}…`,
+        });
       }
       const running = await gitterm.workspaces.ensureRunning(workspace.id, {
         timeoutMs: RESUME_TIMEOUT_MS,

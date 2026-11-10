@@ -33,7 +33,7 @@ const adapter: ChatAdapter = {
   },
   async edit(thread, messageId, text) {},
   async remove(thread, messageId) {},
-  async reply(thread, markdown, footer) {
+  async reply(thread, markdown) {
     /* split with splitMessage() */
   },
   async ask(thread, prompt) {
@@ -56,9 +56,10 @@ The engine reports a message to the agent only when `mentioned` is true. Other t
 answer an open prompt when they come from the person who asked. Every message id must be unique
 within its thread, and `history(thread, after)` must return only messages after `after`.
 
-Two adapter methods are optional: `mark(message, state)` reacts to a request (👀, then ✅ or ❌), and
-`indicate(thread, status)` shows a native "is working…" indicator instead of a status message
-(`""` hides it; resolve `false` to fall back to status messages).
+Some adapter members are optional: `mark(message, state)` reacts to a request (👀, then ✅ or ❌);
+`indicate(thread, status)` shows a native "is on it…" indicator instead of a status message
+(`""` hides it; resolve `false` to fall back to status messages); `react(message, reaction)` lets
+the agent react like a person (❤️ on a thank-you); and `uploads` lets it send files.
 
 ## Security and operations
 

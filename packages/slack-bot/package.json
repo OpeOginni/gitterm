@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/slack-bot",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Slack bot that runs a coding agent on your repository in a GitTerm sandbox",
   "keywords": [
     "agent",

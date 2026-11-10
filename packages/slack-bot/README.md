@@ -52,9 +52,14 @@ Slack over Socket Mode, so it needs no public URL.
   the thread continues it with full context. Anyone in the thread can follow up, and messages
   posted between mentions are passed along as context. Threads work in parallel; messages within
   one thread wait their turn.
-- **Native progress.** While it works, Slack shows _“Acme Agent is working on it…”_ under the
-  thread, the same indicator Slack's AI apps use, with the elapsed time. Workspaces that refuse it
-  get a status message the bot keeps up to date instead.
+- **Native progress.** While it works, Slack shows _“Acme Agent is on it…”_ under the thread, the
+  same indicator Slack's AI apps use. Workspaces that refuse it get a status message the bot keeps
+  up to date instead.
+- **Native Stop.** Slack's Stop button cancels work in that thread with the same access checks as
+  `@Acme Agent stop`. Existing apps must add the `agent_session_stopped` bot event under
+  _Event Subscriptions_ and restart the bot on the updated SDK. No new scope is needed.
+- **Talks like a teammate.** Answers are plain messages in the first person, with no signature
+  line, and the agent may react to a message (❤️ on a thank-you) instead of replying.
 - **Private DMs.** Message the bot directly, no mention needed. Each DM gets its own sandbox, so
   the agent there can't see sessions from channels or other people's DMs. Apps created before
   this need the manifest's `im:history` scope, `message.im` event, and Messages tab; reinstall
@@ -69,6 +74,9 @@ Slack over Socket Mode, so it needs no public URL.
   number, `yes`, or `no`.
 - **Images reach the agent.** PNG, JPEG, GIF, and WebP files up to 5 MB, posted with the mention
   or earlier in the thread, are attached to the run. Other files are only named.
+- **The agent can send files.** Screenshots, PDFs, CSVs, and other files the agent makes are
+  posted in the thread after its answer, up to 10 per answer and 25 MB each. This needs the
+  manifest's `files:write` scope; an app created before it must add the scope and reinstall.
 - **Restarts are safe.** Runs live in GitTerm, not in the bot. A restarted bot reattaches to
   running work and posts the result. The state file only holds thread → run ids, so losing it
   costs thread continuity, never sandboxes (they are found by their tags).

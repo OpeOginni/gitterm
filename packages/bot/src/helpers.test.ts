@@ -10,6 +10,7 @@ import {
   buildPrompt,
   interpretPermissionReply,
   interpretTypedAnswer,
+  readAnswer,
 } from "./prompt.js";
 import { spaceOf } from "./workspaces.js";
 import type { ChatFile } from "./types.js";
@@ -110,6 +111,31 @@ describe("buildPrompt", () => {
       "## Instructions from this bot's owner\n\nThese take precedence over the defaults above.\n\nAlways ask how they are.",
     );
     expect(agentInstructions("Slack", "   ")).toBe(agentInstructions("Slack", undefined));
+  });
+  test("only tells the agent it can send files when the platform takes uploads", () => {
+    expect(agentInstructions("Slack", undefined)).toContain("You cannot send files");
+    const sending = agentInstructions("Slack", undefined, { uploadLimit: 25_000_000 });
+    expect(sending).toContain("[attach: path/relative/to/checkout]");
+    expect(sending).toContain("25 MB each");
+  });
+  test("takes [attach: path] lines out of the answer", () => {
+    expect(
+      readAnswer("Done.\n\n[attach: out/report.pdf]\n  [attach:a.png]  \n[attach: out/report.pdf]"),
+    ).toEqual({ text: "Done.", paths: ["out/report.pdf", "a.png"] });
+    // Only whole lines count, so prose mentioning the syntax stays.
+    expect(readAnswer("Use `[attach: x]` lines.").paths).toEqual([]);
+    const many = Array.from({ length: 12 }, (_, i) => `[attach: ${i}.png]`).join("\n");
+    expect(readAnswer(many).paths).toHaveLength(10);
+  });
+  test("takes a known [react: name] line out of the answer, and drops unknown ones", () => {
+    expect(readAnswer("Glad it helped!\n[react: heart]")).toEqual({
+      text: "Glad it helped!",
+      paths: [],
+      reaction: "heart",
+    });
+    expect(readAnswer("[react: unicorn]")).toEqual({ text: "", paths: [] });
+    expect(agentInstructions("Slack", undefined)).not.toContain("[react:");
+    expect(agentInstructions("Slack", undefined, { react: true })).toContain("[react: name]");
   });
   test("quotes unseen thread messages and attaches each image once", () => {
     const prompt = buildPrompt({
