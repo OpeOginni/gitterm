@@ -26,10 +26,10 @@ mock.module("@vercel/sandbox", () => ({
   ...vercel,
   Sandbox: { create: (params: unknown) => stop(params) },
 }));
-const boat = await import("@asciidev/box-sdk");
-mock.module("@asciidev/box-sdk", () => ({
+const boat = await import("@boatdev/sdk");
+mock.module("@boatdev/sdk", () => ({
   ...boat,
-  BoxApi: class {
+  BoatApi: class {
     create(params: unknown) {
       return stop(params);
     }
@@ -90,10 +90,10 @@ test("Vercel requests the profile's vCPUs", async () => {
   expect(await created(transport, { vcpus: 1 })).toMatchObject({ resources: { vcpus: 1 } });
 });
 
-test("Boat requests the profile's box size", async () => {
+test("Boat requests the profile's sandbox size", async () => {
   const transport = createSandboxTransport({ provider: "boat", apiKey: "k" });
   expect(await created(transport, { size: "small" })).toMatchObject({
-    createBoxRequest: { type: "small" },
+    createSandboxRequest: { type: "small" },
   });
 });
 

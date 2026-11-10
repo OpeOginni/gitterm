@@ -6,8 +6,8 @@ test("boat captures the agent-issued credential before launch and returns it to 
   const provider = new BoatProvider();
   const commands: string[] = [];
   const client = {
-    create: async () => ({ box: { id: "box" } }),
-    get: async () => ({ box: { state: "ready" } }),
+    create: async () => ({ sandbox: { id: "box" } }),
+    get: async () => ({ sandbox: { state: "ready" } }),
     update: async () => ({}),
     stop: async () => ({}),
   };

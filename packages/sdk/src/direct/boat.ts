@@ -1,4 +1,4 @@
-import { BoxApi, Configuration, waitUntilReady } from "@asciidev/box-sdk";
+import { BoatApi, Configuration, waitUntilReady } from "@boatdev/sdk";
 import {
   cloneRepositoryScript,
   setupCommandScript,
@@ -10,6 +10,7 @@ import type { BoatDirectProviderConfig, DirectProviderAdapter } from "./types.js
 const HOME = "/home/user";
 
 type BoatHandle = {
+  // Keep the stored key so existing workspaces remain accessible.
   boxId: string;
   repoDir: string;
   serve: { command: string; port: number };
@@ -34,9 +35,9 @@ function parseHandle(value: string): BoatHandle {
 export function createBoatDirectProvider(config: BoatDirectProviderConfig): DirectProviderAdapter {
   if (!config.apiKey.trim()) throw new Error("Boat apiKey is required");
 
-  const client = new BoxApi(
+  const client = new BoatApi(
     new Configuration({
-      basePath: "https://ascii.dev/api/box/v1",
+      basePath: "https://boat.dev/api/v1",
       accessToken: config.apiKey,
     }),
   );
@@ -48,7 +49,7 @@ export function createBoatDirectProvider(config: BoatDirectProviderConfig): Dire
     timeoutSeconds = 60,
   ): Promise<string> {
     const result = await client.command({
-      boxId,
+      sandboxId: boxId,
       commandRequest: { command, cwd, timeoutSeconds },
     });
     if (result.type !== "command.finished") {
@@ -81,7 +82,7 @@ export function createBoatDirectProvider(config: BoatDirectProviderConfig): Dire
   }
 
   async function deleteBox(boxId: string): Promise<void> {
-    const response = await fetch(`https://ascii.dev/api/box/v1/boxes/${boxId}`, {
+    const response = await fetch(`https://boat.dev/api/v1/sandboxes/${encodeURIComponent(boxId)}`, {
       method: "DELETE",
       // boat requires the target id as an explicit delete confirmation (409 without it).
       headers: { Authorization: `Bearer ${config.apiKey}`, "X-Ascii-Confirm-Delete": boxId },
@@ -104,7 +105,7 @@ export function createBoatDirectProvider(config: BoatDirectProviderConfig): Dire
       const plan = input.provisioning;
       const directory = `${HOME}/${plan.repository?.name ?? "workspace"}`;
       const created = await client.create({
-        createBoxRequest: {
+        createSandboxRequest: {
           type: config.size,
           ttlSeconds:
             config.timeoutMs === null ? null : Math.ceil((config.timeoutMs ?? 10 * 60_000) / 1000),
@@ -113,7 +114,7 @@ export function createBoatDirectProvider(config: BoatDirectProviderConfig): Dire
         },
       });
       const handle: BoatHandle = {
-        boxId: created.box.id,
+        boxId: created.sandbox.id,
         repoDir: directory,
         serve: { command: plan.agent.command, port: plan.agent.port },
       };
@@ -121,8 +122,8 @@ export function createBoatDirectProvider(config: BoatDirectProviderConfig): Dire
       try {
         await waitUntilReady(client, handle.boxId);
         await client.update({
-          boxId: handle.boxId,
-          updateBoxRequest: { name: `gitterm-${input.id}` },
+          sandboxId: handle.boxId,
+          updateSandboxRequest: { name: `gitterm-${input.id}` },
         });
         await runCommand(handle.boxId, `mkdir -p ${shellQuote(directory)}`);
         for (const command of config.runtimeSetupCommands ?? [
@@ -141,7 +142,7 @@ export function createBoatDirectProvider(config: BoatDirectProviderConfig): Dire
         for (const file of plan.agent.files) {
           const path = file.path.startsWith("~/") ? file.path.slice(2) : file.path;
           await client.writeFile({
-            boxId: handle.boxId,
+            sandboxId: handle.boxId,
             fileWriteRequest: { path, content: file.contentBase64, encoding: "base64" },
           });
           if (file.mode != null) {
@@ -174,7 +175,8 @@ export function createBoatDirectProvider(config: BoatDirectProviderConfig): Dire
     },
     async status(workspace) {
       try {
-        const box = (await client.get({ boxId: parseHandle(workspace.externalId).boxId })).box;
+        const box = (await client.get({ sandboxId: parseHandle(workspace.externalId).boxId }))
+          .sandbox;
         if (["ready", "idle", "running"].includes(box.state)) return "running";
         if (["init", "provisioning", "provisioned", "cloning", "archiving"].includes(box.state)) {
           return "pending";
@@ -189,11 +191,11 @@ export function createBoatDirectProvider(config: BoatDirectProviderConfig): Dire
       }
     },
     async pause(workspace) {
-      await client.stop({ boxId: parseHandle(workspace.externalId).boxId });
+      await client.stop({ sandboxId: parseHandle(workspace.externalId).boxId });
     },
     async resume(workspace) {
       const handle = parseHandle(workspace.externalId);
-      await client.resume({ boxId: handle.boxId, resumeRequest: { noEnv: true } });
+      await client.resume({ sandboxId: handle.boxId, resumeRequest: { noEnv: true } });
       await waitUntilReady(client, handle.boxId);
       await startRuntime(handle);
       const runtime = {
@@ -209,8 +211,8 @@ export function createBoatDirectProvider(config: BoatDirectProviderConfig): Dire
     },
     async keepAlive(workspace, timeoutMs) {
       await client.update({
-        boxId: parseHandle(workspace.externalId).boxId,
-        updateBoxRequest: { ttlSeconds: Math.ceil(timeoutMs / 1000) },
+        sandboxId: parseHandle(workspace.externalId).boxId,
+        updateSandboxRequest: { ttlSeconds: Math.ceil(timeoutMs / 1000) },
       });
     },
   };

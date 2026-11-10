@@ -100,7 +100,6 @@
     "e2b:build": "bun run ./src/providers/e2b/template/build.ts"
   },
   "dependencies": {
-    "@asciidev/box-sdk": "^0.0.34",
     "@aws-sdk/client-cloudformation": "^3.1032.0",
     "@aws-sdk/client-ec2": "^3.1032.0",
     "@aws-sdk/client-ecs": "^3.1032.0",
@@ -109,6 +108,7 @@
     "@aws-sdk/client-iam": "^3.1038.0",
     "@aws-sdk/client-secrets-manager": "^3.1038.0",
     "@aws-sdk/client-sts": "^3.1032.0",
+    "@boatdev/sdk": "^1.13.0",
     "@cloudflare/sandbox": "^0.12.1",
     "@cloudflare/workers-types": "^4.20260107.1",
     "@daytonaio/sdk": "^0.207.0",

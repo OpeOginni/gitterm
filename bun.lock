@@ -168,7 +168,7 @@
       "name": "@gitterm/agent-runtime",
       "version": "0.0.0",
       "dependencies": {
-        "@asciidev/box-sdk": "^0.0.34",
+        "@boatdev/sdk": "^1.13.0",
         "@daytonaio/sdk": "^0.207.0",
         "@opencode/client": "2.2.6",
         "@vercel/sandbox": "^3.2.1",
@@ -193,7 +193,6 @@
     "packages/api": {
       "name": "@gitterm/api",
       "dependencies": {
-        "@asciidev/box-sdk": "^0.0.34",
         "@aws-sdk/client-cloudformation": "^3.1032.0",
         "@aws-sdk/client-ec2": "^3.1032.0",
         "@aws-sdk/client-ecs": "^3.1032.0",
@@ -202,6 +201,7 @@
         "@aws-sdk/client-iam": "^3.1038.0",
         "@aws-sdk/client-secrets-manager": "^3.1038.0",
         "@aws-sdk/client-sts": "^3.1032.0",
+        "@boatdev/sdk": "^1.13.0",
         "@cloudflare/sandbox": "^0.12.1",
         "@cloudflare/workers-types": "^4.20260107.1",
         "@daytonaio/sdk": "^0.207.0",
@@ -432,9 +432,9 @@
     },
     "packages/sdk": {
       "name": "@gitterm/sdk",
-      "version": "0.13.0",
+      "version": "0.13.1",
       "dependencies": {
-        "@asciidev/box-sdk": "^0.0.34",
+        "@boatdev/sdk": "^1.13.0",
         "@daytonaio/sdk": "^0.207.0",
         "@trpc/client": "^11.8.1",
         "@vercel/sandbox": "^3.2.1",
@@ -490,8 +490,6 @@
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
 
     "@ardatan/relay-compiler": ["@ardatan/relay-compiler@12.0.3", "", { "dependencies": { "@babel/generator": "^7.26.10", "@babel/parser": "^7.26.10", "@babel/runtime": "^7.26.10", "chalk": "^4.0.0", "fb-watchman": "^2.0.0", "immutable": "~3.7.6", "invariant": "^2.2.4", "nullthrows": "^1.1.1", "relay-runtime": "12.0.0", "signedsource": "^1.0.0" }, "peerDependencies": { "graphql": "*" }, "bin": { "relay-compiler": "bin/relay-compiler" } }, "sha512-mBDFOGvAoVlWaWqs3hm1AciGHSQE1rqFc/liZTyYz/Oek9yZdT5H26pH2zAFuEiTiBVPPyMuqf5VjOFPI2DGsQ=="],
-
-    "@asciidev/box-sdk": ["@asciidev/box-sdk@0.0.34", "", {}, "sha512-BWy2RHKQMLvGGIVicshpngU+Vo0AlP3L2YfNXiCwBs8pXpAsdP8IC9tzQhmm3pBVdFsykoeA5aVPSMEjt7Ybyg=="],
 
     "@aws-crypto/crc32": ["@aws-crypto/crc32@5.2.0", "", { "dependencies": { "@aws-crypto/util": "^5.2.0", "@aws-sdk/types": "^3.222.0", "tslib": "^2.6.2" } }, "sha512-nLbCWqQNgUiwwtFsen1AdzAtvuLRsQS8rYgMuxCrdKf9kOssamGLuPwyTY9wyYblNr9+1XM8v6zoDTPPSIeANg=="],
 
@@ -712,6 +710,8 @@
     "@better-auth/utils": ["@better-auth/utils@0.5.1", "", { "dependencies": { "@noble/hashes": "^2.0.1" } }, "sha512-WETqw5vQ52uQ/xwWR4E8rTgT6fDEr/wnS+otDNkBCa/69281FCF32OKDdQUcahMCnjsvqXBNiEvAQHFB0EVRRg=="],
 
     "@better-fetch/fetch": ["@better-fetch/fetch@1.3.3", "", {}, "sha512-U6SlDt/GUWtK2JAxS/NhdoYTEim+EL1G5byz2TUj83KjLZBUpYzb5SmX0aXaCnbGkAjFKnV/o/0+cyXMbEcqqg=="],
+
+    "@boatdev/sdk": ["@boatdev/sdk@1.13.0", "", {}, "sha512-wSmCyFLDL0QTCLF5NfQR4JTdTccFIvlqBBtCMDLPk61hLj48ZPEH/0nF91j4aiMLBkr+kvmkedfqkyFuokn5dw=="],
 
     "@bufbuild/protobuf": ["@bufbuild/protobuf@2.14.1", "", {}, "sha512-agRJn3+EJDUe8AvxTx/LnHA/GErvLE62pSaSk7+MwFOtOv8eWBu/qCq2qoZjBjVZ3C2aiFJCveuSs17KMkYGOw=="],
 
