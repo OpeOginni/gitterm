@@ -139,7 +139,7 @@ describe("direct run interaction", () => {
               time: { created: now, completed: now },
               content: [{ type: "text", text: phase === "done" ? "Finished" : "Working" }],
             },
-          ],
+          ].toReversed(),
           cursor: { next: null },
         });
       }
