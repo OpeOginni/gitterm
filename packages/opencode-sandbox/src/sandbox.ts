@@ -180,20 +180,29 @@ export async function registerSandboxTools(
    * Setup snapshots are on when the user turned them on, the account's provider can snapshot,
    * and the user has not set a snapshot for the account themselves (theirs always wins).
    */
-  const snapshotEffect =
-    settings?.snapshots === true
-      ? await selected().then(
-          ({ account, client }) =>
-            describeSandboxAccount(account).pinnedSnapshot ? null : client.snapshotEffect,
-          () => null,
-        )
-      : null;
-  const snapshotsOn = snapshotEffect !== null;
+  async function snapshotEffect() {
+    const { account, client } = await selected();
+    return describeSandboxAccount(account).pinnedSnapshot ? null : client.snapshotEffect;
+  }
+  // Tools are registered once, so when the account can't be resolved yet (a GitTerm server that
+  // is unreachable at startup) the snapshot tools are offered anyway and each call checks.
+  const snapshotsOn =
+    settings?.snapshots === true &&
+    (await snapshotEffect().then(
+      (effect) => effect !== null,
+      () => true,
+    ));
+  /** The account's snapshot effect when snapshots are in use for this call, else null. */
+  const snapshotsNow = async () => (snapshotsOn ? snapshotEffect() : null);
 
   /** What the agent should know about the setup snapshots it can use for this checkout. */
-  function snapshotAdvice(snapshots: SetupSnapshotStatus[], used: string | null): string {
+  function snapshotAdvice(
+    effect: "pauses" | "stops",
+    snapshots: SetupSnapshotStatus[],
+    used: string | null,
+  ): string {
     const save =
-      snapshotEffect === "stops"
+      effect === "stops"
         ? "Saving stops the sandbox for good, so save last and create a new sandbox after."
         : "Saving pauses the sandbox briefly.";
     if (!snapshots.length)
@@ -409,7 +418,8 @@ export async function registerSandboxTools(
             warning: "Every port of this sandbox will be reachable by anyone with its URL.",
           });
         const directory = await sessionDirectory(context);
-        const snapshots = snapshotsOn ? await current.setupSnapshots(directory) : [];
+        const effect = await snapshotsNow();
+        const snapshots = effect ? await current.setupSnapshots(directory) : [];
         const wanted = typeof args.snapshot === "string" ? args.snapshot : undefined;
         if (
           wanted &&
@@ -443,7 +453,7 @@ export async function registerSandboxTools(
         return {
           content: [
             `Created sandbox:\n${describeRecord(record, context.sessionID)}`,
-            snapshotsOn ? snapshotAdvice(snapshots, fromSnapshot) : "",
+            effect ? snapshotAdvice(effect, snapshots, fromSnapshot) : "",
           ]
             .filter(Boolean)
             .join("\n"),
@@ -472,8 +482,13 @@ export async function registerSandboxTools(
         const current = await sandbox();
         const records = await current.list();
         const live = records.filter((record) => record.state !== "terminated");
-        const setup = snapshotsOn
-          ? snapshotAdvice(await current.setupSnapshots(await sessionDirectory(context)), null)
+        const effect = await snapshotsNow();
+        const setup = effect
+          ? snapshotAdvice(
+              effect,
+              await current.setupSnapshots(await sessionDirectory(context)),
+              null,
+            )
           : "";
         return {
           content: [
@@ -875,7 +890,11 @@ export async function registerSandboxTools(
         async execute(input, context) {
           const args = (input ?? {}) as Record<string, unknown>;
           const current = await sandbox();
-          const { account } = current.identity;
+          const { account, provider } = current.identity;
+          if (!(await snapshotEffect()))
+            throw new Error(
+              `Sandbox account "${account}" doesn't keep setup snapshots: ${provider} can't save them, or the account starts every sandbox from its own snapshot.`,
+            );
           const directory = await sessionDirectory(context);
           await assert(
             context,

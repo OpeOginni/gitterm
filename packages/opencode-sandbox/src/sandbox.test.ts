@@ -19,9 +19,20 @@ const jobView = (status: string) => ({
   log: { offset: 0, nextOffset: 5, totalBytes: 5, truncated: false, text: "boom\n" },
 });
 let previews = "either";
+/** Account resolutions that fail first, like a GitTerm server that is down at startup. */
+let resolveFailures = 0;
 const actual = await import("@gitterm/sdk/sandbox");
+// Kept before mocking: mock.module also replaces it on `actual`.
+const realResolve = actual.resolveSandboxAccount;
 mock.module("@gitterm/sdk/sandbox", () => ({
   ...actual,
+  resolveSandboxAccount: async (...args: Parameters<typeof realResolve>) => {
+    if (resolveFailures > 0) {
+      resolveFailures--;
+      throw new Error("connect ECONNREFUSED");
+    }
+    return realResolve(...args);
+  },
   createSandboxBackend: () => ({}),
   createSandboxClient: () => ({
     identity: { mode: "direct", account: "e2b", provider: "e2b" },
@@ -318,6 +329,12 @@ test("with snapshots on, a sandbox starts from the checkout's newest snapshot un
     await expect(createSandbox({ snapshots: true }, { snapshot: "gone" })).rejects.toThrow(
       "No setup snapshot gone",
     );
+    // An account that can't be resolved at startup still gets snapshots once it recovers.
+    resolveFailures = 1;
+    const recovered = await createSandbox({ snapshots: true }, {});
+    expect(resolveFailures).toBe(0);
+    expect(recovered.names).toContain("sandbox_snapshot");
+    expect(recovered.snapshot).toBe("newest");
     // Off unless the user turns it on.
     const off = await createSandbox({}, {});
     expect(off.snapshot).toBeUndefined();
