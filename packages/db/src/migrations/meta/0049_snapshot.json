@@ -203,8 +203,8 @@
           "method": "btree",
           "with": {}
         },
-        "agent_run_active_idx": {
-          "name": "agent_run_active_idx",
+        "agent_run_status_idx": {
+          "name": "agent_run_status_idx",
           "columns": [
             {
               "expression": "status",
@@ -214,7 +214,6 @@
             }
           ],
           "isUnique": false,
-          "where": "\"agent_run\".\"status\" in ('pending', 'running', 'retrying', 'awaiting_input')",
           "concurrently": false,
           "method": "btree",
           "with": {}
