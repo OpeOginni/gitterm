@@ -1,0 +1,5 @@
+# Machine-specific output and historical notes, not benchmark source.
+.local/
+results/
+state/
+state.json
