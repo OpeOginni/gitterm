@@ -12,6 +12,7 @@ import {
   createOpencodeClient,
   FileTooLargeError,
   isSessionNotFound,
+  observing,
   requestTimeout,
   unwrapClientError,
 } from "./http";
@@ -34,6 +35,9 @@ const MODEL_READY_MS = 30_000;
 export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
   const client = createOpencodeClient(target);
   const options = () => requestTimeout(target.signal);
+  // Reading a run's state is not use of the workspace. While a run is working, the run
+  // watcher records that itself.
+  const reading = () => observing(target.signal);
 
   async function switchSessionOptions(sessionID: string, agent?: string, model?: string) {
     const modelRef = parseModelRef(model);
@@ -121,16 +125,16 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
 
     async snapshot(sessionID, messageId) {
       try {
-        await call(client.session.get({ sessionID }, options()));
+        await call(client.session.get({ sessionID }, reading()));
       } catch (error) {
         if (isSessionNotFound(error)) return missingSessionSnapshot();
         throw error;
       }
       const [active, messages, permissions, forms] = await Promise.all([
-        call(client.session.active(options())),
+        call(client.session.active(reading())),
         listRunMessages(sessionID, messageId),
-        call(client.permission.list({ sessionID }, options())),
-        call(client.session.form.list({ sessionID }, options())),
+        call(client.permission.list({ sessionID }, reading())),
+        call(client.session.form.list({ sessionID }, reading())),
       ]);
 
       const runMessages = selectRunMessages(messages, messageId);
@@ -249,7 +253,7 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
       const page = await call(
         client.message.list(
           cursor ? { sessionID, cursor, limit } : { sessionID, order: "desc", limit },
-          options(),
+          reading(),
         ),
       );
       messages.push(...page.data);

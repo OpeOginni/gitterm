@@ -1,3 +1,4 @@
+import { PASSIVE_REQUEST_HEADER } from "@gitterm/agent-runtime";
 import { createHash } from "node:crypto";
 import { auth } from "@gitterm/auth";
 import {
@@ -376,6 +377,9 @@ export const proxyResolverRouter = async (c: Context) => {
   debugProxyResolve("[PROXY-RESOLVE] Request received");
 
   try {
+    // A request that only observes the workspace (a status poll, a health check) is routed
+    // like any other but is not use of it: it must not hold off the idle pause.
+    const passive = c.req.header(PASSIVE_REQUEST_HEADER) !== undefined;
     const internalKey = c.req.header("X-Internal-Key") || "";
     if (!internalKey) {
       debugProxyResolve("[PROXY-RESOLVE] Missing internal key");
@@ -505,7 +509,7 @@ export const proxyResolverRouter = async (c: Context) => {
 
       const upstreamUrl = new URL(ws.upstreamUrl);
       const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
-      touchWorkspace(ws.id);
+      if (!passive) touchWorkspace(ws.id);
 
       return c.body(
         null,
@@ -533,7 +537,7 @@ export const proxyResolverRouter = async (c: Context) => {
       const upstreamUrl = new URL(ws.upstreamUrl);
       const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
       const clientAuthorization = c.req.header("Authorization");
-      touchWorkspace(ws.id);
+      if (!passive) touchWorkspace(ws.id);
 
       return c.body(
         null,
@@ -557,7 +561,7 @@ export const proxyResolverRouter = async (c: Context) => {
     if (isPublicPort && portUpstream) {
       const portUrl = new URL(portUpstream);
       const port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
-      touchWorkspace(ws.id);
+      if (!passive) touchWorkspace(ws.id);
 
       return c.body(
         null,
@@ -600,7 +604,7 @@ export const proxyResolverRouter = async (c: Context) => {
       hasUpStreamAccessHeader: upstreamAccessHeaders !== null,
     });
 
-    touchWorkspace(ws.id);
+    if (!passive) touchWorkspace(ws.id);
 
     return c.body(
       null,

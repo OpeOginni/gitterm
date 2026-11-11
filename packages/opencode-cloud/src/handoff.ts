@@ -5,6 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { OpenCode, type OpenCodeClient } from "@opencode/client";
 import {
   GittermError,
+  PASSIVE_REQUEST_HEADER,
   type GittermClient,
   type WorkspaceProviderSelection,
   type WorkspaceRuntimeAccess,
@@ -12,11 +13,11 @@ import {
 import {
   captureSnapshot,
   checkoutRoot,
-  encodeSnapshot,
   repositoryUrl,
   sharedCheckoutSessions,
   type CheckoutSnapshot,
 } from "./snapshot";
+import { CLOUD_KEY, type CloudMarker } from "./marker";
 import {
   PREPARE_STAGE_SCRIPT,
   RESTORE_NEEDS_FULL_HISTORY,
@@ -38,10 +39,15 @@ export type HandoffOptions = {
 export type HandoffRecord = {
   attemptID: string;
   sessionID: string;
-  phase: "creating" | "restoring" | "importing" | "ready" | "failed";
+  /** `ready`: the session lives in the cloud. `returned`: it was brought back with /cloud-return. */
+  phase: "creating" | "restoring" | "importing" | "ready" | "returned" | "failed";
   workspaceID?: string;
   sourceDirectory: string;
   head: string;
+  /** Digest of the local checkout's state as handed off; a return compares against it. */
+  state?: string;
+  /** Digest of the local conversation as handed off. */
+  history?: string;
   includeChanges: boolean;
   sharedSessions: number;
   createdAt: string;
@@ -62,16 +68,17 @@ const STEPS: Record<HandoffRecord["phase"], string> = {
   restoring: "restoring your checkout in the cloud",
   importing: "importing this session into the cloud",
   ready: "finishing",
+  returned: "finishing",
   failed: "finishing",
 };
 
 /** A failure whose message is safe and useful to show the user as is. */
-class HandoffRefused extends Error {}
+export class HandoffRefused extends Error {}
 
 /** Session metadata key holding the digest of the history a handoff imported. */
-const HISTORY_KEY = "gittermHandoffHistory";
-/** Metadata key on the note a handoff leaves in the cloud session's pending input. */
-const NOTE_KEY = "gittermHandoff";
+export const HISTORY_KEY = "gittermHandoffHistory";
+/** Metadata key on the note a handoff or a return leaves in a session's pending input. */
+export const NOTE_KEY = "gittermHandoff";
 const canonical = (value: unknown): unknown =>
   Array.isArray(value)
     ? value.map(canonical)
@@ -83,10 +90,18 @@ const canonical = (value: unknown): unknown =>
         )
       : value;
 // OpenCode returns imported messages unchanged apart from key order.
-const historyDigest = (messages: unknown) =>
+export const historyDigest = (messages: unknown) =>
   createHash("sha256")
     .update(JSON.stringify(canonical(messages)))
     .digest("hex");
+/**
+ * The same over what was said and done only. OpenCode's own records of an agent or model
+ * being selected appear when a prompt is merely typed, so they do not count as a change.
+ */
+export const conversationDigest = (messages: ReadonlyArray<{ type: string }>) =>
+  historyDigest(
+    messages.filter((item) => item.type !== "agent-switched" && item.type !== "model-switched"),
+  );
 
 export class HandoffCancelled extends Error {
   constructor() {
@@ -131,7 +146,7 @@ export async function askForm(
   }
 }
 
-async function assertIdle(client: OpenCodeClient, sessionID: string, signal: AbortSignal) {
+export async function assertIdle(client: OpenCodeClient, sessionID: string, signal: AbortSignal) {
   if ((await client.session.active({ signal }))[sessionID]) {
     throw new Error(
       "Stop this session's running agent before continuing in the cloud. Other sessions will not be interrupted.",
@@ -145,14 +160,60 @@ async function assertIdle(client: OpenCodeClient, sessionID: string, signal: Abo
     throw new Error(
       "This session has running background jobs. Let them finish or stop them before continuing in the cloud; running processes cannot be transferred.",
     );
-  if ((await client.session.inbox.list({ sessionID }, { signal })).length > 0) {
+  if (!(await client.session.inbox.list({ sessionID }, { signal })).every(ownNote)) {
     throw new Error(
       "This session has pending input. Finish or cancel it before continuing in the cloud.",
     );
   }
 }
 
-export function runtimeClient(runtime: WorkspaceRuntimeAccess): OpenCodeClient {
+/** A note a handoff or a return left in a session's pending input; it is not the user's. */
+const ownNote = (item: Awaited<ReturnType<OpenCodeClient["session"]["inbox"]["list"]>>[number]) =>
+  item.type === "synthetic" && item.payload.metadata?.[NOTE_KEY] !== undefined;
+
+/**
+ * Whether a session is doing or waiting to do something: a running agent, running
+ * background jobs, or queued input. Notes a handoff or return left there do not count.
+ */
+export async function sessionBusy(
+  client: OpenCodeClient,
+  sessionID: string,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const jobs = await client.experimental.job.list(
+    { sessionID, status: "running", descendants: true },
+    { signal },
+  );
+  return (
+    Boolean((await client.session.active({ signal }))[sessionID]) ||
+    jobs.length > 0 ||
+    !(await client.session.inbox.list({ sessionID }, { signal })).every(ownNote)
+  );
+}
+
+/** Marks or unmarks the local session as living in a cloud workspace, for the UI to show. */
+export async function markCloudSession(
+  local: OpenCodeClient,
+  sessionID: string,
+  marker: CloudMarker | undefined,
+  signal: AbortSignal,
+) {
+  const { [CLOUD_KEY]: _marker, ...metadata } =
+    (await local.session.get({ sessionID }, { signal })).metadata ?? {};
+  await local.session.update(
+    { sessionID, metadata: marker ? { ...metadata, [CLOUD_KEY]: marker } : metadata },
+    { signal },
+  );
+}
+
+/**
+ * `passive` marks every request as observation only, so GitTerm does not count it as use of
+ * the workspace: a status check must not keep an idle workspace from pausing.
+ */
+export function runtimeClient(
+  runtime: WorkspaceRuntimeAccess,
+  options: { passive?: boolean } = {},
+): OpenCodeClient {
   if (!runtime.url) throw new Error("The workspace does not have an OpenCode server URL.");
   const url = new URL(runtime.url);
   if (
@@ -169,6 +230,7 @@ export function runtimeClient(runtime: WorkspaceRuntimeAccess): OpenCodeClient {
     );
   if (!headers.has("Authorization"))
     throw new Error("The workspace did not return an OpenCode access credential.");
+  if (options.passive) headers.set(PASSIVE_REQUEST_HEADER, "1");
   return OpenCode.make({
     baseUrl: runtime.url,
     headers,
@@ -212,19 +274,73 @@ export async function runRemoteShell(
   }
 }
 
+/**
+ * Whether the OpenCode server offers a model. Its catalog fills in a few seconds after it
+ * starts, so a missing model is only concluded once the catalog has stopped growing.
+ */
+export async function offersModel(
+  client: OpenCodeClient,
+  directory: string,
+  model: { providerID: string; id: string },
+  signal: AbortSignal,
+  pollMs = 500,
+): Promise<boolean> {
+  const deadline = Date.now() + 15_000;
+  let previous = -1;
+  let steady = 0;
+  for (;;) {
+    const { data } = await client.model.list({ location: { directory } }, { signal });
+    if (data.some((entry) => entry.providerID === model.providerID && entry.id === model.id))
+      return true;
+    steady = data.length > 0 && data.length === previous ? steady + 1 : 0;
+    previous = data.length;
+    if (steady >= 4 || Date.now() >= deadline) return false;
+    await delay(pollMs, undefined, { signal });
+  }
+}
+
+/**
+ * Whether the cloud session can keep the local session's model. GitTerm knows at once which
+ * model providers it gave the workspace credentials for, and uses OpenCode's provider IDs,
+ * so that is asked first. Only a provider GitTerm does not manage (OpenCode's own free
+ * models, for one) waits for the cloud's model catalog.
+ */
+export async function cloudHasModel(
+  gitterm: GittermClient,
+  workspaceID: string,
+  remote: OpenCodeClient,
+  directory: string,
+  model: { providerID: string; id: string } | undefined,
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (!model) return true;
+  const connected = await gitterm.workspaces.models(workspaceID).then(
+    (access) =>
+      access.providers.some((entry) => entry.active && entry.provider === model.providerID),
+    // An older GitTerm server: the catalog alone decides.
+    () => false,
+  );
+  return connected || offersModel(remote, directory, model, signal);
+}
+
 export function importPayload(
   data: Awaited<ReturnType<OpenCodeClient["session"]["export"]>>,
   directory: string,
+  options: { keepModel?: boolean } = {},
 ): Parameters<OpenCodeClient["session"]["import"]>[0] {
   // A child session can be continued independently; its parent is not on the destination.
   // Local revert snapshots and filesystem permission grants must not cross machines.
+  // A model the destination does not offer would open the session on an unavailable one;
+  // without it, the session uses the destination's default.
   const {
     parentID: _parent,
     fork: _fork,
     revert: _revert,
     permissions: _permissions,
-    ...info
+    model,
+    ...rest
   } = data.info;
+  const info = options.keepModel === false || !model ? rest : { ...rest, model };
   return {
     info: {
       ...info,
@@ -267,7 +383,9 @@ export async function handoffSession(
   const choice = await askForm(
     local,
     sessionID,
-    "Continue in GitTerm",
+    // The terminal shows a single question's form title, not its field title, so the
+    // title is the question.
+    "Continue in the cloud. Include your uncommitted changes?",
     [
       {
         key: "changes",
@@ -290,7 +408,7 @@ export async function handoffSession(
   const confirmation = await askForm(
     local,
     sessionID,
-    "Create cloud workspace?",
+    "Upload this snapshot and start billable cloud compute?",
     [
       {
         key: "create",
@@ -329,6 +447,8 @@ export async function handoffSession(
     phase: "creating",
     sourceDirectory: root,
     head: snapshot.head,
+    state: snapshot.state,
+    history: conversationDigest(exported.messages),
     includeChanges,
     sharedSessions: shared.length,
     createdAt: new Date().toISOString(),
@@ -340,16 +460,29 @@ export async function handoffSession(
     );
     // Clone the remote's default branch first, then restore HEAD from the bundle.
     // Passing an unpublished local branch/SHA here would make provisioning fail.
-    const created = await gitterm.workspaces.create({
-      idempotencyKey: `opencode-handoff:${record.attemptID}`,
-      name: options.name ?? session.title ?? "OpenCode cloud handoff",
-      repo,
-      agent: "opencode",
-      provider: options.provider,
-      persistent: options.persistent,
-      connections: options.connections,
-      metadata: { "opencode.handoff": record.attemptID, "opencode.session": sessionID },
+    const create = (useProjectSnapshot: boolean) =>
+      gitterm.workspaces.create({
+        // The fresh fallback has its own key: the plain one answers with the failed start.
+        idempotencyKey: `opencode-handoff:${record.attemptID}${useProjectSnapshot ? "" : ":fresh"}`,
+        name: options.name ?? session.title ?? "OpenCode cloud handoff",
+        repo,
+        agent: "opencode",
+        provider: options.provider,
+        persistent: options.persistent,
+        connections: options.connections,
+        metadata: { "opencode.handoff": record.attemptID, "opencode.session": sessionID },
+        useProjectSnapshot,
+      });
+    // Start from the snapshot kept of this repository's last cloud workspace when there is
+    // one: its agent is installed and its dependencies are in place. A snapshot that no
+    // longer starts must not stop the handoff, so start fresh then. That includes a retry
+    // of an attempt whose snapshot start already failed.
+    let created = await create(true).catch((error: unknown) => {
+      if (error instanceof Error && error.message.includes("PROJECT_SNAPSHOT_FAILED"))
+        return undefined;
+      throw error;
     });
+    if (!created || created.workspace.status === "terminated") created = await create(false);
     record.workspaceID = created.workspace.id;
     record.phase = "restoring";
     await deps.save(record);
@@ -376,7 +509,7 @@ export async function handoffSession(
           {
             location: { directory: runtime.directory },
             path: `${stage}/snapshot.bin`,
-            payload: encodeSnapshot(upload),
+            payload: upload.encoded,
           },
           { signal },
         );
@@ -419,19 +552,9 @@ export async function handoffSession(
         if (missing) return undefined;
         throw error;
       }
-      const pending = await remote.session.inbox.list({ sessionID }, { signal });
-      // The only input that may be waiting is the note this attempt left there itself.
-      const own = (item: (typeof pending)[number]) =>
-        item.type === "synthetic" && item.payload.metadata?.[NOTE_KEY] === record.attemptID;
-      const jobs = await remote.experimental.job.list(
-        { sessionID, status: "running", descendants: true },
-        { signal },
-      );
       if (
         earlier.info.metadata?.[HISTORY_KEY] !== historyDigest(earlier.messages) ||
-        (await remote.session.active({ signal }))[sessionID] ||
-        jobs.length > 0 ||
-        !pending.every(own)
+        (await sessionBusy(remote, sessionID, signal))
       )
         throw new HandoffRefused(
           "The cloud session has new activity since the earlier attempt, so the cloud was left as it is. Continue it in the cloud, or start a new handoff.",
@@ -454,7 +577,17 @@ export async function handoffSession(
     if (earlier) await remote.session.remove({ sessionID }, { signal });
     let imported;
     try {
-      imported = await remote.session.import(importPayload(exported, directory), { signal });
+      const keepModel = await cloudHasModel(
+        gitterm,
+        record.workspaceID!,
+        remote,
+        directory,
+        exported.info.model,
+        signal,
+      );
+      imported = await remote.session.import(importPayload(exported, directory, { keepModel }), {
+        signal,
+      });
     } catch (error) {
       // Put the earlier session back rather than leave the cloud without one.
       if (earlier)
@@ -488,6 +621,10 @@ export async function handoffSession(
     );
     record.phase = "ready";
     await deps.save(record);
+    // Only a label for the UI; the saved record is what makes the session cloud-bound.
+    await markCloudSession(local, sessionID, { workspaceID: record.workspaceID }, signal).catch(
+      () => {},
+    );
     return record;
   } catch (error) {
     const step = STEPS[record.phase];

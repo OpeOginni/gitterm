@@ -1,24 +1,8 @@
-import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { lstat, mkdtemp, readFile, realpath, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-
-export const MAX_SNAPSHOT_BYTES = 25 * 1024 * 1024;
-export const DIFF_ARGS = [
-  "--binary",
-  "--full-index",
-  "--no-ext-diff",
-  "--no-textconv",
-  "--no-renames",
-  "--no-color",
-  "--unified=3",
-  "--inter-hunk-context=0",
-  "--diff-algorithm=myers",
-  "--no-indent-heuristic",
-  "--src-prefix=a/",
-  "--dst-prefix=b/",
-];
+import { CAPTURE_SCRIPT, MAX_SNAPSHOT_BYTES, runLocalScript } from "./restore";
 
 export async function git(
   directory: string,
@@ -54,184 +38,112 @@ export async function checkoutRoot(directory: string): Promise<string> {
   return realpath((await git(directory, ["rev-parse", "--show-toplevel"])).toString().trim());
 }
 
-/**
- * A PEM private key: the header, a real or escaped (JSON) line break, optional PEM headers, then
- * key data. Code that merely mentions the header, like this detector, has no key data after it.
- * In a diff each line starts with "+", "-" or " ", so that prefix is allowed after a break.
- */
-const PRIVATE_KEY =
-  /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----(?:\r?\n[+\- ]?|(?:\\r)?\\n)(?:[A-Za-z-]+: [^\r\n]*(?:\r?\n[+\- ]?|(?:\\r)?\\n))*(?:\r?\n[+\- ]?|(?:\\r)?\\n)?[A-Za-z0-9+/]{16}/;
-
-export function safeRelativePath(file: string): boolean {
-  return (
-    Boolean(file) &&
-    !file.includes("\\") &&
-    !file.includes("\0") &&
-    !path.posix.isAbsolute(file) &&
-    file
-      .split("/")
-      .every(
-        (part) => part !== "" && part !== "." && part !== ".." && part.toLowerCase() !== ".git",
-      )
-  );
-}
-
-export function sensitivePath(file: string): boolean {
-  return /(^|\/)(\.env($|\.(?!(?:[^/]*\.)?(?:example|sample|template)$))|id_(rsa|ed25519|ecdsa)($|\.)|credentials(?:\.json)?$)|\.(pem|p12|pfx|key)$/i.test(
-    file,
-  );
-}
-
-export type SnapshotFile = { path: string; data: string; executable: boolean };
-export type WorkingState = {
+/** What an encoded snapshot says about itself, without its contents. */
+export type SnapshotSummary = {
   head: string;
-  staged: string;
-  unstaged: string;
-  files: SnapshotFile[];
-  changedPaths: string[];
-};
-export type CheckoutSnapshot = WorkingState & {
-  version: 1;
-  /** The checked-out branch, recreated under the same name in the cloud; null when detached. */
+  /** The checked-out branch, recreated under the same name on the other side; null when detached. */
   branch: string | null;
-  /** Commits to add to the cloud clone; empty when it already has HEAD. */
-  bundle: string;
+  /** Digest of the captured state; a restore verifies the checkout against it. */
   digest: string;
+  /** Digest a restore records for a checkout left in this state, to recognise it later. */
+  state: string;
+  changedPaths: string[];
+  /** Size of the commits, patches and files it carries. */
   bytes: number;
 };
-
 /**
- * The snapshot as one upload: a 4-byte length, a JSON manifest, then the raw bytes of the
- * bundle, the two patches and each untracked file, in that order. Sending bytes instead of
- * base64 inside JSON keeps the upload the size of the data.
+ * A checkout's state as one upload: a 4-byte length, a JSON manifest, then the raw bytes of
+ * the Git bundle, the staged and unstaged patches and each untracked file.
  */
-export function encodeSnapshot(snapshot: CheckoutSnapshot): Buffer {
-  const bytes = (data: string) => Buffer.from(data, "base64");
-  const bundle = bytes(snapshot.bundle);
-  const staged = bytes(snapshot.staged);
-  const unstaged = bytes(snapshot.unstaged);
-  const files = snapshot.files.map((file) => bytes(file.data));
-  const manifest = Buffer.from(
-    JSON.stringify({
-      version: 2,
-      head: snapshot.head,
-      branch: snapshot.branch,
-      digest: snapshot.digest,
-      changedPaths: snapshot.changedPaths,
-      bundle: bundle.length,
-      staged: staged.length,
-      unstaged: unstaged.length,
-      files: snapshot.files.map((file, index) => ({
-        path: file.path,
-        executable: file.executable,
-        size: files[index]!.length,
-      })),
-    }),
-  );
-  const header = Buffer.alloc(4);
-  header.writeUInt32BE(manifest.length);
-  return Buffer.concat([header, manifest, bundle, staged, unstaged, ...files]);
+export type CheckoutSnapshot = SnapshotSummary & { encoded: Buffer };
+
+export function snapshotSummary(encoded: Uint8Array): SnapshotSummary {
+  const buffer = Buffer.from(encoded.buffer, encoded.byteOffset, encoded.byteLength);
+  const manifest = JSON.parse(
+    buffer.subarray(4, 4 + buffer.readUInt32BE(0)).toString("utf8"),
+  ) as Omit<SnapshotSummary, "bytes"> & {
+    bundle: number;
+    staged: number;
+    unstaged: number;
+    files: Array<{ size: number }>;
+  };
+  return {
+    head: manifest.head,
+    branch: manifest.branch,
+    digest: manifest.digest,
+    state: manifest.state,
+    changedPaths: manifest.changedPaths,
+    bytes:
+      manifest.bundle +
+      manifest.staged +
+      manifest.unstaged +
+      manifest.files.reduce((sum, file) => sum + file.size, 0),
+  };
 }
 
 /**
  * The commit origin's default branch pointed at when this checkout last fetched. A new
  * workspace clones that branch, so everything reachable from here is already there.
  */
-async function originBase(root: string): Promise<string | null> {
+async function originBase(root: string): Promise<string> {
   try {
     const base = await git(root, ["rev-parse", "--verify", "refs/remotes/origin/HEAD^{commit}"]);
     return base.toString().trim();
   } catch {
-    return null;
+    return "";
   }
 }
 
-const nulList = (buffer: Buffer) => {
-  if (!Buffer.from(buffer.toString()).equals(buffer))
-    throw new Error("Non-UTF-8 filenames are not supported by cloud handoff.");
-  return buffer.toString().split("\0").filter(Boolean);
-};
-export const stateDigest = (state: WorkingState) =>
-  createHash("sha256").update(JSON.stringify(state)).digest("hex");
-
-async function readWorkingState(root: string, includeChanges: boolean): Promise<WorkingState> {
-  const head = (await git(root, ["rev-parse", "HEAD"])).toString().trim();
-  if ((await git(root, ["ls-files", "--unmerged", "-z"])).length) {
-    throw new Error("Resolve merge conflicts before continuing in the cloud.");
+/** Why the capture script refused a local checkout, in the user's terms. */
+function captureFailure(stdout: string): string {
+  let report: { reason?: string; path?: string; part?: string } = {};
+  try {
+    report = JSON.parse(stdout);
+  } catch {
+    /* The script printed nothing: Git itself failed. */
   }
-  // Gitlinks need their own object/state transfer; don't silently omit them.
-  if (
-    (await git(root, ["ls-files", "--stage"]))
-      .toString()
-      .split("\n")
-      .some((line) => line.startsWith("160000 "))
-  ) {
-    throw new Error("Cloud handoff does not support submodules yet.");
-  }
-  if (!includeChanges) return { head, staged: "", unstaged: "", files: [], changedPaths: [] };
-  if ((await git(root, ["diff", "--name-only", "--diff-filter=A", "--"])).length) {
-    throw new Error("Stage or unstage intent-to-add files before cloud handoff.");
-  }
-
-  const stagedBytes = await git(root, ["diff", ...DIFF_ARGS, "--cached", "HEAD", "--"]);
-  const unstagedBytes = await git(root, ["diff", ...DIFF_ARGS, "--"]);
-  if (PRIVATE_KEY.test(stagedBytes.toString() + unstagedBytes.toString())) {
-    throw new Error("Private key material detected in changed files. Remove it before uploading.");
-  }
-  // Patches can contain non-UTF-8 text; preserve their bytes, not decoded strings.
-  const staged = stagedBytes.toString("base64");
-  const unstaged = unstagedBytes.toString("base64");
-  const untracked = nulList(
-    await git(root, ["ls-files", "--others", "--exclude-standard", "-z"]),
-  ).toSorted();
-  const changedPaths = [
-    ...new Set([
-      ...nulList(await git(root, ["diff", "--name-only", "-z", "--no-renames", "HEAD", "--"])),
-      ...nulList(await git(root, ["diff", "--name-only", "-z", "--cached", "HEAD", "--"])),
-      ...untracked,
-    ]),
-  ].toSorted();
-  for (const file of changedPaths) {
-    if (!safeRelativePath(file))
-      throw new Error("The checkout contains a path that cannot be transferred safely.");
-    if (sensitivePath(file))
-      throw new Error(
-        `Potential secret file ${JSON.stringify(file)} is changed. Exclude it or continue without uncommitted changes.`,
+  const file = report.path ? JSON.stringify(report.path) : "";
+  switch (report.reason) {
+    case "conflicts":
+      return "Resolve merge conflicts before continuing in the cloud.";
+    case "submodules":
+      // Gitlinks need their own object/state transfer; don't silently omit them.
+      return "Cloud handoff does not support submodules yet.";
+    case "intent-to-add":
+      return "Stage or unstage intent-to-add files before cloud handoff.";
+    case "filename":
+      return "Non-UTF-8 filenames are not supported by cloud handoff.";
+    case "unsafe-path":
+      return "The checkout contains a path that cannot be transferred safely.";
+    case "special-file":
+      return "Untracked symlinks, nested repositories, and special files are not supported.";
+    case "secret-path":
+      return `Potential secret file ${file} is changed. Exclude it or continue without uncommitted changes.`;
+    case "private-key":
+      return `Private key material detected in ${file || "changed files"}. Remove it before uploading.`;
+    case "too-large":
+      return (
+        {
+          changes: "Uncommitted changes exceed the 25 MiB handoff limit.",
+          commits:
+            "Commits that are not on origin's default branch exceed the 25 MiB handoff limit.",
+          history: "Repository history exceeds the 25 MiB handoff limit.",
+        }[report.part ?? ""] ?? "Checkout snapshot exceeds the 25 MiB handoff limit."
       );
+    case "busy":
+      return "The checkout changed during capture. Pause writers and retry.";
+    default:
+      return "Git snapshot operation failed. Check repository access, unresolved conflicts, and snapshot size.";
   }
-
-  let bytes = stagedBytes.length + unstagedBytes.length;
-  const files: SnapshotFile[] = [];
-  for (const file of untracked) {
-    const full = path.join(root, file);
-    const info = await lstat(full);
-    if (!info.isFile() || (await realpath(full)) !== full) {
-      throw new Error(
-        "Untracked symlinks, nested repositories, and special files are not supported.",
-      );
-    }
-    bytes += info.size;
-    if (bytes > MAX_SNAPSHOT_BYTES)
-      throw new Error("Uncommitted changes exceed the 25 MiB handoff limit.");
-    const content = await readFile(full);
-    if (PRIVATE_KEY.test(content.toString("latin1"))) {
-      throw new Error(
-        `Private key material detected in ${JSON.stringify(file)}. Remove it before uploading.`,
-      );
-    }
-    files.push({
-      path: file,
-      data: content.toString("base64"),
-      executable: Boolean(info.mode & 0o111),
-    });
-  }
-  return { head, staged, unstaged, files, changedPaths };
 }
 
 /**
- * `fullHistory` bundles every commit instead of only those the origin lacks. Restoring
- * asks for it when the cloud clone does not have the commits a smaller bundle builds on
- * (origin's default branch was rewritten since the last fetch, or the clone is shallow).
+ * Captures the local checkout for upload: its commits that origin's default branch lacks,
+ * and its uncommitted changes when asked for. Changes that look like secrets are refused.
+ *
+ * `fullHistory` bundles every commit instead. Restoring asks for it when the cloud clone
+ * does not have the commits a smaller bundle builds on (origin's default branch was
+ * rewritten since the last fetch, or the clone is shallow).
  */
 export async function captureSnapshot(
   directory: string,
@@ -239,45 +151,26 @@ export async function captureSnapshot(
   fullHistory = false,
 ): Promise<CheckoutSnapshot> {
   const root = await checkoutRoot(directory);
-  const temporary = await mkdtemp(path.join(tmpdir(), "gitterm-handoff-"));
+  // Written outside the checkout, so nothing appears in it even for a moment.
+  const out = await mkdtemp(path.join(tmpdir(), "gitterm-handoff-"));
   try {
-    const before = await readWorkingState(root, includeChanges);
-    const bundlePath = path.join(temporary, "checkout.bundle");
-    const base = fullHistory ? null : await originBase(root);
-    const commits = base ? ["HEAD", `^${base}`] : ["HEAD"];
-    // Git refuses to write a bundle with no commits in it.
-    const count = Number((await git(root, ["rev-list", "--count", ...commits])).toString());
-    let bundle = "";
-    let bundleSize = 0;
-    if (count > 0) {
-      await git(root, ["bundle", "create", bundlePath, ...commits]);
-      bundleSize = (await stat(bundlePath)).size;
-      if (bundleSize > MAX_SNAPSHOT_BYTES)
-        throw new Error(
-          base
-            ? "Commits that are not on origin's default branch exceed the 25 MiB handoff limit."
-            : "Repository history exceeds the 25 MiB handoff limit.",
-        );
-      bundle = (await readFile(bundlePath)).toString("base64");
-    }
-    const after = await readWorkingState(root, includeChanges);
-    const digest = stateDigest(before);
-    if (digest !== stateDigest(after))
-      throw new Error("The checkout changed during capture. Pause writers and retry.");
-    const bytes =
-      bundleSize +
-      Buffer.from(before.staged, "base64").length +
-      Buffer.from(before.unstaged, "base64").length +
-      before.files.reduce((sum, file) => sum + Buffer.from(file.data, "base64").length, 0);
-    if (bytes > MAX_SNAPSHOT_BYTES)
-      throw new Error("Checkout snapshot exceeds the 25 MiB handoff limit.");
-    const branch = await git(root, ["symbolic-ref", "--short", "-q", "HEAD"]).then(
-      (name) => name.toString().trim() || null,
-      () => null,
-    );
-    return { version: 1, ...before, branch, bundle, digest, bytes };
+    const options = {
+      base: fullHistory ? "" : await originBase(root),
+      changes: includeChanges,
+      screen: true,
+      out,
+    };
+    // The first argument names the upload directory a restore uses inside a checkout; a
+    // capture leaves it out of the snapshot.
+    const result = await runLocalScript(root, CAPTURE_SCRIPT, [
+      ".gitterm-handoff-0",
+      JSON.stringify(options),
+    ]);
+    if (result.exit !== 0) throw new Error(captureFailure(result.stdout));
+    const encoded = await readFile(path.join(out, "snapshot.bin"));
+    return { ...snapshotSummary(encoded), encoded };
   } finally {
-    await rm(temporary, { recursive: true, force: true });
+    await rm(out, { recursive: true, force: true });
   }
 }
 

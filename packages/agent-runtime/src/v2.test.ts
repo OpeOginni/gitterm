@@ -6,6 +6,7 @@ import {
   parseV2Signal,
   selectRunMessages,
 } from "./v2";
+import { PASSIVE_REQUEST_HEADER } from "./http";
 import { parseModelRef } from "./types";
 
 test("model references split the native variant from provider and model IDs", () => {
@@ -360,6 +361,36 @@ test("snapshots page newest-first through the prompt and preserve supersession",
   expect(pages).toHaveLength(2);
   expect(pages[0]!.searchParams.get("order")).toBe("desc");
   expect(pages[1]!.searchParams.has("order")).toBe(false);
+});
+
+test("reading a run is marked passive, so it is not counted as use of the workspace; aborting is not", async () => {
+  const requests: Array<{ call: string; passive: boolean }> = [];
+  const runtime = createV2Runtime({
+    url: "http://opencode.test",
+    directory: "/w",
+    password: null,
+    fetch: (async (input, init) => {
+      const request = new Request(input, init);
+      const url = new URL(request.url);
+      requests.push({
+        call: `${request.method} ${url.pathname}`,
+        passive: request.headers.has(PASSIVE_REQUEST_HEADER),
+      });
+      if (request.method === "POST") return Response.json({ data: {} });
+      const list =
+        url.pathname.endsWith("/permission") ||
+        url.pathname.endsWith("/form") ||
+        url.pathname.endsWith("/message");
+      return Response.json(list ? { data: [], cursor: { next: null } } : { data: {} });
+    }) as typeof fetch,
+  });
+  await runtime.snapshot("ses_test", "run_prompt");
+  expect(requests.length).toBeGreaterThanOrEqual(5);
+  expect(requests.every((request) => request.passive)).toBe(true);
+
+  requests.length = 0;
+  await runtime.abort("ses_test");
+  expect(requests).toEqual([{ call: "POST /api/session/ses_test/interrupt", passive: false }]);
 });
 
 describe("prompt", () => {

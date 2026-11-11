@@ -60,6 +60,21 @@ export async function call<T>(operation: Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Sent by a caller that only observes a workspace: a status poll, a health check, reading a
+ * run. GitTerm's proxy routes the request as usual but does not count it as use of the
+ * workspace, so watching a workspace does not keep it from pausing when it is idle. Requests
+ * that do work (a prompt, a reply, a shell command) never carry it.
+ *
+ * The name avoids the `X-GitTerm-` prefix, which the proxy strips from client requests.
+ */
+export const PASSIVE_REQUEST_HEADER = "X-Passive-Request";
+
+/** Request options for a call that only observes; see PASSIVE_REQUEST_HEADER. */
+export function observing(signal?: AbortSignal, timeoutMs?: number) {
+  return { ...requestTimeout(signal, timeoutMs), headers: { [PASSIVE_REQUEST_HEADER]: "1" } };
+}
+
 export function requestTimeout(signal?: AbortSignal, timeoutMs = 15_000): { signal: AbortSignal } {
   return {
     signal: signal

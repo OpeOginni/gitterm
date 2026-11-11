@@ -201,10 +201,15 @@ export const volume = pgTable("volume", {
 });
 
 /**
- * A snapshot of a managed sandbox, saved in the deployment's provider account so new
- * sandboxes can start from it. Counted against the owner's plan limit. A row without
- * `externalSnapshotId` is being saved. Rows outlive a deleted user (`userId` null) so the
- * provider snapshot can still be found and removed.
+ * A machine snapshot saved in the deployment's provider account. Counted against the
+ * owner's plan limit. A row without `externalSnapshotId` is being saved. Rows outlive a
+ * deleted user (`userId` null) so the provider snapshot can still be found and removed.
+ *
+ * There are two kinds. A sandbox snapshot (`repositoryUrl` null) is one a managed sandbox
+ * saved; new sandboxes start from it. A project snapshot (`repositoryUrl` set) is a cloud
+ * agent workspace kept when the user was done with it; their next workspace for that
+ * repository on that provider starts from it. A user has at most one per repository and
+ * provider: saving another replaces it.
  */
 export const sandboxSnapshot = pgTable(
   "sandbox_snapshot",
@@ -220,9 +225,19 @@ export const sandboxSnapshot = pgTable(
     }),
     externalSnapshotId: text("external_snapshot_id"),
     label: text("label").notNull(),
+    /** Set on a project snapshot: the repository whose workspaces start from it. */
+    repositoryUrl: text("repository_url"),
+    /**
+     * Set on a project snapshot: the image the workspace ran. A workspace only starts from
+     * a snapshot of the image it would otherwise use, so an image update retires old ones.
+     */
+    imageId: uuid("image_id").references(() => image.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (table) => [index("sandbox_snapshot_user_idx").on(table.userId)],
+  (table) => [
+    index("sandbox_snapshot_user_idx").on(table.userId),
+    index("sandbox_snapshot_project_idx").on(table.userId, table.repositoryUrl),
+  ],
 );
 
 /** Durable teardown intent. Kept until provider and local cleanup both succeed. */

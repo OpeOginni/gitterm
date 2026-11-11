@@ -113,6 +113,8 @@ export function createGittermComputeTransport(config: {
               onTimeout: input.onTimeout ?? "kill",
               publicPreviews: input.publicPreviews === true,
               labels: input.labels,
+              // A snapshot Compute saved earlier; the machine starts from its disk and size.
+              snapshot: input.snapshot,
             },
             undefined,
             // Installing an image can take minutes.
@@ -180,6 +182,34 @@ export function createGittermComputeTransport(config: {
     },
     async preview(id, port) {
       return json(await call("GET", `${at(id)}/previews/${port}`, "open a preview"));
+    },
+
+    snapshots: {
+      // Compute answers once the snapshot is ready, which can take many minutes.
+      async create(id, name) {
+        const saved = await json<{ id: string }>(
+          await call(
+            "POST",
+            `${at(id)}/snapshots`,
+            "snapshot the sandbox",
+            { name },
+            undefined,
+            35 * 60_000,
+          ),
+        );
+        return saved.id;
+      },
+      async delete(snapshotId) {
+        try {
+          await call(
+            "DELETE",
+            `/v1/snapshots/${encodeURIComponent(snapshotId)}`,
+            "delete the snapshot",
+          );
+        } catch (error) {
+          if (!(error instanceof SandboxProviderError) || error.code !== "not_found") throw error;
+        }
+      },
     },
   };
 }

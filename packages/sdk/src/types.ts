@@ -177,6 +177,14 @@ export type WorkspaceCreateInput = {
    * GitTerm this needs a paid plan, and spending limits still pause it.
    */
   alwaysOn?: boolean;
+  /**
+   * Start from the snapshot you kept of an earlier workspace for this repository
+   * (`workspaces.terminate(id, { saveSnapshot: true })`), when one fits: same provider,
+   * image and machine size. Its agent is already installed and its repository cloned, with
+   * the files Git ignores (installed dependencies) still there. Without a fitting snapshot
+   * the workspace is created fresh.
+   */
+  useProjectSnapshot?: boolean;
   workspaceProfile?: "standard" | "ssh-enabled";
   /** Omit to use dashboard defaults. An explicit block inherits nothing unless requested. */
   models?: WorkspaceModelsInput;
@@ -347,6 +355,23 @@ export type WorkspacePauseResult = { durationMinutes: number };
 export type WorkspaceTerminateResult = {
   workspace: Workspace | null;
   cleanupInBackground: boolean;
+  /** The project snapshot saved first, when `saveSnapshot` was asked for. */
+  snapshot: { id: string } | null;
+};
+export type WorkspaceTerminateOptions = {
+  /**
+   * Keep the workspace's disk as the snapshot for its repository before deleting it,
+   * replacing the one kept before. If saving fails the workspace is not deleted.
+   */
+  saveSnapshot?: boolean;
+};
+/** Whether a workspace can be kept as its repository's snapshot, and what that replaces. */
+export type ProjectSnapshotStatus = {
+  available: boolean;
+  /** Why not: the provider has no snapshots, the plan allows none, no repository, or not running. */
+  reason?: "provider" | "plan" | "repository" | "not_running";
+  /** The snapshot already kept for this repository on this provider. */
+  existing: { id: string; createdAt: string } | null;
 };
 export type WorkspaceEnsureRunningResult = {
   workspace: Workspace;
@@ -784,6 +809,8 @@ export type ManagedSandboxSnapshot = {
   id: string;
   provider: SandboxProviderKey;
   label: string;
+  /** Set on a project snapshot: the repository whose cloud workspaces start from it. */
+  repositoryUrl: string | null;
   machineProfileId: string | null;
   createdAt: string;
 };

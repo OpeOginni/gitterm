@@ -115,6 +115,23 @@ test("a Gitterm workspace is set up through sandbox calls and keeps a sandbox ha
   });
 });
 
+test("a workspace started from a project snapshot refreshes its clone instead of cloning", async () => {
+  created.length = 0;
+  commands.length = 0;
+  await new GittermProvider().createWorkspace({ ...config(), snapshot: "snap1" });
+  expect(created[0]).toMatchObject({ snapshot: "snap1", template: "gitterm-opencode-server" });
+  const checkout = commands.find((entry) => entry.command.includes("git fetch --prune origin"));
+  expect(checkout?.cwd).toBe("/home/user/workspace/app");
+  // Still a clone when the snapshot turns out to hold no checkout.
+  expect(checkout?.command).toContain(
+    "git clone --branch 'main' 'https://github.com/acme/app.git' .",
+  );
+  // Credentials and agent files are written afresh, and the agent is started as usual.
+  expect(commands.some((entry) => entry.command.includes("credential.helper"))).toBe(true);
+  expect(files.get("/home/user/.config/agent.json")).toBe("{}");
+  expect(commands.some((entry) => entry.command.includes("opencode serve --port 4096"))).toBe(true);
+});
+
 test("a failed clone says why and removes the sandbox", async () => {
   failOn = "git clone";
   try {

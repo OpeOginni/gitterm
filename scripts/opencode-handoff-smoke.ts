@@ -5,7 +5,12 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { handoffSession, runtimeClient } from "../packages/opencode-cloud/src/handoff";
+import {
+  handoffSession,
+  runtimeClient,
+  type HandoffRecord,
+} from "../packages/opencode-cloud/src/handoff";
+import { returnSession } from "../packages/opencode-cloud/src/return";
 import { git } from "../packages/opencode-cloud/src/snapshot";
 
 const binary = process.env.OPENCODE_HANDOFF_SMOKE_BINARY;
@@ -122,6 +127,18 @@ try {
   await writeFile(join(source, "file.txt"), "unstaged smoke\n");
   await writeFile(join(source, "new.bin"), Buffer.from([0, 255, 1]));
 
+  const gitterm = {
+    workspaces: {
+      create: async () => ({ workspace: { id: "isolated-cloud" } }),
+      ensureRunning: async () => {},
+      getRuntimeAccess: async () => ({
+        url: remote.url,
+        password,
+        directory: await realpath(cloud),
+      }),
+    },
+  } as unknown as Parameters<typeof handoffSession>[1]["gitterm"];
+  let record: HandoffRecord;
   const formPolling = new AbortController();
   const answerForms = async () => {
     const answered = new Set<string>();
@@ -146,19 +163,9 @@ try {
   };
   const answering = answerForms();
   try {
-    const record = await handoffSession(session.id, {
+    record = await handoffSession(session.id, {
       local: local.client,
-      gitterm: {
-        workspaces: {
-          create: async () => ({ workspace: { id: "isolated-cloud" } }),
-          ensureRunning: async () => {},
-          getRuntimeAccess: async () => ({
-            url: remote.url,
-            password,
-            directory: await realpath(cloud),
-          }),
-        },
-      } as unknown as Parameters<typeof handoffSession>[1]["gitterm"],
+      gitterm,
       options: {},
       signal,
       save: async () => {},
@@ -195,8 +202,67 @@ try {
     (await readFile(join(source, "file.txt"), "utf8")) === "unstaged smoke\n",
     "Local file changed",
   );
+
+  // Work in the cloud, then bring the session back with /local's code path.
+  await writeFile(join(cloud, "cloud.txt"), "made in the cloud\n");
+  await git(cloud, ["add", "cloud.txt"]);
+  await git(cloud, [
+    "-c",
+    "user.name=Smoke",
+    "-c",
+    "user.email=smoke@example.com",
+    "commit",
+    "-m",
+    "cloud commit",
+  ]);
+  await writeFile(join(cloud, "file.txt"), "cloud unstaged\n");
+  await remote.client.session.shell(
+    { sessionID: session.id, command: "printf 'cloud smoke history\\n'" },
+    { signal },
+  );
+  for (const pending of await remote.client.session.inbox.list(
+    { sessionID: session.id },
+    { signal },
+  )) {
+    await remote.client.session.inbox.cancel(
+      { sessionID: session.id, inboxID: pending.id },
+      { signal },
+    );
+  }
+  // The local checkout is as it was handed off, so nothing needs confirming.
+  const returned = await returnSession(record, {
+    local: local.client,
+    gitterm,
+    signal,
+    save: async () => {},
+    progress: async (text) => console.log(text),
+  });
+  check(returned.record.phase === "returned", "Return did not finish");
+  check(
+    !returned.kept.stash && !returned.kept.branch && !returned.kept.sessionID,
+    "An untouched local checkout should have nothing kept aside",
+  );
+  check(
+    (await git(source, ["rev-parse", "HEAD"])).equals(await git(cloud, ["rev-parse", "HEAD"])),
+    "Cloud commit did not come back",
+  );
+  check(
+    (await readFile(join(source, "file.txt"), "utf8")) === "cloud unstaged\n",
+    "Cloud uncommitted change did not come back",
+  );
+  check(
+    (await git(source, ["status", "--porcelain=v1"])).equals(
+      await git(cloud, ["status", "--porcelain=v1"]),
+    ),
+    "Local and cloud checkouts differ after the return",
+  );
+  const back = await local.client.session.export({ sessionID: session.id }, { signal });
+  check(
+    back.messages.filter((message) => message.type === "shell").length === 2,
+    "Cloud conversation history did not come back",
+  );
   console.log(
-    "OpenCode handoff smoke passed: real forms, binary HTTP upload, restore verification, staging state, unpublished commits, session history; no model or cloud calls.",
+    "OpenCode handoff smoke passed: real forms, binary HTTP upload, restore verification, staging state, unpublished commits, session history, and the return of cloud commits, changes and history; no model or cloud calls.",
   );
 } finally {
   for (const server of servers) {

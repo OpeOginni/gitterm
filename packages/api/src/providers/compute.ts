@@ -297,7 +297,18 @@ export interface WorkspaceConfig {
    * absent (legacy callers), providers derive it from `environmentVariables`.
    */
   provisioningSpec?: WorkspaceProvisioningSpec;
+  /**
+   * The provider's id of a project snapshot to start the machine from: the disk of an
+   * earlier workspace for the same repository, with the agent installed and the repository
+   * cloned. Only passed to providers listed in PROJECT_SNAPSHOT_PROVIDERS. Such a provider
+   * skips installing the agent and refreshes the existing clone instead of cloning.
+   */
+  snapshot?: string;
 }
+
+/** Providers whose workspaces can be saved as, and started from, a project snapshot. */
+export const PROJECT_SNAPSHOT_PROVIDERS = ["e2b", "daytona", "vercel", "boat", "gitterm"] as const;
+export type ProjectSnapshotProvider = (typeof PROJECT_SNAPSHOT_PROVIDERS)[number];
 
 export interface UpstreamAccess {
   headers: Record<string, string>;

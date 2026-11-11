@@ -308,9 +308,10 @@ With `"snapshots": true` in the plugin options, the agent can save a sandbox as 
 snapshot** once a slow setup (dependencies, toolchains, services) works, and later sandboxes
 start from it instead of redoing it. Off by default.
 
-- **Providers:** E2B, Daytona, Vercel, and Boat, with your own key or as a managed account.
-  Gitterm's own sandboxes, exe.dev, Railway, and AWS can't snapshot, so the option is
-  ignored there and the agent is never told about it. Saving pauses the sandbox briefly; on
+- **Providers:** E2B, Daytona, Vercel, and Boat, with your own key or as a managed account,
+  and Gitterm's own sandboxes once the Compute service has its snapshot endpoints. exe.dev,
+  Railway, and AWS can't snapshot, so the option is ignored there and the agent is never
+  told about it. Saving pauses the sandbox briefly; on
   Vercel it stops the sandbox for good, and the agent is told to create a new one.
 - **Managed accounts.** Snapshots are saved in the deployment's provider account and
   recorded in `sandbox_snapshot`, owned by your user. Plans limit how many you keep: Free 0,

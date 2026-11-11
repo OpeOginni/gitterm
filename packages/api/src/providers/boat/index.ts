@@ -14,6 +14,7 @@ import type {
   WorkspaceStatusResult,
 } from "../compute";
 import { createProvisionLogger } from "../provision-logger";
+import { repositoryCheckoutCommand } from "../project-snapshot";
 import { inlineGitAuthCommands } from "../git-auth";
 import { captureAgentAccessCredential } from "../access-credential";
 import {
@@ -246,6 +247,7 @@ export class BoatProvider implements ComputeProvider {
           ttlSeconds: null,
           noEnv: true,
           env: this.getEnvironment(config, spec),
+          ...(config.snapshot ? { from: config.snapshot } : {}),
         },
       }),
     );
@@ -269,9 +271,11 @@ export class BoatProvider implements ComputeProvider {
       await logger.step("create-workspace-directory", () =>
         this.runCommand(client, handle.boxId, `mkdir -p "${repoDir}"`),
       );
-      await logger.step("setup-agent", () =>
-        this.setupAgent(client, handle.boxId, metadata.setupCommands),
-      );
+      // A project snapshot was saved from a workspace that had the agent installed.
+      if (!config.snapshot)
+        await logger.step("setup-agent", () =>
+          this.setupAgent(client, handle.boxId, metadata.setupCommands),
+        );
 
       if (spec?.repo) {
         const repoUrl = spec.repo.url.endsWith(".git") ? spec.repo.url : `${spec.repo.url}.git`;
@@ -293,7 +297,9 @@ export class BoatProvider implements ComputeProvider {
           this.runCommand(
             client,
             handle.boxId,
-            `GIT_TERMINAL_PROMPT=0 git clone ${spec.repo!.checkoutRef || spec.repo!.branch ? `--branch ${spec.repo!.checkoutRef || spec.repo!.branch}` : ""} "${repoUrl}" .`,
+            config.snapshot
+              ? repositoryCheckoutCommand(spec.repo!, repoUrl)
+              : `GIT_TERMINAL_PROMPT=0 git clone ${spec.repo!.checkoutRef || spec.repo!.branch ? `--branch ${spec.repo!.checkoutRef || spec.repo!.branch}` : ""} "${repoUrl}" .`,
             repoDir,
           ),
         );

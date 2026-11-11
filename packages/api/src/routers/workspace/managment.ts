@@ -128,6 +128,14 @@ import {
 } from "../../service/workspace-runtime";
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { holdWorkspaceOperation, operationLease } from "../../service/workspace-operation";
+import { PASSIVE_REQUEST_HEADER } from "@gitterm/agent-runtime";
+import {
+  findProjectSnapshot,
+  projectSnapshotProvider,
+  projectSnapshotStatus,
+  saveProjectSnapshot,
+  workspaceProviderKey,
+} from "../../service/project-snapshot";
 import { pollDelays, pollHttpRuntimeHealth } from "../../utils/runtime-health";
 import {
   buildGitExcludeCommand,
@@ -387,6 +395,12 @@ const workspaceCreateBaseSchema = z.strictObject({
   workspaceProfile: z.enum(WORKSPACE_PROFILES).default("standard").optional(),
   /** Keep the workspace running while idle. Spending limits still apply. */
   alwaysOn: z.boolean().optional(),
+  /**
+   * Start from the snapshot the caller kept of an earlier workspace for this repository
+   * (see `deleteWorkspace` with `saveSnapshot`), when one fits: same provider, image and
+   * machine size. Without a fitting one the workspace is created fresh, as usual.
+   */
+  useProjectSnapshot: z.boolean().optional(),
   /** Per-provider selection: inline apiKey, dashboard credential by label, or dashboard default. */
   models: workspaceModelsSchema.optional(),
   /** Injected into this workspace only; never stored as dashboard environment settings. */
@@ -1916,6 +1930,8 @@ export const workspaceRouter = router({
       let selectedProviderKey = "unknown";
       let workspaceReservedBeforeProvision = false;
       let provisionStartedAt = 0;
+      // Set once a machine is being started from a project snapshot.
+      let startingFromSnapshot = false;
       try {
         // Get cloud provider info first to determine if local
         const [cloudProviderRecord] = await db
@@ -2929,6 +2945,25 @@ export const workspaceRouter = router({
           }
         }
 
+        // A project snapshot holds the catalog image's agent and the machine's size, so it
+        // is only used for the same image and size; anything else starts fresh.
+        const candidateSnapshot =
+          input.useProjectSnapshot &&
+          input.repo &&
+          !input.image &&
+          projectSnapshotProvider(providerKey)
+            ? await findProjectSnapshot({
+                userId,
+                repositoryUrl: input.repo,
+                cloudProviderId: input.cloudProviderId,
+                imageId: imageRecord.id,
+              })
+            : undefined;
+        const startSnapshot =
+          candidateSnapshot?.machineProfileId === (selectedMachineProfile?.id ?? null)
+            ? candidateSnapshot
+            : undefined;
+
         // Plan-based persistence gating: free tier cannot opt into persistent
         // (volume-backed) workspaces. Guard server-side even though the UI hides
         // the toggle. Self-hosted and paid plans are allowed.
@@ -2977,6 +3012,7 @@ export const workspaceRouter = router({
             sharedGitConnectionId,
             googleCloudIntegrationId: googleCloudIntegrationId ?? null,
             repositoryUrl: input.repo ?? null,
+            snapshotId: startSnapshot?.id ?? null,
             domain,
             subdomain,
             status: "pending",
@@ -3038,6 +3074,7 @@ export const workspaceRouter = router({
         };
 
         // Create workspace via compute provider
+        startingFromSnapshot = Boolean(startSnapshot);
         const workspaceInfo = await workspaceCreateLogger.step(
           `provision-workspace provider=${providerKey} persistent=${effectivePersistent}`,
           // Held while the provider works: its handle may be published before it finishes.
@@ -3059,6 +3096,7 @@ export const workspaceRouter = router({
                     regionIdentifier: regionRecord?.externalRegionIdentifier,
                     environmentVariables: providerEnvironment,
                     provisioningSpec,
+                    snapshot: startSnapshot?.externalSnapshotId ?? undefined,
                     persistent: effectivePersistent,
                   })
                 : computeProvider.createWorkspace({
@@ -3076,6 +3114,7 @@ export const workspaceRouter = router({
                     regionIdentifier: regionRecord?.externalRegionIdentifier,
                     environmentVariables: providerEnvironment,
                     provisioningSpec,
+                    snapshot: startSnapshot?.externalSnapshotId ?? undefined,
                   }),
             ),
         );
@@ -3097,6 +3136,7 @@ export const workspaceRouter = router({
           imageId: imageRecord.id,
           cloudProviderId: input.cloudProviderId,
           machineProfileId: selectedMachineProfile?.id ?? null,
+          snapshotId: startSnapshot?.id ?? null,
           launchProfileId: null,
           gitIntegrationId: input.repositoryCredentials ? null : (gitIntegrationId ?? null),
           sharedGitConnectionId,
@@ -3327,6 +3367,13 @@ export const workspaceRouter = router({
             .delete(workspaceRuntimeBundle)
             .where(eq(workspaceRuntimeBundle.workspaceId, workspaceId));
         }
+        // A snapshot that no longer starts must not stop the caller from working: say so in
+        // a way it can recognise, so it can create the workspace fresh instead.
+        if (startingFromSnapshot)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `PROJECT_SNAPSHOT_FAILED: The project snapshot could not be started. Create the workspace without it. Reference: ${workspaceId}`,
+          });
         if (error instanceof AwsWorkspaceStartupError) {
           throw new TRPCError({
             code: error.diagnostics.stage === "task-start" ? "INTERNAL_SERVER_ERROR" : "TIMEOUT",
@@ -3799,7 +3846,8 @@ export const workspaceRouter = router({
       }
       const healthy = await pollHttpRuntimeHealth({
         url: runtime.url,
-        headers: runtime.headers,
+        // Waiting for a runtime to answer is not use of the workspace.
+        headers: { ...runtime.headers, [PASSIVE_REQUEST_HEADER]: "1" },
         timeoutMs: Math.max(0, deadline - Date.now()),
         intervalMs: pollIntervalMs,
         // Authentication failures still prove that the runtime server is up.
@@ -4164,9 +4212,50 @@ export const workspaceRouter = router({
     }),
 
   // Delete a workspace
-  deleteWorkspace: accountProcedure("workspace:write")
+  /** Whether a workspace can be kept as its repository's snapshot, and what that replaces. */
+  projectSnapshot: accountProcedure("workspace:access")
     .input(z.object({ workspaceId: z.string() }))
-    .mutation(({ input, ctx }) => deleteWorkspaceForUser(ctx.session.user.id, input.workspaceId)),
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      const row = await db.query.workspace.findFirst({
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
+      });
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      const { maxSnapshots } = await (await getBilling()).getEntitlements(userId);
+      return projectSnapshotStatus(row, (await workspaceProviderKey(row)) ?? "", maxSnapshots);
+    }),
+
+  deleteWorkspace: accountProcedure("workspace:write")
+    .input(
+      z.object({
+        workspaceId: z.string(),
+        /**
+         * Keep the workspace's disk as the snapshot for its repository before deleting it,
+         * replacing the one kept before. The next workspace created for that repository
+         * with `useProjectSnapshot` starts from it. If saving fails the workspace is not
+         * deleted, but it has been prepared for the snapshot: its agent is stopped.
+         */
+        saveSnapshot: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      let snapshot: { id: string } | null = null;
+      if (input.saveSnapshot) {
+        const row = await db.query.workspace.findFirst({
+          where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, userId)),
+        });
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+        const { maxSnapshots } = await (await getBilling()).getEntitlements(userId);
+        const saved = await saveProjectSnapshot(
+          row,
+          (await workspaceProviderKey(row)) ?? "",
+          maxSnapshots,
+        );
+        snapshot = { id: saved.id };
+      }
+      return { ...(await deleteWorkspaceForUser(userId, input.workspaceId)), snapshot };
+    }),
 
   openWorkspacePort: protectedProcedure
     .input(

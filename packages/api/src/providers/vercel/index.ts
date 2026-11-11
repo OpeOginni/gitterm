@@ -15,6 +15,7 @@ import type {
   WorkspaceStatusResult,
 } from "../compute";
 import { createProvisionLogger } from "../provision-logger";
+import { repositoryCheckoutCommand, shellQuote } from "../project-snapshot";
 import { inlineGitAuthCommands } from "../git-auth";
 import type {
   WorkspaceSSHAccess,
@@ -276,7 +277,11 @@ export class VercelProvider implements ComputeProvider {
           [AGENT_COMMAND_TAG]: serve.command,
           [AGENT_PORT_TAG]: String(serve.port),
         },
-        ...(metadata.image ? { image: metadata.image } : { runtime: metadata.runtime }),
+        ...(config.snapshot
+          ? { source: { type: "snapshot" as const, snapshotId: config.snapshot } }
+          : metadata.image
+            ? { image: metadata.image }
+            : { runtime: metadata.runtime }),
         ...(metadata.vcpus ? { resources: { vcpus: metadata.vcpus } } : {}),
       }),
     );
@@ -287,9 +292,11 @@ export class VercelProvider implements ComputeProvider {
       await logger.step("create-workspace-directory", () =>
         sandbox.runCommand("mkdir", ["-p", repoDir]),
       );
-      await logger.step("setup-agent", () =>
-        this.setupAgent(sandbox, metadata.setupCommands, isOpencodeServeCommand(serve.command)),
-      );
+      // A project snapshot was saved from a workspace that had the agent installed.
+      if (!config.snapshot)
+        await logger.step("setup-agent", () =>
+          this.setupAgent(sandbox, metadata.setupCommands, isOpencodeServeCommand(serve.command)),
+        );
       if (spec?.repo) {
         const repo = spec.repo;
         const repositoryUrl = repo.url.endsWith(".git") ? repo.url : `${repo.url}.git`;
@@ -311,15 +318,26 @@ esac
         try {
           await logger.step("clone-repository", () =>
             sandbox.runCommand({
-              cmd: "git",
-              args: [
-                "clone",
-                ...(repo.checkoutRef || repo.branch
-                  ? ["--branch", repo.checkoutRef || repo.branch!]
-                  : []),
-                repositoryUrl,
-                repoDir,
-              ],
+              // The snapshot already holds a clone: refresh it instead.
+              ...(config.snapshot
+                ? {
+                    cmd: "bash",
+                    args: [
+                      "-c",
+                      `cd ${shellQuote(repoDir)} && ${repositoryCheckoutCommand(repo, repositoryUrl)}`,
+                    ],
+                  }
+                : {
+                    cmd: "git",
+                    args: [
+                      "clone",
+                      ...(repo.checkoutRef || repo.branch
+                        ? ["--branch", repo.checkoutRef || repo.branch!]
+                        : []),
+                      repositoryUrl,
+                      repoDir,
+                    ],
+                  }),
               env: repo.authToken
                 ? {
                     GIT_ASKPASS: askPassPath,

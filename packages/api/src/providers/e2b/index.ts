@@ -25,6 +25,7 @@ import {
 } from "../ssh-access";
 import { createProvisionLogger } from "../provision-logger";
 import { inlineGitAuthCommands } from "../git-auth";
+import { repositoryCheckoutCommand } from "../project-snapshot";
 import type { E2BConfig } from "./types";
 import { getWorkspaceIdleTimeoutMs } from "../../service/workspace-timeouts";
 import { redactSecrets } from "../../utils/redact-secrets";
@@ -139,7 +140,8 @@ export class E2BProvider implements ComputeProvider {
   ): Promise<E2BSandbox> {
     const timeoutMs = await getWorkspaceIdleTimeoutMs(config.userId);
 
-    return Sandbox.create(this.getTemplateId(config, sshEnabled), {
+    // A project snapshot is a template too, with the size it was saved at.
+    return Sandbox.create(config.snapshot ?? this.getTemplateId(config, sshEnabled), {
       apiKey: await this.getApiKey(),
       timeoutMs,
       network: {
@@ -186,6 +188,7 @@ export class E2BProvider implements ComputeProvider {
     spec: WorkspaceProvisioningSpec | null,
     repoDir: string,
     cloneDepth?: number,
+    fromSnapshot = false,
   ): Promise<void> {
     await this.runCommand(sandbox, `mkdir -p ${WORKSPACE_DIR}`, "mkdir workspace");
 
@@ -204,7 +207,22 @@ export class E2BProvider implements ComputeProvider {
       );
     }
     try {
-      if (cloneDepth && cloneDepth > 0 && !spec.repo.authToken) {
+      if (fromSnapshot) {
+        // The snapshot already holds a clone: refresh it, with credentials in place first.
+        if (inlineAuth)
+          await this.runCommand(
+            sandbox,
+            inlineAuth.configure,
+            "configure inline git auth",
+            undefined,
+            [spec.repo.authToken!],
+          );
+        await this.runCommand(
+          sandbox,
+          `mkdir -p ${shellQuote(repoDir)} && cd ${shellQuote(repoDir)} && bash -c ${shellQuote(repositoryCheckoutCommand(spec.repo, this.getRepositoryUrl(spec.repo.url)))}`,
+          "git refresh (snapshot)",
+        );
+      } else if (cloneDepth && cloneDepth > 0 && !spec.repo.authToken) {
         const branchArg = cloneBranch ? ` --branch ${shellQuote(cloneBranch)}` : "";
         await this.runCommand(
           sandbox,
@@ -228,7 +246,7 @@ export class E2BProvider implements ComputeProvider {
       throw error;
     }
 
-    if (inlineAuth) {
+    if (inlineAuth && !fromSnapshot) {
       await this.runCommand(sandbox, inlineAuth.configure, "configure inline git auth", undefined, [
         spec.repo.authToken!,
       ]);
@@ -435,7 +453,13 @@ export class E2BProvider implements ComputeProvider {
     const repoDir = this.getRepoDir(spec);
 
     await provisionLogger.step("clone-repository", () =>
-      this.cloneRepository(sandbox, spec, repoDir, config.repositoryCloneDepth),
+      this.cloneRepository(
+        sandbox,
+        spec,
+        repoDir,
+        config.repositoryCloneDepth,
+        Boolean(config.snapshot),
+      ),
     );
     await provisionLogger.step("write-agent-files", () =>
       this.writeAgentFiles(sandbox, spec, repoDir),

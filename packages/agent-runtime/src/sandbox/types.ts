@@ -261,7 +261,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       previews: "private",
       pause: "stateful",
       maxLifetimeMs: DAY,
-      snapshots: "none",
+      snapshots: "pauses",
     },
   },
 };
