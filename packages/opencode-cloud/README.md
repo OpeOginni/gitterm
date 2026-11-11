@@ -27,11 +27,8 @@ In GitTerm, add your model credentials and repository access first.
 
 ## 3. Use it
 
-In a Git repository, stop the agent and finish or stop its background jobs, then type:
-
-```text
-/cloud
-```
+In a Git repository, stop the agent and finish or stop its background jobs, then type `/cloud` in
+OpenCode.
 
 1. Choose whether to include uncommitted changes.
 2. Review what will be uploaded and approve it. The workspace is billed while it runs.
@@ -53,11 +50,7 @@ would not see it.
 `/cloud-return` appears in the command list only while a session of this checkout is in the
 cloud.
 
-When the cloud agent has stopped, type:
-
-```text
-/cloud-return
-```
+When the cloud agent has stopped, type `/cloud-return` in the local session.
 
 The cloud's new commits, its uncommitted changes and its conversation replace the local ones.
 
