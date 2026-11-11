@@ -344,7 +344,7 @@ export function Demo() {
                       </p>
                       <div className="pa-user">Looks good. Open the PR.</div>
                       <p className="pa-text">
-                        Opened PR #482 from <code>gitterm/checkout-coupons</code>.
+                        Opened PR #482 from <code>checkout-coupons</code>.
                       </p>
                     </div>
                     <div className="pa-composer">

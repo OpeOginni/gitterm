@@ -12,6 +12,7 @@ export function CopyButton({
   className,
   icon = false,
   installLocation,
+  target = false,
 }: {
   value: string;
   label?: string;
@@ -20,11 +21,14 @@ export function CopyButton({
   icon?: boolean;
   /** Set on plugin install commands, so a copy is counted as a first step. */
   installLocation?: "hero" | "cta";
+  /** Marks it as the button a surrounding ClickToCopy box hands its clicks to. */
+  target?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       type="button"
+      data-copy-target={target || undefined}
       onClick={() => {
         navigator.clipboard?.writeText(value).then(() => {
           setCopied(true);

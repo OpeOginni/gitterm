@@ -1408,9 +1408,306 @@
     width: 24px;
     height: 24px;
   }
-  .lp .stack.fan:hover > span {
+  .lp .stack.fan:hover > span,
+  .lp .prompt-strip:hover .stack.fan > span,
+  .lp .prompt-strip:focus-within .stack.fan > span {
     margin-left: 4px;
     filter: none;
+  }
+  .lp .prompt-strip:hover .stack.fan > span:first-child,
+  .lp .prompt-strip:focus-within .stack.fan > span:first-child {
+    margin-left: 0;
+  }
+  /* The setup prompt's copy button: hovering anywhere on the strip sweeps a band of the accent
+     across it, then leaves it lit, so it reads as the thing to press */
+  .lp .prompt-copy {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    transition:
+      background-color 0.35s ease,
+      color 0.35s ease,
+      box-shadow 0.35s ease;
+  }
+  .lp .prompt-copy::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      100deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.18) 42%,
+      rgba(255, 255, 255, 0.55) 50%,
+      rgba(255, 255, 255, 0.18) 58%,
+      transparent 100%
+    );
+    transform: translateX(-110%);
+    pointer-events: none;
+  }
+  /* The round trip under "Run agents in the cloud": stops joined by thin wires, each with its
+     command above it and a small dot running along it (gold out, green back) */
+  .lp .rt-leg {
+    flex: 1 1 0;
+    min-width: 84px;
+    max-width: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    padding-top: 0;
+  }
+  .lp .rt-cmd {
+    font: 12px var(--mono);
+    color: var(--gold-2);
+    white-space: nowrap;
+  }
+  .lp .rt-wire {
+    position: relative;
+    width: 100%;
+    height: 1px;
+    background: var(--line-2);
+  }
+  /* An arrowhead at the far end */
+  .lp .rt-wire::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    top: -3px;
+    width: 7px;
+    height: 7px;
+    border-top: 1px solid var(--line-2);
+    border-right: 1px solid var(--line-2);
+    transform: rotate(45deg);
+  }
+  /* One 6 s loop for the whole trip, so every step lands after the one before it:
+       0-20%   gold dot along /cloud
+       20-30%  Gitterm glows
+       26-44%  the devices bump up, one after another
+       44-62%  green dot along /cloud-return
+       62-82%  the laptop lights up green: the session is home */
+  .lp .rt-dot {
+    position: absolute;
+    top: -2px;
+    left: 0;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 8px var(--gold);
+    opacity: 0;
+    animation: lp-rt-out 6s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+  }
+  .lp .rt-back .rt-dot {
+    background: var(--ok);
+    box-shadow: 0 0 8px var(--ok);
+    animation-name: lp-rt-back;
+  }
+  @keyframes lp-rt-out {
+    0% {
+      left: 0;
+      opacity: 0;
+    }
+    2%,
+    18% {
+      opacity: 1;
+    }
+    20%,
+    100% {
+      left: calc(100% - 5px);
+      opacity: 0;
+    }
+  }
+  @keyframes lp-rt-back {
+    0%,
+    44% {
+      left: 0;
+      opacity: 0;
+    }
+    46%,
+    60% {
+      opacity: 1;
+    }
+    62%,
+    100% {
+      left: calc(100% - 5px);
+      opacity: 0;
+    }
+  }
+  .lp .rt-hub {
+    animation: lp-rt-hub 6s ease-out infinite;
+  }
+  @keyframes lp-rt-hub {
+    0%,
+    19%,
+    34%,
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+      transform: none;
+    }
+    23% {
+      box-shadow:
+        0 0 0 5px color-mix(in oklab, var(--gold) 18%, transparent),
+        0 0 22px color-mix(in oklab, var(--gold) 45%, transparent);
+      transform: scale(1.05);
+    }
+  }
+  /* The devices sit on an arc above Gitterm: the middle one highest */
+  .lp .rt-arc {
+    position: absolute;
+    bottom: calc(100% + 14px);
+    left: 50%;
+    display: flex;
+    gap: 8px;
+    transform: translateX(-50%);
+    align-items: flex-end;
+  }
+  .lp .rt-device {
+    display: block;
+    translate: 0 calc(10px - 10px * var(--i) * (2 - var(--i)));
+    animation: lp-rt-bump 6s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+    animation-delay: calc(var(--i) * 0.3s);
+  }
+  .lp .rt-device > span {
+    transition: border-color 0.3s;
+  }
+  @keyframes lp-rt-bump {
+    0%,
+    26%,
+    34%,
+    100% {
+      transform: none;
+    }
+    30% {
+      transform: translateY(-7px);
+    }
+  }
+  .lp .rt-home {
+    animation: lp-rt-home 6s ease-out infinite;
+  }
+  @keyframes lp-rt-home {
+    0%,
+    61%,
+    84%,
+    100% {
+      border-color: var(--line-2);
+      color: var(--fg-2);
+      box-shadow: 0 0 0 0 transparent;
+    }
+    66%,
+    76% {
+      border-color: color-mix(in oklab, var(--ok) 70%, transparent);
+      color: var(--ok);
+      box-shadow:
+        0 0 0 4px color-mix(in oklab, var(--ok) 14%, transparent),
+        0 0 20px color-mix(in oklab, var(--ok) 35%, transparent);
+    }
+  }
+  /* The wires sit at the height of the icon tiles, not of the labels under them */
+  .lp .rt-trip .rt-leg {
+    margin-top: 7px;
+  }
+  /* Phones: the trip runs down the page; the devices stay on their arc above Gitterm */
+  @media (max-width: 560px) {
+    .lp .rt-trip {
+      flex-direction: column;
+      align-items: center;
+    }
+    .lp .rt-trip .rt-leg {
+      flex: none;
+      margin: 0;
+      flex-direction: row;
+      gap: 10px;
+      width: auto;
+      min-width: 0;
+      height: 44px;
+    }
+    .lp .rt-trip .rt-leg:nth-child(2) {
+      margin-bottom: 64px;
+    }
+    .lp .rt-wire {
+      order: -1;
+      width: 1px;
+      height: 100%;
+    }
+    .lp .rt-wire::after {
+      right: -3px;
+      top: auto;
+      bottom: -1px;
+      transform: rotate(135deg);
+    }
+    .lp .rt-dot {
+      left: -2px;
+      animation-name: lp-rt-out-down;
+    }
+    .lp .rt-back .rt-dot {
+      animation-name: lp-rt-back-down;
+    }
+    @keyframes lp-rt-out-down {
+      0% {
+        top: 0;
+        opacity: 0;
+      }
+      2%,
+      18% {
+        opacity: 1;
+      }
+      20%,
+      100% {
+        top: calc(100% - 5px);
+        opacity: 0;
+      }
+    }
+    @keyframes lp-rt-back-down {
+      0%,
+      44% {
+        top: 0;
+        opacity: 0;
+      }
+      46%,
+      60% {
+        opacity: 1;
+      }
+      62%,
+      100% {
+        top: calc(100% - 5px);
+        opacity: 0;
+      }
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lp .rt-dot {
+      display: none;
+    }
+    .lp .rt-hub,
+    .lp .rt-device,
+    .lp .rt-home {
+      animation: none;
+    }
+  }
+  /* It turns gold through Tailwind classes on the button (see sections.tsx); this adds the
+     shine passing over it as it does */
+  .lp .prompt-strip:hover .prompt-copy::before,
+  .lp .prompt-strip:focus-within .prompt-copy::before,
+  .lp .lane:hover .prompt-copy::before,
+  .lp .lane:focus-within .prompt-copy::before {
+    animation: lp-whoosh 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lp .prompt-strip:hover .prompt-copy::before,
+    .lp .prompt-strip:focus-within .prompt-copy::before,
+    .lp .lane:hover .prompt-copy::before,
+    .lp .lane:focus-within .prompt-copy::before {
+      animation: none;
+    }
+  }
+  @keyframes lp-whoosh {
+    from {
+      transform: translateX(-110%);
+    }
+    to {
+      transform: translateX(110%);
+    }
   }
   .lp .stack:hover > span:first-child {
     margin-left: 0;
@@ -1651,6 +1948,17 @@
     font: 500 11.5px/1.2 var(--mono);
     color: var(--fg-3);
     background: rgba(255, 255, 255, 0.06);
+  }
+  /* On its way home with /cloud-return, then home: the card dims like a moved laptop row */
+  .lp .card.returning {
+    box-shadow: inset 0 0 0 1px rgba(211, 173, 85, 0.25);
+  }
+  .lp .card.returning .c-tag {
+    color: var(--gold-2);
+    background: rgba(211, 173, 85, 0.12);
+  }
+  .lp .card.returned {
+    opacity: 0.42;
   }
   .lp .card.fresh {
     animation-name: lp-cardnew;

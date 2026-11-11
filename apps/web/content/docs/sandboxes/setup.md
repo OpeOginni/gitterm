@@ -133,7 +133,7 @@ For a project with a slow setup, let the agent save a sandbox once dependencies 
 "options": { "account": "e2b", "accounts": { "...": {} }, "snapshots": true }
 ```
 
-- Works on E2B, Daytona, Vercel and Boat, with your own key or a Gitterm plan. On a plan, snapshots need Pro or Growth; see [Plans](/docs/account/plans-and-billing#plans).
+- Works on E2B, Daytona, Vercel and Boat, with your own key or a Gitterm plan, and on Gitterm's own machines. On a plan, snapshots need Pro or Growth; see [Plans](/docs/account/plans-and-billing#plans).
 - The agent gets a `sandbox_snapshot` tool. OpenCode asks before each save or delete; allow `gitterm.sandbox.snapshot` under [Approvals](#approvals) to skip the prompt.
 - A project can have several snapshots, such as one with dependencies and one with dependencies and a database. New sandboxes start from the project's newest one unless the agent picks another.
 - When a lockfile changed since a snapshot, the agent is told. It can then save a replacement, which deletes the old one. Until it does, the old one is still used.

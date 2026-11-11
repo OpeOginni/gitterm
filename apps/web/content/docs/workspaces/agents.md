@@ -24,7 +24,7 @@ Every workspace runs OpenCode 2 (the `@opencode/cli` package), including inside 
 | SDK runs (`client.runs.*`)   | Yes      | No                           |
 | Slack and Discord bots       | Yes      | No                           |
 | MCP connections from Gitterm | Yes      | No                           |
-| `/cloud` session handoff     | Yes      | No                           |
+| `/cloud` and `/cloud-return` | Yes      | No                           |
 | Saved agent config           | OpenCode | OpenCode, Claude Code, Codex |
 
 T3 Code sessions don't move to the cloud. To use Codex or Claude Code in the cloud, create a T3 Code workspace and start a new thread there. See [Move a session to the cloud](/docs/workspaces/move-a-session).
