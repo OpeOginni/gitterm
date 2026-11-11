@@ -151,6 +151,7 @@ describe("createDirectGittermClient", () => {
         return Response.json({ data: { "session-1": {} } });
       }
       if (path === "/api/session/session-1/message") {
+        expect(new URL(request.url).searchParams.get("order")).toBe("desc");
         return Response.json({
           data: [
             { id: "message-1", type: "user", time: { created: Date.now() }, text: "hi" },
