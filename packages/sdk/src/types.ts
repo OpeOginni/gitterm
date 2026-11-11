@@ -790,7 +790,7 @@ export type SandboxJobFinished = {
 };
 
 export type ManagedSandboxCreateInput = {
-  /** Defaults to e2b. Must be enabled for sandboxes on the deployment. */
+  /** Defaults to the server's default (see `sandboxes.providers()`). */
   provider?: SandboxProviderKey;
   name?: string;
   lifetimeMinutes: number;

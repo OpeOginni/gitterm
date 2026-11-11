@@ -1,6 +1,7 @@
 import { createSandboxTransport } from "@gitterm/agent-runtime/sandbox/index";
 import { SANDBOX_PROVIDER_PROFILES } from "@gitterm/agent-runtime/sandbox/types";
-import { createGittermClient } from "../client.js";
+import { createGittermClient, type GittermClient } from "../client.js";
+import { GittermError } from "../errors.js";
 import {
   createDirectSandboxBackend,
   createManagedSandboxBackend,
@@ -16,7 +17,7 @@ import {
   type SandboxProviderKey,
 } from "./types.js";
 
-type DirectCredential = {
+type OwnKey = {
   /** The resolved credential (plugin options, after `{env:...}`/`{file:...}` substitution). */
   apiKey?: string;
   /** Name of an environment variable holding the credential (CLI settings file). */
@@ -29,13 +30,12 @@ type DirectCredential = {
 };
 
 /**
- * Account settings. In OpenCode they live in the plugin options, where
- * `"apiKey": "{env:E2B_API_KEY}"` is substituted by OpenCode before the plugin sees it.
- * The CLI reads the same shape from a file but takes credentials only from `apiKeyEnv`.
+ * Your own provider account. Having `apiKey` (or `apiKeyEnv`) is what makes it one. In OpenCode
+ * `"apiKey": "{env:E2B_API_KEY}"` is substituted by OpenCode before the plugin sees it; the CLI
+ * reads the same shape from a file but takes credentials only from `apiKeyEnv`.
  */
-export type SandboxAccountConfig =
+export type OwnKeyAccountConfig =
   | ({
-      mode: "direct";
       provider: "e2b";
       /**
        * Template ID or name. E2B fixes CPU and memory when a template is built, so this is
@@ -44,18 +44,16 @@ export type SandboxAccountConfig =
       template?: string;
       /** A snapshot every sandbox starts from; it keeps the size it was saved at. */
       snapshot?: string;
-    } & DirectCredential)
+    } & OwnKey)
   | ({
-      mode: "direct";
       provider: "daytona";
       target?: "us" | "eu";
       /** Daytona snapshot name. A snapshot carries its own size, so it excludes `resources`. */
       snapshot?: string;
       /** vCPUs and GiB of memory and disk. Defaults to Daytona's 1 vCPU, 1 GiB, 3 GiB. */
       resources?: { cpu?: number; memory?: number; disk?: number };
-    } & DirectCredential)
+    } & OwnKey)
   | ({
-      mode: "direct";
       provider: "vercel";
       teamId: string;
       projectId: string;
@@ -64,51 +62,45 @@ export type SandboxAccountConfig =
       vcpus?: number;
       /** A snapshot id every sandbox starts from instead of `runtime`. */
       snapshot?: string;
-    } & DirectCredential)
+    } & OwnKey)
   | ({
-      mode: "direct";
       provider: "boat";
       size?: "small" | "default" | "large";
       /** A named snapshot every box starts from. */
       snapshot?: string;
-    } & DirectCredential)
+    } & OwnKey)
   | ({
-      mode: "direct";
       provider: "exedev";
       /** Container image; defaults to a plain Node image. */ image?: string;
       /** VM size, as exe.dev's `new` flags take it, e.g. `4`, `"8GB"`, `"20GB"`. */
       cpu?: number;
       memory?: string;
       disk?: string;
-    } & DirectCredential)
+    } & OwnKey)
   | ({
-      mode: "direct";
       provider: "railway";
       projectId: string;
       environmentId: string;
       apiUrl?: string;
       image?: string;
-    } & DirectCredential)
-  | {
-      mode: "managed";
-      /** Defaults to e2b, or to Gitterm when `size` is set. The deployment must enable it. */
-      provider?: SandboxProviderKey;
-      /**
-       * On gitterm.dev: `small` or `medium`. Same as `provider: "gitterm"` with that machine.
-       */
-      size?: "small" | "medium";
-      /** Machine profile key, e.g. `small` or `large`. Defaults to your plan's default size. */
-      machine?: string;
-      /** Defaults to the CLI login's server. */
-      serverUrl?: string;
-      /** Defaults to the CLI login or GITTERM_API_TOKEN. */
-      token?: string;
-    };
+    } & OwnKey);
 
-export type SandboxSettings = {
-  /** Selected account name. */
-  account?: string;
-  accounts?: Record<string, SandboxAccountConfig>;
+/** Sandboxes through a GitTerm server (gitterm.dev or self-hosted), billed to your plan there. */
+export type GittermAccountConfig = {
+  /** Defaults to the server's default: Gitterm's own sandboxes on gitterm.dev. */
+  provider?: SandboxProviderKey;
+  /** Machine size, e.g. `small` or `medium` on gitterm.dev. Defaults to your plan's default. */
+  size?: string;
+  /** Defaults to the CLI login's server. */
+  serverUrl?: string;
+  /** Defaults to the CLI login or GITTERM_API_TOKEN. */
+  token?: string;
+};
+
+/** An account with `apiKey`/`apiKeyEnv` uses your own provider key; one without goes through GitTerm. */
+export type SandboxAccountConfig = OwnKeyAccountConfig | GittermAccountConfig;
+
+type SandboxOptions = {
   limits?: Partial<SandboxLimits>;
   /** Extra glob patterns never uploaded. Secret-like files are always excluded. */
   exclude?: string[];
@@ -119,12 +111,28 @@ export type SandboxSettings = {
   publicPreviews?: boolean;
   /**
    * Let the agent save a setup snapshot of a sandbox once a checkout's dependencies are
-   * installed, and start that checkout's next sandboxes from it. Direct E2B, Daytona, Vercel,
-   * and Boat accounts only. Snapshots are stored in your provider account until deleted.
+   * installed, and start that checkout's next sandboxes from it. E2B, Daytona, Vercel, and
+   * Boat only. Snapshots are stored in the provider account until deleted.
    * Off by default. An account's own `snapshot` setting always wins.
    */
   snapshots?: boolean;
 };
+
+/**
+ * One account inline (`{ provider: "e2b", apiKey }`, `{ size: "medium" }`), or several under
+ * `accounts` with `account` naming the selected one.
+ */
+export type SandboxSettings = SandboxOptions &
+  (
+    | { account?: string; accounts: Record<string, SandboxAccountConfig> }
+    | (SandboxAccountConfig & { accounts?: undefined })
+  );
+
+/** A selected account with its provider known. From `resolveSandboxAccount`. */
+export type SandboxAccount = { name: string; provider: SandboxProviderKey } & (
+  | { ownKey: true; config: OwnKeyAccountConfig }
+  | { ownKey: false; config: GittermAccountConfig; client: GittermClient }
+);
 
 export type SandboxAccountSummary = {
   name: string;
@@ -143,7 +151,7 @@ export type SandboxAccountSummary = {
   limitations: string[];
 };
 
-const DIRECT_PROVIDERS = ["e2b", "daytona", "vercel", "boat", "exedev", "railway"] as const;
+const OWN_KEY_PROVIDERS = ["e2b", "daytona", "vercel", "boat", "exedev", "railway"] as const;
 const PROVIDER_NAMES: Record<SandboxProviderKey, string> = {
   e2b: "E2B",
   daytona: "Daytona",
@@ -155,41 +163,83 @@ const PROVIDER_NAMES: Record<SandboxProviderKey, string> = {
   gitterm: "Gitterm",
 };
 
+const isOwnKey = (config: SandboxAccountConfig): config is OwnKeyAccountConfig =>
+  "apiKey" in config || "apiKeyEnv" in config;
+
 function selected(settings: SandboxSettings, accountName?: string) {
+  if (!settings.accounts) {
+    const { limits: _l, exclude: _e, publicPreviews: _p, snapshots: _s, ...config } = settings;
+    const name = config.provider ?? "gitterm";
+    if (accountName && accountName !== name)
+      throw new Error(`Sandbox account ${JSON.stringify(accountName)} is not configured.`);
+    return { name, config: config as SandboxAccountConfig };
+  }
   const name = accountName ?? settings.account;
-  const accounts = settings.accounts ?? {};
   if (!name) {
-    const names = Object.keys(accounts);
+    const names = Object.keys(settings.accounts);
     throw new Error(
       names.length
         ? `No sandbox account selected. Choose one of: ${names.join(", ")}.`
         : "No sandbox accounts are configured. Add one to the sandbox settings.",
     );
   }
-  const config = accounts[validateAccountName(name)];
+  const config = settings.accounts[validateAccountName(name)];
   if (!config) throw new Error(`Sandbox account ${JSON.stringify(name)} is not configured.`);
-  const mode: string = config.mode;
-  if (mode !== "direct" && mode !== "managed")
-    throw new Error(`Sandbox account ${name} has an unknown mode.`);
-  // A managed `size` means Gitterm's own sandboxes (gitterm.dev): sizes, not providers.
-  const provider: string =
-    config.provider ?? (config.mode === "managed" && config.size ? "gitterm" : "e2b");
-  if (config.mode === "managed" && config.size && provider !== "gitterm")
-    throw new Error(
-      `Sandbox account ${name}: "size" picks a Gitterm size; drop "provider" or use "machine".`,
-    );
-  if (!Object.hasOwn(SANDBOX_PROVIDER_PROFILES, provider))
-    throw new Error(
-      `Sandbox account ${name} uses provider ${JSON.stringify(provider)}, which does not support sandboxes.`,
-    );
-  if (mode === "direct" && !(DIRECT_PROVIDERS as readonly string[]).includes(provider))
-    throw new Error(
-      `Sandbox account ${name}: ${provider} sandboxes are available only as a managed account.`,
-    );
-  return { name, config, provider: provider as SandboxProviderKey };
+  return { name, config };
 }
 
-function directCredential(config: DirectCredential) {
+/**
+ * Picks the account and finds its provider. A GitTerm account without `provider` asks the
+ * server for its default, so this needs the server only then.
+ */
+export async function resolveSandboxAccount(
+  settings: SandboxSettings,
+  accountName?: string,
+): Promise<SandboxAccount> {
+  const { name, config } = selected(settings, accountName);
+  validateAccountName(name);
+  if (isOwnKey(config)) {
+    if (!(OWN_KEY_PROVIDERS as readonly string[]).includes(config.provider))
+      throw new Error(
+        `Sandbox account ${name}: "provider" must be one of ${OWN_KEY_PROVIDERS.join(", ")} with your own key.`,
+      );
+    return { name, provider: config.provider, ownKey: true, config };
+  }
+  // `machine` is the old name of `size`.
+  const legacy = config as GittermAccountConfig & { machine?: string };
+  const gitterm: GittermAccountConfig = { ...config, size: config.size ?? legacy.machine };
+  if (gitterm.provider && !Object.hasOwn(SANDBOX_PROVIDER_PROFILES, gitterm.provider))
+    throw new Error(
+      `Sandbox account ${name} uses provider ${JSON.stringify(gitterm.provider)}, which does not support sandboxes.`,
+    );
+  // Without `apiKey` an account goes through GitTerm, so a forgotten key shows up here.
+  const ownKeyHint =
+    gitterm.provider && gitterm.provider !== "gitterm"
+      ? ` To use your own ${PROVIDER_NAMES[gitterm.provider]} account instead, add "apiKey" to sandbox account "${name}".`
+      : "";
+  try {
+    const client = createGittermClient({ serverUrl: gitterm.serverUrl, token: gitterm.token });
+    const offered = await client.sandboxes.providers();
+    const provider = gitterm.provider ?? offered.default;
+    if (!provider || !offered.providers.includes(provider))
+      throw new Error(
+        `${
+          !offered.providers.length
+            ? "This GitTerm server offers no sandboxes to your account."
+            : provider
+              ? `This GitTerm server doesn't offer ${PROVIDER_NAMES[provider]} sandboxes to your account (it offers ${offered.providers.join(", ")}).`
+              : `This GitTerm server offers ${offered.providers.join(", ")} sandboxes and no default. Set "provider" on sandbox account "${name}".`
+        }${ownKeyHint}`,
+      );
+    return { name, provider, ownKey: false, config: gitterm, client };
+  } catch (error) {
+    if (error instanceof GittermError && error.code === "NOT_LOGGED_IN")
+      error.message = `${error.message}${ownKeyHint}`;
+    throw error;
+  }
+}
+
+function directCredential(config: OwnKey) {
   if (config.apiKey !== undefined) return { source: "plugin option", value: config.apiKey.trim() };
   if (config.apiKeyEnv)
     return {
@@ -230,13 +280,12 @@ export function describeLimitations(provider: SandboxProviderKey, mode: SandboxM
   ];
 }
 
-function describeMachine(config: SandboxAccountConfig): string {
-  if (config.mode === "managed") {
-    const machine = config.size ?? config.machine;
-    return machine
-      ? `Gitterm machine profile "${machine}".`
+function describeMachine(account: SandboxAccount): string {
+  if (!account.ownKey)
+    return account.config.size
+      ? `Gitterm machine profile "${account.config.size}".`
       : "Your Gitterm plan's default machine profile.";
-  }
+  const { config } = account;
   switch (config.provider) {
     case "e2b":
       if (config.snapshot) return `E2B snapshot "${config.snapshot}" (sized as when it was saved).`;
@@ -263,28 +312,25 @@ function describeMachine(config: SandboxAccountConfig): string {
   }
 }
 
-export function describeSandboxAccount(
-  settings: SandboxSettings,
-  accountName?: string,
-): SandboxAccountSummary {
-  const { name, config, provider } = selected(settings, accountName);
+export function describeSandboxAccount(account: SandboxAccount): SandboxAccountSummary {
+  const { name, provider } = account;
+  const mode: SandboxMode = account.ownKey ? "direct" : "managed";
   const base = {
     name,
+    mode,
     provider,
-    capabilities:
-      config.mode === "managed"
-        ? managedCapabilities(provider)
-        : SANDBOX_PROVIDER_PROFILES[provider].capabilities,
-    limitations: describeLimitations(provider, config.mode),
+    capabilities: account.ownKey
+      ? SANDBOX_PROVIDER_PROFILES[provider].capabilities
+      : managedCapabilities(provider),
+    limitations: describeLimitations(provider, mode),
     pinnedSnapshot:
-      config.mode === "direct" && "snapshot" in config ? (config.snapshot ?? null) : null,
-    machine: `${describeMachine(config)} Only the user can change this, in the settings of sandbox account "${name}".`,
+      account.ownKey && "snapshot" in account.config ? (account.config.snapshot ?? null) : null,
+    machine: `${describeMachine(account)} Only the user can change this, in the settings of sandbox account "${name}".`,
   };
-  if (config.mode === "direct") {
-    const credential = directCredential(config);
+  if (account.ownKey) {
+    const credential = directCredential(account.config);
     return {
       ...base,
-      mode: "direct",
       credentialSource: credential.source,
       credentialPresent: Boolean(credential.value),
       chargedTo: `your ${PROVIDER_NAMES[provider]} account (no Gitterm account or credits used)`,
@@ -292,26 +338,25 @@ export function describeSandboxAccount(
   }
   return {
     ...base,
-    mode: "managed",
-    credentialSource: config.token ? "plugin option" : "Gitterm CLI login or GITTERM_API_TOKEN",
+    credentialSource: account.config.token
+      ? "plugin option"
+      : "Gitterm CLI login or GITTERM_API_TOKEN",
     credentialPresent: true,
     chargedTo: "your Gitterm plan (usage, quotas, and limits apply)",
   };
 }
 
-/** Builds exactly the selected account's backend. A missing or rejected credential is an error, never a fallback. */
-export function createSandboxBackend(
-  settings: SandboxSettings,
-  accountName?: string,
-): SandboxBackend {
-  const { name, config, provider } = selected(settings, accountName);
-  if (config.mode === "managed")
+/** Builds exactly this account's backend. A missing or rejected credential is an error, never a fallback. */
+export function createSandboxBackend(account: SandboxAccount): SandboxBackend {
+  const { name, provider } = account;
+  if (!account.ownKey)
     return createManagedSandboxBackend({
       account: name,
       provider,
-      client: createGittermClient({ serverUrl: config.serverUrl, token: config.token }),
-      machine: config.size ?? config.machine,
+      client: account.client,
+      machine: account.config.size,
     });
+  const { config } = account;
   const credential = directCredential(config);
   if (!credential.value)
     throw new Error(
@@ -322,18 +367,25 @@ export function createSandboxBackend(
       `Sandbox account ${name}: a Daytona snapshot carries its own size, so set "snapshot" or "resources", not both.`,
     );
   const { apiKey: _apiKey, apiKeyEnv: _apiKeyEnv, allowUnboundedLifetime, ...options } = config;
-  return withAuthHint(
+  // `mode` from configs written before it went away.
+  delete (options as { mode?: unknown }).mode;
+  return withHint(
     createDirectSandboxBackend({
       account: name,
       allowUnboundedLifetime,
       transport: createSandboxTransport({ ...options, apiKey: credential.value }),
     }),
+    (error) => isSandboxProviderError(error) && error.code === "auth",
     `This is your own ${PROVIDER_NAMES[provider]} key, not Gitterm's: check sandbox account "${name}" in your settings.`,
   );
 }
 
-/** A rejected key on a direct account is the caller's own key, so say which account to fix. */
-function withAuthHint(backend: SandboxBackend, hint: string): SandboxBackend {
+/** Adds what the user can do about an error to its message, e.g. which account to fix. */
+function withHint(
+  backend: SandboxBackend,
+  matches: (error: unknown) => boolean,
+  hint: string,
+): SandboxBackend {
   return new Proxy(backend, {
     get(target, key, receiver) {
       const value = Reflect.get(target, key, receiver);
@@ -342,8 +394,7 @@ function withAuthHint(backend: SandboxBackend, hint: string): SandboxBackend {
         try {
           return await value.apply(target, args);
         } catch (error) {
-          if (isSandboxProviderError(error) && error.code === "auth")
-            error.message = `${error.message} ${hint}`;
+          if (matches(error)) (error as Error).message = `${(error as Error).message} ${hint}`;
           throw error;
         }
       };

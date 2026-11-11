@@ -3,8 +3,7 @@ import { cn } from "@/lib/utils";
 import { CopyButton } from "./copy-button";
 
 /**
- * JSON with soft colours: keys blue, strings green, numbers orange, `{env:…}` and
- * `"managed"` in gold. Server-renderable: returns React nodes, no innerHTML.
+ * JSON with soft colours: keys blue, strings green, numbers orange, `{env:…}` in gold. Server-renderable: returns React nodes, no innerHTML.
  */
 export function highlightJson(src: string): ReactNode[] {
   const out: ReactNode[] = [];
@@ -25,7 +24,7 @@ export function highlightJson(src: string): ReactNode[] {
         </span>,
       );
     } else if (str) {
-      const hot = /env:|managed/.test(str);
+      const hot = str.includes("env:");
       out.push(
         <span key={k++} className={hot ? "text-[#e2c47c]" : "text-[#b9d9a8]"}>
           {str}

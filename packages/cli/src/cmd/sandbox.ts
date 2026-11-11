@@ -6,8 +6,10 @@ import {
   createSandboxBackend,
   createSandboxClient,
   describeSandboxAccount,
+  resolveSandboxAccount,
   startPreviewProxy,
   type JobView,
+  type SandboxAccount,
   type SandboxClient,
   type SandboxSettings,
 } from "@gitterm/sdk/sandbox";
@@ -31,8 +33,8 @@ async function loadSettings(): Promise<SandboxSettings> {
         {
           account: "e2b",
           accounts: {
-            e2b: { mode: "direct", provider: "e2b", apiKeyEnv: "E2B_API_KEY" },
-            gitterm: { mode: "managed" },
+            e2b: { provider: "e2b", apiKeyEnv: "E2B_API_KEY" },
+            gitterm: { size: "medium" },
           },
         },
         null,
@@ -41,7 +43,8 @@ async function loadSettings(): Promise<SandboxSettings> {
     );
   });
   const settings = JSON.parse(text) as SandboxSettings;
-  for (const [name, account] of Object.entries(settings.accounts ?? {})) {
+  const accounts = settings.accounts ?? { [settings.provider ?? "gitterm"]: settings };
+  for (const [name, account] of Object.entries(accounts)) {
     if ("apiKey" in account || "token" in account)
       throw new Error(
         `Sandbox account ${name} in ${file} contains a credential. Store it in an environment variable and reference it with apiKeyEnv.`,
@@ -52,13 +55,14 @@ async function loadSettings(): Promise<SandboxSettings> {
 
 async function clientFor(
   args: Common,
-): Promise<{ client: SandboxClient; settings: SandboxSettings }> {
+): Promise<{ client: SandboxClient; settings: SandboxSettings; account: SandboxAccount }> {
   const settings = await loadSettings();
-  if (args.account) settings.account = args.account;
+  const account = await resolveSandboxAccount(settings, args.account);
   return {
     settings,
+    account,
     client: createSandboxClient({
-      backend: createSandboxBackend(settings),
+      backend: createSandboxBackend(account),
       limits: settings.limits,
     }),
   };
@@ -117,11 +121,11 @@ export async function runSandboxAccount(args: Common) {
     args,
     "Reading settings...",
     async () => {
-      const settings = await loadSettings();
-      return { ...describeSandboxAccount(settings, args.account), configFile: sandboxConfigPath() };
+      const account = await resolveSandboxAccount(await loadSettings(), args.account);
+      return { ...describeSandboxAccount(account), configFile: sandboxConfigPath() };
     },
     (summary) => {
-      console.log(`${chalk.bold(summary.name)}  ${summary.mode} ${summary.provider}`);
+      console.log(`${chalk.bold(summary.name)}  ${summary.provider}`);
       console.log(
         `credential: ${summary.credentialSource}${summary.credentialPresent ? "" : chalk.red(" (missing)")}`,
       );
@@ -134,8 +138,8 @@ export async function runSandboxCreate(
   args: Common & { name?: string; lifetime?: number; public?: boolean; yes?: boolean },
 ) {
   try {
-    const { client, settings } = await clientFor(args);
-    const summary = describeSandboxAccount(settings);
+    const { client, settings, account } = await clientFor(args);
+    const summary = describeSandboxAccount(account);
     await approve(args, `Create a billable sandbox charged to ${summary.chargedTo}?`);
     // Where previews are always private there is nothing to approve.
     const publicPreviews =
@@ -157,7 +161,7 @@ export async function runSandboxCreate(
         }),
       (record) =>
         success(
-          `Sandbox ${chalk.bold(record.id)} (${record.mode}/${record.account}) expires ${record.expiresAt ?? "-"}`,
+          `Sandbox ${chalk.bold(record.id)} (${record.account}) expires ${record.expiresAt ?? "-"}`,
         ),
     );
   } catch (error) {
@@ -178,7 +182,7 @@ export async function runSandboxList(args: Common) {
           ? Math.round((Date.now() - Date.parse(record.createdAt)) / 60_000)
           : null;
         console.log(
-          `${chalk.bold(record.id)}  ${record.state}  ${record.mode}/${record.account}  "${record.name}"  age ${age ?? "?"} min  expires ${record.expiresAt ?? "-"}`,
+          `${chalk.bold(record.id)}  ${record.state}  ${record.account}  "${record.name}"  age ${age ?? "?"} min  expires ${record.expiresAt ?? "-"}`,
         );
       }
     },

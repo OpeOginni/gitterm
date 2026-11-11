@@ -20,14 +20,14 @@ This page defines the terms the rest of the docs use. Read it once before settin
 
 ## Managed and direct accounts
 
-A sandbox account says whose provider account runs the sandbox and who pays. You can configure several accounts and pick one by name.
+A sandbox account says whose provider account runs the sandbox and who pays. An account with an `apiKey` is direct; one without is managed. You can configure several accounts and pick one by name.
 
-| Mode      | Who holds the provider account | Who pays              | Needs a Gitterm account |
-| --------- | ------------------------------ | --------------------- | ----------------------- |
-| `direct`  | You (bring your own key)       | Your provider account | No                      |
-| `managed` | The Gitterm deployment         | Your Gitterm plan     | Yes                     |
+| Account | Set up with                                             | Who holds the provider account | Who pays              | Needs a Gitterm account |
+| ------- | ------------------------------------------------------- | ------------------------------ | --------------------- | ----------------------- |
+| Direct  | `provider` and `apiKey`                                 | You (bring your own key)       | Your provider account | No                      |
+| Managed | No `apiKey`; optionally `size`, `serverUrl`, `provider` | The Gitterm deployment         | Your Gitterm plan     | Yes                     |
 
-Every sandbox belongs to the account that created it. Gitterm never falls back to another account or mode: using a sandbox from another account, or a missing or rejected key, is an error. See [Setup](/docs/sandboxes/setup).
+Every sandbox belongs to the account that created it. Gitterm never falls back to another account: using a sandbox from another account, or a missing or rejected key, is an error. See [Setup](/docs/sandboxes/setup).
 
 Cloud workspaces always run through a Gitterm account.
 

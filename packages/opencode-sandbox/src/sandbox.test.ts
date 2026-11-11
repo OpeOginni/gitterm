@@ -69,6 +69,7 @@ const { registerSandboxTools } = await import("./sandbox");
 
 async function createSandbox(options: Record<string, unknown>, input: Record<string, unknown>) {
   const asked: string[] = [];
+  const resources: string[] = [];
   const names: string[] = [];
   let create: ((input: unknown, context: unknown) => Promise<{ content: string }>) | undefined;
   const ctx = {
@@ -83,18 +84,21 @@ async function createSandbox(options: Record<string, unknown>, input: Record<str
         }),
     },
     session: { get: async () => ({ location: { directory: process.cwd() } }) },
-    permission: { assert: async (request: { action: string }) => asked.push(request.action) },
+    permission: {
+      assert: async (request: { action: string; resources: string[] }) => {
+        asked.push(request.action);
+        resources.push(...request.resources);
+      },
+    },
   };
-  const settings = {
-    account: "e2b",
-    accounts: { e2b: { mode: "direct", provider: "e2b", apiKey: "k" } },
-    ...options,
-  };
+  // One account inline, as most users write it.
+  const settings = { provider: "e2b", apiKey: "k", ...options };
   await registerSandboxTools(ctx as never, settings as never);
   created.length = 0;
   const result = await create!(input, { sessionID: "ses", agent: "a", messageID: "m", id: "t" });
   return {
     asked,
+    resources,
     publicPreviews: created[0]?.publicPreviews,
     snapshot: created[0]?.snapshot,
     names,
@@ -116,6 +120,8 @@ test("without the option, previews are private unless the agent asks and you app
   });
   expect(await createSandbox({}, { publicPreviews: true })).toMatchObject({
     asked: ["gitterm.sandbox.provision", "gitterm.sandbox.public"],
+    // Permission rules name the account, e.g. `e2b:*`.
+    resources: ["e2b:e2b", "e2b"],
     publicPreviews: true,
   });
 });
@@ -154,7 +160,7 @@ async function tools() {
   };
   const settings = {
     account: "e2b",
-    accounts: { e2b: { mode: "direct", provider: "e2b", apiKey: "k" } },
+    accounts: { e2b: { provider: "e2b", apiKey: "k" } },
   };
   const unload = await registerSandboxTools(ctx as never, settings as never, 10);
   const call = (name: string, input: unknown) =>

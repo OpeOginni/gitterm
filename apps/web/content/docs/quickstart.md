@@ -36,12 +36,7 @@ Your agent and your files stay local. The agent runs one command in a remote san
      "plugins": [
        {
          "package": "@gitterm/opencode-sandbox",
-         "options": {
-           "account": "e2b",
-           "accounts": {
-             "e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
-           },
-         },
+         "options": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
        },
      ],
    }

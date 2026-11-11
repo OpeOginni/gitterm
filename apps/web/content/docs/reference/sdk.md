@@ -236,17 +236,18 @@ See [Previews](/docs/workspaces/previews).
 
 ## Sandboxes
 
-`@gitterm/sdk/sandbox` runs commands in a plain remote sandbox, with no agent inside, for a local agent or script. It works with your Gitterm plan (`managed`) or your own provider account (`direct`). For the model, limits and accounts, see [Sandboxes](/docs/sandboxes/overview).
+`@gitterm/sdk/sandbox` runs commands in a plain remote sandbox, with no agent inside, for a local agent or script. An account with `apiKey` or `apiKeyEnv` uses your own provider key; one without goes through your Gitterm plan (`{ size: "medium" }`, or `serverUrl` and `provider` for a self-hosted server). For the model, limits and accounts, see [Sandboxes](/docs/sandboxes/overview).
 
 ```ts
-import { captureSource, createSandboxBackend, createSandboxClient } from "@gitterm/sdk/sandbox";
+import {
+  captureSource,
+  createSandboxBackend,
+  createSandboxClient,
+  resolveSandboxAccount,
+} from "@gitterm/sdk/sandbox";
 
-const sandboxes = createSandboxClient({
-  backend: createSandboxBackend({
-    account: "e2b",
-    accounts: { e2b: { mode: "direct", provider: "e2b", apiKeyEnv: "E2B_API_KEY" } },
-  }),
-});
+const account = await resolveSandboxAccount({ provider: "e2b", apiKeyEnv: "E2B_API_KEY" });
+const sandboxes = createSandboxClient({ backend: createSandboxBackend(account) });
 
 const sandbox = await sandboxes.create({ name: "ci", lifetimeMinutes: 30 });
 await sandboxes.sync(sandbox, await captureSource(process.cwd()));
@@ -259,7 +260,7 @@ Methods: `create`, `list`, `get`, `sync`, `exec`, `job`, `wait`, `cancel`, `prev
 
 `preview()` returns `url`, the URL to open, with `public`, `ready`, and `viaGitterm` (true when Gitterm serves `url`; a private one opens for the owner signed in to Gitterm). `access` holds the direct provider `url` and `headers` for a local proxy such as `startPreviewProxy`. The headers are secret: keep them away from models, logs, and storage.
 
-The managed sandbox calls are also on the main client: `client.sandboxes.create`, `list`, `get`, `run`, `writeFile`, `readFile`, `preview`, `resume` and `terminate`.
+The Gitterm sandbox calls are also on the main client: `client.sandboxes.providers`, `create`, `list`, `get`, `run`, `writeFile`, `readFile`, `preview`, `resume` and `terminate`.
 
 ## Direct provider mode
 

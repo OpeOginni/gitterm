@@ -865,20 +865,22 @@ they appear under **API tokens** in the dashboard and can be revoked there.
 ## Sandboxes
 
 `@gitterm/sdk/sandbox` runs commands in a plain remote sandbox, with no coding agent
-inside, on behalf of a local agent or script. The same client works against your
-Gitterm plan (`managed`) or your own provider account (`direct`, no Gitterm login needed).
-Direct mode supports E2B, Daytona, Vercel, Boat, exe.dev, and Railway; managed mode also AWS:
+inside, on behalf of a local agent or script. An account with `apiKey` or `apiKeyEnv` uses
+your own provider account (E2B, Daytona, Vercel, Boat, exe.dev, or Railway; no Gitterm login
+needed). One without goes through your Gitterm plan: `{ size: "medium" }` on gitterm.dev, or
+`{ serverUrl, provider? }` on a self-hosted server, which picks its default provider when
+`provider` is left out.
 
 ```ts
-import { captureSource, createSandboxBackend, createSandboxClient } from "@gitterm/sdk/sandbox";
+import {
+  captureSource,
+  createSandboxBackend,
+  createSandboxClient,
+  resolveSandboxAccount,
+} from "@gitterm/sdk/sandbox";
 
-const settings = {
-  account: "e2b",
-  accounts: {
-    e2b: { mode: "direct" as const, provider: "e2b" as const, apiKeyEnv: "E2B_API_KEY" },
-  },
-};
-const sandboxes = createSandboxClient({ backend: createSandboxBackend(settings) });
+const account = await resolveSandboxAccount({ provider: "e2b", apiKeyEnv: "E2B_API_KEY" });
+const sandboxes = createSandboxClient({ backend: createSandboxBackend(account) });
 
 const sandbox = await sandboxes.create({ name: "ci", lifetimeMinutes: 30 });
 await sandboxes.sync(sandbox, await captureSource(process.cwd())); // includes uncommitted changes
@@ -892,7 +894,7 @@ Jobs are durable: their state lives in the sandbox, so another process can reatt
 `sandboxes.job()` or stop the whole process group with `sandboxes.cancel()`. A non-zero
 exit is a `failed` job; a provider failure throws `SandboxProviderError`. Managed
 primitives are also available directly as `client.sandboxes.*`. See
-[Agent sandboxes](../../docs/agent-sandboxes.md) for modes, credentials, charges, and
+[Agent sandboxes](../../docs/agent-sandboxes.md) for accounts, credentials, charges, and
 cleanup.
 
 ## Direct provider mode

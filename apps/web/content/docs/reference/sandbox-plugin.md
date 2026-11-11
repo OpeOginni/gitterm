@@ -24,12 +24,7 @@ The tools need an account, so replace the plugin's string entry with an object t
   "plugins": [
     {
       "package": "@gitterm/opencode-sandbox",
-      "options": {
-        "account": "e2b",
-        "accounts": {
-          "e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
-        },
-      },
+      "options": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
     },
   ],
 }
@@ -50,12 +45,12 @@ The plugin uses the CLI's saved login. For a self-hosted deployment, run `gitter
 
 ## Options
 
-These go directly in the plugin's `options`. Without `accounts`, the tools report that sandboxes are not configured.
+These go directly in the plugin's `options`, next to one account's [fields](#account-fields). For several accounts, put them under `accounts` instead. Without options, the tools report that sandboxes are not configured.
 
 | Option           | Type     | Required | Default               | What it does                                                                                                                                                                                                                                                  |
 | ---------------- | -------- | -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `account`        | string   | Yes      | None                  | Name of the account the tools use.                                                                                                                                                                                                                            |
-| `accounts`       | object   | Yes      | None                  | Map of account name to [account fields](#account-fields).                                                                                                                                                                                                     |
+| `account`        | string   | No       | None                  | With `accounts`: name of the account the tools use.                                                                                                                                                                                                           |
+| `accounts`       | object   | No       | None                  | Map of account name to [account fields](#account-fields), for several accounts. A single account inline is named after its `provider`, or `gitterm` without one.                                                                                              |
 | `limits`         | object   | No       | See [limits](#limits) | Caps on what the agent can start.                                                                                                                                                                                                                             |
 | `exclude`        | string[] | No       | None                  | Extra glob patterns `sandbox_sync` never uploads. Secret-like files are always left out.                                                                                                                                                                      |
 | `publicPreviews` | boolean  | No       | `false`               | Creates every sandbox with public previews, without asking. Setting it is your approval. Whether a preview can be public depends on the provider and the kind of account; see [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider). |
@@ -65,24 +60,25 @@ Account names use letters, digits, `_`, `.`, and `-`, start with a letter or dig
 
 ### Account fields
 
-| Field                        | Applies to                 | Required     | Default                 | What it does                                                                       |
-| ---------------------------- | -------------------------- | ------------ | ----------------------- | ---------------------------------------------------------------------------------- |
-| `mode`                       | All                        | Yes          | None                    | `direct` or `managed`. See [Concepts](/docs/concepts#managed-and-direct-accounts). |
-| `provider`                   | All                        | No           | `e2b`                   | `e2b`, `daytona`, `vercel`, `boat`, `exedev`, `railway`, or (managed only) `aws`.  |
-| `apiKey`                     | Direct                     | Yes          | None                    | Provider key, as `"{env:VAR}"` or `"{file:path}"`.                                 |
-| `allowUnboundedLifetime`     | Direct `exedev`, `railway` | Yes (`true`) | `false`                 | Accepts that a crashed sandbox runs until you destroy it.                          |
-| `template`                   | Direct `e2b`               | No           | `base`                  | E2B template.                                                                      |
-| `target`                     | Direct `daytona`           | No           | Daytona's default       | Region: `us` or `eu`.                                                              |
-| `snapshot`                   | Direct `daytona`           | No           | None                    | Daytona snapshot to use instead of the default image.                              |
-| `teamId`, `projectId`        | Direct `vercel`            | Yes          | None                    | Vercel team and project.                                                           |
-| `runtime`                    | Direct `vercel`            | No           | `node24`                | `node24`, `node22`, or `python3.13`.                                               |
-| `size`                       | Direct `boat`              | No           | Boat's default          | `small`, `default`, or `large`.                                                    |
-| `image`                      | Direct `exedev`            | No           | `node:22-bookworm`      | Container image.                                                                   |
-| `projectId`, `environmentId` | Direct `railway`           | Yes          | None                    | Railway project and environment.                                                   |
-| `image`                      | Direct `railway`           | No           | `node:22-bookworm-slim` | Container image. Gitterm's command server runs in it.                              |
-| `apiUrl`                     | Direct `railway`           | No           | Railway's API           | Railway API URL. Default: `backboard.railway.app/graphql/v2`.                      |
-| `serverUrl`                  | Managed                    | No           | CLI login               | Gitterm API URL, for self-hosted deployments.                                      |
-| `token`                      | Managed                    | No           | CLI login               | Gitterm API token. Prefer `gitterm login` or `GITTERM_API_TOKEN`.                  |
+| Field                        | Applies to                 | Required     | Default                 | What it does                                                                                                                                                                          |
+| ---------------------------- | -------------------------- | ------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiKey`                     | Direct                     | Yes          | None                    | Provider key, as `"{env:VAR}"` or `"{file:path}"`. Having it makes the account direct; without it the account is managed. See [Concepts](/docs/concepts#managed-and-direct-accounts). |
+| `provider`                   | Direct                     | Yes          | None                    | `e2b`, `daytona`, `vercel`, `boat`, `exedev`, or `railway`.                                                                                                                           |
+| `provider`                   | Managed                    | No           | The server's default    | One the deployment offers, for example `e2b` or (managed only) `aws`. Gitterm's own sandboxes on gitterm.dev.                                                                         |
+| `size`                       | Managed                    | No           | Your plan's default     | Machine size: `small` or `medium` on gitterm.dev, or one of a self-hosted deployment's machine profiles.                                                                              |
+| `allowUnboundedLifetime`     | Direct `exedev`, `railway` | Yes (`true`) | `false`                 | Accepts that a crashed sandbox runs until you destroy it.                                                                                                                             |
+| `template`                   | Direct `e2b`               | No           | `base`                  | E2B template.                                                                                                                                                                         |
+| `target`                     | Direct `daytona`           | No           | Daytona's default       | Region: `us` or `eu`.                                                                                                                                                                 |
+| `snapshot`                   | Direct `daytona`           | No           | None                    | Daytona snapshot to use instead of the default image.                                                                                                                                 |
+| `teamId`, `projectId`        | Direct `vercel`            | Yes          | None                    | Vercel team and project.                                                                                                                                                              |
+| `runtime`                    | Direct `vercel`            | No           | `node24`                | `node24`, `node22`, or `python3.13`.                                                                                                                                                  |
+| `size`                       | Direct `boat`              | No           | Boat's default          | `small`, `default`, or `large`.                                                                                                                                                       |
+| `image`                      | Direct `exedev`            | No           | `node:22-bookworm`      | Container image.                                                                                                                                                                      |
+| `projectId`, `environmentId` | Direct `railway`           | Yes          | None                    | Railway project and environment.                                                                                                                                                      |
+| `image`                      | Direct `railway`           | No           | `node:22-bookworm-slim` | Container image. Gitterm's command server runs in it.                                                                                                                                 |
+| `apiUrl`                     | Direct `railway`           | No           | Railway's API           | Railway API URL. Default: `backboard.railway.app/graphql/v2`.                                                                                                                         |
+| `serverUrl`                  | Managed                    | No           | CLI login               | Gitterm API URL, for self-hosted deployments.                                                                                                                                         |
+| `token`                      | Managed                    | No           | CLI login               | Gitterm API token. Prefer `gitterm login` or `GITTERM_API_TOKEN`.                                                                                                                     |
 
 For what each provider does with a sandbox, see [Providers](/docs/sandboxes/providers).
 

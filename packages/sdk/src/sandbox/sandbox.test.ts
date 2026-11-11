@@ -106,7 +106,8 @@ mock.module("e2b", () => ({
   },
 }));
 
-const { createSandboxBackend, describeSandboxAccount } = await import("./config");
+const { createSandboxBackend, describeSandboxAccount, resolveSandboxAccount } =
+  await import("./config");
 const { createSandboxClient } = await import("./client");
 const backendModule = await import("./backend");
 const { SandboxAccountError } = backendModule;
@@ -118,20 +119,23 @@ const { createTarGz } = await import("./tar");
 
 const settings = {
   accounts: {
-    personal: { mode: "direct" as const, provider: "e2b" as const, apiKey: "key-team-1" },
+    personal: { provider: "e2b" as const, apiKey: "key-team-1" },
     // Same provider, same key, different account name.
-    alias: { mode: "direct" as const, provider: "e2b" as const, apiKey: "key-team-1" },
-    work: { mode: "direct" as const, provider: "e2b" as const, apiKey: "key-team-2" },
-    broken: { mode: "direct" as const, provider: "e2b" as const, apiKey: "wrong" },
-    empty: { mode: "direct" as const, provider: "e2b" as const, apiKey: "" },
-    hosted: { mode: "managed" as const, serverUrl: "http://127.0.0.1:9", token: "gt_test" },
+    alias: { provider: "e2b" as const, apiKey: "key-team-1" },
+    work: { provider: "e2b" as const, apiKey: "key-team-2" },
+    broken: { provider: "e2b" as const, apiKey: "wrong" },
+    empty: { provider: "e2b" as const, apiKey: "" },
+    hosted: { serverUrl: "http://127.0.0.1:9", token: "gt_test" },
   },
 };
+
+const backendFor = async (account: string) =>
+  createSandboxBackend(await resolveSandboxAccount(settings, account));
 
 async function clientFor(account: string) {
   const store = createFileSandboxStore(await mkdtemp(path.join(tmpdir(), "gitterm-store-")));
   return createSandboxClient({
-    backend: createSandboxBackend(settings, account),
+    backend: await backendFor(account),
     store,
     limits: { maxSandboxes: 10 },
   });
@@ -200,12 +204,12 @@ describe("sandbox account isolation", () => {
     expect(error.message).not.toContain("wrong");
     // Only the selected account's key was tried.
     expect(calls.filter((call) => call.startsWith("auth:") && call !== "auth:wrong")).toEqual([]);
-    expect(() => createSandboxBackend(settings, "empty")).toThrow(/no E2B credential/);
-    expect(() => createSandboxBackend(settings, "missing")).toThrow(/not configured/);
-    expect(() => createSandboxBackend({ accounts: {} })).toThrow(/No sandbox accounts/);
+    await expect(backendFor("empty")).rejects.toThrow(/no E2B credential/);
+    await expect(backendFor("missing")).rejects.toThrow(/not configured/);
+    await expect(resolveSandboxAccount({ accounts: {} })).rejects.toThrow(/No sandbox accounts/);
   });
 
-  test("direct mode needs no Gitterm login", async () => {
+  test("an own key needs no Gitterm login", async () => {
     const saved = { token: process.env.GITTERM_API_TOKEN, home: process.env.HOME };
     delete process.env.GITTERM_API_TOKEN;
     process.env.HOME = await mkdtemp(path.join(tmpdir(), "gitterm-nohome-"));
@@ -213,14 +217,16 @@ describe("sandbox account isolation", () => {
       const personal = await clientFor("personal");
       const created = await personal.create({ name: "d", lifetimeMinutes: 10 });
       expect(created.mode).toBe("direct");
-      expect(describeSandboxAccount(settings, "personal")).toMatchObject({
+      const account = await resolveSandboxAccount(settings, "personal");
+      expect(describeSandboxAccount(account)).toMatchObject({
         mode: "direct",
         credentialSource: "plugin option",
         credentialPresent: true,
       });
-      expect(JSON.stringify(describeSandboxAccount(settings, "personal"))).not.toContain(
-        "key-team-1",
-      );
+      expect(JSON.stringify(describeSandboxAccount(account))).not.toContain("key-team-1");
+      // One account inline, named after its provider.
+      const inline = await resolveSandboxAccount({ provider: "e2b", apiKey: "key-team-1" });
+      expect(inline).toMatchObject({ name: "e2b", provider: "e2b", ownKey: true });
     } finally {
       process.env.GITTERM_API_TOKEN = saved.token;
       process.env.HOME = saved.home;
@@ -243,7 +249,7 @@ describe("sandbox account isolation", () => {
 
   test("limits cap concurrency and lifetime", async () => {
     const work = createSandboxClient({
-      backend: createSandboxBackend(settings, "work"),
+      backend: await backendFor("work"),
       store: createFileSandboxStore(await mkdtemp(path.join(tmpdir(), "gitterm-store-"))),
       limits: { maxSandboxes: 1, maxLifetimeMinutes: 15 },
     });
@@ -253,6 +259,48 @@ describe("sandbox account isolation", () => {
     await expect(work.create({ name: "f", lifetimeMinutes: 5 })).rejects.toThrow(
       /approved limit is 1/,
     );
+  });
+});
+
+describe("GitTerm accounts", () => {
+  /** A GitTerm server that answers only `sandbox.providers`. */
+  async function withServer(
+    offered: { providers: string[]; default: string | null },
+    run: (serverUrl: string) => Promise<void>,
+  ) {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => Response.json([{ result: { data: offered } }]),
+    });
+    try {
+      await run(`http://127.0.0.1:${server.port}`);
+    } finally {
+      server.stop(true);
+    }
+  }
+
+  test("an account without a key uses the server's default provider", async () => {
+    await withServer({ providers: ["daytona", "e2b"], default: "daytona" }, async (serverUrl) => {
+      const account = await resolveSandboxAccount({ serverUrl, token: "gt_test", size: "large" });
+      expect(account).toMatchObject({ name: "gitterm", provider: "daytona", ownKey: false });
+      expect(describeSandboxAccount(account).chargedTo).toContain("Gitterm plan");
+    });
+  });
+
+  test("a provider the server doesn't offer points at the forgotten key", async () => {
+    await withServer({ providers: ["gitterm"], default: "gitterm" }, async (serverUrl) => {
+      await expect(
+        resolveSandboxAccount({ provider: "e2b", serverUrl, token: "gt_test" }),
+      ).rejects.toThrow(/doesn't offer E2B .* add "apiKey" to sandbox account "e2b"/);
+    });
+  });
+
+  test("several providers and no default asks for one", async () => {
+    await withServer({ providers: ["daytona", "e2b"], default: null }, async (serverUrl) => {
+      await expect(resolveSandboxAccount({ serverUrl, token: "gt_test" })).rejects.toThrow(
+        /daytona, e2b sandboxes and no default. Set "provider"/,
+      );
+    });
   });
 });
 

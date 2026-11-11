@@ -6,8 +6,8 @@ import { registerSandboxTools } from "./sandbox";
 export const GittermSandboxToolsPlugin = Plugin.define({
   id: "gitterm.sandbox",
   async setup(ctx) {
-    const options = ctx.options as Partial<SandboxSettings> | undefined;
-    return registerSandboxTools(ctx, options?.accounts ? (options as SandboxSettings) : undefined);
+    const options = ctx.options as SandboxSettings | undefined;
+    return registerSandboxTools(ctx, options && Object.keys(options).length ? options : undefined);
   },
 });
 
