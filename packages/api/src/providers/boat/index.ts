@@ -32,6 +32,8 @@ export type { BoatConfig } from "./types";
 const BASE_DOMAIN = env.BASE_DOMAIN;
 const ROUTING_MODE = env.ROUTING_MODE;
 const WORKSPACE_DIR = "/home/user";
+/** The Boat SDK polls every 2 s by default; a box is usually ready sooner than that. */
+const READY_POLL_MS = 500;
 const DEFAULT_AGENT_SERVE = {
   command: "opencode serve --hostname 0.0.0.0 --port 4096",
   port: 4096,
@@ -255,7 +257,9 @@ export class BoatProvider implements ComputeProvider {
     };
 
     try {
-      await logger.step("wait-for-box", () => waitUntilReady(client, handle.boxId));
+      await logger.step("wait-for-box", () =>
+        waitUntilReady(client, handle.boxId, { intervalMs: READY_POLL_MS }),
+      );
       await logger.step("name-box", () =>
         client.update({
           sandboxId: handle.boxId,
@@ -393,7 +397,7 @@ export class BoatProvider implements ComputeProvider {
     const handle = parseHandle(externalId);
     const client = await this.getClient();
     await client.resume({ sandboxId: handle.boxId, resumeRequest: { noEnv: true } });
-    await waitUntilReady(client, handle.boxId);
+    await waitUntilReady(client, handle.boxId, { intervalMs: READY_POLL_MS });
     await this.startAgentServer(client, handle);
   }
 

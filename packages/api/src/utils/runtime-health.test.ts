@@ -15,6 +15,21 @@ describe("pollHttpRuntimeHealth", () => {
     expect(performance.now() - startedAt).toBeLessThan(500);
   });
 
+  test("notices a runtime that comes up early instead of waiting a whole interval", async () => {
+    const startedAt = performance.now();
+    const healthy = await pollHttpRuntimeHealth({
+      url: "https://runtime.example.com",
+      timeoutMs: 10_000,
+      intervalMs: 2_000,
+      // Starts answering 300 ms in, as an agent server that is still booting does.
+      fetch: async () =>
+        new Response(null, { status: performance.now() - startedAt < 300 ? 502 : 200 }),
+    });
+
+    expect(healthy).toBe(true);
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
+  });
+
   test("checks provider state after an unhealthy response", async () => {
     let checked = false;
 

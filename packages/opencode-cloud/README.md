@@ -78,6 +78,10 @@ can't reach; instead run `opencode serve --port 4096`, open it with
 - It is one way: later local edits are not sent, and cloud changes are not merged back.
   Use Git to move work between them.
 - GitTerm must be able to clone your repository's `origin`.
+- The cloud checkout is on a branch with the same name as your local one.
+- If a handoff fails partway, run `/cloud` again and choose to retry: it continues in the
+  workspace that attempt created instead of starting a second one. If you already worked in
+  that cloud checkout or session, the retry stops and leaves your cloud work as it is.
 - The checkout and the conversation are each limited to 25 MiB. Submodules and merge
   conflicts are not supported.
 - Common secret files are blocked, but this is not full secret scanning. Check the
