@@ -28,6 +28,7 @@ import {
   type WorkspaceSSHAccessConfig,
 } from "../ssh-access";
 import { createProvisionLogger } from "../provision-logger";
+import { gitCredentialPrefix, repositoryCheckoutCommand, shellQuote } from "../project-snapshot";
 import { inlineGitAuthCommands } from "../git-auth";
 import type { DaytonaConfig } from "./types";
 import { redactSecrets } from "../../utils/redact-secrets";
@@ -358,33 +359,37 @@ export class DaytonaProvider implements ComputeProvider {
 
     const sandbox = await provisionLogger.step(
       `create-sandbox image=${imageRef} cpu=${resources.cpu} mem=${resources.memory}`,
-      () =>
-        daytona.create(
-          {
-            image,
-            resources,
-            // Tier 3+ orgs can lift the network policy per sandbox so
-            // workspaces reach the gitterm API; Tier 1/2 orgs ignore this
-            // (egress stays limited to Daytona's essential-services list).
-            ...(providerConfig.tier3NetworkAccess ? { networkBlockAll: false } : {}),
-            labels: this.getWorkspaceLabels(config, spec, persistent),
-            envVars: Object.fromEntries(
-              Object.entries({
-                ...config.environmentVariables,
-                AGENT_FILES_BASE64: undefined,
-                AGENT_RUNTIME_UPGRADE: "1",
-              }).filter((entry): entry is [string, string] => entry[1] !== undefined),
-            ),
-          },
-          {
-            // Leave enough time for the API to return an error before Bun's
-            // 255-second request timeout closes the client connection.
-            timeout: DAYTONA_CREATE_TIMEOUT_SECONDS,
-            onSnapshotCreateLogs: (chunk) => {
-              process.stdout.write(chunk);
-            },
-          },
-        ),
+      () => {
+        const shared = {
+          // Tier 3+ orgs can lift the network policy per sandbox so
+          // workspaces reach the gitterm API; Tier 1/2 orgs ignore this
+          // (egress stays limited to Daytona's essential-services list).
+          ...(providerConfig.tier3NetworkAccess ? { networkBlockAll: false } : {}),
+          labels: this.getWorkspaceLabels(config, spec, persistent),
+          envVars: Object.fromEntries(
+            Object.entries({
+              ...config.environmentVariables,
+              AGENT_FILES_BASE64: undefined,
+              AGENT_RUNTIME_UPGRADE: "1",
+            }).filter((entry): entry is [string, string] => entry[1] !== undefined),
+          ),
+        };
+        // Leave enough time for the API to return an error before Bun's
+        // 255-second request timeout closes the client connection.
+        const timeout = DAYTONA_CREATE_TIMEOUT_SECONDS;
+        // A project snapshot carries its own image and size.
+        return config.snapshot
+          ? daytona.create({ ...shared, snapshot: config.snapshot }, { timeout })
+          : daytona.create(
+              { ...shared, image, resources },
+              {
+                timeout,
+                onSnapshotCreateLogs: (chunk) => {
+                  process.stdout.write(chunk);
+                },
+              },
+            );
+      },
     );
     // Recorded first, so a sandbox whose setup fails is still deleted if its cleanup fails;
     // the setup steps below delete it themselves only on a best-effort basis.
@@ -403,16 +408,21 @@ export class DaytonaProvider implements ComputeProvider {
       const repoBranch = spec.repo.checkoutRef || spec.repo.branch;
 
       await provisionLogger.step("clone-repository", () =>
-        sandbox.git
-          .clone(parsedGitRepoUrl, repoDir, repoBranch, undefined, username, password)
-          .catch(async (err) => {
-            await sandbox.delete().catch(() => undefined);
-            console.error(
-              "Daytona killed sandbox because of err:",
-              redactSecrets(err, spec.repo?.authToken ? [spec.repo.authToken] : []),
-            );
-            throw err;
-          }),
+        (config.snapshot
+          ? // The snapshot already holds a clone: refresh it instead.
+            this.executeCommand(
+              sandbox,
+              `mkdir -p ${shellQuote(repoDir)} && cd ${shellQuote(repoDir)} && ${gitCredentialPrefix(spec.repo!)}bash -c ${shellQuote(repositoryCheckoutCommand(spec.repo!, parsedGitRepoUrl))}`,
+            )
+          : sandbox.git.clone(parsedGitRepoUrl, repoDir, repoBranch, undefined, username, password)
+        ).catch(async (err) => {
+          await sandbox.delete().catch(() => undefined);
+          console.error(
+            "Daytona killed sandbox because of err:",
+            redactSecrets(err, spec.repo?.authToken ? [spec.repo.authToken] : []),
+          );
+          throw err;
+        }),
       );
 
       const inlineAuth = inlineGitAuthCommands(spec.repo);

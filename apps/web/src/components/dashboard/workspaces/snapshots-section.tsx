@@ -58,8 +58,8 @@ export function SnapshotsSection({
           limit === 0
             ? "Snapshots are on paid plans."
             : limit !== null
-              ? `${snapshots.length} of ${limit} on your plan. New agent sandboxes start from them with dependencies installed.`
-              : "New agent sandboxes start from them with dependencies installed."
+              ? `${snapshots.length} of ${limit} on your plan. New agent sandboxes, and cloud workspaces for a repository, start from them with dependencies installed.`
+              : "New agent sandboxes, and cloud workspaces for a repository, start from them with dependencies installed."
         }
       />
       {snapshots.length === 0 ? (
@@ -81,6 +81,8 @@ export function SnapshotsSection({
                   <p className="truncate font-mono text-[13.5px] text-fg">{snapshot.label}</p>
                   <p className="mt-1 text-[12.5px] text-fg-4">
                     {[
+                      // A cloud workspace kept for its repository, not a sandbox snapshot.
+                      snapshot.repositoryUrl ? "cloud workspace" : null,
                       where ? `${where.size} on ${where.provider}` : null,
                       `saved ${formatDistanceToNow(new Date(snapshot.createdAt), { addSuffix: true })}`,
                     ]
@@ -89,7 +91,9 @@ export function SnapshotsSection({
                   </p>
                 </div>
                 <p className="hidden shrink-0 text-[12.5px] text-fg-3 sm:block">
-                  {inUse ? `Used by ${inUse} sandbox${inUse === 1 ? "" : "es"}` : "Not in use"}
+                  {inUse
+                    ? `Used by ${inUse} ${snapshot.repositoryUrl ? "workspace" : "sandbox"}${inUse === 1 ? "" : snapshot.repositoryUrl ? "s" : "es"}`
+                    : "Not in use"}
                 </p>
                 {confirming === snapshot.id ? (
                   <div className="flex shrink-0 items-center gap-1.5">

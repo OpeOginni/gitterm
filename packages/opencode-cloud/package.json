@@ -28,13 +28,18 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./tui": {
+      "types": "./dist/tui.d.ts",
+      "import": "./dist/tui.js",
+      "default": "./dist/tui.js"
     }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target bun --format esm --external @opencode/plugin --external @opencode/client --external '@opencode/client/*' && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target bun --format esm --external @opencode/plugin --external @opencode/client --external '@opencode/client/*' && bun run build-tui.ts && tsc -p tsconfig.build.json",
     "check-types": "tsc --noEmit",
     "prepack": "bun run check-types && bun run build"
   },
@@ -44,11 +49,17 @@
   "devDependencies": {
     "@gitterm/sdk": "workspace:*",
     "@opencode/plugin": "^2.2.6",
+    "@opentui/core": "0.8.0",
+    "@opentui/solid": "0.8.0",
     "@types/bun": "^1.2.6",
+    "solid-js": "1.9.17",
     "typescript": "^5.8.2"
   },
   "peerDependencies": {
-    "@opencode/plugin": "^2.2.6"
+    "@opencode/plugin": "^2.2.6",
+    "@opentui/core": ">=0.8.0",
+    "@opentui/solid": ">=0.8.0",
+    "solid-js": ">=1.9.0"
   },
   "engines": {
     "bun": ">=1.2.0"

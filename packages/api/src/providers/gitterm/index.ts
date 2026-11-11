@@ -12,6 +12,7 @@ import type {
   WorkspaceProvisioningSpec,
   WorkspaceStatusResult,
 } from "../compute";
+import { repositoryCheckoutCommand } from "../project-snapshot";
 import { inlineGitAuthCommands } from "../git-auth";
 import { createProvisionLogger } from "../provision-logger";
 import type {
@@ -154,6 +155,7 @@ export class GittermProvider implements ComputeProvider {
           machine: { size },
           env: environment,
           resumeCommand: startAgentCommand(serve, repoDir),
+          ...(config.snapshot ? { snapshot: config.snapshot } : {}),
         })
         .catch((error: unknown) => {
           throw new WorkspaceProvisionError(
@@ -191,7 +193,10 @@ export class GittermProvider implements ComputeProvider {
           this.run(
             transport,
             id,
-            `GIT_TERMINAL_PROMPT=0 git clone ${ref ? `--branch ${quote(ref)}` : ""} ${quote(repoUrl)} .`,
+            // A project snapshot already holds a clone: refresh it instead.
+            config.snapshot
+              ? repositoryCheckoutCommand(spec.repo!, repoUrl)
+              : `GIT_TERMINAL_PROMPT=0 git clone ${ref ? `--branch ${quote(ref)}` : ""} ${quote(repoUrl)} .`,
             repoDir,
             600_000,
           ).catch((error: unknown) => {

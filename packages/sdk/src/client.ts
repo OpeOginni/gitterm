@@ -39,6 +39,8 @@ import type {
   WorkspaceRestartResult,
   WorkspaceRuntimeAccess,
   WorkspacePauseResult,
+  ProjectSnapshotStatus,
+  WorkspaceTerminateOptions,
   WorkspaceTerminateResult,
   WorkspaceCatalog,
   WorkspaceSetupStatus,
@@ -148,7 +150,12 @@ export type GittermClient = {
     ): Promise<WorkspaceEnsureRunningResult>;
     pause(workspace: WorkspaceRef): Promise<WorkspacePauseResult>;
     restart(workspace: WorkspaceRef): Promise<WorkspaceRestartResult>;
-    terminate(workspace: WorkspaceRef): Promise<WorkspaceTerminateResult>;
+    terminate(
+      workspace: WorkspaceRef,
+      options?: WorkspaceTerminateOptions,
+    ): Promise<WorkspaceTerminateResult>;
+    /** Whether the workspace can be kept as its repository's snapshot when it is deleted. */
+    projectSnapshot(workspace: WorkspaceRef): Promise<ProjectSnapshotStatus>;
     create(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
     setupStatus(workspace: WorkspaceRef): Promise<WorkspaceSetupStatus>;
     /** Credential-source metadata; never wakes the runtime. */
@@ -755,16 +762,20 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           });
           return { status: result.status as Workspace["status"] };
         }),
-      terminate: (ref: WorkspaceRef) =>
+      terminate: (ref: WorkspaceRef, options?: WorkspaceTerminateOptions) =>
         run(async (): Promise<WorkspaceTerminateResult> => {
           const result = await trpc.workspace.deleteWorkspace.mutate({
             workspaceId: workspaceIdOf(ref),
+            saveSnapshot: options?.saveSnapshot,
           });
           return {
             workspace: normalizeWorkspace(result.workspace),
             cleanupInBackground: result.cleanupInBackground,
+            snapshot: result.snapshot,
           };
         }),
+      projectSnapshot: (ref: WorkspaceRef) =>
+        run(() => trpc.workspace.projectSnapshot.query({ workspaceId: workspaceIdOf(ref) })),
       create: createWorkspace,
       models: (ref) =>
         run(() => trpc.workspace.getModelAccess.query({ workspaceId: workspaceIdOf(ref) })),

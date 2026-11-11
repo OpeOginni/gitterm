@@ -111,6 +111,8 @@ function presentSnapshot(row: typeof sandboxSnapshot.$inferSelect, provider: San
     id: row.id,
     provider,
     label: row.label,
+    /** Set on a project snapshot: the repository whose cloud workspaces start from it. */
+    repositoryUrl: row.repositoryUrl,
     machineProfileId: row.machineProfileId,
     createdAt: row.createdAt.toISOString(),
   };
@@ -296,6 +298,12 @@ export const sandboxRouter = router({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: `Snapshot ${snapshot.id} was saved on another provider; create the sandbox there.`,
+        });
+      // A project snapshot is a whole agent workspace, not a sandbox.
+      if (snapshot?.repositoryUrl)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Snapshot ${snapshot.id} is a cloud workspace snapshot for ${snapshot.repositoryUrl}; sandboxes can't start from it.`,
         });
 
       // The sandbox is provisioned at the machine profile it is billed at.

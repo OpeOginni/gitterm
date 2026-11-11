@@ -5,6 +5,7 @@ export function getRuntime(target: RuntimeTarget): OpencodeRuntime {
   return createV2Runtime(target);
 }
 
+export { PASSIVE_REQUEST_HEADER } from "./http";
 export { parseModelRef } from "./types";
 export type {
   OpencodeRuntime,

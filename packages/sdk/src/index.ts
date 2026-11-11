@@ -11,6 +11,7 @@ export type { CliConfig } from "./config.js";
 export { loginWithDeviceCode } from "./device-login.js";
 export type { DeviceCodeInfo, LoginWithDeviceCodeOptions } from "./device-login.js";
 export { AgentRunError, GittermError, WorkspaceLifecycleError } from "./errors.js";
+export { PASSIVE_REQUEST_HEADER } from "@gitterm/agent-runtime";
 export {
   createGittermWorkspaceClient,
   getWorkspaceEnvironment,
@@ -71,6 +72,8 @@ export type {
   WorkspaceModelsInput,
   WorkspaceModelAccess,
   WorkspacePauseResult,
+  ProjectSnapshotStatus,
+  WorkspaceTerminateOptions,
   WorkspaceTerminateResult,
   WorkspaceProviderSelection,
   Integration,

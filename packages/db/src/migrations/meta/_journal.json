@@ -351,6 +351,13 @@
       "when": 1794357042928,
       "tag": "0049_nice_micromax",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1794395406752,
+      "tag": "0050_project_snapshot",
+      "breakpoints": true
     }
   ]
 }

@@ -352,7 +352,21 @@ integration("Gitterm serves managed previews: public to anyone, private to the o
   // Direct access is still returned, for local proxies.
   expect(mine).toMatchObject({ headers: { "e2b-traffic-access-token": "t" } });
 
+  // A request that only observes the workspace is routed, but is not counted as use of it:
+  // watching a workspace must not hold off its idle pause.
+  const recordActivity = activity.recordWorkspaceActivity as unknown as {
+    mock: { calls: string[][] };
+  };
+  const recorded = () =>
+    recordActivity.mock.calls.filter(([workspaceId]) => workspaceId === sandbox.id).length;
+  const before = recorded();
+  const watched = await resolve(subdomain, 5173, { "X-Passive-Request": "1" });
+  expect(watched.status).toBe(200);
+  expect(watched.headers.get("X-Upstream-URL")).toBe("https://5173-fake.e2b.app/");
+  expect(recorded()).toBe(before);
+
   const open = await resolve(subdomain, 5173);
+  expect(recorded()).toBe(before + 1);
   expect(open.status).toBe(200);
   expect(await open.text()).toBe("");
   expect(open.headers.get("X-Upstream-URL")).toBe("https://5173-fake.e2b.app/");
@@ -1010,6 +1024,139 @@ integration(
       snapshotLimit = null;
       failSnapshots = false;
       workspaceLimit = previousLimit;
+    }
+  },
+);
+
+integration(
+  "a cloud workspace is kept as its repository's snapshot when it is deleted, one per repository",
+  async () => {
+    const { E2BProvider } = await import("../providers/e2b");
+    const { image, agentType } = await import("@gitterm/db/schema/cloud");
+    const { findProjectSnapshot } = await import("../service/project-snapshot");
+    const prepared: string[] = [];
+    const terminated: string[] = [];
+    const spies = [
+      spyOn(E2BProvider.prototype, "execCommand").mockImplementation(async (id, command) => {
+        prepared.push(`${id}: ${command.slice(0, 26)}`);
+        return { exitCode: 0, stdout: "" };
+      }),
+      spyOn(E2BProvider.prototype, "terminateWorkspace").mockImplementation(async (id) => {
+        terminated.push(id);
+      }),
+    ];
+    const [e2b] = await db.select().from(cloudProvider).where(eq(cloudProvider.providerKey, "e2b"));
+    const [opencode] = await db
+      .select({ id: image.id })
+      .from(image)
+      .innerJoin(agentType, eq(image.agentTypeId, agentType.id))
+      .where(eq(agentType.key, "opencode"));
+    const repositoryUrl = `https://github.com/acme/app-${randomUUID().slice(0, 8)}`;
+    const workspaces = workspaceRouter.createCaller({
+      session: { user: { id: userId } },
+    } as unknown as Context);
+    const cloudWorkspace = async (machine: string) => {
+      const id = randomUUID();
+      await db.insert(workspace).values({
+        id,
+        userId,
+        externalInstanceId: machine,
+        imageId: opencode!.id,
+        cloudProviderId: e2b!.id,
+        repositoryUrl,
+        domain: "",
+        status: "running",
+        startedAt: new Date(),
+        updatedAt: new Date(),
+      });
+      return id;
+    };
+    const kept = () =>
+      db
+        .select()
+        .from(sandboxSnapshot)
+        .where(
+          and(eq(sandboxSnapshot.userId, userId), eq(sandboxSnapshot.repositoryUrl, repositoryUrl)),
+        );
+    const status = async (id: string) =>
+      (await db.select().from(workspace).where(eq(workspace.id, id)))[0]!.status;
+    try {
+      // A plan without snapshots: nothing is offered, and asking anyway deletes nothing.
+      const first = await cloudWorkspace("machine-1");
+      snapshotLimit = 0;
+      expect(await workspaces.projectSnapshot({ workspaceId: first })).toEqual({
+        available: false,
+        reason: "plan",
+        existing: null,
+      });
+      await expect(
+        workspaces.deleteWorkspace({ workspaceId: first, saveSnapshot: true }),
+      ).rejects.toThrow(/plan doesn't include snapshots/);
+      expect(await status(first)).toBe("running");
+
+      // With room for one more: the workspace is prepared, saved, then deleted.
+      const others = await db
+        .select({ id: sandboxSnapshot.id })
+        .from(sandboxSnapshot)
+        .where(eq(sandboxSnapshot.userId, userId));
+      snapshotLimit = others.length + 1;
+      savedSnapshots.length = 0;
+      expect(await workspaces.projectSnapshot({ workspaceId: first })).toMatchObject({
+        available: true,
+        existing: null,
+      });
+      const deleted = await workspaces.deleteWorkspace({ workspaceId: first, saveSnapshot: true });
+      expect(prepared).toEqual(["machine-1: pkill -f 'opencode serve' "]);
+      expect(terminated).toEqual(["machine-1"]);
+      expect(await status(first)).toBe("terminated");
+      const [saved] = await kept();
+      expect(deleted.snapshot).toEqual({ id: saved!.id });
+      expect(saved).toMatchObject({
+        label: repositoryUrl.replace("https://github.com/", ""),
+        imageId: opencode!.id,
+        externalSnapshotId: `e2b-gitterm-${saved!.id}`,
+      });
+
+      // The next workspace for the repository finds it, on the same image only.
+      const lookup = { userId, repositoryUrl, cloudProviderId: e2b!.id };
+      expect((await findProjectSnapshot({ ...lookup, imageId: opencode!.id }))?.id).toBe(saved!.id);
+      expect(await findProjectSnapshot({ ...lookup, imageId: randomUUID() })).toBeUndefined();
+      expect(await findProjectSnapshot({ ...lookup, userId: otherId })).toBeUndefined();
+      // It is a whole workspace, so a sandbox cannot start from it.
+      await expect(
+        caller(userId).create({ name: "from-project", lifetimeMinutes: 30, snapshotId: saved!.id }),
+      ).rejects.toThrow(/cloud workspace snapshot/);
+
+      // Keeping it again replaces it, even at the plan limit: still one, the older one gone.
+      const second = await cloudWorkspace("machine-2");
+      expect(await workspaces.projectSnapshot({ workspaceId: second })).toMatchObject({
+        available: true,
+        existing: { id: saved!.id },
+      });
+      deletedSnapshots.length = 0;
+      await workspaces.deleteWorkspace({ workspaceId: second, saveSnapshot: true });
+      const after = await kept();
+      expect(after.map((row) => row.id)).not.toContain(saved!.id);
+      expect(after).toHaveLength(1);
+      expect(deletedSnapshots).toEqual([saved!.externalSnapshotId!]);
+
+      // A provider that refuses the save leaves the workspace and the kept snapshot alone.
+      const third = await cloudWorkspace("machine-3");
+      failSnapshots = true;
+      await expect(
+        workspaces.deleteWorkspace({ workspaceId: third, saveSnapshot: true }),
+      ).rejects.toThrow(/E2B failed to snapshot/);
+      expect(await status(third)).toBe("running");
+      expect((await kept()).map((row) => row.id)).toEqual(after.map((row) => row.id));
+      // Deleting without a snapshot still works.
+      failSnapshots = false;
+      expect((await workspaces.deleteWorkspace({ workspaceId: third })).snapshot).toBeNull();
+      expect(await status(third)).toBe("terminated");
+    } finally {
+      failSnapshots = false;
+      snapshotLimit = null;
+      for (const spy of spies) spy.mockRestore();
+      await db.delete(sandboxSnapshot).where(eq(sandboxSnapshot.repositoryUrl, repositoryUrl));
     }
   },
 );

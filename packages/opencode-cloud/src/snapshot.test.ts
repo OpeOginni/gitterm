@@ -1,22 +1,38 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
   captureSnapshot,
   checkoutRoot,
-  DIFF_ARGS,
-  encodeSnapshot,
   git,
   repositoryUrl,
-  safeRelativePath,
-  sensitivePath,
   sharedCheckoutSessions,
+  snapshotSummary,
   type CheckoutSnapshot,
 } from "./snapshot";
-import { PREPARE_STAGE_SCRIPT, RESTORE_SCRIPT } from "./restore";
+import {
+  CAPTURE_SCRIPT,
+  DIFF_ARGS,
+  sensitivePath,
+  CAPTURE_UNSUPPORTED,
+  PREPARE_STAGE_SCRIPT,
+  RESTORE_NEEDS_CONFIRMATION,
+  RESTORE_NEEDS_FULL_HISTORY,
+  RESTORE_SCRIPT,
+} from "./restore";
 
 const execute = promisify(execFile);
 let temporary: string;
@@ -44,10 +60,58 @@ afterEach(async () => {
   await rm(temporary, { recursive: true, force: true });
 });
 
-async function restore(snapshot: CheckoutSnapshot) {
+type Contents = {
+  digest: string;
+  bundle: Buffer;
+  staged: Buffer;
+  unstaged: Buffer;
+  files: Array<{ path: string; executable: boolean; data: Buffer }>;
+};
+/** What a snapshot carries, for tests that look inside one. */
+function contents(encoded: Buffer): Contents {
+  const size = encoded.readUInt32BE(0);
+  const manifest = JSON.parse(encoded.subarray(4, 4 + size).toString("utf8"));
+  let offset = 4 + size;
+  const take = (length: number) => encoded.subarray(offset, (offset += length));
+  return {
+    ...manifest,
+    bundle: take(manifest.bundle),
+    staged: take(manifest.staged),
+    unstaged: take(manifest.unstaged),
+    files: manifest.files.map((file: { path: string; executable: boolean; size: number }) => ({
+      path: file.path,
+      executable: file.executable,
+      data: take(file.size),
+    })),
+  };
+}
+/** The snapshot after `change`, as something on the way could have altered it. */
+function tampered(snapshot: { encoded: Buffer }, change: (inside: Contents) => void) {
+  const inside = contents(snapshot.encoded);
+  change(inside);
+  const manifest = Buffer.from(
+    JSON.stringify({
+      ...inside,
+      bundle: inside.bundle.length,
+      staged: inside.staged.length,
+      unstaged: inside.unstaged.length,
+      files: inside.files.map((file) => ({
+        path: file.path,
+        executable: file.executable,
+        size: file.data.length,
+      })),
+    }),
+  );
+  const header = Buffer.alloc(4);
+  header.writeUInt32BE(manifest.length);
+  const parts = [inside.bundle, inside.staged, inside.unstaged, ...inside.files.map((f) => f.data)];
+  return { encoded: Buffer.concat([header, manifest, ...parts]) };
+}
+
+async function restore(snapshot: { encoded: Buffer }) {
   const stage = ".gitterm-handoff-1234-abcd";
   await execute("node", ["-e", PREPARE_STAGE_SCRIPT, stage], { cwd: cloud });
-  await writeFile(path.join(cloud, stage, "snapshot.bin"), encodeSnapshot(snapshot));
+  await writeFile(path.join(cloud, stage, "snapshot.bin"), snapshot.encoded);
   return execute("node", ["-e", RESTORE_SCRIPT, stage], { cwd: cloud, maxBuffer: 1024 * 1024 });
 }
 
@@ -67,7 +131,7 @@ describe("checkout snapshot restoration", () => {
     await writeFile(path.join(source, ".env"), "PRIVATE=not-uploaded");
     const beforeStatus = await git(source, ["status", "--porcelain=v1"]);
     const snapshot = await captureSnapshot(source, true);
-    expect(snapshot.files.map((file) => file.path)).not.toContain(".env");
+    expect(contents(snapshot.encoded).files.map((file) => file.path)).not.toContain(".env");
     expect((await restore(snapshot)).stdout).toBe("GITTERM_HANDOFF_VERIFIED");
     expect(await git(cloud, ["rev-parse", "HEAD"])).toEqual(
       await git(source, ["rev-parse", "HEAD"]),
@@ -134,14 +198,18 @@ describe("checkout snapshot restoration", () => {
 
   test("detects restoration corruption", async () => {
     const snapshot = await captureSnapshot(source, true);
-    snapshot.digest = "bad";
-    await expect(restore(snapshot)).rejects.toThrow();
+    const corrupt = tampered(snapshot, (inside) => {
+      inside.digest = "bad";
+    });
+    await expect(restore(corrupt)).rejects.toThrow();
   });
 
   test("rejects path traversal in untracked files", async () => {
     const snapshot = await captureSnapshot(source, true);
-    snapshot.files.push({ path: "../outside", data: "eA==", executable: false });
-    await expect(restore(snapshot)).rejects.toThrow();
+    const escaping = tampered(snapshot, (inside) => {
+      inside.files.push({ path: "../outside", data: Buffer.from("x"), executable: false });
+    });
+    await expect(restore(escaping)).rejects.toThrow();
     expect(await readdir(temporary)).not.toContain("outside");
   });
 
@@ -152,8 +220,10 @@ describe("checkout snapshot restoration", () => {
     await git(source, ["add", "linked"]);
     await git(source, ["commit", "-m", "tracked symlink"]);
     const snapshot = await captureSnapshot(source, true);
-    snapshot.files.push({ path: "linked/unsafe.txt", data: "eA==", executable: false });
-    await expect(restore(snapshot)).rejects.toThrow();
+    const escaping = tampered(snapshot, (inside) => {
+      inside.files.push({ path: "linked/unsafe.txt", data: Buffer.from("x"), executable: false });
+    });
+    await expect(restore(escaping)).rejects.toThrow();
     expect(await readdir(outside)).toEqual([]);
   });
 
@@ -182,6 +252,58 @@ describe("checkout snapshot restoration", () => {
     await rm(path.join(source, "private.pem"));
     await symlink(path.join(source, "hello.txt"), path.join(source, "link"));
     await expect(captureSnapshot(source, true)).rejects.toThrow("symlinks");
+  });
+});
+
+describe("what a capture refuses", () => {
+  // Assembled here so this file does not itself look like it holds a key.
+  const key = ["-----BEGIN OPENSSH PRIVATE KEY-----", "b3BlbnNzaC1rZXktdjEAAAAABG5vbmU", ""].join(
+    "\n",
+  );
+
+  test("private keys, in a tracked edit or an untracked file, only when the snapshot is uploaded", async () => {
+    await writeFile(path.join(source, "hello.txt"), `config\n${key}`);
+    await expect(captureSnapshot(source, true)).rejects.toThrow(
+      "Private key material detected in changed files.",
+    );
+    await git(source, ["checkout", "--", "hello.txt"]);
+    await writeFile(path.join(source, "notes.txt"), key);
+    await expect(captureSnapshot(source, true)).rejects.toThrow(
+      'Private key material detected in "notes.txt".',
+    );
+    // Leaving the changes out leaves the key out.
+    expect((await captureSnapshot(source, false)).changedPaths).toEqual([]);
+
+    // Coming back from the cloud nothing is screened: it is the user's own machine.
+    const stage = ".gitterm-handoff-1234-abcd";
+    await writeFile(path.join(cloud, ".env"), "TOKEN=from-the-cloud\n");
+    await git(cloud, ["add", "-f", ".env"]);
+    await execute("node", ["-e", PREPARE_STAGE_SCRIPT, stage], { cwd: cloud });
+    const result = await execute(
+      "node",
+      ["-e", CAPTURE_SCRIPT, stage, JSON.stringify({ changes: true })],
+      { cwd: cloud },
+    );
+    expect(result.stdout).toBe("GITTERM_CAPTURE_READY");
+  });
+
+  test("changes over the size limit, without reading them, and merge conflicts", async () => {
+    await writeFile(path.join(source, "huge.bin"), Buffer.alloc(26 * 1024 * 1024));
+    await expect(captureSnapshot(source, true)).rejects.toThrow(
+      "Uncommitted changes exceed the 25 MiB handoff limit.",
+    );
+    await rm(path.join(source, "huge.bin"));
+
+    await git(source, ["checkout", "-qb", "other"]);
+    await writeFile(path.join(source, "hello.txt"), "other\n");
+    await git(source, ["commit", "-qam", "other"]);
+    await git(source, ["checkout", "-q", "main"]);
+    await writeFile(path.join(source, "hello.txt"), "main\n");
+    await git(source, ["commit", "-qam", "main"]);
+    await git(source, ["merge", "other"]).catch(() => {});
+    await expect(captureSnapshot(source, true)).rejects.toThrow("Resolve merge conflicts");
+    // Nothing is left behind in the checkout by a refused capture.
+    expect((await readdir(source)).filter((name) => name.startsWith(".gitterm"))).toEqual([]);
   });
 });
 
@@ -217,7 +339,10 @@ describe("retrying in the same checkout", () => {
     const before = { head: await git(cloud, ["rev-parse", "HEAD"]), status: await status() };
     const snapshot = await captureSnapshot(source, true);
 
-    await expect(restore({ ...snapshot, digest: "bad" })).rejects.toThrow();
+    const corrupt = tampered(snapshot, (inside) => {
+      inside.digest = "bad";
+    });
+    await expect(restore(corrupt)).rejects.toThrow();
     expect(await git(cloud, ["rev-parse", "HEAD"])).toEqual(before.head);
     expect(await status()).toEqual(before.status);
     expect((await git(cloud, ["branch", "--list", "feature/login"])).length).toBe(0);
@@ -291,7 +416,10 @@ describe("retrying in the same checkout", () => {
 
     await writeFile(path.join(source, "hello.txt"), "newer\n");
     const newer = await captureSnapshot(source, true);
-    await expect(restore({ ...newer, digest: "bad" })).rejects.toThrow();
+    const corrupt = tampered(newer, (inside) => {
+      inside.digest = "bad";
+    });
+    await expect(restore(corrupt)).rejects.toThrow();
     expect(await git(cloud, ["diff", "--cached"])).toEqual(before.staged);
     expect(await git(cloud, ["diff"])).toEqual(before.unstaged);
     expect(await status()).toEqual(before.status);
@@ -333,7 +461,7 @@ describe("retrying in the same checkout", () => {
     const run = (subpath: string) => {
       const stage = ".gitterm-handoff-1234-abcd";
       return mkdir(path.join(cloud, stage))
-        .then(() => writeFile(path.join(cloud, stage, "snapshot.bin"), encodeSnapshot(snapshot)))
+        .then(() => writeFile(path.join(cloud, stage, "snapshot.bin"), snapshot.encoded))
         .then(() => execute("node", ["-e", RESTORE_SCRIPT, stage, subpath], { cwd: cloud }));
     };
     await run("packages/app");
@@ -364,7 +492,7 @@ describe("commits already on origin", () => {
   test("are not uploaded: a pushed HEAD sends no bundle, an unpushed one only its own commits", async () => {
     await publish();
     const pushed = await captureSnapshot(source, false);
-    expect(pushed.bundle).toBe("");
+    expect(contents(pushed.encoded).bundle.length).toBe(0);
     expect((await restore(pushed)).stdout).toBe("GITTERM_HANDOFF_VERIFIED");
 
     await writeFile(path.join(source, "big.bin"), Buffer.alloc(200_000, 7));
@@ -411,6 +539,162 @@ describe("commits already on origin", () => {
   });
 });
 
+describe("coming back from the cloud", () => {
+  const stage = ".gitterm-handoff-1234-abcd";
+  const commit = (directory: string, message: string) =>
+    git(directory, [
+      "-c",
+      "user.name=Cloud",
+      "-c",
+      "user.email=cloud@example.com",
+      "commit",
+      "-qm",
+      message,
+    ]);
+  const look = async (directory: string) => ({
+    head: (await git(directory, ["rev-parse", "HEAD"])).toString(),
+    branch: (await git(directory, ["symbolic-ref", "--short", "HEAD"])).toString(),
+    status: (await git(directory, ["status", "--porcelain=v1"])).toString(),
+    staged: (await git(directory, ["diff", "--cached"])).toString(),
+    unstaged: (await git(directory, ["diff"])).toString(),
+  });
+  /** Captures the cloud checkout the way a return does. */
+  async function captureCloud(base: string) {
+    await execute("node", ["-e", PREPARE_STAGE_SCRIPT, stage], { cwd: cloud });
+    await execute("node", ["-e", CAPTURE_SCRIPT, stage, JSON.stringify({ base, changes: true })], {
+      cwd: cloud,
+    });
+    const encoded = await readFile(path.join(cloud, stage, "snapshot.bin"));
+    await rm(path.join(cloud, stage), { recursive: true });
+    return encoded;
+  }
+  /** Applies it to the local checkout through this runtime, as the plugin does inside OpenCode. */
+  async function bringBack(encoded: Buffer, expected: string, force = false) {
+    await execute("node", ["-e", PREPARE_STAGE_SCRIPT, stage], { cwd: source });
+    await writeFile(path.join(source, stage, "snapshot.bin"), encoded);
+    return execute(
+      process.execPath,
+      ["-e", RESTORE_SCRIPT, stage, "", expected, force ? "force" : ""],
+      {
+        cwd: source,
+        env: { ...process.env, BUN_BE_BUN: "1" },
+      },
+    );
+  }
+  /** Hands the local checkout off with its uncommitted changes, then works in the cloud. */
+  async function handOffAndWorkInCloud() {
+    await writeFile(path.join(source, "hello.txt"), "local edit\n");
+    await writeFile(path.join(source, "draft.txt"), "local draft\n");
+    const snapshot = await captureSnapshot(source, true);
+    await restore(snapshot);
+    await git(cloud, ["add", "hello.txt", "draft.txt"]);
+    await commit(cloud, "cloud commit");
+    await writeFile(path.join(cloud, "hello.txt"), "cloud staged\n");
+    await git(cloud, ["add", "hello.txt"]);
+    await writeFile(path.join(cloud, "hello.txt"), "cloud unstaged\n");
+    await rm(path.join(cloud, "delete.txt"));
+    await mkdir(path.join(cloud, "notes"));
+    await writeFile(path.join(cloud, "notes", "plan.md"), "cloud notes\n");
+    await chmod(path.join(cloud, "notes", "plan.md"), 0o755);
+    return snapshot;
+  }
+
+  test("an untouched local checkout takes the cloud's commits and changes, keeping nothing aside", async () => {
+    const snapshot = await handOffAndWorkInCloud();
+    const encoded = await captureCloud(snapshot.head);
+    const result = await bringBack(encoded, snapshot.state);
+    expect(result.stdout).toBe('GITTERM_HANDOFF_VERIFIED {"stash":false,"branch":null}');
+    expect(await look(source)).toEqual(await look(cloud));
+    expect(await readFile(path.join(source, "notes", "plan.md"), "utf8")).toBe("cloud notes\n");
+    expect((await stat(path.join(source, "notes", "plan.md"))).mode & 0o111).toBeTruthy();
+    expect((await git(source, ["stash", "list"])).length).toBe(0);
+    expect(await readdir(source)).not.toContain(stage);
+
+    // Running it again (a retry after a later step failed) changes nothing.
+    const again = await bringBack(encoded, snapshot.state);
+    expect(again.stdout).toBe("GITTERM_HANDOFF_VERIFIED");
+    expect(await look(source)).toEqual(await look(cloud));
+  });
+
+  test("local work done since the handoff is replaced only when forced, and is kept", async () => {
+    const snapshot = await handOffAndWorkInCloud();
+    await git(source, ["add", "draft.txt"]);
+    await commit(source, "local commit after handoff");
+    await writeFile(path.join(source, "hello.txt"), "edited after handoff\n");
+    const before = await look(source);
+    const encoded = await captureCloud(snapshot.head);
+
+    await expect(bringBack(encoded, snapshot.state)).rejects.toMatchObject({
+      code: RESTORE_NEEDS_CONFIRMATION,
+    });
+    expect(await look(source)).toEqual(before);
+
+    const result = await bringBack(encoded, snapshot.state, true);
+    expect(result.stdout).toBe(
+      'GITTERM_HANDOFF_VERIFIED {"stash":true,"branch":"gitterm/before-return-1234-abcd"}',
+    );
+    expect(await look(source)).toEqual(await look(cloud));
+    expect((await git(source, ["rev-parse", "gitterm/before-return-1234-abcd"])).toString()).toBe(
+      before.head,
+    );
+    // The stash holds the edit made after the handoff.
+    await git(source, ["reset", "-q", "--hard"]);
+    await git(source, ["clean", "-fdq"]);
+    await git(source, ["checkout", "-q", "gitterm/before-return-1234-abcd"]);
+    await git(source, ["stash", "pop", "-q"]);
+    expect(await readFile(path.join(source, "hello.txt"), "utf8")).toBe("edited after handoff\n");
+  });
+
+  test("a failed forced return puts the local work back", async () => {
+    const snapshot = await handOffAndWorkInCloud();
+    await writeFile(path.join(source, "hello.txt"), "edited after handoff\n");
+    await writeFile(path.join(source, "mine.txt"), "untracked after handoff\n");
+    const before = await look(source);
+    const encoded = await captureCloud(snapshot.head);
+    // Corrupt one byte of the last file, so verification fails after everything is applied.
+    encoded[encoded.length - 2] = encoded[encoded.length - 2]! ^ 0xff;
+    await expect(bringBack(encoded, snapshot.state, true)).rejects.toMatchObject({ code: 1 });
+    expect(await look(source)).toEqual(before);
+    expect(await readFile(path.join(source, "mine.txt"), "utf8")).toBe("untracked after handoff\n");
+    expect((await git(source, ["stash", "list"])).length).toBe(0);
+    expect((await git(source, ["branch", "--list", "gitterm/*"])).length).toBe(0);
+  });
+
+  test("only what the cloud added is captured, unless this machine lost the base", async () => {
+    const snapshot = await handOffAndWorkInCloud();
+    const thin = await captureCloud(snapshot.head);
+    const full = await captureCloud("");
+    expect(snapshotSummary(thin).digest).toBe(snapshotSummary(full).digest);
+    expect(thin.length).toBeLessThan(full.length);
+
+    // A base only the cloud has: the local checkout asks for everything, untouched.
+    const cloudOnly = (await git(cloud, ["rev-parse", "HEAD"])).toString().trim();
+    await writeFile(path.join(cloud, "more.txt"), "more\n");
+    await git(cloud, ["add", "more.txt"]);
+    await commit(cloud, "second cloud commit");
+    const before = await look(source);
+    await expect(bringBack(await captureCloud(cloudOnly), snapshot.state)).rejects.toMatchObject({
+      code: RESTORE_NEEDS_FULL_HISTORY,
+    });
+    expect(await look(source)).toEqual(before);
+    expect((await bringBack(await captureCloud(""), snapshot.state)).stdout).toContain(
+      "GITTERM_HANDOFF_VERIFIED",
+    );
+    expect(await look(source)).toEqual(await look(cloud));
+  });
+
+  test("a cloud checkout that cannot be reproduced is refused and left alone", async () => {
+    await symlink("hello.txt", path.join(cloud, "link"));
+    await execute("node", ["-e", PREPARE_STAGE_SCRIPT, stage], { cwd: cloud });
+    await expect(
+      execute("node", ["-e", CAPTURE_SCRIPT, stage, JSON.stringify({ changes: true })], {
+        cwd: cloud,
+      }),
+    ).rejects.toMatchObject({ code: CAPTURE_UNSUPPORTED });
+    expect(await readdir(cloud)).not.toContain(stage);
+  });
+});
+
 describe("checkout identity and origin", () => {
   test("matches subdirectory sessions but not other worktrees", async () => {
     await mkdir(path.join(source, "nested"));
@@ -436,10 +720,7 @@ describe("checkout identity and origin", () => {
     await expect(repositoryUrl(source)).rejects.toThrow("HTTPS origin");
   });
 
-  test("validates transfer paths and allows environment templates", () => {
-    for (const name of ["../x", "/absolute", "a/.git/config", "a\\b", "a/../b"])
-      expect(safeRelativePath(name)).toBe(false);
-    expect(safeRelativePath("a/normal.txt")).toBe(true);
+  test("treats environment files as secrets but allows their templates", () => {
     expect(sensitivePath(".env.production")).toBe(true);
     expect(sensitivePath(".env.example")).toBe(false);
     expect(sensitivePath(".env.selfhost.example")).toBe(false);

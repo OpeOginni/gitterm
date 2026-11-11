@@ -8,7 +8,9 @@ import {
   changePrompt,
   handoffSession,
   HandoffCancelled,
+  cloudHasModel,
   importPayload,
+  offersModel,
   runtimeClient,
   showConnection,
   type HandoffRecord,
@@ -429,6 +431,38 @@ test("a retry whose import fails puts the earlier cloud session back", async () 
   expect(cloud.session).toEqual(earlier);
 });
 
+test("starts from the project snapshot, and fresh when that snapshot no longer starts", async () => {
+  cloudWithSession();
+  const attempts: Array<{ key: string; snapshot: boolean | undefined }> = [];
+  const run = async (outcome: "starts" | "fails" | "failed earlier") => {
+    attempts.length = 0;
+    const f = fixture([{ changes: false }, { create: true }]);
+    f.gitterm.workspaces.create = (async (input: {
+      idempotencyKey: string;
+      useProjectSnapshot?: boolean;
+    }) => {
+      attempts.push({ key: input.idempotencyKey, snapshot: input.useProjectSnapshot });
+      if (input.useProjectSnapshot && outcome === "fails")
+        throw new GittermError(
+          "SERVER_ERROR",
+          "PROJECT_SNAPSHOT_FAILED: The project snapshot could not be started.",
+        );
+      // A retry of an attempt whose snapshot start failed is answered with that workspace.
+      const terminated = input.useProjectSnapshot && outcome === "failed earlier";
+      return { workspace: { id: "workspace-test", status: terminated ? "terminated" : "running" } };
+    }) as unknown as typeof f.gitterm.workspaces.create;
+    expect((await handoffSession("ses_test", f.deps, "1111-aaaa")).phase).toBe("ready");
+    return [...attempts];
+  };
+  expect(await run("starts")).toEqual([{ key: "opencode-handoff:1111-aaaa", snapshot: true }]);
+  const fallback = [
+    { key: "opencode-handoff:1111-aaaa", snapshot: true },
+    { key: "opencode-handoff:1111-aaaa:fresh", snapshot: false },
+  ];
+  expect(await run("fails")).toEqual(fallback);
+  expect(await run("failed earlier")).toEqual(fallback);
+});
+
 test("a failed create says which step failed and GitTerm's reason", async () => {
   const f = fixture([{ changes: false }, { create: true }]);
   f.gitterm.workspaces.create = async () => {
@@ -521,4 +555,91 @@ test("reconnect offers a fresh pairing link without creating compute or saving t
   );
   expect(f.creates()).toBe(0);
   expect(f.records).toEqual([]);
+});
+
+test("a model is kept when the cloud offers it, waiting for a catalog that is still loading", async () => {
+  const model = { providerID: "openai", id: "gpt-5.2" };
+  // What the cloud's catalog holds on each look: empty at start, then growing, then steady.
+  const catalog = (pages: Array<Array<{ providerID: string; id: string }>>) => {
+    let look = 0;
+    const client = {
+      model: { list: async () => ({ data: pages[Math.min(look++, pages.length - 1)] }) },
+    } as unknown as OpenCodeClient;
+    return { client, looks: () => look };
+  };
+  const other = { providerID: "opencode", id: "big-pickle" };
+  const signal = AbortSignal.timeout(5_000);
+
+  const loading = catalog([[], [other], [other, model]]);
+  expect(await offersModel(loading.client, "/w", model, signal, 1)).toBe(true);
+  expect(loading.looks()).toBe(3);
+
+  // Not there once the catalog has stopped growing: a few unchanged looks, not the full wait.
+  const without = catalog([[], [other]]);
+  expect(await offersModel(without.client, "/w", model, signal, 1)).toBe(false);
+  expect(without.looks()).toBe(6);
+
+  // The model is left out of the import, so the cloud session uses the cloud's default.
+  const exported = {
+    info: { id: "ses_test", location: { directory: "/local" }, model },
+    messages: [],
+  } as unknown as Parameters<typeof importPayload>[0];
+  expect(importPayload(exported, "/w").info).toHaveProperty("model");
+  expect(importPayload(exported, "/w", { keepModel: false }).info).not.toHaveProperty("model");
+});
+
+test("a provider GitTerm gave the workspace credentials for keeps its model at once", async () => {
+  const model = { providerID: "openai", id: "gpt-5.2" };
+  let looks = 0;
+  // A cloud whose catalog has not loaded anything yet.
+  const remote = {
+    model: {
+      list: async () => {
+        looks++;
+        return { data: [] };
+      },
+    },
+  } as unknown as OpenCodeClient;
+  const gitterm = (providers: Array<{ provider: string; active: boolean }> | Error) =>
+    ({
+      workspaces: {
+        models: async () => {
+          if (providers instanceof Error) throw providers;
+          return { providers };
+        },
+      },
+    }) as unknown as GittermClient;
+  const signal = AbortSignal.timeout(5_000);
+
+  expect(
+    await cloudHasModel(
+      gitterm([{ provider: "openai", active: true }]),
+      "w",
+      remote,
+      "/w",
+      model,
+      signal,
+    ),
+  ).toBe(true);
+  expect(looks).toBe(0);
+  // No session model: nothing to check.
+  expect(await cloudHasModel(gitterm([]), "w", remote, "/w", undefined, signal)).toBe(true);
+
+  // A disabled credential, or an older GitTerm, falls back to the catalog.
+  const catalog = {
+    model: { list: async () => ({ data: [{ providerID: "openai", id: "gpt-5.2" }] }) },
+  } as unknown as OpenCodeClient;
+  expect(
+    await cloudHasModel(
+      gitterm([{ provider: "openai", active: false }]),
+      "w",
+      catalog,
+      "/w",
+      model,
+      signal,
+    ),
+  ).toBe(true);
+  expect(
+    await cloudHasModel(gitterm(new Error("old server")), "w", catalog, "/w", model, signal),
+  ).toBe(true);
 });

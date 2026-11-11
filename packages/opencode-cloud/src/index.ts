@@ -10,6 +10,9 @@ import {
   type HandoffOptions,
   type HandoffRecord,
 } from "./handoff";
+import { confirmLocalPrompt, finishReturn, returnSession } from "./return";
+import { checkoutRoot } from "./snapshot";
+import { watchCloudSessions } from "./status";
 
 const sessionKey = (sessionID: string) => `handoff/session/${sessionID}`;
 
@@ -57,13 +60,67 @@ export const GittermCloudPlugin = Plugin.define({
     const busy = new Set<string>();
     const load = async (sessionID: string) =>
       (await ctx.storage.get(sessionKey(sessionID))) as HandoffRecord | undefined;
+    const gitterm = () =>
+      createGittermClient({ serverUrl: options.serverUrl, token: options.token });
+
+    // The sessions of this checkout that live in the cloud. /cloud-return is only offered
+    // while there is one, and what their cloud side is doing is kept on the session.
+    const here = await checkoutRoot(ctx.location.directory).catch(() => undefined);
+    const inCloud = new Map<string, HandoffRecord>();
+    let after: string | undefined;
+    do {
+      const page = await ctx.storage.scan({ prefix: sessionKey(""), after });
+      for (const { value } of page.entries) {
+        const record = value as HandoffRecord;
+        if (record.phase === "ready" && record.sourceDirectory === here)
+          inCloud.set(record.sessionID, record);
+      }
+      after = page.next;
+    } while (after);
+
+    let watching = false;
+    // Ends the watcher's wait early, so a session that just moved to the cloud is looked at
+    // straight away.
+    let wake = () => {};
+    const watch = () => {
+      wake();
+      if (watching || inCloud.size === 0) return;
+      watching = true;
+      void watchCloudSessions({
+        gitterm,
+        local: () => localClient(options),
+        sessions: () => [...inCloud.values()],
+        busy: (sessionID) => busy.has(sessionID),
+        // Nothing is left to return from: the session is no longer in the cloud.
+        gone: (record) => save({ ...record, phase: "returned" }),
+        signal: controller.signal,
+        pause: (milliseconds) =>
+          new Promise((resolve) => {
+            const timer = setTimeout(resolve, milliseconds);
+            wake = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+            controller.signal.addEventListener("abort", wake, { once: true });
+          }),
+      })
+        .catch((error) => console.error("GitTerm cloud status watcher stopped", error))
+        .finally(() => {
+          watching = false;
+        });
+    };
     const save = async (record: HandoffRecord) => {
       // Snapshot contents and access credentials never enter plugin storage.
       await ctx.storage.set(`handoff/attempt/${record.attemptID}`, { ...record });
       await ctx.storage.set(sessionKey(record.sessionID), { ...record });
+      const offered = inCloud.size > 0;
+      if (record.phase === "ready" && record.sourceDirectory === here)
+        inCloud.set(record.sessionID, record);
+      else inCloud.delete(record.sessionID);
+      // OpenCode lists commands per project, not per session.
+      if (inCloud.size > 0 !== offered) await ctx.command.reload().catch(() => {});
+      watch();
     };
-    const gitterm = () =>
-      createGittermClient({ serverUrl: options.serverUrl, token: options.token });
 
     await ctx.command.transform((editor) => {
       editor.add({
@@ -88,7 +145,10 @@ export const GittermCloudPlugin = Plugin.define({
               );
             }
             const client = gitterm();
-            const previous = await load(sessionID);
+            // A session that came back with /cloud-return starts over.
+            const previous = await load(sessionID).then((record) =>
+              record?.phase === "returned" ? undefined : record,
+            );
             if (previous?.phase === "ready") {
               await showConnection(local, client, previous, controller.signal);
               return;
@@ -98,7 +158,7 @@ export const GittermCloudPlugin = Plugin.define({
               const answer = await askForm(
                 local,
                 sessionID,
-                "Previous cloud handoff did not finish",
+                "The last cloud handoff did not finish. Retry in the same workspace?",
                 [
                   {
                     key: "reuse",
@@ -137,7 +197,52 @@ export const GittermCloudPlugin = Plugin.define({
           }
         },
       });
+      if (inCloud.size === 0) return;
+      editor.add({
+        name: "cloud-return",
+        description: "Bring this session and its changes back from its GitTerm cloud workspace",
+        async execute({ sessionID }) {
+          if (busy.has(sessionID))
+            throw new Error("A cloud handoff is already in progress for this session.");
+          busy.add(sessionID);
+          try {
+            const previous = await load(sessionID);
+            if (previous?.phase !== "ready")
+              throw new Error(
+                "This session is not in a cloud workspace. Run /cloud to move it there.",
+              );
+            const local = await localClient(options);
+            const client = gitterm();
+            const { record, kept } = await returnSession(previous, {
+              local,
+              gitterm: client,
+              signal: controller.signal,
+              save,
+              progress: async (text) => {
+                console.info(`GitTerm: ${text}`);
+              },
+            });
+            await finishReturn(local, client, record, kept, controller.signal);
+          } catch (error) {
+            if (!(error instanceof HandoffCancelled)) throw error;
+          } finally {
+            busy.delete(sessionID);
+          }
+        },
+      });
     });
+
+    // While a session lives in the cloud, a message sent here would fork the conversation.
+    // Ask first. /cloud and /cloud-return are commands and do not pass through this hook.
+    await ctx.session.hook("prompt", async ({ sessionID }) => {
+      const record = await load(sessionID).catch(() => undefined);
+      if (record?.phase !== "ready" || busy.has(sessionID)) return;
+      // If the question cannot be asked, let the message through rather than lock the session.
+      const local = await localClient(options).catch(() => undefined);
+      if (!local) return;
+      await confirmLocalPrompt(local, record, controller.signal);
+    });
+    watch();
     return async () => {
       controller.abort();
     };
