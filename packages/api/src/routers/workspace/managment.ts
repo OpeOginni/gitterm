@@ -128,7 +128,7 @@ import {
 } from "../../service/workspace-runtime";
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
 import { holdWorkspaceOperation, operationLease } from "../../service/workspace-operation";
-import { pollHttpRuntimeHealth } from "../../utils/runtime-health";
+import { pollDelays, pollHttpRuntimeHealth } from "../../utils/runtime-health";
 import {
   buildGitExcludeCommand,
   buildRuntimeSecretFileLinkCommand,
@@ -3739,6 +3739,7 @@ export const workspaceRouter = router({
 
       // Wait until running (or timeout) when still pending after restart/create.
       if (existingWorkspace.status === "pending" || existingWorkspace.status === "running") {
+        const nextDelay = pollDelays(pollIntervalMs);
         while (Date.now() < deadline) {
           existingWorkspace = (await loadOwnedWorkspace()) ?? existingWorkspace;
           await reconcileProviderStatus();
@@ -3753,7 +3754,7 @@ export const workspaceRouter = router({
           }
           if (existingWorkspace.status === "running") break;
           if (existingWorkspace.status !== "pending") break;
-          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          await new Promise((resolve) => setTimeout(resolve, nextDelay()));
         }
       }
 

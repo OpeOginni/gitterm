@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -9,8 +9,20 @@ import {
   type WorkspaceProviderSelection,
   type WorkspaceRuntimeAccess,
 } from "@gitterm/sdk";
-import { captureSnapshot, checkoutRoot, repositoryUrl, sharedCheckoutSessions } from "./snapshot";
-import { RESTORE_SCRIPT, shellQuote } from "./restore";
+import {
+  captureSnapshot,
+  checkoutRoot,
+  encodeSnapshot,
+  repositoryUrl,
+  sharedCheckoutSessions,
+  type CheckoutSnapshot,
+} from "./snapshot";
+import {
+  PREPARE_STAGE_SCRIPT,
+  RESTORE_NEEDS_FULL_HISTORY,
+  RESTORE_SCRIPT,
+  shellQuote,
+} from "./restore";
 
 export type HandoffOptions = {
   serverUrl?: string;
@@ -52,6 +64,29 @@ const STEPS: Record<HandoffRecord["phase"], string> = {
   ready: "finishing",
   failed: "finishing",
 };
+
+/** A failure whose message is safe and useful to show the user as is. */
+class HandoffRefused extends Error {}
+
+/** Session metadata key holding the digest of the history a handoff imported. */
+const HISTORY_KEY = "gittermHandoffHistory";
+/** Metadata key on the note a handoff leaves in the cloud session's pending input. */
+const NOTE_KEY = "gittermHandoff";
+const canonical = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(canonical)
+    : value && typeof value === "object"
+      ? Object.fromEntries(
+          Object.entries(value)
+            .toSorted(([a], [b]) => (a < b ? -1 : 1))
+            .map(([key, item]) => [key, canonical(item)]),
+        )
+      : value;
+// OpenCode returns imported messages unchanged apart from key order.
+const historyDigest = (messages: unknown) =>
+  createHash("sha256")
+    .update(JSON.stringify(canonical(messages)))
+    .digest("hex");
 
 export class HandoffCancelled extends Error {
   constructor() {
@@ -142,26 +177,32 @@ export function runtimeClient(runtime: WorkspaceRuntimeAccess): OpenCodeClient {
   });
 }
 
+/** Resolves with the exit code when it is 0 or one of `accept`; any other outcome throws. */
 export async function runRemoteShell(
   remote: OpenCodeClient,
   directory: string,
   command: string,
   signal: AbortSignal,
-): Promise<void> {
+  accept: number[] = [],
+): Promise<number> {
   const location = { directory };
   let shell = (
     await remote.shell.create({ location, cwd: directory, command, timeout: 120_000 }, { signal })
   ).data;
   try {
+    // Most of these commands finish at once, so look early before settling into a poll.
+    let wait = 100;
     while (shell.status === "running") {
-      await delay(300, undefined, { signal });
+      await delay(wait, undefined, { signal });
+      wait = 300;
       shell = (await remote.shell.get({ id: shell.id, location }, { signal })).data;
     }
-    if (shell.status !== "exited" || shell.exit !== 0) {
+    if (shell.status !== "exited" || (shell.exit !== 0 && !accept.includes(shell.exit ?? -1))) {
       throw new Error(
         "Cloud checkout restoration failed. The workspace is retained for inspection; local files are unchanged.",
       );
     }
+    return shell.exit ?? 0;
   } finally {
     // A cancelled command must not keep applying files after we report failure.
     if (shell.status === "running")
@@ -185,15 +226,26 @@ export function importPayload(
     ...info
   } = data.info;
   return {
-    info: { ...info, location: { directory } },
+    info: {
+      ...info,
+      // Lets a retry tell whether the cloud session has moved on since it was imported.
+      metadata: { ...info.metadata, [HISTORY_KEY]: historyDigest(data.messages) },
+      location: { directory },
+    },
     messages: data.messages,
     location: { directory },
   };
 }
 
+/**
+ * `attemptID` repeats an earlier attempt that did not finish. The workspace is created
+ * under a key derived from it, so GitTerm returns that attempt's workspace instead of
+ * starting a second one, and each later step picks up what the earlier attempt left.
+ */
 export async function handoffSession(
   sessionID: string,
   deps: HandoffDependencies,
+  attemptID: string = randomUUID(),
 ): Promise<HandoffRecord> {
   const { local, gitterm, options, signal } = deps;
   await assertIdle(local, sessionID, signal);
@@ -251,7 +303,7 @@ export async function handoffSession(
           includeChanges
             ? `${snapshot.changedPaths.length} changed paths${manifest ? `:\n${manifest}` : ""}${snapshot.changedPaths.length > 100 ? "\n(additional paths omitted)" : ""}`
             : "Uncommitted changes are excluded.",
-          "Uploads this conversation (which may contain secrets) and Git history, including unpublished commits. Ignored files are not separately uploaded; tracked history can contain secrets. Review before approving.",
+          "Uploads this conversation (which may contain secrets) and commits that are not on origin's default branch, including unpublished ones. Ignored files are not separately uploaded; tracked history can contain secrets. Review before approving.",
           "Uses your GitTerm model/repository connections, not separately copied local credential stores. Cloud compute may incur charges until paused or terminated in GitTerm. Local work remains untouched; later local edits will not sync.",
         ].join("\n\n"),
       },
@@ -272,7 +324,7 @@ export async function handoffSession(
     throw new Error("Session history exceeds the 25 MiB handoff limit.");
 
   const record: HandoffRecord = {
-    attemptID: randomUUID(),
+    attemptID,
     sessionID,
     phase: "creating",
     sourceDirectory: root,
@@ -305,57 +357,125 @@ export async function handoffSession(
     const runtime = await gitterm.workspaces.getRuntimeAccess(record.workspaceID);
     const remote = runtimeClient(runtime);
     await remote.server.info({ signal });
-    const stage = `.gitterm-handoff-${record.attemptID}`;
-    await deps.progress("Restoring and verifying the captured checkout in the cloud.");
-    await runRemoteShell(
-      remote,
-      runtime.directory,
-      `node -e ${shellQuote('require("node:fs").mkdirSync(process.argv[1], { mode: 0o700 })')} ${shellQuote(stage)}`,
-      signal,
-    );
-    try {
-      await remote.file.write(
-        {
-          location: { directory: runtime.directory },
-          path: `${stage}/snapshot.json`,
-          payload: Buffer.from(JSON.stringify(snapshot)),
-        },
-        { signal },
-      );
-      await runRemoteShell(
-        remote,
-        runtime.directory,
-        `node -e ${shellQuote(RESTORE_SCRIPT)} ${shellQuote(stage)}`,
-        signal,
-      );
-    } finally {
-      // Remove only this attempt's temporary upload, including on cancellation.
-      await runRemoteShell(
-        remote,
-        runtime.directory,
-        `node -e ${shellQuote('require("node:fs").rmSync(process.argv[1], { recursive: true, force: true })')} ${shellQuote(stage)}`,
-        AbortSignal.timeout(10_000),
-      ).catch(() => {});
-    }
     const subpath = path.relative(root, sourceDirectory).split(path.sep).join("/");
     if (subpath.startsWith("../") || path.isAbsolute(subpath))
       throw new Error("The session moved outside its source checkout.");
     const directory = path.posix.join(runtime.directory, subpath);
-    await runRemoteShell(
-      remote,
-      runtime.directory,
-      `node -e ${shellQuote('require("node:fs").mkdirSync(process.argv[1], { recursive: true })')} ${shellQuote(directory)}`,
-      signal,
-    );
+    const stage = `.gitterm-handoff-${record.attemptID}`;
+    await deps.progress("Restoring and verifying the captured checkout in the cloud.");
+    const restore = async (upload: CheckoutSnapshot) => {
+      let finished = false;
+      try {
+        await runRemoteShell(
+          remote,
+          runtime.directory,
+          `node -e ${shellQuote(PREPARE_STAGE_SCRIPT)} ${shellQuote(stage)}`,
+          signal,
+        );
+        await remote.file.write(
+          {
+            location: { directory: runtime.directory },
+            path: `${stage}/snapshot.bin`,
+            payload: encodeSnapshot(upload),
+          },
+          { signal },
+        );
+        // The script also creates the session's directory, saving a round trip.
+        const exit = await runRemoteShell(
+          remote,
+          runtime.directory,
+          `node -e ${shellQuote(RESTORE_SCRIPT)} ${shellQuote(stage)} ${shellQuote(subpath)}`,
+          signal,
+          [RESTORE_NEEDS_FULL_HISTORY],
+        );
+        finished = true;
+        return exit;
+      } finally {
+        // The script removes its own upload when it runs to the end. If it did not (an
+        // error, a cancellation), remove only this attempt's upload.
+        if (!finished)
+          await runRemoteShell(
+            remote,
+            runtime.directory,
+            `node -e ${shellQuote('require("node:fs").rmSync(process.argv[1], { recursive: true, force: true })')} ${shellQuote(stage)}`,
+            AbortSignal.timeout(10_000),
+          ).catch(() => {});
+      }
+    };
+    // A retry in the same workspace can find the session an earlier attempt imported. It is
+    // replaced with the current history only if nothing has happened in it since. Check
+    // before touching the checkout, so a refused retry leaves the cloud exactly as it was.
+    const untouchedSession = async () => {
+      let earlier;
+      try {
+        earlier = await remote.session.export({ sessionID }, { signal });
+      } catch (error) {
+        // Only OpenCode saying the session does not exist means there is nothing to protect.
+        // Any other failure could hide cloud work, so stop before touching the cloud.
+        const missing =
+          error instanceof Error &&
+          error.name === "SessionNotFoundError" &&
+          (error as { sessionID?: unknown }).sessionID === sessionID;
+        if (missing) return undefined;
+        throw error;
+      }
+      const pending = await remote.session.inbox.list({ sessionID }, { signal });
+      // The only input that may be waiting is the note this attempt left there itself.
+      const own = (item: (typeof pending)[number]) =>
+        item.type === "synthetic" && item.payload.metadata?.[NOTE_KEY] === record.attemptID;
+      const jobs = await remote.experimental.job.list(
+        { sessionID, status: "running", descendants: true },
+        { signal },
+      );
+      if (
+        earlier.info.metadata?.[HISTORY_KEY] !== historyDigest(earlier.messages) ||
+        (await remote.session.active({ signal }))[sessionID] ||
+        jobs.length > 0 ||
+        !pending.every(own)
+      )
+        throw new HandoffRefused(
+          "The cloud session has new activity since the earlier attempt, so the cloud was left as it is. Continue it in the cloud, or start a new handoff.",
+        );
+      return earlier;
+    };
+    const found = await untouchedSession();
+    if ((await restore(snapshot)) === RESTORE_NEEDS_FULL_HISTORY) {
+      // The cloud clone lacks the commits the snapshot builds on. Send the whole history,
+      // but only for the checkout the user approved.
+      const full = await captureSnapshot(root, includeChanges, true);
+      if (full.digest !== snapshot.digest)
+        throw new Error("The checkout changed during handoff. Retry after it is idle.");
+      if ((await restore(full)) !== 0) throw new Error("Cloud checkout restoration failed.");
+    }
     record.phase = "importing";
     await deps.save(record);
-    const imported = await remote.session.import(importPayload(exported, directory), { signal });
+    // Look again: the cloud session must still be untouched at the moment it is replaced.
+    const earlier = found && (await untouchedSession());
+    if (earlier) await remote.session.remove({ sessionID }, { signal });
+    let imported;
+    try {
+      imported = await remote.session.import(importPayload(exported, directory), { signal });
+    } catch (error) {
+      // Put the earlier session back rather than leave the cloud without one.
+      if (earlier)
+        await remote.session
+          .import(
+            { ...earlier, location: earlier.info.location } as Parameters<
+              OpenCodeClient["session"]["import"]
+            >[0],
+            { signal: AbortSignal.timeout(30_000) },
+          )
+          .catch(() => {});
+      throw error;
+    }
     if (imported.id !== sessionID || imported.location.directory !== directory)
       throw new Error("Cloud session verification failed.");
     await remote.session.synthetic(
       {
         sessionID,
         resume: false,
+        // Marks the note as this attempt's own, so a retry does not take it for cloud input.
+        metadata: { [NOTE_KEY]: record.attemptID },
         text: [
           `Continued from local checkout ${root}. The current cloud working directory is ${directory}.`,
           includeChanges
@@ -376,7 +496,8 @@ export async function handoffSession(
     // The full error goes to OpenCode's local log. The message keeps only GitTerm's own
     // (already redacted) reason: workspace responses could echo snapshots or credentials.
     console.error("GitTerm cloud handoff failed while", step, error);
-    const reason = error instanceof GittermError ? ` ${error.message}` : "";
+    const reason =
+      error instanceof GittermError || error instanceof HandoffRefused ? ` ${error.message}` : "";
     throw new Error(
       `Cloud handoff failed while ${step}${record.workspaceID ? ` for workspace ${record.workspaceID}` : ` (attempt ${record.attemptID})`}.${reason} Check GitTerm before retrying; a workspace may still be running and incurring charges. Local files and sessions are unchanged.`,
     );
