@@ -59,7 +59,7 @@ The CLI does not create workspaces. Use the dashboard, the SDK, or `/cloud`. See
 
 | Command                                                 | Flags                                                                        | What it does                                                                                                                                                    |
 | ------------------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gitterm sandbox account`                               |                                                                              | Show the selected mode, account, and who is charged                                                                                                             |
+| `gitterm sandbox account`                               |                                                                              | Show the selected account, its provider, and who is charged                                                                                                     |
 | `gitterm sandbox create`                                | `--name`, `--lifetime <minutes>` (default 30), `--public`, `--yes`/`-y`      | Create a billable sandbox. `--public` makes every preview public and can't be changed later. `--public` or `--no-public` overrides the `publicPreviews` setting |
 | `gitterm sandbox list`                                  |                                                                              | List live sandboxes for the account                                                                                                                             |
 | `gitterm sandbox sync <sandboxId>`                      | `--dir <path>` (default: current directory), `--yes`/`-y`                    | Upload the checkout, including uncommitted changes                                                                                                              |
@@ -84,15 +84,15 @@ The CLI reads accounts from `~/.config/gitterm/sandbox.json`, or from the file i
 {
   "account": "e2b",
   "accounts": {
-    "e2b": { "mode": "direct", "provider": "e2b", "apiKeyEnv": "E2B_API_KEY" },
-    "gitterm": { "mode": "managed" }
+    "e2b": { "provider": "e2b", "apiKeyEnv": "E2B_API_KEY" },
+    "gitterm": { "size": "medium" }
   }
 }
 ```
 
 The file takes the same `limits`, `exclude`, and `publicPreviews` settings as the [sandbox plugin](/docs/reference/sandbox-plugin#options). With `"publicPreviews": true`, `create` makes public previews without asking. Whether a provider can make a preview public: [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
 
-Direct accounts don't need a Gitterm login.
+An account with `apiKeyEnv` uses your own provider key and needs no Gitterm login. One without goes through GitTerm. A single account can also sit at the top level: `{ "provider": "e2b", "apiKeyEnv": "E2B_API_KEY" }`.
 
 ## Inside a workspace
 

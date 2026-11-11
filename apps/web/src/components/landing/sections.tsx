@@ -381,44 +381,51 @@ export function HowItWorks() {
 
 // ---------- Keys ----------
 
-const DIRECT = `"options": {
-  "account": "e2b",
-  "accounts": {
-    "e2b": {
-      "mode": "direct",
-      "provider": "e2b",
-      "apiKey": "{env:E2B_API_KEY}"
-    }
-  },
-  "limits": { "maxSandboxes": 2, "maxLifetimeMinutes": 60 }
+const OWN_KEY = `"options": {
+  "provider": "e2b",
+  "apiKey": "{env:E2B_API_KEY}"
 }`;
-const MANAGED = `"options": {
-  "account": "gitterm",
-  "accounts": {
-    "gitterm": { "mode": "managed" }
-  },
-  "limits": { "maxSandboxes": 2, "maxLifetimeMinutes": 60 }
+const PLAN = `"options": {
+  "size": "medium"
+}`;
+const SELF_HOSTED = `"options": {
+  "serverUrl": "https://git.acme.dev"
 }`;
 
 export function Keys() {
   return (
     <Band>
       <Wrap>
-        <SectionHead title="Your key, or our plan">
-          Set an account in the plugin options. Limits apply either way, so a busy agent cannot run
-          up a surprise bill.
+        <SectionHead title="Your key, our plan, or your server">
+          Set one account in the plugin options. Add <code>limits</code> to any of them, so a busy
+          agent cannot run up a surprise bill.
         </SectionHead>
-        <div className={cn(cells, "grid-cols-2 max-[860px]:grid-cols-1")}>
+        <div className={cn(cells, "grid-cols-3 max-[1100px]:grid-cols-1")}>
           {[
             {
               title: "Bring your own provider key",
               body: "No Gitterm account needed. The key comes from your environment and the provider bills you directly.",
-              code: DIRECT,
+              code: OWN_KEY,
             },
             {
               title: "Use your Gitterm plan",
-              body: "Sandboxes run on Gitterm's accounts and count against your plan. Gitterm stops anything that outlives its deadline.",
-              code: MANAGED,
+              body: (
+                <>
+                  No provider account needed. Sign in with <code>gitterm login</code>; sandboxes
+                  count against your plan, and Gitterm stops anything that outlives its deadline.
+                </>
+              ),
+              code: PLAN,
+            },
+            {
+              title: "Use your own Gitterm",
+              body: (
+                <>
+                  Point at a self-hosted server. It uses its default provider; add{" "}
+                  <code>provider</code> to pick another one it offers.
+                </>
+              ),
+              code: SELF_HOSTED,
             },
           ].map((k) => (
             <div

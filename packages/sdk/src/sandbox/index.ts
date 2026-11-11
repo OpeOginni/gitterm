@@ -34,6 +34,10 @@ export {
 export {
   createSandboxBackend,
   describeSandboxAccount,
+  resolveSandboxAccount,
+  type GittermAccountConfig,
+  type OwnKeyAccountConfig,
+  type SandboxAccount,
   type SandboxAccountConfig,
   type SandboxAccountSummary,
   type SandboxSettings,

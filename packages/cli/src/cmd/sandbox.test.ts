@@ -28,7 +28,10 @@ async function exec() {
   process.env.GITTERM_SANDBOX_CONFIG = path.join(directory, "sandbox.json");
   await writeFile(
     process.env.GITTERM_SANDBOX_CONFIG,
-    JSON.stringify({ account: "e2b", accounts: { e2b: { mode: "direct", provider: "e2b" } } }),
+    JSON.stringify({
+      account: "e2b",
+      accounts: { e2b: { provider: "e2b", apiKeyEnv: "E2B_API_KEY" } },
+    }),
   );
   try {
     await runSandboxExec({ sandboxId: "sbx", command: "npm test", json: true });

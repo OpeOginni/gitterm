@@ -41,6 +41,8 @@ const { getWorkspaceRouteAccess } = await import("../service/workspace-route-acc
 const { holdWorkspaceOperation } = await import("../service/workspace-operation");
 /** Providers this suite enabled, disabled again afterwards. */
 let enabledForTest: string[] = [];
+/** The deployment's preferred providers before the suite made E2B preferred. */
+let preferredBefore: string[] = [];
 
 const userId = `sandbox-test-${randomUUID()}`;
 const otherId = `sandbox-other-${randomUUID()}`;
@@ -199,6 +201,18 @@ beforeAll(async () => {
     )
     .returning({ id: cloudProvider.id });
   enabledForTest = disabled.map((row) => row.id);
+  // E2B is faked, so it is the preferred provider: a create that names none uses it.
+  preferredBefore = (
+    await db
+      .update(cloudProvider)
+      .set({ preferredDefault: false })
+      .where(eq(cloudProvider.preferredDefault, true))
+      .returning({ id: cloudProvider.id })
+  ).map((row) => row.id);
+  await db
+    .update(cloudProvider)
+    .set({ preferredDefault: true })
+    .where(eq(cloudProvider.providerKey, "e2b"));
   await db.insert(user).values(
     [userId, otherId].map((id) => ({
       id,
@@ -219,6 +233,15 @@ afterAll(async () => {
       .update(cloudProvider)
       .set({ isEnabled: false })
       .where(inArray(cloudProvider.id, enabledForTest));
+  await db
+    .update(cloudProvider)
+    .set({ preferredDefault: false })
+    .where(eq(cloudProvider.providerKey, "e2b"));
+  if (preferredBefore.length)
+    await db
+      .update(cloudProvider)
+      .set({ preferredDefault: true })
+      .where(inArray(cloudProvider.id, preferredBefore));
   const rows = await db
     .select({ id: workspace.id })
     .from(workspace)
@@ -239,6 +262,28 @@ afterAll(async () => {
   }
   await db.delete(sandboxSnapshot).where(inArray(sandboxSnapshot.userId, [userId, otherId]));
   await db.delete(user).where(inArray(user.id, [userId, otherId]));
+});
+
+integration("a create without a provider uses the deployment's default", async () => {
+  const offered = await caller(userId).providers();
+  expect(offered.providers).toEqual(expect.arrayContaining(["e2b", "boat"]));
+  expect(offered.default).toBe("e2b");
+  // With several providers and none preferred, there is no default to guess.
+  await db
+    .update(cloudProvider)
+    .set({ preferredDefault: false })
+    .where(eq(cloudProvider.providerKey, "e2b"));
+  try {
+    expect((await caller(userId).providers()).default).toBeNull();
+    await expect(caller(userId).create({ lifetimeMinutes: 5 })).rejects.toThrow(
+      /no default sandbox provider/,
+    );
+  } finally {
+    await db
+      .update(cloudProvider)
+      .set({ preferredDefault: true })
+      .where(eq(cloudProvider.providerKey, "e2b"));
+  }
 });
 
 integration(
@@ -556,6 +601,8 @@ integration(
           providerOptions: { size: key },
           isDefault,
         });
+      // Where the deployment runs Gitterm's own sandboxes, they are the default.
+      expect((await caller(userId).providers()).default).toBe("gitterm");
       const sandbox = await caller(userId).create({
         provider: "gitterm",
         name: "compute",

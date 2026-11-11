@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { on } from "node:events";
 import z from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, db, desc, eq, gt, inArray, isNotNull, or, sql } from "@gitterm/db";
+import { and, asc, db, desc, eq, gt, inArray, isNotNull, or, sql } from "@gitterm/db";
 import { agentType, cloudProvider, image, machineProfile } from "@gitterm/db/schema/cloud";
 import { sandboxSnapshot, workspace, workspaceTermination } from "@gitterm/db/schema/workspace";
 import {
@@ -12,7 +12,9 @@ import {
   SandboxProviderError,
   type SandboxProviderKey,
 } from "@gitterm/agent-runtime/sandbox/types";
+import type { Entitlements } from "@gitterm/schema/billing";
 import { accountProcedure, router } from "../index";
+import { COMPUTE_PROVIDER_KEY } from "../service/compute-provider";
 import { canUseProvider, getBilling } from "../billing";
 import {
   managedSandboxTransport,
@@ -228,11 +230,58 @@ async function loadRunningSandbox(userId: string, sandboxId: string) {
   return { ...(await transportFor(row)), row };
 }
 
+function loadSandboxImage() {
+  return db
+    .select({ image, agentType })
+    .from(image)
+    .innerJoin(agentType, eq(image.agentTypeId, agentType.id))
+    .where(and(eq(agentType.key, SANDBOX_AGENT_KEY), eq(image.isEnabled, true)))
+    .limit(1)
+    .then((rows) => rows[0]);
+}
+
+/**
+ * The sandbox providers this deployment offers the user's plan. The default is Gitterm's own
+ * sandboxes where the deployment runs them, else the deployment's preferred provider, else the
+ * only one. With several and no preferred one there is no default.
+ */
+async function sandboxProviders(entitlements: Entitlements) {
+  const rows = (await loadSandboxImage())
+    ? await db.query.cloudProvider.findMany({
+        where: and(
+          eq(cloudProvider.isEnabled, true),
+          eq(cloudProvider.isSandbox, true),
+          inArray(cloudProvider.providerKey, [...SANDBOX_PROVIDERS]),
+        ),
+        columns: { providerKey: true, preferredDefault: true },
+        orderBy: [desc(cloudProvider.preferredDefault), asc(cloudProvider.name)],
+      })
+    : [];
+  const usable = rows.filter((row) => canUseProvider(entitlements, row.providerKey));
+  const providers = [...new Set(usable.map((row) => row.providerKey as SandboxProviderKey))];
+  const preferred = usable.find((row) => row.preferredDefault)?.providerKey as
+    | SandboxProviderKey
+    | undefined;
+  const fallback = providers.length === 1 ? providers[0]! : null;
+  return {
+    providers,
+    default: providers.includes(COMPUTE_PROVIDER_KEY)
+      ? COMPUTE_PROVIDER_KEY
+      : (preferred ?? fallback),
+  };
+}
+
 export const sandboxRouter = router({
+  /** Sandbox providers you can use here, and the one used when you don't name one. */
+  providers: accountProcedure("workspace:read").query(async ({ ctx }) =>
+    sandboxProviders(await (await getBilling()).getEntitlements(ctx.session.user.id)),
+  ),
+
   create: accountProcedure("workspace:write")
     .input(
       z.object({
-        provider: z.enum(SANDBOX_PROVIDERS).default("e2b"),
+        /** Defaults to the deployment's default; see `providers`. */
+        provider: z.enum(SANDBOX_PROVIDERS).optional(),
         name: z.string().trim().min(1).max(120).optional(),
         lifetimeMinutes: z.number().int().min(1).max(MAX_LIFETIME_MINUTES),
         /** Machine profile key; defaults to the plan's default size. */
@@ -255,40 +304,36 @@ export const sandboxRouter = router({
         });
         if (existing) return present(await loadSandbox(userId, existing.id));
       }
-      const maxMinutes =
-        SANDBOX_PROVIDER_PROFILES[input.provider].capabilities.maxLifetimeMs / 60_000;
+      const billing = await getBilling();
+      const entitlements = await billing.getEntitlements(userId);
+      const providerKey = input.provider ?? (await sandboxProviders(entitlements)).default;
+      if (!providerKey)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This deployment has no default sandbox provider; choose a provider.",
+        });
+      const maxMinutes = SANDBOX_PROVIDER_PROFILES[providerKey].capabilities.maxLifetimeMs / 60_000;
       if (input.lifetimeMinutes > maxMinutes) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `${input.provider} sandboxes live at most ${maxMinutes} minutes`,
+          message: `${providerKey} sandboxes live at most ${maxMinutes} minutes`,
         });
       }
 
-      const sandboxImage = await db
-        .select({ image, agentType })
-        .from(image)
-        .innerJoin(agentType, eq(image.agentTypeId, agentType.id))
-        .where(and(eq(agentType.key, SANDBOX_AGENT_KEY), eq(image.isEnabled, true)))
-        .limit(1)
-        .then((rows) => rows[0]);
+      const sandboxImage = await loadSandboxImage();
       const provider = await db.query.cloudProvider.findFirst({
-        where: and(
-          eq(cloudProvider.providerKey, input.provider),
-          eq(cloudProvider.isEnabled, true),
-        ),
+        where: and(eq(cloudProvider.providerKey, providerKey), eq(cloudProvider.isEnabled, true)),
       });
       if (!sandboxImage || !provider)
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: `This deployment has not enabled managed ${input.provider} sandboxes.`,
+          message: `This deployment has not enabled managed ${providerKey} sandboxes.`,
         });
 
-      const billing = await getBilling();
-      const entitlements = await billing.getEntitlements(userId);
       if (!canUseProvider(entitlements, provider.providerKey))
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: `Your plan cannot use ${input.provider} compute.`,
+          message: `Your plan cannot use ${providerKey} compute.`,
         });
 
       const snapshot = input.snapshotId
@@ -370,7 +415,7 @@ export const sandboxRouter = router({
           });
       }
 
-      const transport = await managedSandboxTransport(input.provider, provider.id);
+      const transport = await managedSandboxTransport(providerKey, provider.id);
       const id = randomUUID();
       const now = new Date();
       const lifetimeMs = input.lifetimeMinutes * 60_000;
@@ -412,18 +457,18 @@ export const sandboxRouter = router({
           ),
           onTimeout: "pause",
           // Where Gitterm proxies previews, it decides who sees them; the provider URL stays private.
-          publicPreviews: GITTERM_PREVIEW_PROVIDERS.includes(input.provider)
+          publicPreviews: GITTERM_PREVIEW_PROVIDERS.includes(providerKey)
             ? false
             : input.publicPreviews,
           // E2B sizes are separate templates named after the sandbox image's template.
           template:
-            input.provider === "e2b"
+            providerKey === "e2b"
               ? sandboxImage.image.providerMetadata?.e2b?.templateId
               : undefined,
           machine: profile?.providerOptions,
           ...(snapshot?.externalSnapshotId ? { snapshot: snapshot.externalSnapshotId } : {}),
         });
-        externalId = sandboxHandle(input.provider, created.id);
+        externalId = sandboxHandle(providerKey, created.id);
       } catch (error) {
         const failed = {
           status: "terminated" as const,
@@ -441,7 +486,7 @@ export const sandboxRouter = router({
         await db.transaction(async (tx) => {
           await tx
             .update(workspace)
-            .set({ ...failed, externalInstanceId: sandboxHandle(input.provider, leftover) })
+            .set({ ...failed, externalInstanceId: sandboxHandle(providerKey, leftover) })
             .where(eq(workspace.id, id));
           await tx
             .insert(workspaceTermination)
@@ -473,7 +518,7 @@ export const sandboxRouter = router({
         await processWorkspaceTermination(userId, id).catch(() => {});
         throw new TRPCError({ code: "CONFLICT", message: "Sandbox creation was cancelled" });
       }
-      return present({ workspace: settled.workspace, provider: input.provider });
+      return present({ workspace: settled.workspace, provider: providerKey });
     }),
 
   list: accountProcedure("workspace:read")

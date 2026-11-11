@@ -37,14 +37,14 @@ variables:
 {
   "account": "e2b",
   "accounts": {
-    "e2b": { "mode": "direct", "provider": "e2b", "apiKeyEnv": "E2B_API_KEY" },
-    "gitterm": { "mode": "managed" }
+    "e2b": { "provider": "e2b", "apiKeyEnv": "E2B_API_KEY" },
+    "gitterm": { "size": "medium" }
   }
 }
 ```
 
 ```bash
-gitterm sandbox account                     # selected mode, account, who is charged
+gitterm sandbox account                     # selected account, provider, who is charged
 gitterm sandbox create --lifetime 30
 gitterm sandbox list                        # live sandboxes for the account
 gitterm sandbox sync <id>                   # current checkout, including uncommitted changes

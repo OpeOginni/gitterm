@@ -21,6 +21,7 @@ import {
   createSandboxClient,
   createFileSandboxStore,
   describeSandboxAccount,
+  resolveSandboxAccount,
   type SandboxRecord,
   type SandboxSettings,
 } from "../packages/sdk/src/sandbox/index";
@@ -36,15 +37,16 @@ const option = (name: string) => {
 const settingsPath = process.env.GITTERM_SANDBOX_CONFIG;
 if (!settingsPath) throw new Error("Set GITTERM_SANDBOX_CONFIG to a sandbox settings file");
 const settings = JSON.parse(await readFile(settingsPath, "utf8")) as SandboxSettings;
-for (const account of Object.values(settings.accounts ?? {}))
+const accounts = Object.values(settings.accounts ?? { only: settings });
+for (const account of accounts)
   if ("apiKey" in account || "token" in account)
     throw new Error("Use apiKeyEnv; the settings file must not hold credentials");
-settings.account = option("account") ?? settings.account;
+const account = await resolveSandboxAccount(settings, option("account"));
 
 if (flag("child-create")) {
   // Crash-test child: create a 1-minute sandbox, announce it, then wait to be killed.
   const child = createSandboxClient({
-    backend: createSandboxBackend(settings),
+    backend: createSandboxBackend(account),
     limits: { maxSandboxes: 5 },
   });
   const created = await child.create({
@@ -60,7 +62,7 @@ const runId = `smoke-${randomBytes(4).toString("hex")}`;
 const SENTINEL = `gitterm-sentinel-${randomBytes(12).toString("hex")}`;
 const secretsToFind = [
   SENTINEL,
-  ...Object.values(settings.accounts ?? {}).flatMap((account) =>
+  ...accounts.flatMap((account) =>
     "apiKeyEnv" in account && account.apiKeyEnv && process.env[account.apiKeyEnv]
       ? [process.env[account.apiKeyEnv]!]
       : [],
@@ -86,12 +88,12 @@ function scrub(text: string) {
 const work = await mkdtemp(path.join(tmpdir(), `gitterm-${runId}-`));
 const repo = path.join(work, "repo");
 const store = createFileSandboxStore(path.join(work, "store"));
-const summary = describeSandboxAccount(settings);
+const summary = describeSandboxAccount(account);
 console.log(
-  `run ${runId}: ${summary.mode}/${summary.name} (${summary.provider}); charged to ${summary.chargedTo}; credential from ${summary.credentialSource}`,
+  `run ${runId}: ${summary.name} (${summary.provider}); charged to ${summary.chargedTo}; credential from ${summary.credentialSource}`,
 );
 const client = createSandboxClient({
-  backend: createSandboxBackend(settings),
+  backend: createSandboxBackend(account),
   store,
   limits: { maxSandboxes: 5, maxLifetimeMinutes: 15, maxJobMinutes: 10 },
 });
@@ -134,7 +136,7 @@ try {
   check(
     "create",
     sandbox.state === "running",
-    `${sandbox.mode}/${sandbox.account} ${sandbox.id} expires ${sandbox.expiresAt}`,
+    `${sandbox.account} ${sandbox.id} expires ${sandbox.expiresAt}`,
   );
 
   const runtime = await client.exec(sandbox, {
@@ -216,7 +218,7 @@ try {
   );
 
   const long = await client.exec(sandbox, { command: "echo started; sleep 900 & sleep 900" });
-  const restarted = createSandboxClient({ backend: createSandboxBackend(settings), store });
+  const restarted = createSandboxClient({ backend: createSandboxBackend(account), store });
   const saved = (await restarted.list()).find((record) => record.id === sandbox!.id);
   const reattached = await restarted.job(saved!, long.job.id);
   check(
@@ -305,7 +307,7 @@ try {
     // A child creates a 1-minute sandbox and is SIGKILLed; the provider must delete it.
     const child = spawn(
       process.execPath,
-      [import.meta.path, "--child-create", "--account", settings.account ?? ""],
+      [import.meta.path, "--child-create", "--account", account.name],
       {
         env: {
           ...process.env,
@@ -326,7 +328,7 @@ try {
       });
       child.on("exit", () => reject(new Error("child exited before creating a sandbox")));
     });
-    const backend = createSandboxBackend(settings);
+    const backend = createSandboxBackend(account);
     const deadline = Date.now() + 5 * 60_000;
     // Boat archives rather than deletes at the lifetime.
     const expected = client.capabilities.expiry === "archive" ? "paused" : "terminated";
@@ -345,7 +347,7 @@ try {
   check("smoke run", false, error instanceof Error ? error.message : String(error));
 } finally {
   // Remove anything this run created, including after a failure.
-  const backend = createSandboxBackend(settings);
+  const backend = createSandboxBackend(account);
   const leftovers = new Set(createdIds);
   for (const info of await backend.list().catch(() => []))
     if (info.labels.gitterm_purpose?.startsWith(runId)) leftovers.add(info.id);

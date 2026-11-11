@@ -6,9 +6,11 @@ import {
   createSandboxClient,
   describeSandboxAccount,
   projectDir,
+  resolveSandboxAccount,
   startPreviewProxy,
   type JobView,
   type PreviewProxy,
+  type SandboxAccount,
   type SandboxClient,
   type SandboxRecord,
   type SandboxRef,
@@ -95,20 +97,17 @@ function ageText(from: string | null): string {
 function describeRecord(record: SandboxRecord, sessionID?: string): string {
   const running = Object.values(record.jobs).filter((job) => job.status === "running").length;
   return [
-    `- ${record.id} "${record.name}" [${record.state}] ${record.mode}/${record.account} (${record.provider})${record.sessionId === sessionID ? " (this session)" : ""}`,
+    `- ${record.id} "${record.name}" [${record.state}] ${record.account} (${record.provider})${record.sessionId === sessionID ? " (this session)" : ""}`,
     `  wall-clock age ${ageText(record.createdAt)}; expires ${record.expiresAt ?? "unknown"}`,
     `  ${record.mode === "direct" ? `Billed by ${record.provider} to your own ${record.provider} account while it exists.` : "Billed by Gitterm for active (unpaused) time; pauses when idle."}`,
     `  snapshot ${record.snapshot ? `${record.snapshot.id} synced ${record.snapshot.syncedAt}` : "none"}; ${running} running job(s); previews ${Object.keys(record.previews).join(", ") || "none"}`,
   ].join("\n");
 }
 
-function describeJob(
-  view: JobView,
-  record: Pick<SandboxRecord, "id" | "mode" | "account">,
-): string {
+function describeJob(view: JobView, record: Pick<SandboxRecord, "id" | "account">): string {
   const { job, state, log } = view;
   return [
-    `Job ${job.id} in sandbox ${record.id} (${record.mode}/${record.account}): ${state.status}${state.exitCode === null ? "" : `, exit ${state.exitCode}`}`,
+    `Job ${job.id} in sandbox ${record.id} (${record.account}): ${state.status}${state.exitCode === null ? "" : `, exit ${state.exitCode}`}`,
     state.status === "failed"
       ? "The command ran and exited non-zero (a command failure, not a provider failure)."
       : "",
@@ -129,27 +128,38 @@ export async function registerSandboxTools(
   /** Tests shorten the job watch interval. */
   watchIntervalMs = WATCH_INTERVAL_MS,
 ) {
-  let client: SandboxClient | undefined;
+  let resolved: { account: SandboxAccount; client: SandboxClient } | undefined;
+  let resolving: Promise<{ account: SandboxAccount; client: SandboxClient }> | undefined;
   const proxies = new Map<string, PreviewProxy>();
   /** Jobs left running by a tool call, keyed `sandbox:job`; each posts one message when done. */
   const watched = new Map<string, { stop: boolean; wake: () => void }>();
   /** Where the account pushes job completions, a push wakes the watch; polling is a fallback. */
   let stopPushes: (() => void) | undefined;
   let unloaded = false;
-  const sandbox = () => {
+  /** The selected account, resolved once it works; a failure is retried on the next call. */
+  async function selected() {
     if (!settings)
       throw new Error(
-        "Gitterm sandboxes are not configured. Add an account to the plugin options.",
+        "Gitterm sandboxes are not configured. Add your provider key or GitTerm settings to the plugin options.",
       );
-    return (client ??= createSandboxClient({
-      backend: createSandboxBackend(settings),
-      limits: settings.limits,
-    }));
-  };
+    if (resolved) return resolved;
+    const options = settings;
+    resolving ??= (async () => {
+      const account = await resolveSandboxAccount(options);
+      const client = createSandboxClient({
+        backend: createSandboxBackend(account),
+        limits: options.limits,
+      });
+      return (resolved = { account, client });
+    })().finally(() => (resolving = undefined));
+    return resolving;
+  }
+  const sandbox = async () => (await selected()).client;
+  const summary = async () => describeSandboxAccount((await selected()).account);
 
   /** A sandbox created under another account resolves to that account, which then fails explicitly. */
   async function refFor(id: string): Promise<SandboxRef> {
-    const current = sandbox();
+    const current = await sandbox();
     const known = (await current.store.list()).filter((record) => record.id === id);
     const match = known.find(
       (record) =>
@@ -170,19 +180,29 @@ export async function registerSandboxTools(
    * Setup snapshots are on when the user turned them on, the account's provider can snapshot,
    * and the user has not set a snapshot for the account themselves (theirs always wins).
    */
-  function snapshotsOn(): boolean {
-    if (settings?.snapshots !== true) return false;
-    try {
-      return !!sandbox().snapshotEffect && !describeSandboxAccount(settings).pinnedSnapshot;
-    } catch {
-      return false;
-    }
+  async function snapshotEffect() {
+    const { account, client } = await selected();
+    return describeSandboxAccount(account).pinnedSnapshot ? null : client.snapshotEffect;
   }
+  // Tools are registered once, so when the account can't be resolved yet (a GitTerm server that
+  // is unreachable at startup) the snapshot tools are offered anyway and each call checks.
+  const snapshotsOn =
+    settings?.snapshots === true &&
+    (await snapshotEffect().then(
+      (effect) => effect !== null,
+      () => true,
+    ));
+  /** The account's snapshot effect when snapshots are in use for this call, else null. */
+  const snapshotsNow = async () => (snapshotsOn ? snapshotEffect() : null);
 
   /** What the agent should know about the setup snapshots it can use for this checkout. */
-  function snapshotAdvice(snapshots: SetupSnapshotStatus[], used: string | null): string {
+  function snapshotAdvice(
+    effect: "pauses" | "stops",
+    snapshots: SetupSnapshotStatus[],
+    used: string | null,
+  ): string {
     const save =
-      sandbox().snapshotEffect === "stops"
+      effect === "stops"
         ? "Saving stops the sandbox for good, so save last and create a new sandbox after."
         : "Saving pauses the sandbox briefly.";
     if (!snapshots.length)
@@ -220,9 +240,9 @@ export async function registerSandboxTools(
     });
 
   /** Subscribes once, on the first watch, if the account pushes job completions. */
-  function subscribePushes() {
+  async function subscribePushes() {
     if (!stopPushes)
-      stopPushes = sandbox().onJobFinished?.((event) =>
+      stopPushes = (await sandbox()).onJobFinished?.((event) =>
         watched.get(`${event.sandboxId}:${event.jobId}`)?.wake(),
       );
     return stopPushes;
@@ -263,7 +283,7 @@ export async function registerSandboxTools(
     const deadline = Date.now() + timeoutMs + LOST_MARGIN_MS;
     void (async () => {
       // With pushes, a check runs when the job's event arrives; the poll only covers a missed one.
-      const pushes = !!subscribePushes();
+      const pushes = !!(await subscribePushes());
       const interval = pushes ? Math.max(watchIntervalMs, PUSHED_POLL_MS) : watchIntervalMs;
       let delay = interval;
       while (true) {
@@ -277,7 +297,7 @@ export async function registerSandboxTools(
         if (entry.stop || unloaded) return;
         let view: JobView;
         try {
-          view = await sandbox().job(ref, jobId, { tailBytes: 4096 });
+          view = await (await sandbox()).job(ref, jobId, { tailBytes: 4096 });
           delay = interval;
         } catch (error) {
           // A busy sandbox can be slow to answer: keep trying, less often, until the job's own
@@ -322,7 +342,7 @@ export async function registerSandboxTools(
         "Start independent work together: Promise.allSettled over jobs, or several sandboxes up to the account limit.",
         "Jobs in one sandbox share its files, so run setup such as installs once, before starting parallel jobs.",
         "Run long jobs with background: true, then carry on or end your turn. A message arrives when each job finishes, so never poll.",
-        snapshotsOn()
+        snapshotsOn
           ? "This account keeps setup snapshots: new sandboxes can start from one with dependencies and services already set up. After a slow setup (installs, toolchains, databases) succeeds, save one with sandbox_snapshot; a checkout can have several. sandbox_create and sandbox_list show which exist and which are out of date."
           : "",
       ]
@@ -359,7 +379,7 @@ export async function registerSandboxTools(
           description:
             "Anyone with a preview URL can open it. Fixed at creation; requires separate approval unless the plugin options already turn it on. Required where previews are always public (Vercel); ignored where they are always private.",
         },
-        ...(snapshotsOn()
+        ...(snapshotsOn
           ? {
               snapshot: {
                 type: "string",
@@ -371,18 +391,18 @@ export async function registerSandboxTools(
       }),
       async execute(input, context) {
         const args = (input ?? {}) as Record<string, unknown>;
-        const current = sandbox();
-        const { mode, account, provider } = current.identity;
+        const current = await sandbox();
+        const { account, provider } = current.identity;
         const lifetimeMinutes =
           optionalNumber(args.lifetimeMinutes) ?? current.limits.defaultLifetimeMinutes;
-        const summary = describeSandboxAccount(settings!);
+        const { chargedTo } = await summary();
         await assert(
           context,
           "gitterm.sandbox.provision",
-          [`${mode}:${account}:${provider}`],
-          [`${mode}:${account}:${provider}`],
+          [`${account}:${provider}`],
+          [`${account}:${provider}`],
           {
-            chargedTo: summary.chargedTo,
+            chargedTo,
             lifetimeMinutes,
             maxSandboxes: current.limits.maxSandboxes,
           },
@@ -394,11 +414,12 @@ export async function registerSandboxTools(
           current.capabilities.previews !== "none" &&
           (settings!.publicPreviews === true || args.publicPreviews === true);
         if (publicPreviews && !settings!.publicPreviews)
-          await assert(context, "gitterm.sandbox.public", [`${mode}:${account}`], [], {
+          await assert(context, "gitterm.sandbox.public", [`${account}`], [], {
             warning: "Every port of this sandbox will be reachable by anyone with its URL.",
           });
         const directory = await sessionDirectory(context);
-        const snapshots = snapshotsOn() ? await current.setupSnapshots(directory) : [];
+        const effect = await snapshotsNow();
+        const snapshots = effect ? await current.setupSnapshots(directory) : [];
         const wanted = typeof args.snapshot === "string" ? args.snapshot : undefined;
         if (
           wanted &&
@@ -432,7 +453,7 @@ export async function registerSandboxTools(
         return {
           content: [
             `Created sandbox:\n${describeRecord(record, context.sessionID)}`,
-            snapshotsOn() ? snapshotAdvice(snapshots, fromSnapshot) : "",
+            effect ? snapshotAdvice(effect, snapshots, fromSnapshot) : "",
           ]
             .filter(Boolean)
             .join("\n"),
@@ -452,20 +473,26 @@ export async function registerSandboxTools(
       name: "sandbox_list",
       options: PINNED,
       description:
-        "Show the selected account (mode, provider, who is charged, limits; never credentials) and its sandboxes, reconciled with the provider.",
+        "Show the selected account (provider, who is charged, limits; never credentials) and its sandboxes, reconciled with the provider.",
       input: object({}),
       async execute(_input, context) {
         if (!settings)
           return { content: "Gitterm sandboxes are not configured in the plugin options." };
-        const summary = describeSandboxAccount(settings);
-        const records = await sandbox().list();
+        const account = await summary();
+        const current = await sandbox();
+        const records = await current.list();
         const live = records.filter((record) => record.state !== "terminated");
-        const setup = snapshotsOn()
-          ? snapshotAdvice(await sandbox().setupSnapshots(await sessionDirectory(context)), null)
+        const effect = await snapshotsNow();
+        const setup = effect
+          ? snapshotAdvice(
+              effect,
+              await current.setupSnapshots(await sessionDirectory(context)),
+              null,
+            )
           : "";
         return {
           content: [
-            `Account: ${JSON.stringify({ ...summary, limits: sandbox().limits })}`,
+            `Account: ${JSON.stringify({ ...account, limits: current.limits })}`,
             live.length
               ? live.map((record) => describeRecord(record, context.sessionID)).join("\n")
               : "No live sandboxes.",
@@ -473,7 +500,7 @@ export async function registerSandboxTools(
           ]
             .filter(Boolean)
             .join("\n"),
-          metadata: summary,
+          metadata: account,
         };
       },
     });
@@ -495,7 +522,8 @@ export async function registerSandboxTools(
       input: object({ sandboxId }, ["sandboxId"]),
       async execute(input, context) {
         const ref = await refFor(str((input as Record<string, unknown>).sandboxId, "sandboxId"));
-        await sandbox().get(ref);
+        const current = await sandbox();
+        await current.get(ref);
         const captured = await captureSource(await sessionDirectory(context), {
           exclude: settings?.exclude,
         });
@@ -503,8 +531,8 @@ export async function registerSandboxTools(
         await assert(
           context,
           "gitterm.sandbox.upload",
-          [`${ref.mode}:${ref.account}:${snapshot.root}`],
-          [`${ref.mode}:${ref.account}:${snapshot.root}`],
+          [`${ref.account}:${snapshot.root}`],
+          [`${ref.account}:${snapshot.root}`],
           {
             files: snapshot.files.length,
             bytes: snapshot.bytes,
@@ -514,7 +542,7 @@ export async function registerSandboxTools(
             excluded: snapshot.excluded.slice(0, 50),
           },
         );
-        const result = await sandbox().sync(ref, captured);
+        const result = await current.sync(ref, captured);
         return {
           content: [
             `Synced snapshot ${snapshot.id} (sha256 ${snapshot.digest}) to ${ref.id}; verified in the sandbox: ${result.verified}.`,
@@ -522,13 +550,13 @@ export async function registerSandboxTools(
             snapshot.excluded.length
               ? `Excluded: ${snapshot.excluded.map((item) => `${item.path} (${item.reason})`).join(", ")}`
               : "",
-            `Project directory in the sandbox: ${projectDir(sandbox().home)}`,
+            `Project directory in the sandbox: ${projectDir(current.home)}`,
           ]
             .filter(Boolean)
             .join("\n"),
           output: {
             snapshotId: snapshot.id,
-            projectDir: projectDir(sandbox().home),
+            projectDir: projectDir(current.home),
             files: snapshot.files.length,
             excluded: snapshot.excluded.map((item) => `${item.path} (${item.reason})`),
           },
@@ -580,8 +608,8 @@ export async function registerSandboxTools(
         await assert(
           context,
           "gitterm.sandbox.exec",
-          [`${ref.mode}:${ref.account}:${ref.id}`],
-          [`${ref.mode}:${ref.account}:*`],
+          [`${ref.account}:${ref.id}`],
+          [`${ref.account}:*`],
           { command },
         );
         const names = Array.isArray(args.secretEnv)
@@ -597,7 +625,9 @@ export async function registerSandboxTools(
             env[name] = value;
           }
         }
-        const view = await sandbox().exec(ref, {
+        const view = await (
+          await sandbox()
+        ).exec(ref, {
           command,
           cwd: typeof args.cwd === "string" ? args.cwd : undefined,
           timeoutMinutes: optionalNumber(args.timeoutMinutes),
@@ -649,14 +679,18 @@ export async function registerSandboxTools(
         const offset = optionalNumber(args.offset);
         const view =
           args.cancel === true
-            ? await sandbox().cancel(ref, jobId)
+            ? await (await sandbox()).cancel(ref, jobId)
             : offset === undefined && optionalNumber(args.waitSeconds)
-              ? await sandbox().wait(
+              ? await (
+                  await sandbox()
+                ).wait(
                   ref,
                   jobId,
                   Math.min(optionalNumber(args.waitSeconds)!, MAX_WAIT_SECONDS) * 1000,
                 )
-              : await sandbox().job(ref, jobId, { offset, limit: optionalNumber(args.limit) });
+              : await (
+                  await sandbox()
+                ).job(ref, jobId, { offset, limit: optionalNumber(args.limit) });
         // Seen finished here, so no message is needed.
         if (view.state.status !== "running") unwatch(`${ref.id}:${jobId}`);
         return {
@@ -700,11 +734,13 @@ export async function registerSandboxTools(
           await assert(
             context,
             "gitterm.sandbox.exec",
-            [`${ref.mode}:${ref.account}:${ref.id}`],
-            [`${ref.mode}:${ref.account}:*`],
+            [`${ref.account}:${ref.id}`],
+            [`${ref.account}:*`],
             { command: args.command },
           );
-        const preview = await sandbox().preview(ref, {
+        const preview = await (
+          await sandbox()
+        ).preview(ref, {
           port,
           command: typeof args.command === "string" ? args.command : undefined,
           cwd: typeof args.cwd === "string" ? args.cwd : undefined,
@@ -714,8 +750,8 @@ export async function registerSandboxTools(
           await assert(
             context,
             "gitterm.sandbox.browser",
-            [`${ref.mode}:${ref.account}:${ref.id}:${port}`],
-            [`${ref.mode}:${ref.account}:*`],
+            [`${ref.account}:${ref.id}:${port}`],
+            [`${ref.account}:*`],
             {
               note: "Creates a loopback URL that grants access to this private preview while OpenCode runs.",
             },
@@ -768,7 +804,9 @@ export async function registerSandboxTools(
       async execute(input) {
         const args = input as Record<string, unknown>;
         const ref = await refFor(str(args.sandboxId, "sandboxId"));
-        const artifact = await sandbox().fetchArtifact(ref, str(args.path, "path"), {
+        const artifact = await (
+          await sandbox()
+        ).fetchArtifact(ref, str(args.path, "path"), {
           jobId: str(args.jobId, "jobId"),
         });
         return {
@@ -795,7 +833,9 @@ export async function registerSandboxTools(
         const args = input as Record<string, unknown>;
         const ref = await refFor(str(args.sandboxId, "sandboxId"));
         const directory = await sessionDirectory(context);
-        const applied = await sandbox().applyArtifact(ref, {
+        const applied = await (
+          await sandbox()
+        ).applyArtifact(ref, {
           localPath: str(args.artifactPath, "artifactPath"),
           target: str(args.target, "target"),
           beforeWrite: async (plan) => {
@@ -814,7 +854,7 @@ export async function registerSandboxTools(
       },
     });
 
-    if (snapshotsOn())
+    if (snapshotsOn)
       editor.add({
         name: "sandbox_snapshot",
         options: LISTED,
@@ -849,14 +889,18 @@ export async function registerSandboxTools(
         ),
         async execute(input, context) {
           const args = (input ?? {}) as Record<string, unknown>;
-          const current = sandbox();
-          const { mode, account } = current.identity;
+          const current = await sandbox();
+          const { account, provider } = current.identity;
+          if (!(await snapshotEffect()))
+            throw new Error(
+              `Sandbox account "${account}" doesn't keep setup snapshots: ${provider} can't save them, or the account starts every sandbox from its own snapshot.`,
+            );
           const directory = await sessionDirectory(context);
           await assert(
             context,
             "gitterm.sandbox.snapshot",
-            [`${mode}:${account}:${directory}`],
-            [`${mode}:${account}:${directory}`],
+            [`${account}:${directory}`],
+            [`${account}:${directory}`],
             { action: args.action, project: directory },
           );
           if (args.action === "delete") {
@@ -903,7 +947,7 @@ export async function registerSandboxTools(
       input: object({ sandboxId }, ["sandboxId"]),
       async execute(input) {
         const ref = await refFor(str((input as Record<string, unknown>).sandboxId, "sandboxId"));
-        const record = await sandbox().destroy(ref);
+        const record = await (await sandbox()).destroy(ref);
         unwatch(ref.id);
         for (const [key, proxy] of proxies) if (key.startsWith(`${ref.id}:`)) await proxy.close();
         return { content: `Sandbox ${ref.id} is ${record.state} (confirmed with the provider).` };
@@ -915,7 +959,7 @@ export async function registerSandboxTools(
   // reload or restart dropped. Failures surface on first use.
   if (settings)
     void sandbox()
-      .list()
+      .then((current) => current.list())
       .then(resumeWatches)
       .catch(() => {});
 
@@ -925,7 +969,7 @@ export async function registerSandboxTools(
    * servers are meant to keep running.
    */
   async function resumeWatches() {
-    const current = sandbox();
+    const current = await sandbox();
     const { mode, provider, account } = current.identity;
     for (const record of await current.store.list()) {
       if (record.mode !== mode || record.account !== account) continue;

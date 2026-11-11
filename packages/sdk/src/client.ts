@@ -72,6 +72,7 @@ import type {
   RunResultOptions,
   WorkspaceModelAccess,
 } from "./types.js";
+import type { SandboxProviderKey } from "./sandbox/types.js";
 
 export type GittermClientOptions = {
   serverUrl?: string;
@@ -191,6 +192,8 @@ export type GittermClient = {
   };
   /** Plain command sandboxes billed to this account. Higher-level jobs live in `@gitterm/sdk/sandbox`. */
   sandboxes: {
+    /** Providers you can use on this server, and the one `create` uses when you don't name one. */
+    providers(): Promise<{ providers: SandboxProviderKey[]; default: SandboxProviderKey | null }>;
     create(input: ManagedSandboxCreateInput): Promise<ManagedSandbox>;
     list(input?: { includeTerminated?: boolean }): Promise<ManagedSandbox[]>;
     get(sandboxId: string): Promise<ManagedSandbox>;
@@ -785,6 +788,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         run(() => waitForWorkspaceSetup(workspaceIdOf(ref), waitOptions)),
     },
     sandboxes: {
+      providers: () => run(() => trpc.sandbox.providers.query()),
       create: (input) => run(() => trpc.sandbox.create.mutate(input)),
       list: (input) => run(() => trpc.sandbox.list.query(input)),
       get: (sandboxId) => run(() => trpc.sandbox.get.query({ sandboxId })),

@@ -38,7 +38,7 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@gitterm/sdk": "workspace:^0.14.0"
+    "@gitterm/sdk": "workspace:^0.15.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.6",

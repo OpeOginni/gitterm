@@ -23,12 +23,7 @@ OpenCode with `opencode --standalone`.
   "plugins": [
     {
       "package": "@gitterm/opencode-sandbox",
-      "options": {
-        "account": "e2b",
-        "accounts": {
-          "e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
-        },
-      },
+      "options": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
     },
   ],
 }
@@ -43,22 +38,21 @@ Restart OpenCode after changing the settings.
 
 ### Other providers
 
-Add the account and set `"account"` to its name:
-
 ```jsonc
-"daytona": { "mode": "direct", "provider": "daytona", "apiKey": "{env:DAYTONA_API_KEY}" },
-"boat":    { "mode": "direct", "provider": "boat", "apiKey": "{env:BOAT_API_KEY}" },
-"vercel":  { "mode": "direct", "provider": "vercel", "apiKey": "{env:VERCEL_TOKEN}", "teamId": "team_…", "projectId": "prj_…" },
-"railway": { "mode": "direct", "provider": "railway", "apiKey": "{env:RAILWAY_TOKEN}", "projectId": "…", "environmentId": "…", "allowUnboundedLifetime": true },
-"exedev":  { "mode": "direct", "provider": "exedev", "apiKey": "{env:EXEDEV_API_KEY}", "allowUnboundedLifetime": true },
+{ "provider": "daytona", "apiKey": "{env:DAYTONA_API_KEY}" }
+{ "provider": "boat", "apiKey": "{env:BOAT_API_KEY}" }
+{ "provider": "vercel", "apiKey": "{env:VERCEL_TOKEN}", "teamId": "team_…", "projectId": "prj_…" }
+{ "provider": "railway", "apiKey": "{env:RAILWAY_TOKEN}", "projectId": "…", "environmentId": "…", "allowUnboundedLifetime": true }
+{ "provider": "exedev", "apiKey": "{env:EXEDEV_API_KEY}", "allowUnboundedLifetime": true }
 ```
 
 Railway and exe.dev never delete a forgotten sandbox themselves, so they need
 `allowUnboundedLifetime: true`. Destroy sandboxes you no longer need.
 
-### Or use your GitTerm plan
+### Or use GitTerm
 
-No provider account needed. Sign in once, then use a managed account:
+Leave out `apiKey` and sandboxes go through GitTerm instead, billed to your plan. No provider
+account needed. Sign in once:
 
 ```sh
 npm install -g @gitterm/cli
@@ -66,7 +60,28 @@ gitterm login
 ```
 
 ```jsonc
-"gitterm": { "mode": "managed", "size": "medium" },
+"options": { "size": "medium" }
+```
+
+On a self-hosted GitTerm, add its address. It uses the server's default provider; set
+`provider` to pick another one it offers:
+
+```jsonc
+"options": { "serverUrl": "https://gitterm.example.com", "provider": "daytona", "size": "large" }
+```
+
+### Several accounts
+
+Put each under `accounts` and pick one with `account`:
+
+```jsonc
+"options": {
+  "account": "e2b",
+  "accounts": {
+    "e2b": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
+    "gitterm": { "size": "medium" },
+  },
+}
 ```
 
 ## 3. Use it
@@ -98,8 +113,8 @@ The right sidebar lists this checkout's sandboxes, with what each is running.
 
 ```jsonc
 "options": {
-  "account": "e2b",
-  "accounts": { … },
+  "provider": "e2b",
+  "apiKey": "{env:E2B_API_KEY}",
   "limits": {
     "maxSandboxes": 2,
     "maxLifetimeMinutes": 60,
@@ -117,12 +132,12 @@ You choose the size per account; the agent can't change it. If a build runs out 
 pick a bigger size:
 
 ```jsonc
-"gitterm": { "mode": "managed", "size": "medium" },
-"e2b":     { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "template": "my-8gb-template" },
-"daytona": { "mode": "direct", "provider": "daytona", "apiKey": "{env:DAYTONA_API_KEY}", "resources": { "cpu": 4, "memory": 8 } },
-"vercel":  { "mode": "direct", "provider": "vercel", "apiKey": "{env:VERCEL_TOKEN}", "teamId": "team_…", "projectId": "prj_…", "vcpus": 4 },
-"boat":    { "mode": "direct", "provider": "boat", "apiKey": "{env:BOAT_API_KEY}", "size": "large" },
-"exedev":  { "mode": "direct", "provider": "exedev", "apiKey": "{env:EXEDEV_API_KEY}", "cpu": 4, "memory": "8GB", "allowUnboundedLifetime": true },
+{ "size": "medium" }
+{ "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "template": "my-8gb-template" }
+{ "provider": "daytona", "apiKey": "{env:DAYTONA_API_KEY}", "resources": { "cpu": 4, "memory": 8 } }
+{ "provider": "vercel", "apiKey": "{env:VERCEL_TOKEN}", "teamId": "team_…", "projectId": "prj_…", "vcpus": 4 }
+{ "provider": "boat", "apiKey": "{env:BOAT_API_KEY}", "size": "large" }
+{ "provider": "exedev", "apiKey": "{env:EXEDEV_API_KEY}", "cpu": 4, "memory": "8GB", "allowUnboundedLifetime": true }
 ```
 
 E2B's default `base` template has 512 MB of memory, too little for most builds. E2B sets
@@ -140,9 +155,12 @@ To stop being asked every time, allow actions in your OpenCode `permissions`:
 
 ```jsonc
 "permissions": [
-  { "action": "gitterm.sandbox.exec", "resource": "direct:e2b:*", "effect": "allow" }
+  { "action": "gitterm.sandbox.exec", "resource": "e2b:*", "effect": "allow" }
 ]
 ```
+
+`e2b` is the account name: its name under `accounts`, or for a single account its
+`provider` (`gitterm` when it has none).
 
 ### Setup snapshots
 
@@ -150,7 +168,7 @@ For a project with a slow setup, let the agent save a sandbox once dependencies 
 installed, so the project's next sandboxes start ready:
 
 ```jsonc
-"options": { "account": "e2b", "accounts": { … }, "snapshots": true }
+"options": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "snapshots": true }
 ```
 
 Works with E2B, Daytona, Vercel, or Boat, with your own key or a GitTerm plan (Pro keeps 20 snapshots, Growth 100). The agent gets a `sandbox_snapshot`
@@ -165,7 +183,7 @@ To start every sandbox from a snapshot you made yourself, set it on the account 
 the agent then doesn't manage snapshots for that account:
 
 ```jsonc
-"e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "snapshot": "my-snapshot:latest" },
+{ "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "snapshot": "my-snapshot:latest" }
 ```
 
 More detail on costs, cleanup, and permissions:

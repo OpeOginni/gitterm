@@ -11,13 +11,16 @@ includes an `opencode` binary, which is never started.
 
 ## Modes
 
+An account's mode follows from its settings: with `apiKey` (or `apiKeyEnv`) it is `direct`,
+without it `managed`.
+
 | Mode                      | Who runs the provider account | Who pays                                        | Needs a Gitterm account |
 | ------------------------- | ----------------------------- | ----------------------------------------------- | ----------------------- |
 | `managed`                 | The Gitterm deployment        | Your Gitterm plan (usage sessions, plan limits) | Yes                     |
 | `direct` (bring your own) | You                           | Your provider account                           | No                      |
 
 On gitterm.dev, managed sandboxes are Gitterm's own: the account sets `"size": "small" |
-"medium"` instead of a provider, and finished jobs are reported as they happen, so
+"medium"` and no provider, and finished jobs are reported as they happen, so
 the plugin doesn't poll for them. The server offers them only in managed mode with
 `COMPUTE_URL` and `COMPUTE_SERVICE_TOKEN` set, after the provider is registered with
 `bun run compute:setup`; a self-hosted deployment uses the providers below.
@@ -241,10 +244,11 @@ Options for the `@gitterm/opencode-sandbox` OpenCode plugin:
     {
       "package": "@gitterm/opencode-sandbox",
       "options": {
+        // A single account can also sit here directly: "provider": "e2b", "apiKey": "...".
         "account": "e2b",
         "accounts": {
-          "e2b": { "mode": "direct", "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
-          "gitterm": { "mode": "managed" },
+          "e2b": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
+          "gitterm": { "size": "medium" },
         },
         "limits": {
           "maxSandboxes": 2,
@@ -259,12 +263,16 @@ Options for the `@gitterm/opencode-sandbox` OpenCode plugin:
   ],
   // Approve routine work once; keep public sharing denied.
   "permissions": [
-    { "action": "gitterm.sandbox.provision", "resource": "direct:e2b:e2b", "effect": "allow" },
-    { "action": "gitterm.sandbox.exec", "resource": "direct:e2b:*", "effect": "allow" },
+    { "action": "gitterm.sandbox.provision", "resource": "e2b:e2b", "effect": "allow" },
+    { "action": "gitterm.sandbox.exec", "resource": "e2b:*", "effect": "allow" },
     { "action": "gitterm.sandbox.public", "resource": "*", "effect": "deny" },
   ],
 }
 ```
+
+An account with `apiKey` is direct; one without is managed. A managed account without
+`provider` uses the server's default: Gitterm's own sandboxes where the deployment runs them,
+else its preferred provider, else its only one (`sandbox.providers` on the API).
 
 The CLI reads the same shape from `~/.config/gitterm/sandbox.json` (or
 `GITTERM_SANDBOX_CONFIG`), with `apiKeyEnv` instead of `apiKey`.
@@ -277,7 +285,7 @@ which setting to change. To keep a small and a large option, configure two accou
 
 | Account          | Setting                                                                                                                                           | Default                    |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `managed`        | gitterm.dev: `"size": "small" \| "medium"`. Self-hosted: `"machine"`, one of the deployment's machine profile keys. Both limited by the plan      | The plan's default profile |
+| `managed`        | `"size"`: `"small" \| "medium"` on gitterm.dev, or one of a self-hosted deployment's machine profile keys. Limited by the plan                    | The plan's default profile |
 | `direct` E2B     | `"template": "<template ID or name>"`. E2B fixes CPU and memory when the template is built (`e2b template build --cpu-count 4 --memory-mb 8192`). | `base`: 2 vCPU, 512 MB     |
 | `direct` Daytona | `"resources": { "cpu": 4, "memory": 8, "disk": 10 }` (GiB), or `"snapshot"`, which carries its own size                                           | 1 vCPU, 1 GiB, 3 GiB disk  |
 | `direct` Vercel  | `"vcpus": 4` (1 to 8, 2 GB of memory each)                                                                                                        | 2 vCPU                     |
@@ -287,16 +295,16 @@ which setting to change. To keep a small and a large option, configure two accou
 
 ### Plugin permissions
 
-| Action                      | Resource                           | Asked when                                                                                     |
-| --------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `gitterm.sandbox.provision` | `<mode>:<account>:<provider>`      | Creating a sandbox                                                                             |
-| `gitterm.sandbox.public`    | `<mode>:<account>`                 | Creating with public previews. "Always" is not offered; the `publicPreviews` setting skips it. |
-| `gitterm.sandbox.upload`    | `<mode>:<account>:<checkout root>` | Syncing. The prompt lists modified, untracked, deleted, and excluded files.                    |
-| `gitterm.sandbox.exec`      | `<mode>:<account>:<sandbox id>`    | Running a command or starting a preview server. "Always" saves `<mode>:<account>:*`.           |
-| `gitterm.sandbox.secret`    | variable names                     | Passing local environment variables through `secretEnv`                                        |
-| `gitterm.sandbox.browser`   | `<mode>:<account>:<id>:<port>`     | Creating a loopback proxy for a private preview. "Always" saves `<mode>:<account>:*`.          |
-| `gitterm.sandbox.apply`     | target path                        | Writing an artifact into the checkout. "Always" is not offered.                                |
-| `gitterm.sandbox.snapshot`  | `<mode>:<account>:<checkout root>` | Saving or deleting the checkout's setup snapshot                                               |
+| Action                      | Resource                    | Asked when                                                                                     |
+| --------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------- |
+| `gitterm.sandbox.provision` | `<account>:<provider>`      | Creating a sandbox                                                                             |
+| `gitterm.sandbox.public`    | `<account>`                 | Creating with public previews. "Always" is not offered; the `publicPreviews` setting skips it. |
+| `gitterm.sandbox.upload`    | `<account>:<checkout root>` | Syncing. The prompt lists modified, untracked, deleted, and excluded files.                    |
+| `gitterm.sandbox.exec`      | `<account>:<sandbox id>`    | Running a command or starting a preview server. "Always" saves `<account>:*`.                  |
+| `gitterm.sandbox.secret`    | variable names              | Passing local environment variables through `secretEnv`                                        |
+| `gitterm.sandbox.browser`   | `<account>:<id>:<port>`     | Creating a loopback proxy for a private preview. "Always" saves `<account>:*`.                 |
+| `gitterm.sandbox.apply`     | target path                 | Writing an artifact into the checkout. "Always" is not offered.                                |
+| `gitterm.sandbox.snapshot`  | `<account>:<checkout root>` | Saving or deleting the checkout's setup snapshot                                               |
 
 Listing sandboxes, reading jobs and logs, cancelling, downloading artifacts into the
 staging directory, and destroying need no approval. A denied action stops before any

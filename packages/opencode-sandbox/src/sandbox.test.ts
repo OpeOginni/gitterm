@@ -19,9 +19,20 @@ const jobView = (status: string) => ({
   log: { offset: 0, nextOffset: 5, totalBytes: 5, truncated: false, text: "boom\n" },
 });
 let previews = "either";
+/** Account resolutions that fail first, like a GitTerm server that is down at startup. */
+let resolveFailures = 0;
 const actual = await import("@gitterm/sdk/sandbox");
+// Kept before mocking: mock.module also replaces it on `actual`.
+const realResolve = actual.resolveSandboxAccount;
 mock.module("@gitterm/sdk/sandbox", () => ({
   ...actual,
+  resolveSandboxAccount: async (...args: Parameters<typeof realResolve>) => {
+    if (resolveFailures > 0) {
+      resolveFailures--;
+      throw new Error("connect ECONNREFUSED");
+    }
+    return realResolve(...args);
+  },
   createSandboxBackend: () => ({}),
   createSandboxClient: () => ({
     identity: { mode: "direct", account: "e2b", provider: "e2b" },
@@ -69,6 +80,7 @@ const { registerSandboxTools } = await import("./sandbox");
 
 async function createSandbox(options: Record<string, unknown>, input: Record<string, unknown>) {
   const asked: string[] = [];
+  const resources: string[] = [];
   const names: string[] = [];
   let create: ((input: unknown, context: unknown) => Promise<{ content: string }>) | undefined;
   const ctx = {
@@ -83,18 +95,21 @@ async function createSandbox(options: Record<string, unknown>, input: Record<str
         }),
     },
     session: { get: async () => ({ location: { directory: process.cwd() } }) },
-    permission: { assert: async (request: { action: string }) => asked.push(request.action) },
+    permission: {
+      assert: async (request: { action: string; resources: string[] }) => {
+        asked.push(request.action);
+        resources.push(...request.resources);
+      },
+    },
   };
-  const settings = {
-    account: "e2b",
-    accounts: { e2b: { mode: "direct", provider: "e2b", apiKey: "k" } },
-    ...options,
-  };
+  // One account inline, as most users write it.
+  const settings = { provider: "e2b", apiKey: "k", ...options };
   await registerSandboxTools(ctx as never, settings as never);
   created.length = 0;
   const result = await create!(input, { sessionID: "ses", agent: "a", messageID: "m", id: "t" });
   return {
     asked,
+    resources,
     publicPreviews: created[0]?.publicPreviews,
     snapshot: created[0]?.snapshot,
     names,
@@ -116,6 +131,8 @@ test("without the option, previews are private unless the agent asks and you app
   });
   expect(await createSandbox({}, { publicPreviews: true })).toMatchObject({
     asked: ["gitterm.sandbox.provision", "gitterm.sandbox.public"],
+    // Permission rules name the account, e.g. `e2b:*`.
+    resources: ["e2b:e2b", "e2b"],
     publicPreviews: true,
   });
 });
@@ -154,7 +171,7 @@ async function tools() {
   };
   const settings = {
     account: "e2b",
-    accounts: { e2b: { mode: "direct", provider: "e2b", apiKey: "k" } },
+    accounts: { e2b: { provider: "e2b", apiKey: "k" } },
   };
   const unload = await registerSandboxTools(ctx as never, settings as never, 10);
   const call = (name: string, input: unknown) =>
@@ -312,6 +329,12 @@ test("with snapshots on, a sandbox starts from the checkout's newest snapshot un
     await expect(createSandbox({ snapshots: true }, { snapshot: "gone" })).rejects.toThrow(
       "No setup snapshot gone",
     );
+    // An account that can't be resolved at startup still gets snapshots once it recovers.
+    resolveFailures = 1;
+    const recovered = await createSandbox({ snapshots: true }, {});
+    expect(resolveFailures).toBe(0);
+    expect(recovered.names).toContain("sandbox_snapshot");
+    expect(recovered.snapshot).toBe("newest");
     // Off unless the user turns it on.
     const off = await createSandbox({}, {});
     expect(off.snapshot).toBeUndefined();
