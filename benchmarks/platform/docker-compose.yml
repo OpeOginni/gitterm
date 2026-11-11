@@ -1,0 +1,42 @@
+# Throwaway Postgres and Redis for the platform benchmarks.
+# Data lives in tmpfs, so `docker compose down` leaves nothing on disk.
+name: gitterm-bench
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: gitterm
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: bench
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - fsync=off
+      - -c
+      - max_connections=200
+    ports:
+      - "127.0.0.1:5439:5432"
+    tmpfs:
+      - /var/lib/postgresql
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "127.0.0.1:6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
