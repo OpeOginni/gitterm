@@ -4,6 +4,19 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.15.0
+
+### Breaking
+
+- Sandbox account settings infer direct or managed access from `apiKey` or `apiKeyEnv` instead of requiring `mode`.
+- Resolve settings with `await resolveSandboxAccount(settings)` before passing the account to `createSandboxBackend` or `describeSandboxAccount`.
+- Managed sandbox accounts use the server's default provider instead of defaulting to E2B. Deploy the updated API before using this SDK with managed sandbox accounts.
+
+### Added
+
+- A single sandbox account can be configured inline without `account` and `accounts`.
+- `client.sandboxes.providers()` lists the providers available to the account and the server's default.
+
 ## 0.12.2
 
 ### Changed

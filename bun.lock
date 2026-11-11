@@ -293,7 +293,7 @@
       "name": "@gitterm/bot",
       "version": "0.3.0",
       "dependencies": {
-        "@gitterm/sdk": "workspace:^0.14.0",
+        "@gitterm/sdk": "workspace:^0.15.0",
       },
       "devDependencies": {
         "@types/bun": "^1.2.6",
@@ -302,7 +302,7 @@
     },
     "packages/cli": {
       "name": "@gitterm/cli",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "bin": {
         "gitterm": "dist/index.js",
       },
@@ -349,7 +349,7 @@
       },
       "dependencies": {
         "@gitterm/bot": "workspace:^",
-        "@gitterm/sdk": "workspace:^0.14.0",
+        "@gitterm/sdk": "workspace:^0.15.0",
         "discord.js": "^14.28.1",
       },
       "devDependencies": {
@@ -394,7 +394,7 @@
     },
     "packages/opencode-sandbox": {
       "name": "@gitterm/opencode-sandbox",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "devDependencies": {
         "@gitterm/sdk": "workspace:*",
         "@opencode/plugin": "^2.2.6",
@@ -438,7 +438,7 @@
     },
     "packages/sdk": {
       "name": "@gitterm/sdk",
-      "version": "0.14.0",
+      "version": "0.15.0",
       "dependencies": {
         "@boatdev/sdk": "^1.13.0",
         "@daytonaio/sdk": "^0.207.0",
@@ -464,7 +464,7 @@
       },
       "dependencies": {
         "@gitterm/bot": "workspace:^",
-        "@gitterm/sdk": "workspace:^0.14.0",
+        "@gitterm/sdk": "workspace:^0.15.0",
         "@slack/bolt": "^5.1.0",
       },
       "devDependencies": {
