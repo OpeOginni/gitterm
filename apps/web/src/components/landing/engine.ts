@@ -351,7 +351,7 @@ function withSteps(P: SandboxProvider, id: SandboxProviderId): Script {
         },
       },
       {
-        text: "This session now continues in a cloud workspace on {P}, on `gitterm/checkout-coupons`. Open the pairing link on your phone. Your laptop copy is unchanged.",
+        text: "This session now continues in a cloud workspace on {P}, on `checkout-coupons`. Open the pairing link on your phone. Your laptop copy is unchanged.",
       },
       { foot: "6.8s" },
     ],
@@ -416,14 +416,14 @@ function scenesFor(P: SandboxProvider, id: SandboxProviderId) {
       text("Tests pass and the checkout preview is up. Review the snapshot with `git diff`."),
     user(TRAIN) +
       user("/cloud") +
-      `<div class="t-block"><div class="hd"># Cloud handoff</div><div class="o">Conversation         <span style="color:var(--t-text)">41 messages</span>\nUnpublished commits  <span style="color:var(--t-text)">2 on checkout-coupons</span>\nUncommitted changes  <span style="color:var(--t-text)">3 files, approved</span>\n\n<span class="hl">→ ${esc(P.name)} workspace ready on gitterm/checkout-coupons</span>\nPair your phone      <span class="url">gitterm.dev/pair/7QK-4M2</span></div></div>` +
+      `<div class="t-block"><div class="hd"># Cloud handoff</div><div class="o">Conversation         <span style="color:var(--t-text)">41 messages</span>\nUnpublished commits  <span style="color:var(--t-text)">2 on checkout-coupons</span>\nUncommitted changes  <span style="color:var(--t-text)">3 files, approved</span>\n\n<span class="hl">→ ${esc(P.name)} workspace ready on checkout-coupons</span>\nPair your phone      <span class="url">gitterm.dev/pair/7QK-4M2</span></div></div>` +
       text(
         `This session now continues in a cloud workspace on ${P.name}. Your laptop copy is unchanged.`,
       ),
   ];
 }
 
-// Part 2. Truthful to what ships: OpenCode sessions move with /cloud (one way).
+// Part 2. Truthful to what ships: OpenCode sessions move with /cloud (and come back with /cloud-return).
 // Codex and Claude Code don't move; T3 Code starts them in a new cloud workspace.
 type Sess = {
   id: string;
@@ -434,6 +434,8 @@ type Sess = {
   prov?: [string, string];
   work?: string;
   done?: string;
+  /** Shown on the laptop once /cloud-return brought the session home. */
+  back?: string;
 };
 const SESS: Sess[] = [
   {
@@ -453,6 +455,7 @@ const SESS: Sess[] = [
     prov: ["Vercel", "/vercel.svg"],
     work: "Building the admin form",
     done: "Form and tests done. Opened PR #483.",
+    back: "Back mid-task, continuing here",
   },
 ];
 const FRESH: Sess[] = [
@@ -915,7 +918,7 @@ export function startLanding(root: HTMLElement): () => void {
         sfx.teleport();
         addLine(
           o,
-          `<br><span class="hl">→ <span data-pname>${esc(PROVIDERS[prov].name)}</span> workspace ready on gitterm/checkout-coupons</span>\n${esc(pad("Pair your phone"))}<span class="url">gitterm.dev/pair/7QK-4M2</span>`,
+          `<br><span class="hl">→ <span data-pname>${esc(PROVIDERS[prov].name)}</span> workspace ready on checkout-coupons</span>\n${esc(pad("Pair your phone"))}<span class="url">gitterm.dev/pair/7QK-4M2</span>`,
         );
         slots.cloud.classList.add("on", "fresh");
         if (!(await wait(600, id))) return;
@@ -1061,7 +1064,8 @@ export function startLanding(root: HTMLElement): () => void {
   );
   for (const c of chaps) chapIO.observe(c);
 
-  // ---------- Part 2: sessions move to the cloud, T3 Code starts new ones there ----------
+  // ---------- Part 2: sessions move to the cloud, T3 Code starts new ones there, and the
+  // OpenCode sessions come back with /cloud-return ----------
   const ho = $("handoff");
   const hoLocal = $("ho-local");
   const hoCards = $("ho-cards");
@@ -1107,6 +1111,16 @@ export function startLanding(root: HTMLElement): () => void {
       "beforeend",
       `<div class="card${fresh ? " fresh" : ""}" data-c="${s.id}"><div class="c-top">${agIcon(s)}<b>${esc(s.title)}</b><span class="c-tag">${fresh ? "New" : "/cloud"}</span><span class="c-prov"><img src="${pl}" alt="">${pn}</span></div><div class="c-st"><i class="spin2"></i><span>${esc(s.agent)}: ${esc(s.work ?? "")}</span></div></div>`,
     );
+  }
+  /** A card on its way home with /cloud-return, then home. */
+  function cardReturn(id: string, home: boolean) {
+    const el = need(`[data-c="${id}"]`, hoCards);
+    el.classList.remove("done");
+    el.classList.add(home ? "returned" : "returning");
+    need(".c-tag", el).textContent = home ? "Returned" : "/cloud-return";
+    need(".c-st", el).innerHTML = home
+      ? "<span>Back on your laptop</span>"
+      : '<i class="spin2"></i><span>Bringing it back to your laptop</span>';
   }
   function cardDone(id: string, text = "") {
     const el = need(`[data-c="${id}"]`, hoCards);
@@ -1158,18 +1172,28 @@ export function startLanding(root: HTMLElement): () => void {
     hoCpu(14);
     hoClock("18:45");
     if (!(await hoWait(1400, id))) return;
-    // Meanwhile the cloud finishes the work
+    // Two ways a cloud session ends. This one is finished in the cloud and stays there.
     hoClock("18:58");
     cardDone("cc", FRESH[1]?.done);
     if (!(await hoWait(1000, id))) return;
     hoClock("19:03");
     cardDone("oc", SESS[0]?.done);
+    if (!(await hoWait(1400, id))) return;
+    // This one comes home mid-task with /cloud-return, with its commits, changes and
+    // conversation, and carries on on the laptop.
+    const back = SESS[1]!;
+    hoClock("19:06");
+    cardReturn(back.id, false);
+    setRow(back.id, "moving", "/cloud-return", '<i class="spin2"></i>Returning');
+    packet("back");
     if (!(await hoWait(1000, id))) return;
+    cardReturn(back.id, true);
+    setRow(back.id, "back", back.back ?? "Back on your laptop", "<i></i>Running");
+    hoCpu(38);
+    hoSfx.done();
+    if (!(await hoWait(1200, id))) return;
     hoClock("19:10");
     cardDone("cx", FRESH[0]?.done);
-    if (!(await hoWait(1000, id))) return;
-    hoClock("19:16");
-    cardDone("o2", SESS[1]?.done);
     hoDone = true;
     hoSchedule();
   }

@@ -28,7 +28,7 @@ Pausing stops compute and ends the current usage session. Resuming starts comput
 
 ## Idle pausing
 
-A running workspace pauses on its own after a period with no activity. Traffic through the workspace's URLs and agent runs in progress count as activity.
+A running workspace pauses on its own after a period with no activity. Traffic through the workspace's URLs and agent runs in progress count as activity. Gitterm's own status checks do not: reading a run's state, waiting for the workspace to start, and the cloud plugin's status line only observe the workspace, so watching it doesn't stop it from pausing.
 
 | Deployment      | Idle timeout                                                                     |
 | --------------- | -------------------------------------------------------------------------------- |

@@ -1,10 +1,12 @@
 ---
 title: Cloud plugin reference
 nav: Cloud plugin
-description: Install, options, environment variables, and the /cloud command of @gitterm/opencode-cloud.
+description: Install, options, environment variables, and the /cloud and /cloud-return commands of @gitterm/opencode-cloud.
 ---
 
-This is the reference for `@gitterm/opencode-cloud`, the OpenCode plugin that adds the `/cloud` command: every option, environment variable, and command. Use it to look up a field. For step-by-step use, see [Move a session](/docs/workspaces/move-a-session).
+This is the reference for `@gitterm/opencode-cloud`, the OpenCode plugin that adds the `/cloud` and `/cloud-return` commands: every option, environment variable, and command. Use it to look up a field. For step-by-step use, see [Move a session](/docs/workspaces/move-a-session) and [Bring a session back](/docs/workspaces/return-a-session).
+
+Version 0.2.0 or later, with OpenCode 2.2.6 or later. It also needs a Gitterm server that includes cloud return (managed Gitterm does); against an older self-hosted server, `/cloud` fails until the server is updated.
 
 Formerly part of `@gitterm/opencode-plugin`. The `sandbox_*` tools are now a separate plugin; see [Sandbox plugin reference](/docs/reference/sandbox-plugin).
 
@@ -39,11 +41,11 @@ Every option is optional. To pass options, replace the string with an object. Ke
 }
 ```
 
-Restart OpenCode if `/cloud` does not appear. When you load the plugin from a local path, point `package` at the package directory, not a file.
+Restart OpenCode if `/cloud` does not appear. `/cloud-return` appears only while a session of the checkout is in the cloud. When you load the plugin from a local path, point `package` at the package directory, not a file.
 
 ## Sign in
 
-`/cloud` needs a Gitterm login.
+Both commands need a Gitterm login.
 
 ```sh
 npm install -g @gitterm/cli
@@ -80,12 +82,20 @@ Set variables before OpenCode starts.
 
 ## Commands
 
-| Command  | What it does                                                                                                                                      |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/cloud` | Moves this session into a new cloud workspace. Run again in the same session to reconnect. See [Move a session](/docs/workspaces/move-a-session). |
+| Command         | What it does                                                                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/cloud`        | Moves this session into a cloud workspace. Run again in the same session to reconnect, or to retry a move that failed. See [Move a session](/docs/workspaces/move-a-session).         |
+| `/cloud-return` | Brings the session, and the cloud's commits, changes and conversation, back to this checkout, then ends the workspace. See [Bring a session back](/docs/workspaces/return-a-session). |
+
+## In the OpenCode terminal
+
+While a session is in the cloud, the plugin's terminal part shows a **Cloud** block in the session's sidebar and a status line above the prompt: working, needs your input, idle, paused, or deleted. It notifies you when the cloud agent finishes or needs your input. Sending a message in that session locally asks first. Status checks are marked as passive, so they don't keep the workspace from pausing when it is idle.
+
+The desktop app gets the check before sending and both commands, but not the sidebar, status line or notifications.
 
 ## Related
 
 - [Move a session](/docs/workspaces/move-a-session)
+- [Bring a session back](/docs/workspaces/return-a-session)
 - [Connections](/docs/integrations/connections)
 - [Lifecycle](/docs/workspaces/lifecycle)

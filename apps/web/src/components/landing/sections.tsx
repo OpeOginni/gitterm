@@ -15,6 +15,7 @@ import {
 } from "@/lib/site/providers";
 import { SITE_URL } from "@/lib/docs/content";
 import { cn } from "@/lib/utils";
+import { ClickToCopy } from "./click-to-copy";
 import { ReplayButton } from "./demo";
 import { SoundToggle } from "./sound-toggle";
 import { WorkspacesCard } from "./workspaces-card";
@@ -32,7 +33,10 @@ function Command({ value }: { value: string }) {
   return (
     <div className="flex items-center gap-2 rounded-lg bg-fill py-2 pr-1.5 pl-3.5 font-mono text-[12.5px] leading-[1.6] text-fg-2">
       <span className="min-w-0 flex-1">
-        <span className="text-fg-4 select-none">$ </span>
+        {/* A touch of the accent at rest; full gold while the card is hovered */}
+        <span className="text-primary/60 transition-colors duration-300 select-none group-hover/lane:text-primary">
+          ${" "}
+        </span>
         {value.split(" ").map((word, i) => (
           <Fragment key={i}>
             {i > 0 && " "}
@@ -45,7 +49,7 @@ function Command({ value }: { value: string }) {
         value={value}
         icon
         installLocation="hero"
-        className="size-8 justify-center bg-transparent px-0 hover:bg-fill-2 [&_[data-label]]:sr-only"
+        className="prompt-copy size-8 justify-center bg-transparent px-0 group-focus-within/lane:bg-primary group-focus-within/lane:text-primary-foreground group-hover/lane:bg-primary group-hover/lane:text-primary-foreground hover:bg-[#c09a45] hover:text-primary-foreground [&_[data-label]]:sr-only"
       />
     </div>
   );
@@ -55,6 +59,14 @@ function Command({ value }: { value: string }) {
  * One of the two hero cards. The four parts sit on a shared subgrid, so titles, text, logos and
  * commands line up across both cards whatever their length.
  */
+/**
+ * Hover (or keyboard focus inside) draws a gold line along a cell's top, then down its right
+ * edge, as one stroke; leaving undraws it in reverse. The cell must be `relative`, and its own
+ * `::before` and `::after` stay free for this.
+ */
+const DRAW_EDGE =
+  "transition-colors before:absolute before:-inset-x-px before:-top-px before:h-0.5 before:origin-left before:scale-x-0 before:bg-primary before:transition-transform before:delay-[220ms] before:duration-[400ms] before:ease-[cubic-bezier(0.22,1,0.36,1)] after:pointer-events-none after:absolute after:-top-px after:-right-px after:-bottom-px after:w-0.5 after:origin-top after:scale-y-0 after:bg-primary after:transition-transform after:delay-0 after:duration-[360ms] after:ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:before:scale-x-100 focus-within:before:delay-0 focus-within:after:scale-y-100 focus-within:after:delay-[300ms] hover:bg-[#131317] hover:before:scale-x-100 hover:before:delay-0 hover:after:scale-y-100 hover:after:delay-[300ms]";
+
 function Lane({
   href,
   title,
@@ -71,7 +83,15 @@ function Lane({
   note: ReactNode;
 }) {
   return (
-    <div className="relative row-span-4 grid grid-rows-subgrid gap-y-0 bg-background px-7 pt-6 pb-7 transition-colors before:absolute before:-inset-x-px before:-top-px before:h-0.5 before:origin-left before:scale-x-0 before:bg-primary before:transition-transform before:duration-[400ms] before:ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:before:scale-x-100 hover:bg-[#131317] hover:before:scale-x-100">
+    // On hover a line draws along the top, then down the right edge, as one stroke. Leaving
+    // undraws it in reverse: the edge first, then the top. Hovering anywhere on the card also
+    // lights its copy button, the way the setup prompt's does; only the button itself copies.
+    <div
+      className={cn(
+        "lane group/lane relative row-span-4 grid grid-rows-subgrid gap-y-0 bg-background px-7 pt-6 pb-7",
+        DRAW_EDGE,
+      )}
+    >
       {/* The title link covers the card; the command and links sit above it. */}
       <Link
         href={href as Route}
@@ -103,7 +123,7 @@ const SETUP_PROMPT = `Set up Gitterm for me. Read ${SITE_URL}/llms.txt first and
 
 Before you change anything, ask me which of these I want:
 1. Remote sandboxes for the OpenCode agent on this machine (@gitterm/opencode-sandbox). Ask which provider (E2B, Daytona, Vercel, Boat, exe.dev, Railway or AWS) and whether I'll use my own provider key or a Gitterm plan.
-2. Moving an OpenCode session to a cloud workspace with /cloud (@gitterm/opencode-cloud).
+2. Moving an OpenCode session to a cloud workspace with /cloud, and back with /cloud-return (@gitterm/opencode-cloud).
 3. A cloud workspace that runs OpenCode, or T3 Code with Codex or Claude Code, started from ${SITE_URL}/dashboard.
 
 Both plugins are for OpenCode. If I use a different agent, only option 3 applies.
@@ -151,10 +171,12 @@ export function Hero() {
             OpenCode, Codex or Claude Code in a cloud workspace. Reach it from your phone or Slack.
           </Lane>
         </div>
-        {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow */}
-        <div className="mx-auto mt-3 flex max-w-[1080px] items-center gap-4 border border-line-2 bg-background px-7 py-3 text-left max-[760px]:px-5">
+        {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow.
+            Clicking anywhere on the strip copies it. */}
+        <ClickToCopy className="prompt-strip group/strip mx-auto mt-3 flex max-w-[1080px] items-center gap-4 border border-line-2 bg-background px-7 py-3 text-left transition-colors hover:bg-[#131317] max-[760px]:px-5">
           <span className="shrink-0 text-[14px] text-fg-2">Or let your agent set it up</span>
-          {/* Paste it into any of these. Grey and stacked; hover spreads them out in colour */}
+          {/* Paste it into any of these. Grey and stacked; hovering the strip spreads them out in
+              colour, and sweeps a glow across the copy button */}
           <span
             className="stack fan shrink-0 max-[480px]:hidden"
             role="img"
@@ -169,8 +191,17 @@ export function Hero() {
           <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-fg-4 max-[640px]:hidden">
             {SETUP_PROMPT.split("\n")[0]}
           </span>
-          <CopyButton value={SETUP_PROMPT} label="Copy prompt" icon className="ml-auto" />
-        </div>
+          <CopyButton
+            value={SETUP_PROMPT}
+            label="Copy prompt"
+            icon
+            // Clicking anywhere on the strip presses this button.
+            target
+            // Gold while the strip is hovered. Set here: landing.css sits in a lower layer than
+            // the button's own Tailwind colours, so it can't override them.
+            className="prompt-copy ml-auto group-focus-within/strip:bg-primary group-focus-within/strip:text-primary-foreground group-hover/strip:bg-primary group-hover/strip:text-primary-foreground hover:bg-[#c09a45] hover:text-primary-foreground"
+          />
+        </ClickToCopy>
       </Wrap>
     </section>
   );
@@ -278,7 +309,8 @@ const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }
       <>
         Add the cloud plugin and type <code>/cloud</code>. The conversation, your unpublished
         commits and, if you choose, uncommitted changes move to a cloud workspace. Pick it up from
-        your phone, a browser or OpenCode desktop. Your laptop copy stays as it was.
+        your phone, a browser or OpenCode desktop. Your laptop copy stays as it was until you bring
+        the session back with <code>/cloud-return</code>.
       </>
     ),
   },
@@ -453,7 +485,7 @@ export function Desktop() {
                   >
                     <path d="M4.5 12.5a3 3 0 0 1-.3-6 4 4 0 0 1 7.7.9 2.6 2.6 0 0 1-.4 5.1h-7Z" />
                   </svg>
-                  <span id="desk-loc">E2B workspace</span>&nbsp;· gitterm/checkout-coupons
+                  <span id="desk-loc">E2B workspace</span>&nbsp;· checkout-coupons
                 </span>
                 <span className="oc-title">Run tests and preview checkout</span>
                 <span className="oc-review">Session changes 2 files</span>
@@ -529,10 +561,11 @@ export function Agents() {
     <Band id="agents" className="border-line-2">
       <Wrap>
         <PartHeading>Run agents in the cloud</PartHeading>
-        <SectionHead title="Send sessions to the cloud. Keep working.">
+        <SectionHead title="Send sessions to the cloud. Bring them back.">
           Move an OpenCode session to a cloud workspace with <code>/cloud</code>, or start Codex or
           Claude Code in a new one from T3 Code. They keep running on their own, and your laptop is
-          free for whatever is next.
+          free for whatever is next. <code>/cloud-return</code> brings a session back whenever you
+          want it.
         </SectionHead>
         {/* Two clients. Codex and Claude Code sit under T3 Code, because T3 Code is what runs them. */}
         <div className="-mt-[18px] mb-[26px] flex flex-wrap items-start gap-x-10 gap-y-4">
@@ -540,7 +573,8 @@ export function Agents() {
             Works with
           </span>
           <WorksWith logo="/opencode.svg" name="OpenCode">
-            Move a session with <code className="font-mono text-[0.95em] text-fg-2">/cloud</code>
+            Move a session with <code className="font-mono text-[0.95em] text-fg-2">/cloud</code>,
+            back with <code className="font-mono text-[0.95em] text-fg-2">/cloud-return</code>
           </WorksWith>
           <WorksWith logo={T3_LOGO} logoClassName="rounded-[5px]" name="T3 Code">
             Runs
@@ -608,8 +642,168 @@ export function Agents() {
           <SoundToggle />
           <ReplayButton id="ho-replay" />
         </div>
+        <RoundTrip />
       </Wrap>
     </Band>
+  );
+}
+
+// ---------- The way back (a subsection of "Run agents in the cloud") ----------
+
+/** 24-unit line icons for the round trip. */
+const TRIP_ICONS = {
+  laptop: (
+    <>
+      <rect x="4.5" y="5" width="15" height="10.5" rx="1.5" />
+      <path d="M2.5 19h19" />
+    </>
+  ),
+  browser: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2" />
+      <path d="M3 9h18M6 6.75h.01M8.5 6.75h.01" />
+    </>
+  ),
+  phone: (
+    <>
+      <rect x="7" y="2.5" width="10" height="19" rx="2.2" />
+      <path d="M11 18.5h2" />
+    </>
+  ),
+  computer: (
+    <>
+      <rect x="3" y="4" width="18" height="12" rx="1.5" />
+      <path d="M12 16v4M8 20h8" />
+    </>
+  ),
+};
+
+const TRIP_NAMES: Record<keyof typeof TRIP_ICONS, string> = {
+  laptop: "Your laptop",
+  browser: "A browser",
+  phone: "Your phone",
+  computer: "Another computer",
+};
+
+function TripIcon({
+  icon,
+  title,
+  className,
+}: {
+  icon: keyof typeof TRIP_ICONS;
+  title: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "grid size-10 shrink-0 place-items-center rounded-[10px] border border-line-2 bg-card text-fg-2",
+        className,
+      )}
+      title={title}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="size-[18px]"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        {TRIP_ICONS[icon]}
+      </svg>
+    </span>
+  );
+}
+
+/** A stop on the trip: its icon (or icons) above a short label. */
+/** A laptop at either end of the trip. The far one lights up green when the session is home. */
+function TripStop({ label, home = false }: { label: string; home?: boolean }) {
+  return (
+    <li className="flex shrink-0 flex-col items-center gap-2">
+      <TripIcon icon="laptop" title={label} className={cn(home && "rt-home")} />
+      <span className="text-[12.5px] text-fg-3">{label}</span>
+    </li>
+  );
+}
+
+/**
+ * The middle of the trip: Gitterm, with the places a session can continue on an arc above it.
+ * When the session arrives, the hub glows and the devices bump up one after another.
+ */
+function TripHub() {
+  const devices = ["browser", "phone", "computer"] as const;
+  return (
+    <li className="relative flex shrink-0 flex-col items-center gap-2">
+      <span className="rt-arc" aria-hidden>
+        {devices.map((icon, i) => (
+          <span key={icon} className="rt-device" style={{ ["--i" as string]: i }}>
+            <TripIcon icon={icon} title={TRIP_NAMES[icon]} className="size-8 rounded-[8px]" />
+          </span>
+        ))}
+      </span>
+      <span
+        className="rt-hub grid size-10 shrink-0 place-items-center rounded-[10px] border border-[color-mix(in_oklab,var(--primary)_45%,transparent)] bg-card text-primary"
+        title="Gitterm"
+      >
+        <Mark className="size-[17px]" />
+      </span>
+      <span className="text-[12.5px] text-fg-3">Gitterm</span>
+    </li>
+  );
+}
+
+/** The wire between two stops: the command on it, and a dot running along it. */
+function TripLeg({ cmd, tone }: { cmd: string; tone: "out" | "back" }) {
+  return (
+    <li className={cn("rt-leg", tone === "back" && "rt-back")} aria-hidden>
+      <code className="rt-cmd">{cmd}</code>
+      <span className="rt-wire">
+        <i className="rt-dot" />
+      </span>
+    </li>
+  );
+}
+
+function RoundTrip() {
+  return (
+    <div className="mt-[clamp(56px,7vw,88px)]">
+      <h3 className="m-0 mb-2 font-display text-[clamp(1.35rem,2.2vw,1.65rem)] leading-[1.2] font-medium tracking-[-0.02em] text-fg">
+        Take it with you, then bring it back
+      </h3>
+      <p className="m-0 mb-6 max-w-[40rem] text-[15px] leading-[1.6] text-pretty text-fg-3">
+        Move an OpenCode session to the cloud, keep the agent going on your phone, in a browser or
+        on another computer, then pull the session back to your laptop whenever you like, finished
+        or not.
+      </p>
+      <div
+        className={cn(cells, "grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] max-[900px]:grid-cols-1")}
+      >
+        <div className="flex min-w-0 flex-col justify-center gap-3 px-6 py-6 max-[640px]:px-[18px]">
+          <p className={cn(cellText, "m-0")}>
+            The whole agent session travels: its conversation, and the checkout it works in, with
+            commits and uncommitted changes. Anything you changed on your laptop in the meantime is
+            kept.
+          </p>
+          <p className="m-0 text-[13.5px] leading-[1.55] text-fg-4 [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-fg-3">
+            Keep a snapshot as you return, and the next <code>/cloud</code> starts with the setup
+            done.
+          </p>
+        </div>
+        <ol
+          className="rt-trip m-0 flex min-w-0 list-none flex-wrap content-center items-start justify-center gap-3 px-6 pt-[88px] pb-7 max-[640px]:px-[18px]"
+          aria-label="Your laptop, then /cloud to Gitterm, which lets you continue in a browser, on your phone or on another computer, then /cloud-return to your laptop again."
+        >
+          <TripStop label="Your laptop" />
+          <TripLeg cmd="/cloud" tone="out" />
+          <TripHub />
+          <TripLeg cmd="/cloud-return" tone="back" />
+          <TripStop label="Your laptop" home />
+        </ol>
+      </div>
+    </div>
   );
 }
 
@@ -801,7 +995,13 @@ export function Features() {
         </SectionHead>
         <div className={cn(cells, "grid-cols-3 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1")}>
           {FEATURES.map(([t, d]) => (
-            <div key={t} className="px-6 pt-6 pb-7 max-[640px]:px-[18px] max-[640px]:py-5">
+            <div
+              key={t}
+              className={cn(
+                "relative px-6 pt-6 pb-7 max-[640px]:px-[18px] max-[640px]:py-5",
+                DRAW_EDGE,
+              )}
+            >
               <h3 className={cn(h3, "text-[16.5px]")}>{t}</h3>
               <p className={cellText}>{d}</p>
             </div>

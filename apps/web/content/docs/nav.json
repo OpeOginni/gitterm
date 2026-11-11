@@ -22,6 +22,7 @@
         "workspaces/overview",
         "workspaces/agents",
         "workspaces/move-a-session",
+        "workspaces/return-a-session",
         "workspaces/connect",
         "workspaces/previews",
         "workspaces/lifecycle"

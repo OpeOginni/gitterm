@@ -20,7 +20,7 @@ export function GET() {
       "Start here:",
       "",
       "- Remote sandboxes for a local OpenCode agent: `opencode plugin add @gitterm/opencode-sandbox`, then add a provider account to the plugin options. No Gitterm account is needed with your own provider key.",
-      "- Move an OpenCode session to a cloud workspace: `opencode plugin add @gitterm/opencode-cloud`, sign in with `gitterm login` (`npm install -g @gitterm/cli`), then type `/cloud`.",
+      "- Move an OpenCode session to a cloud workspace: `opencode plugin add @gitterm/opencode-cloud`, sign in with `gitterm login` (`npm install -g @gitterm/cli`), then type `/cloud`. Bring it back with `/cloud-return`.",
       `- Every docs page is markdown at its URL plus \`.md\`, or with \`Accept: text/markdown\`. Full docs in one file: ${SITE_URL}/llms-full.txt`,
     ].join("\n"),
     ...sections,

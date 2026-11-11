@@ -16,7 +16,7 @@ This page defines the terms the rest of the docs use. Read it once before settin
 
 - **Sandbox.** A plain remote machine your local agent uses for builds, tests, and preview servers. It runs no coding agent. See [Sandboxes overview](/docs/sandboxes/overview).
 - **Cloud workspace.** A remote machine that runs the agent itself: OpenCode, or T3 Code (which drives Codex and Claude Code). You open it in the browser or connect a local client. See [Cloud workspaces](/docs/workspaces/overview).
-- **`/cloud` handoff.** Moves one OpenCode session into a new cloud workspace. It is one-way: later local edits do not sync up, and cloud changes are not merged back. T3 Code sessions do not move; start a new cloud agent instead. See [Move a session](/docs/workspaces/move-a-session).
+- **`/cloud` handoff.** Moves one OpenCode session into a cloud workspace, and `/cloud-return` brings it back with the cloud's commits, changes and conversation. Nothing syncs in between: later local edits do not go up, and cloud changes come back only when you return the session, which replaces the local state rather than merging. T3 Code sessions do not move; start a new cloud agent instead. See [Move a session](/docs/workspaces/move-a-session) and [Bring a session back](/docs/workspaces/return-a-session).
 
 ## Managed and direct accounts
 
@@ -50,7 +50,7 @@ A provider is the company whose machines run the sandbox or workspace. Sandboxes
 
 With sandboxes, these never leave your machine: the conversation, Git history, your model credentials, and files that look like secrets (such as `.env` files and private keys). See [Security](/docs/sandboxes/security#what-a-sandbox-never-receives).
 
-With `/cloud`, the selected conversation and Git history do move, by design. Your local files and sessions stay unchanged.
+With `/cloud`, the selected conversation and Git history do move, by design. Your local files and sessions stay unchanged until you run `/cloud-return`.
 
 ## Lifetimes and cleanup
 

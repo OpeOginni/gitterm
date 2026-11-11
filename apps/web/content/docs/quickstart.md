@@ -89,4 +89,4 @@ A cloud workspace runs the agent itself in the cloud.
 
 ### Or move a local OpenCode session
 
-To continue a session you already started, install `@gitterm/opencode-cloud` and run `/cloud` in OpenCode. It moves the conversation and checkout into a new cloud workspace, one-way. See [Move a session](/docs/workspaces/move-a-session) for the steps.
+To continue a session you already started, install `@gitterm/opencode-cloud` and run `/cloud` in OpenCode. It moves the conversation and checkout into a cloud workspace, and `/cloud-return` brings them back when you're done. See [Move a session](/docs/workspaces/move-a-session) for the steps.
