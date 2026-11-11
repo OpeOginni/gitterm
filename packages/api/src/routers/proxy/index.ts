@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { auth } from "@gitterm/auth";
 import {
   agentProvisionerKeyForName,
@@ -34,6 +35,50 @@ function debugProxyResolve(message: string, data?: unknown) {
     return;
   }
   console.log(message, data);
+}
+
+const ACTIVITY_WRITE_INTERVAL_MS = 10_000;
+const SESSION_CACHE_TTL_MS = 15_000;
+const MAX_LOCAL_ENTRIES = 10_000;
+const lastActivityWrite = new Map<string, number>();
+const sessionUsers = new Map<string, { userId: string | null; expiresAt: number }>();
+
+/**
+ * Idle timeouts are minutes long, so one activity write per workspace every few seconds
+ * is enough, and the proxied request does not wait for it.
+ */
+function touchWorkspace(workspaceId: string) {
+  const now = Date.now();
+  if (now - (lastActivityWrite.get(workspaceId) ?? 0) < ACTIVITY_WRITE_INTERVAL_MS) return;
+  if (lastActivityWrite.size >= MAX_LOCAL_ENTRIES) lastActivityWrite.clear();
+  lastActivityWrite.set(workspaceId, now);
+  void recordWorkspaceActivity(workspaceId).catch((error) => {
+    console.error("Workspace activity write failed:", error);
+  });
+}
+
+/**
+ * The signed-in user for this request. The answer for a Cookie header is remembered for
+ * a few seconds, so steady traffic on a private route does not query the session and
+ * user tables on every request. The cost: a revoked session keeps reaching its
+ * workspaces for up to SESSION_CACHE_TTL_MS.
+ *
+ * The key is the whole header, not one cookie picked out of it: better-auth decides
+ * which cookie is the session, and a key built from a different one would let a request
+ * borrow another user's answer.
+ */
+async function sessionUserId(headers: Headers): Promise<string | null> {
+  const cookie = headers.get("cookie");
+  if (!cookie) return (await auth.api.getSession({ headers }))?.user.id ?? null;
+
+  const key = createHash("sha256").update(cookie).digest("base64");
+  const cached = sessionUsers.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.userId;
+
+  const userId = (await auth.api.getSession({ headers }))?.user.id ?? null;
+  if (sessionUsers.size >= MAX_LOCAL_ENTRIES) sessionUsers.clear();
+  sessionUsers.set(key, { userId, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
+  return userId;
 }
 
 async function getCachedOrFetchRouteAccess(workspaceId: string, port?: number | null) {
@@ -322,6 +367,11 @@ function buildProxyResolveHeaders(
   return responseHeaders;
 }
 
+/**
+ * Answers Caddy's forward_auth. A 200 must have an empty body: Caddy does not read the
+ * body of a 2xx auth response, and a connection with an unread body cannot be reused,
+ * so any body here costs a new TCP connection to this server per proxied request.
+ */
 export const proxyResolverRouter = async (c: Context) => {
   debugProxyResolve("[PROXY-RESOLVE] Request received");
 
@@ -342,7 +392,6 @@ export const proxyResolverRouter = async (c: Context) => {
     const host = c.req.header("Host") || "";
 
     let subdomain = extractWorkspaceSubdomain(host, originalUri, {
-      "x-subdomain": c.req.header("X-Subdomain"),
       "x-routing-mode": routingMode,
     });
 
@@ -367,14 +416,19 @@ export const proxyResolverRouter = async (c: Context) => {
       return htmlError(c, "unavailable", 404);
     }
 
-    if (await hasCachedProxyWorkspaceMiss(subdomain)) {
+    // Sent together so the two cache reads cost one Redis round trip.
+    const [missed, cached] = await Promise.all([
+      hasCachedProxyWorkspaceMiss(subdomain),
+      getCachedProxyWorkspace(subdomain),
+    ]);
+    if (missed) {
       cacheProxyWorkspaceMiss(subdomain);
       return htmlError(c, "unavailable", 404);
     }
 
     // Check workspace - only match active (running) workspaces
     // Subdomain is not unique, so we must filter by status to get the correct one
-    let ws = await getCachedProxyWorkspace(subdomain);
+    let ws = cached;
 
     if (!ws) {
       const [workspaceRecord] = await db
@@ -451,10 +505,10 @@ export const proxyResolverRouter = async (c: Context) => {
 
       const upstreamUrl = new URL(ws.upstreamUrl);
       const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
-      await recordWorkspaceActivity(ws.id);
+      touchWorkspace(ws.id);
 
-      return c.text(
-        "OK",
+      return c.body(
+        null,
         200,
         buildProxyResolveHeaders(
           {
@@ -479,10 +533,10 @@ export const proxyResolverRouter = async (c: Context) => {
       const upstreamUrl = new URL(ws.upstreamUrl);
       const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
       const clientAuthorization = c.req.header("Authorization");
-      await recordWorkspaceActivity(ws.id);
+      touchWorkspace(ws.id);
 
-      return c.text(
-        "OK",
+      return c.body(
+        null,
         200,
         buildProxyResolveHeaders(
           {
@@ -503,10 +557,10 @@ export const proxyResolverRouter = async (c: Context) => {
     if (isPublicPort && portUpstream) {
       const portUrl = new URL(portUpstream);
       const port = portUrl.port || (portUrl.protocol === "https:" ? "443" : "80");
-      await recordWorkspaceActivity(ws.id);
+      touchWorkspace(ws.id);
 
-      return c.text(
-        "OK",
+      return c.body(
+        null,
         200,
         buildProxyResolveHeaders(
           {
@@ -522,11 +576,9 @@ export const proxyResolverRouter = async (c: Context) => {
     }
 
     // Private workspace routes and ports are only reachable by the owner's session.
-    const session = await auth.api.getSession({
-      headers: c.req.raw.headers,
-    });
+    const userId = await sessionUserId(c.req.raw.headers);
 
-    if (!session || session.user.id !== ws.userId) {
+    if (!userId || userId !== ws.userId) {
       return htmlError(c, "unavailable", 403);
     }
 
@@ -548,10 +600,10 @@ export const proxyResolverRouter = async (c: Context) => {
       hasUpStreamAccessHeader: upstreamAccessHeaders !== null,
     });
 
-    await recordWorkspaceActivity(ws.id);
+    touchWorkspace(ws.id);
 
-    return c.text(
-      "OK",
+    return c.body(
+      null,
       200,
       buildProxyResolveHeaders(
         {
@@ -559,7 +611,7 @@ export const proxyResolverRouter = async (c: Context) => {
           "X-Container-Host": upstreamUrl.hostname,
           "X-Container-Port": port,
           "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
-          "X-User-ID": session.user.id,
+          "X-User-ID": userId,
           "X-Hosting-Type": ws.hostingType,
         },
         upstreamAccessHeaders,

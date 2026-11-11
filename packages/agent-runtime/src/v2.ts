@@ -128,7 +128,7 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
       }
       const [active, messages, permissions, forms] = await Promise.all([
         call(client.session.active(options())),
-        listMessages(sessionID),
+        listRunMessages(sessionID, messageId),
         call(client.permission.list({ sessionID }, options())),
         call(client.session.form.list({ sessionID }, options())),
       ]);
@@ -233,24 +233,32 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
     },
   };
 
-  async function listMessages(sessionID: string): Promise<Record<string, unknown>[]> {
-    const limit = 200;
+  /**
+   * The run's prompt and everything after it, oldest first. Pages are read newest first
+   * and stop at the prompt, so a snapshot costs the size of the run, not of the session.
+   */
+  async function listRunMessages(
+    sessionID: string,
+    messageId: string,
+  ): Promise<Record<string, unknown>[]> {
+    const limit = 50;
     const messages: Record<string, unknown>[] = [];
     // The server rejects `order` together with `cursor`, so only the first page states it.
     let cursor: string | undefined;
     while (true) {
       const page = await call(
         client.message.list(
-          cursor ? { sessionID, cursor, limit } : { sessionID, order: "asc", limit },
+          cursor ? { sessionID, cursor, limit } : { sessionID, order: "desc", limit },
           options(),
         ),
       );
       messages.push(...page.data);
+      if (page.data.some((message) => message.id === messageId)) break;
       const next = page.cursor.next ?? null;
       if (!next || page.data.length < limit) break;
       cursor = next;
     }
-    return messages;
+    return messages.reverse();
   }
 }
 

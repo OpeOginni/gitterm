@@ -316,6 +316,52 @@ describe("v2 message snapshots", () => {
   });
 });
 
+test("snapshots page newest-first through the prompt and preserve supersession", async () => {
+  const history = Array.from({ length: 150 }, (_, n) => ({ id: `old_${n}`, type: "user" }));
+  const prompt = { id: "run_prompt", type: "user", text: "run" };
+  const replies = Array.from({ length: 50 }, (_, n) => ({
+    id: `reply_${n}`,
+    type: "assistant",
+    time: { created: 1, completed: 2 },
+    content: [{ type: "text", text: `reply ${n}` }],
+  }));
+  const newestFirst = [
+    ...history,
+    prompt,
+    ...replies,
+    { id: "next_prompt", type: "user" },
+  ].toReversed();
+  const pages: URL[] = [];
+  const runtime = createV2Runtime({
+    url: "http://opencode.test",
+    directory: "/w",
+    password: null,
+    fetch: (async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/message")) {
+        pages.push(url);
+        const offset = Number(url.searchParams.get("cursor") ?? 0);
+        const limit = Number(url.searchParams.get("limit"));
+        return Response.json({
+          data: newestFirst.slice(offset, offset + limit),
+          cursor: { next: String(offset + limit) },
+        });
+      }
+      const data = url.pathname.endsWith("/permission") || url.pathname.endsWith("/form") ? [] : {};
+      return Response.json({ data });
+    }) as typeof fetch,
+  });
+  const snapshot = await runtime.snapshot("ses_test", prompt.id);
+  expect(snapshot.messages.map((message) => message.id)).toEqual(
+    [prompt, ...replies].map((message) => message.id),
+  );
+  expect(snapshot.finalText).toBe("reply 49");
+  expect(snapshot.superseded).toBe(true);
+  expect(pages).toHaveLength(2);
+  expect(pages[0]!.searchParams.get("order")).toBe("desc");
+  expect(pages[1]!.searchParams.has("order")).toBe(false);
+});
+
 describe("prompt", () => {
   test("waits for a freshly started OpenCode to list the model before prompting", async () => {
     const requests: string[] = [];

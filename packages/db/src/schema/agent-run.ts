@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   index,
@@ -127,6 +127,10 @@ export const agentRun = pgTable(
     uniqueIndex("agent_run_parent_run_unique").on(table.parentRunId),
     index("agent_run_workspace_native_session_idx").on(table.workspaceId, table.nativeSessionId),
     index("agent_run_workspace_status_idx").on(table.workspaceId, table.status),
+    // The watcher sweep reads every active run on each replica every 30 seconds.
+    index("agent_run_active_idx")
+      .on(table.status)
+      .where(sql`${table.status} in ('pending', 'running', 'retrying', 'awaiting_input')`),
   ],
 );
 

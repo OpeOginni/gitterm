@@ -317,11 +317,13 @@ integration(
 integration("Gitterm serves managed previews: public to anyone, private to the owner", async () => {
   await terminateAll(userId);
   const resolver = new Hono().get("/resolve", proxyResolverRouter);
-  const resolve = (subdomain: string, port: number) =>
+  const resolve = (subdomain: string, port: number, headers: Record<string, string> = {}) =>
     resolver.request("/resolve", {
       headers: {
         "X-Internal-Key": process.env.INTERNAL_API_KEY!,
-        "X-Subdomain": `${port}-${subdomain}`,
+        "X-Routing-Mode": "path",
+        "X-Original-URI": `/ws/${port}-${subdomain}`,
+        ...headers,
       },
     });
 
@@ -352,6 +354,7 @@ integration("Gitterm serves managed previews: public to anyone, private to the o
 
   const open = await resolve(subdomain, 5173);
   expect(open.status).toBe(200);
+  expect(await open.text()).toBe("");
   expect(open.headers.get("X-Upstream-URL")).toBe("https://5173-fake.e2b.app/");
   expect(open.headers.get("e2b-traffic-access-token")).toBe("t");
   expect((await resolve(subdomain, 3000)).status).toBe(403);
@@ -364,6 +367,9 @@ integration("Gitterm serves managed previews: public to anyone, private to the o
     expect(owner.status).toBe(200);
     expect(owner.headers.get("X-Upstream-URL")).toBe("https://3000-fake.e2b.app/");
     expect(owner.headers.get("e2b-traffic-access-token")).toBe("t");
+    const spoofed = await resolve(subdomain, 5173, { "X-Subdomain": `3000-${subdomain}` });
+    expect(spoofed.status).toBe(200);
+    expect(spoofed.headers.get("X-Upstream-URL")).toBe("https://5173-fake.e2b.app/");
   } finally {
     signedIn.mockRestore();
   }

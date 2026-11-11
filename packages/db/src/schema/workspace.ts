@@ -21,7 +21,7 @@ import {
   providerLaunchProfile,
   region,
 } from "./cloud";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { gitIntegration, googleCloudIntegration } from "./integrations";
 
 /** Legacy marker; see `workspace.opencodeApi`. */
@@ -169,6 +169,14 @@ export const workspace = pgTable(
   },
   (table) => [
     uniqueIndex("workspace_user_idempotency_key_unique").on(table.userId, table.idempotencyKey),
+    // The proxy resolves every uncached request by subdomain; creates check it for uniqueness.
+    index("workspace_subdomain_idx").on(table.subdomain),
+    // Provider webhooks and compute job events find the workspace by its provider id.
+    index("workspace_external_instance_idx").on(table.externalInstanceId),
+    // Reaper passes read by status. Terminated rows are most of the table, so leave them out.
+    index("workspace_live_status_idx")
+      .on(table.status)
+      .where(sql`${table.status} <> 'terminated'`),
   ],
 );
 
@@ -228,18 +236,27 @@ export const workspaceTermination = pgTable("workspace_termination", {
 });
 
 // Tracks each usage session (start → stop) for billing
-export const usageSession = pgTable("usage_session", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspace.id, { onDelete: "cascade" }),
-  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
-  startedAt: timestamp("started_at").notNull(),
-  stoppedAt: timestamp("stopped_at"),
-  durationMinutes: integer("duration_minutes"),
-  stopSource: sessionStopSourceEnum("stop_source"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const usageSession = pgTable(
+  "usage_session",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    startedAt: timestamp("started_at").notNull(),
+    stoppedAt: timestamp("stopped_at"),
+    durationMinutes: integer("duration_minutes"),
+    stopSource: sessionStopSourceEnum("stop_source"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    // Closing a workspace's open session runs on every pause, terminate and webhook.
+    index("usage_session_workspace_idx").on(table.workspaceId),
+    // Usage and allowance checks read one user's sessions.
+    index("usage_session_user_stopped_idx").on(table.userId, table.stoppedAt),
+  ],
+);
 
 export const agentConfigKindEnum = pgEnum("agent_config_kind", [
   "opencode",
