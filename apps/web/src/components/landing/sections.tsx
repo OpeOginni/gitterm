@@ -16,6 +16,7 @@ import {
 import { SITE_URL } from "@/lib/docs/content";
 import { cn } from "@/lib/utils";
 import { ClickToCopy } from "./click-to-copy";
+import { OwnKeyCode } from "./own-key-code";
 import { ReplayButton } from "./demo";
 import { SoundToggle } from "./sound-toggle";
 import { WorkspacesCard } from "./workspaces-card";
@@ -381,10 +382,9 @@ export function HowItWorks() {
 
 // ---------- Keys ----------
 
-const OWN_KEY = `"options": {
-  "provider": "e2b",
-  "apiKey": "{env:E2B_API_KEY}"
-}`;
+/** Code boxes fill their row, so all three are the same height. */
+const keyCode =
+  "h-full [&_pre]:h-full max-[640px]:[&_pre]:text-[12px] max-[640px]:[&_pre]:[overflow-wrap:anywhere] max-[640px]:[&_pre]:whitespace-pre-wrap";
 const PLAN = `"options": {
   "size": "medium"
 }`;
@@ -405,7 +405,7 @@ export function Keys() {
             {
               title: "Bring your own provider key",
               body: "No Gitterm account needed. The key comes from your environment and the provider bills you directly.",
-              code: OWN_KEY,
+              code: null,
             },
             {
               title: "Use your Gitterm plan",
@@ -428,18 +428,18 @@ export function Keys() {
               code: SELF_HOSTED,
             },
           ].map((k) => (
+            // A subgrid, so titles, text and code boxes line up across the cards.
             <div
               key={k.title}
-              className="min-w-0 px-6 py-[26px] max-[640px]:px-[18px] max-[640px]:py-5"
+              className="row-span-3 grid min-w-0 grid-rows-subgrid gap-y-0 px-6 py-[26px] max-[640px]:px-[18px] max-[640px]:py-5"
             >
               <h3 className={cn(h3, "mb-1.5")}>{k.title}</h3>
               <p className={cn(cellText, "mb-[18px]")}>{k.body}</p>
-              <CodeBlock
-                code={k.code}
-                lang="json"
-                copy
-                className="max-[640px]:[&_pre]:text-[12px] max-[640px]:[&_pre]:[overflow-wrap:anywhere] max-[640px]:[&_pre]:whitespace-pre-wrap"
-              />
+              {k.code ? (
+                <CodeBlock code={k.code} lang="json" copy className={keyCode} />
+              ) : (
+                <OwnKeyCode className={keyCode} />
+              )}
             </div>
           ))}
         </div>

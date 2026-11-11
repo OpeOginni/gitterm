@@ -3415,4 +3415,11 @@
       scroll-behavior: auto;
     }
   }
+  /* The own-key example's provider name and variable, as they change (own-key-code.tsx) */
+  @keyframes lp-swap {
+    from {
+      opacity: 0;
+      filter: blur(2px);
+    }
+  }
 }
