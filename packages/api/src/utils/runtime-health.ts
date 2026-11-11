@@ -12,6 +12,21 @@ export type HttpRuntimeHealthPollOptions = {
 };
 
 const MAX_FETCH_ATTEMPT_MS = 10_000;
+const FIRST_POLL_DELAY_MS = 250;
+
+/**
+ * Waits between polls: short at first, doubling up to `maxMs`. A workspace that is nearly
+ * ready is noticed within a fraction of a second, and a slow one is not polled any harder
+ * than before.
+ */
+export function pollDelays(maxMs: number): () => number {
+  let next = Math.min(FIRST_POLL_DELAY_MS, maxMs);
+  return () => {
+    const wait = next;
+    next = Math.min(next * 2, maxMs);
+    return wait;
+  };
+}
 
 async function fetchWithTimeout(
   fetchImpl: NonNullable<HttpRuntimeHealthPollOptions["fetch"]>,
@@ -48,6 +63,7 @@ export async function pollHttpRuntimeHealth({
   onUnhealthy,
 }: HttpRuntimeHealthPollOptions): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
+  const nextDelay = pollDelays(intervalMs);
 
   do {
     try {
@@ -62,7 +78,7 @@ export async function pollHttpRuntimeHealth({
 
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) return false;
-    await new Promise((resolve) => setTimeout(resolve, Math.min(intervalMs, remainingMs)));
+    await new Promise((resolve) => setTimeout(resolve, Math.min(nextDelay(), remainingMs)));
   } while (Date.now() < deadline);
 
   return false;

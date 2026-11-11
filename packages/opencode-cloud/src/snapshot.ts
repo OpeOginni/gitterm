@@ -92,10 +92,59 @@ export type WorkingState = {
 };
 export type CheckoutSnapshot = WorkingState & {
   version: 1;
+  /** The checked-out branch, recreated under the same name in the cloud; null when detached. */
+  branch: string | null;
+  /** Commits to add to the cloud clone; empty when it already has HEAD. */
   bundle: string;
   digest: string;
   bytes: number;
 };
+
+/**
+ * The snapshot as one upload: a 4-byte length, a JSON manifest, then the raw bytes of the
+ * bundle, the two patches and each untracked file, in that order. Sending bytes instead of
+ * base64 inside JSON keeps the upload the size of the data.
+ */
+export function encodeSnapshot(snapshot: CheckoutSnapshot): Buffer {
+  const bytes = (data: string) => Buffer.from(data, "base64");
+  const bundle = bytes(snapshot.bundle);
+  const staged = bytes(snapshot.staged);
+  const unstaged = bytes(snapshot.unstaged);
+  const files = snapshot.files.map((file) => bytes(file.data));
+  const manifest = Buffer.from(
+    JSON.stringify({
+      version: 2,
+      head: snapshot.head,
+      branch: snapshot.branch,
+      digest: snapshot.digest,
+      changedPaths: snapshot.changedPaths,
+      bundle: bundle.length,
+      staged: staged.length,
+      unstaged: unstaged.length,
+      files: snapshot.files.map((file, index) => ({
+        path: file.path,
+        executable: file.executable,
+        size: files[index]!.length,
+      })),
+    }),
+  );
+  const header = Buffer.alloc(4);
+  header.writeUInt32BE(manifest.length);
+  return Buffer.concat([header, manifest, bundle, staged, unstaged, ...files]);
+}
+
+/**
+ * The commit origin's default branch pointed at when this checkout last fetched. A new
+ * workspace clones that branch, so everything reachable from here is already there.
+ */
+async function originBase(root: string): Promise<string | null> {
+  try {
+    const base = await git(root, ["rev-parse", "--verify", "refs/remotes/origin/HEAD^{commit}"]);
+    return base.toString().trim();
+  } catch {
+    return null;
+  }
+}
 
 const nulList = (buffer: Buffer) => {
   if (!Buffer.from(buffer.toString()).equals(buffer))
@@ -179,21 +228,38 @@ async function readWorkingState(root: string, includeChanges: boolean): Promise<
   return { head, staged, unstaged, files, changedPaths };
 }
 
+/**
+ * `fullHistory` bundles every commit instead of only those the origin lacks. Restoring
+ * asks for it when the cloud clone does not have the commits a smaller bundle builds on
+ * (origin's default branch was rewritten since the last fetch, or the clone is shallow).
+ */
 export async function captureSnapshot(
   directory: string,
   includeChanges: boolean,
+  fullHistory = false,
 ): Promise<CheckoutSnapshot> {
   const root = await checkoutRoot(directory);
   const temporary = await mkdtemp(path.join(tmpdir(), "gitterm-handoff-"));
   try {
     const before = await readWorkingState(root, includeChanges);
     const bundlePath = path.join(temporary, "checkout.bundle");
-    // A self-contained bundle also carries commits that have never been pushed.
-    await git(root, ["bundle", "create", bundlePath, "HEAD"]);
-    const bundleSize = (await stat(bundlePath)).size;
-    if (bundleSize > MAX_SNAPSHOT_BYTES)
-      throw new Error("Repository history exceeds the 25 MiB handoff limit.");
-    const bundle = (await readFile(bundlePath)).toString("base64");
+    const base = fullHistory ? null : await originBase(root);
+    const commits = base ? ["HEAD", `^${base}`] : ["HEAD"];
+    // Git refuses to write a bundle with no commits in it.
+    const count = Number((await git(root, ["rev-list", "--count", ...commits])).toString());
+    let bundle = "";
+    let bundleSize = 0;
+    if (count > 0) {
+      await git(root, ["bundle", "create", bundlePath, ...commits]);
+      bundleSize = (await stat(bundlePath)).size;
+      if (bundleSize > MAX_SNAPSHOT_BYTES)
+        throw new Error(
+          base
+            ? "Commits that are not on origin's default branch exceed the 25 MiB handoff limit."
+            : "Repository history exceeds the 25 MiB handoff limit.",
+        );
+      bundle = (await readFile(bundlePath)).toString("base64");
+    }
     const after = await readWorkingState(root, includeChanges);
     const digest = stateDigest(before);
     if (digest !== stateDigest(after))
@@ -205,7 +271,11 @@ export async function captureSnapshot(
       before.files.reduce((sum, file) => sum + Buffer.from(file.data, "base64").length, 0);
     if (bytes > MAX_SNAPSHOT_BYTES)
       throw new Error("Checkout snapshot exceeds the 25 MiB handoff limit.");
-    return { version: 1, ...before, bundle, digest, bytes };
+    const branch = await git(root, ["symbolic-ref", "--short", "-q", "HEAD"]).then(
+      (name) => name.toString().trim() || null,
+      () => null,
+    );
+    return { version: 1, ...before, branch, bundle, digest, bytes };
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

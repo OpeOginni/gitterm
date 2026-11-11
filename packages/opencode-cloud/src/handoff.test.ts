@@ -33,6 +33,13 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+// What OpenCode answers when the cloud has no session of that ID.
+const sessionNotFound = () =>
+  Response.json(
+    { _tag: "SessionNotFoundError", sessionID: "ses_test", message: "Session not found" },
+    { status: 404 },
+  );
+
 function fixture(answers: Array<Record<string, boolean> | "cancelled">) {
   const forms: Array<{ title: string; fields: Array<{ description?: string }> }> = [];
   const session = {
@@ -174,7 +181,7 @@ test("warns about another active session in a subdirectory of the same checkout"
 test("restores before importing, records ready state, and never stores credentials or snapshot contents", async () => {
   await writeFile(path.join(root, "file.txt"), "local edit\n");
   const requests: string[] = [];
-  let uploaded: { unstaged: string } | undefined;
+  let uploaded: Buffer | undefined;
   server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -191,7 +198,7 @@ test("restores before importing, records ready state, and never stores credentia
           data: { id: "shell", status: "exited", exit: 0 },
         });
       if (route === "/api/experimental/fs/write") {
-        uploaded = (await request.json()) as { unstaged: string };
+        uploaded = Buffer.from(await request.arrayBuffer());
         return Response.json({ location: { directory: root }, data: {} });
       }
       if (route === "/api/experimental/session/import") {
@@ -199,13 +206,14 @@ test("restores before importing, records ready state, and never stores credentia
         return Response.json({ data: { ...input.info, location: { directory: root } } });
       }
       if (route.endsWith("/synthetic")) return Response.json({ data: {} });
+      if (route === "/api/experimental/session/ses_test/export") return sessionNotFound();
       return new Response("not found", { status: 404 });
     },
   });
   const f = fixture([{ changes: true }, { create: true }]);
   const record = await handoffSession("ses_test", f.deps);
   expect(record.phase).toBe("ready");
-  expect(Buffer.from(uploaded!.unstaged, "base64").toString()).toContain("local edit");
+  expect(uploaded!.toString("latin1")).toContain("local edit");
   expect(requests.indexOf("/api/experimental/fs/write")).toBeLessThan(
     requests.indexOf("/api/experimental/session/import"),
   );
@@ -218,6 +226,207 @@ test("restores before importing, records ready state, and never stores credentia
   expect(JSON.stringify(f.records)).not.toContain("password");
   expect(JSON.stringify(f.records)).not.toContain("local edit");
   expect(f.terminates()).toBe(0);
+});
+
+test("sends the whole history when the cloud clone lacks the commits a smaller upload builds on", async () => {
+  // HEAD is on origin's default branch, so the first upload carries no commits.
+  await git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  await git(root, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+  // The upload starts with a 4-byte length and a JSON manifest; `bundle` is its byte count.
+  const uploads: Array<{ bundle: number; digest: string }> = [];
+  let restores = 0;
+  server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      const route = new URL(request.url).pathname;
+      if (route === "/api/info") return Response.json({ version: "2.0.30" });
+      if (route === "/api/shell") {
+        const { command } = (await request.json()) as { command: string };
+        // The restore script is the only command that reads the uploaded snapshot.
+        const exit = command.includes("snapshot.bin") && restores++ === 0 ? 3 : 0;
+        return Response.json({
+          location: { directory: root },
+          data: { id: "shell", status: "exited", exit },
+        });
+      }
+      if (route === "/api/experimental/fs/write") {
+        const body = Buffer.from(await request.arrayBuffer());
+        uploads.push(JSON.parse(body.subarray(4, 4 + body.readUInt32BE(0)).toString()));
+        return Response.json({ location: { directory: root }, data: {} });
+      }
+      if (route === "/api/experimental/session/import") {
+        const input = (await request.json()) as { info: { id: string } };
+        return Response.json({ data: { ...input.info, location: { directory: root } } });
+      }
+      if (route.endsWith("/synthetic")) return Response.json({ data: {} });
+      if (route === "/api/experimental/session/ses_test/export") return sessionNotFound();
+      return new Response("not found", { status: 404 });
+    },
+  });
+  const f = fixture([{ changes: false }, { create: true }]);
+  const record = await handoffSession("ses_test", f.deps);
+  expect(record.phase).toBe("ready");
+  expect(uploads.map((upload) => upload.bundle === 0)).toEqual([true, false]);
+  expect(uploads[1]!.digest).toBe(uploads[0]!.digest);
+  expect(f.creates()).toBe(1);
+});
+
+/** A cloud OpenCode that keeps one session, so a retry meets what the earlier attempt left. */
+type CloudSession = { info: Record<string, unknown>; messages: unknown[] };
+function cloudWithSession() {
+  const cloud = {
+    session: undefined as CloudSession | undefined,
+    requests: [] as string[],
+    /** Input waiting in the session, as OpenCode's inbox lists it. */
+    inbox: [] as unknown[],
+    active: false,
+    failImports: 0,
+    failExports: 0,
+  };
+  server = Bun.serve({
+    port: 0,
+    async fetch(request) {
+      const route = new URL(request.url).pathname;
+      cloud.requests.push(`${request.method} ${route}`);
+      if (route === "/api/info") return Response.json({ version: "2.0.30" });
+      if (route === "/api/shell")
+        return Response.json({
+          location: { directory: root },
+          data: { id: "shell", status: "exited", exit: 0 },
+        });
+      if (route === "/api/experimental/fs/write")
+        return Response.json({ location: { directory: root }, data: {} });
+      if (route === "/api/experimental/session/ses_test/export") {
+        if (cloud.failExports-- > 0) return new Response("broken", { status: 500 });
+        return cloud.session
+          ? Response.json({ data: structuredClone(cloud.session) })
+          : sessionNotFound();
+      }
+      if (route === "/api/session/ses_test/inbox") return Response.json({ data: cloud.inbox });
+      if (route === "/api/session/active")
+        return Response.json({ data: cloud.active ? { ses_test: {} } : {} });
+      if (route === "/api/experimental/job") return Response.json({ data: [] });
+      if (request.method === "DELETE" && route === "/api/session/ses_test") {
+        cloud.session = undefined;
+        cloud.inbox = [];
+        return new Response(null, { status: 204 });
+      }
+      if (route === "/api/experimental/session/import") {
+        if (cloud.failImports-- > 0) return new Response("broken", { status: 500 });
+        if (cloud.session) return Response.json({ message: "exists" }, { status: 409 });
+        const input = (await request.json()) as CloudSession;
+        cloud.session = { info: input.info, messages: input.messages };
+        return Response.json({ data: input.info });
+      }
+      if (route.endsWith("/synthetic")) {
+        const input = (await request.json()) as { text: string; metadata?: unknown };
+        cloud.inbox.push({
+          id: `msg_note_${cloud.inbox.length}`,
+          type: "synthetic",
+          payload: { text: input.text, metadata: input.metadata },
+        });
+        return Response.json({ data: {} });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  return cloud;
+}
+
+const message = (id: string, text: string) => ({ id, time: { created: 1 }, text, type: "user" });
+
+/** Runs an attempt that imports the session and then fails, and returns what retries need. */
+async function failAfterImport() {
+  const cloud = cloudWithSession();
+  const f = fixture([{ changes: false }, { create: true }, { changes: false }, { create: true }]);
+  const local = { messages: [message("msg_1", "one")] };
+  const get = f.local.session.get;
+  f.local.session.export = (async (input: { sessionID: string }) => ({
+    info: await get(input),
+    messages: local.messages,
+  })) as typeof f.local.session.export;
+  const keys: string[] = [];
+  f.gitterm.workspaces.create = (async (input: { idempotencyKey: string }) => {
+    keys.push(input.idempotencyKey);
+    return { workspace: { id: "workspace-test" } };
+  }) as unknown as typeof f.gitterm.workspaces.create;
+  // Everything reaches the cloud, then the last local save fails.
+  const save = f.deps.save;
+  let failSave = true;
+  f.deps.save = async (record) => {
+    if (record.phase === "ready" && failSave) throw new Error("disk full");
+    await save(record);
+  };
+  await expect(handoffSession("ses_test", f.deps, "1111-aaaa")).rejects.toThrow();
+  expect(cloud.session?.messages).toEqual(local.messages);
+  // The attempt's own note is waiting in the cloud session.
+  expect(cloud.inbox.length).toBe(1);
+  failSave = false;
+  cloud.requests.length = 0;
+  return { cloud, f, local, keys, retry: () => handoffSession("ses_test", f.deps, "1111-aaaa") };
+}
+
+test("a retry uses the same workspace and replaces the session it imported with newer history", async () => {
+  const { cloud, local, keys, retry } = await failAfterImport();
+  local.messages = [message("msg_1", "one"), message("msg_2", "two")];
+  expect(await retry()).toMatchObject({ attemptID: "1111-aaaa", phase: "ready" });
+  expect(keys).toEqual(["opencode-handoff:1111-aaaa", "opencode-handoff:1111-aaaa"]);
+  expect(cloud.session?.messages).toEqual(local.messages);
+  const removed = cloud.requests.indexOf("DELETE /api/session/ses_test");
+  expect(removed).toBeGreaterThan(-1);
+  expect(cloud.requests.indexOf("POST /api/experimental/session/import")).toBeGreaterThan(removed);
+  // Two shell commands on the way: make the upload directory, run the restore.
+  expect(cloud.requests.filter((request) => request === "POST /api/shell").length).toBe(2);
+});
+
+test("a retry leaves a cloud session that has moved on since the earlier import", async () => {
+  const { cloud, retry } = await failAfterImport();
+  cloud.session!.messages.push(message("msg_cloud", "asked in the cloud"));
+  await expect(retry()).rejects.toThrow("The cloud session has new activity");
+  expect(cloud.requests).not.toContain("DELETE /api/session/ses_test");
+  expect(cloud.session?.messages.at(-1)).toEqual(message("msg_cloud", "asked in the cloud"));
+  // Refused before anything was uploaded or run: the cloud checkout is as it was.
+  expect(cloud.requests).not.toContain("POST /api/shell");
+  expect(cloud.requests).not.toContain("POST /api/experimental/fs/write");
+});
+
+test("a retry leaves a cloud session that has a prompt queued", async () => {
+  const { cloud, retry } = await failAfterImport();
+  const queued = { id: "msg_queued", type: "user", payload: { text: "asked in the cloud" } };
+  cloud.inbox.push(queued);
+  await expect(retry()).rejects.toThrow("The cloud session has new activity");
+  expect(cloud.inbox).toContainEqual(queued);
+  expect(cloud.requests).not.toContain("DELETE /api/session/ses_test");
+  expect(cloud.requests).not.toContain("POST /api/shell");
+});
+
+test("a retry that cannot read the cloud session stops before touching the cloud", async () => {
+  const { cloud, retry } = await failAfterImport();
+  const queued = { id: "msg_queued", type: "user", payload: { text: "asked in the cloud" } };
+  cloud.inbox.push(queued);
+  cloud.failExports = 1;
+  await expect(retry()).rejects.toThrow("Cloud handoff failed while restoring");
+  expect(cloud.inbox).toContainEqual(queued);
+  expect(cloud.requests).not.toContain("POST /api/shell");
+  expect(cloud.requests).not.toContain("POST /api/experimental/session/import");
+});
+
+test("a retry leaves a cloud session whose agent is running", async () => {
+  const { cloud, retry } = await failAfterImport();
+  cloud.active = true;
+  await expect(retry()).rejects.toThrow("The cloud session has new activity");
+  expect(cloud.requests).not.toContain("DELETE /api/session/ses_test");
+  expect(cloud.requests).not.toContain("POST /api/shell");
+});
+
+test("a retry whose import fails puts the earlier cloud session back", async () => {
+  const { cloud, local, retry } = await failAfterImport();
+  const earlier = structuredClone(cloud.session);
+  local.messages = [message("msg_1", "one"), message("msg_2", "two")];
+  cloud.failImports = 1;
+  await expect(retry()).rejects.toThrow();
+  expect(cloud.session).toEqual(earlier);
 });
 
 test("a failed create says which step failed and GitTerm's reason", async () => {

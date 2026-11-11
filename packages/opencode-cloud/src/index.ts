@@ -93,37 +93,42 @@ export const GittermCloudPlugin = Plugin.define({
               await showConnection(local, client, previous, controller.signal);
               return;
             }
+            let attemptID: string | undefined;
             if (previous) {
               const answer = await askForm(
                 local,
                 sessionID,
-                "Previous cloud handoff is incomplete",
+                "Previous cloud handoff did not finish",
                 [
                   {
-                    key: "retry",
+                    key: "reuse",
                     type: "boolean",
-                    title: "Start a new cloud handoff?",
-                    default: false,
+                    title: "Retry in the same cloud workspace?",
+                    default: true,
                     required: true,
-                    description: `Previous attempt: ${previous.attemptID}${previous.workspaceID ? `; workspace: ${previous.workspaceID}` : ""}. Check GitTerm first: that workspace may still be running. It will NOT be deleted by retrying, and another workspace may incur additional charges.`,
+                    description: `Previous attempt: ${previous.attemptID}${previous.workspaceID ? `; workspace: ${previous.workspaceID}` : ""}. Yes retries that attempt, so no second workspace is created. No starts a new workspace: the earlier one is NOT deleted and may keep incurring charges until you remove it in GitTerm.`,
                   },
                 ],
                 controller.signal,
               );
-              if (answer.retry !== true) throw new HandoffCancelled();
+              if (answer.reuse === true) attemptID = previous.attemptID;
             }
             // Validate login before capture or billable provisioning.
             await client.auth.status();
-            const record = await handoffSession(sessionID, {
-              local,
-              gitterm: client,
-              options,
-              signal: controller.signal,
-              save,
-              progress: async (text) => {
-                console.info(`GitTerm: ${text}`);
+            const record = await handoffSession(
+              sessionID,
+              {
+                local,
+                gitterm: client,
+                options,
+                signal: controller.signal,
+                save,
+                progress: async (text) => {
+                  console.info(`GitTerm: ${text}`);
+                },
               },
-            });
+              attemptID,
+            );
             await showConnection(local, client, record, controller.signal);
           } catch (error) {
             if (!(error instanceof HandoffCancelled)) throw error;
