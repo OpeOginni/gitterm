@@ -43,6 +43,21 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 }
 
 :80 {
+	# Routing and provider-access headers are internal: drop any a client sends. Caddy
+	# 2.10 forward_auth copies a header from the auth response but leaves a client-supplied
+	# one in place when the response does not set it.
+	request_header -X-Subdomain
+	request_header -X-Hosting-Type
+	request_header -X-Workspace-ID
+	request_header -X-User-ID
+	request_header -X-Upstream-URL
+	request_header -X-Container-*
+	request_header -X-GitTerm-*
+	request_header -X-Exedev-Authorization
+	request_header -e2b-traffic-access-token
+	request_header -x-daytona-preview-token
+	request_header -X-Daytona-Skip-Preview-Warning
+
 	# Health check endpoint
 	handle /health {
 		header Content-Type application/json
@@ -116,8 +131,12 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 			header_up Authorization {header.Authorization}
 			header_up X-Original-URI {uri}
 			header_up X-Original-Method {method}
-			header_up X-Forwarded-For {remote_ip}
 			header_up X-Routing-Mode path
+
+			# Enough idle connections to the API for a burst of proxied requests.
+			transport http {
+				keepalive_idle_conns_per_host 256
+			}
 		}
 
 		# Cloud workspaces: strip /ws/{subdomain} prefix and proxy to container
@@ -145,8 +164,7 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 					header_up x-gitterm-cf-sandbox-id {header.x-gitterm-cf-sandbox-id}
 					header_up x-gitterm-cf-internal-key {header.x-gitterm-cf-internal-key}
 					header_up x-gitterm-cf-port {header.x-gitterm-cf-port}
-					header_up X-Real-IP {remote_ip}
-					header_up X-Forwarded-For {remote_ip}
+					header_up X-Real-IP {remote_host}
 					header_up User-Agent {header.User-Agent}
 					# Never hand GitTerm session/anon cookies to workspace apps (public ports
 					# can be visited by any signed-in user). App cookies still pass through.
@@ -162,7 +180,8 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 						response_header_timeout 0
 						expect_continue_timeout 0
 						keepalive 2m
-						keepalive_idle_conns 10
+						keepalive_idle_conns 1024
+						keepalive_idle_conns_per_host 32
 					}
 				}
 			}
@@ -176,8 +195,7 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 					header_up x-gitterm-cf-sandbox-id {header.x-gitterm-cf-sandbox-id}
 					header_up x-gitterm-cf-internal-key {header.x-gitterm-cf-internal-key}
 					header_up x-gitterm-cf-port {header.x-gitterm-cf-port}
-					header_up X-Real-IP {remote_ip}
-					header_up X-Forwarded-For {remote_ip}
+					header_up X-Real-IP {remote_host}
 					header_up User-Agent {header.User-Agent}
 					# Never hand GitTerm session/anon cookies to workspace apps (public ports
 					# can be visited by any signed-in user). App cookies still pass through.
@@ -192,7 +210,8 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 						response_header_timeout 0
 						expect_continue_timeout 0
 						keepalive 2m
-						keepalive_idle_conns 10
+						keepalive_idle_conns 1024
+						keepalive_idle_conns_per_host 32
 					}
 				}
 			}
@@ -216,15 +235,17 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key Authorization X-GitTerm-Boat-Token X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
 
 			header_up Host {host}
-			header_up X-Requested-Port {http.regexp.portsub.1}
-			header_up X-Subdomain {http.regexp.portsub.2}
 			header_up X-Internal-Key {$INTERNAL_API_KEY}
 			header_up Cookie {header.Cookie}
 			header_up Authorization {header.Authorization}
 			header_up X-Original-URI {uri}
 			header_up X-Original-Method {method}
-			header_up X-Forwarded-For {remote_ip}
 			header_up X-Routing-Mode subdomain
+
+			# Enough idle connections to the API for a burst of proxied requests.
+			transport http {
+				keepalive_idle_conns_per_host 256
+			}
 		}
 
 		# Cloud workspaces: route to container
@@ -248,8 +269,7 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 					header_up x-gitterm-cf-sandbox-id {header.x-gitterm-cf-sandbox-id}
 					header_up x-gitterm-cf-internal-key {header.x-gitterm-cf-internal-key}
 					header_up x-gitterm-cf-port {header.x-gitterm-cf-port}
-					header_up X-Real-IP {remote_ip}
-					header_up X-Forwarded-For {remote_ip}
+					header_up X-Real-IP {remote_host}
 					header_up User-Agent {header.User-Agent}
 					# Never hand GitTerm session/anon cookies to workspace apps (public ports
 					# can be visited by any signed-in user). App cookies still pass through.
@@ -265,7 +285,8 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 						response_header_timeout 0
 						expect_continue_timeout 0
 						keepalive 2m
-						keepalive_idle_conns 10
+						keepalive_idle_conns 1024
+						keepalive_idle_conns_per_host 32
 					}
 				}
 			}
@@ -279,8 +300,7 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 					header_up x-gitterm-cf-sandbox-id {header.x-gitterm-cf-sandbox-id}
 					header_up x-gitterm-cf-internal-key {header.x-gitterm-cf-internal-key}
 					header_up x-gitterm-cf-port {header.x-gitterm-cf-port}
-					header_up X-Real-IP {remote_ip}
-					header_up X-Forwarded-For {remote_ip}
+					header_up X-Real-IP {remote_host}
 					header_up User-Agent {header.User-Agent}
 					# Never hand GitTerm session/anon cookies to workspace apps (public ports
 					# can be visited by any signed-in user). App cookies still pass through.
@@ -295,7 +315,8 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 						response_header_timeout 0
 						expect_continue_timeout 0
 						keepalive 2m
-						keepalive_idle_conns 10
+						keepalive_idle_conns 1024
+						keepalive_idle_conns_per_host 32
 					}
 				}
 			}

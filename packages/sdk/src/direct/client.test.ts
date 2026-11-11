@@ -161,7 +161,7 @@ describe("createDirectGittermClient", () => {
               content: [{ type: "text", text: "done" }],
             },
             { id: "message-2", type: "user", time: { created: Date.now() }, text: "again" },
-          ],
+          ].toReversed(),
           cursor: { next: null },
         });
       }

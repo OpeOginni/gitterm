@@ -136,6 +136,8 @@ Open a port on a running workspace to get a live URL like `https://{port}-{works
 
 You can switch a port between private and public from the dashboard, with `gitterm ports visibility <port> <private|public>`, or with the SDK. GitTerm's own session cookies are stripped before requests reach workspace apps.
 
+The proxy caches session identity for 15 seconds. Signing out or revoking a session can take up to 15 seconds to block new requests to private workspace routes.
+
 ## Providers
 
 GitTerm can run workspaces on any of these providers. Configure each one in the admin panel before users create workspaces. Click a provider for its full setup guide.

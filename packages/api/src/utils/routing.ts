@@ -111,22 +111,21 @@ export function getWorkspaceUrlWithPath(subdomain: string, path: string): string
  *
  * Supports both routing modes:
  * - Subdomain: Extract from Host header (abc123.gitterm.dev -> abc123)
- * - Path: Extract from URL path (/ws/abc123/... -> abc123) or X-Subdomain header
+ * - Path: Extract from URL path (/ws/abc123/... -> abc123)
+ *
+ * Only the host and path are read. A header naming the workspace would come from the
+ * client, who could point a request that carries another user's session at that user's
+ * workspace.
  *
  * @param host - The Host header value
  * @param path - The request path (optional, for path-based routing)
- * @param headers - Additional headers (optional, for X-Subdomain)
+ * @param headers - Additional headers (optional, for X-Routing-Mode)
  */
 export function extractWorkspaceSubdomain(
   host: string,
   path?: string,
-  headers?: { "x-subdomain"?: string; "x-routing-mode"?: string },
+  headers?: { "x-routing-mode"?: string },
 ): string | null {
-  // If X-Subdomain header is present (set by forward_auth), use it
-  if (headers?.["x-subdomain"]) {
-    return headers["x-subdomain"];
-  }
-
   // Check if this is path-based routing
   const routingMode = headers?.["x-routing-mode"] || env.ROUTING_MODE;
 

@@ -127,6 +127,10 @@ export const agentRun = pgTable(
     uniqueIndex("agent_run_parent_run_unique").on(table.parentRunId),
     index("agent_run_workspace_native_session_idx").on(table.workspaceId, table.nativeSessionId),
     index("agent_run_workspace_status_idx").on(table.workspaceId, table.status),
+    // The watcher sweep reads every active run on each replica every 30 seconds. A partial
+    // index on the active statuses cannot be created by a fresh database's single migration
+    // run: it names 'awaiting_input', which migration 0027 adds in that same transaction.
+    index("agent_run_status_idx").on(table.status),
   ],
 );
 
