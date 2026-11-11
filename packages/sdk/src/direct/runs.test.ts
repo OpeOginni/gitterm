@@ -128,6 +128,7 @@ describe("direct run interaction", () => {
               : [],
         });
       if (path.endsWith("/message")) {
+        expect(url.searchParams.get("order")).toBe("desc");
         const now = Date.now();
         // A completed intermediate assistant message is NOT a completed agent run.
         return Response.json({
