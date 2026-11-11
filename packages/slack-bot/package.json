@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "@gitterm/bot": "workspace:^",
-    "@gitterm/sdk": "workspace:^0.13.0",
+    "@gitterm/sdk": "workspace:^0.14.0",
     "@slack/bolt": "^5.1.0"
   },
   "devDependencies": {

@@ -166,7 +166,7 @@
     },
     "packages/agent-runtime": {
       "name": "@gitterm/agent-runtime",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@boatdev/sdk": "^1.13.0",
         "@daytonaio/sdk": "^0.207.0",
@@ -293,7 +293,7 @@
       "name": "@gitterm/bot",
       "version": "0.3.0",
       "dependencies": {
-        "@gitterm/sdk": "workspace:^0.13.0",
+        "@gitterm/sdk": "workspace:^0.14.0",
       },
       "devDependencies": {
         "@types/bun": "^1.2.6",
@@ -349,7 +349,7 @@
       },
       "dependencies": {
         "@gitterm/bot": "workspace:^",
-        "@gitterm/sdk": "workspace:^0.13.0",
+        "@gitterm/sdk": "workspace:^0.14.0",
         "discord.js": "^14.28.1",
       },
       "devDependencies": {
@@ -372,7 +372,7 @@
     },
     "packages/opencode-cloud": {
       "name": "@gitterm/opencode-cloud",
-      "version": "0.1.5",
+      "version": "0.2.0",
       "dependencies": {
         "@opencode/client": "^2.2.6",
       },
@@ -438,7 +438,7 @@
     },
     "packages/sdk": {
       "name": "@gitterm/sdk",
-      "version": "0.13.1",
+      "version": "0.14.0",
       "dependencies": {
         "@boatdev/sdk": "^1.13.0",
         "@daytonaio/sdk": "^0.207.0",
@@ -464,7 +464,7 @@
       },
       "dependencies": {
         "@gitterm/bot": "workspace:^",
-        "@gitterm/sdk": "workspace:^0.13.0",
+        "@gitterm/sdk": "workspace:^0.14.0",
         "@slack/bolt": "^5.1.0",
       },
       "devDependencies": {

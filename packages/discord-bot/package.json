@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@gitterm/bot": "workspace:^",
-    "@gitterm/sdk": "workspace:^0.13.0",
+    "@gitterm/sdk": "workspace:^0.14.0",
     "discord.js": "^14.28.1"
   },
   "devDependencies": {
