@@ -656,7 +656,6 @@ function WorkspaceListHeader() {
   );
 }
 
-/** The table's header over rows shaped like WorkspaceRow. */
 function WorkspaceListSkeleton() {
   return (
     <div className="overflow-hidden rounded-xl border border-line">
@@ -825,7 +824,6 @@ function WorkspaceRow({
         <p className="mt-0.5 truncate text-[12.5px] text-fg-4">{started}</p>
       </div>
 
-      {/* Phones: one compact meta line instead of columns. */}
       <p className="flex flex-wrap gap-x-2 pl-12 text-[12.5px] text-fg-3 sm:hidden">
         {minutes > 0 && <span className="font-mono text-fg-2">{formatRuntime(minutes)}</span>}
         {runtime && (

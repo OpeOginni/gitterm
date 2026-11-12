@@ -87,10 +87,6 @@ const endsIn = (workspace: Workspace) => {
   return minutes < 60 ? `${minutes} min left` : `${Math.round(minutes / 60)} h left`;
 };
 
-/**
- * One workspace as a list row: what it is, its status, and the one action you most likely want.
- * Opening the row shows how to connect, its ports, the machine, and the rarer actions.
- */
 export function WorkspaceRow({
   workspace,
   provider,
@@ -181,7 +177,6 @@ export function WorkspaceRow({
     });
   };
 
-  // One click creates the code, copies its link and opens the dialog with both.
   const connectOpencodeApp = () => {
     trackConnection("desktop");
     setAppPairing(startOpencodePairing(workspace.id));
@@ -206,7 +201,6 @@ export function WorkspaceRow({
     tab.location.href = getT3PairingUrl(workspace.subdomain, credential);
   };
 
-  // The one action a row offers: connect when it runs, restart when it is paused.
   let primary: ReactNode = null;
   if (isRunning && sandbox) {
     // No agent runs in a sandbox, so there is nothing to open or attach.
@@ -560,7 +554,6 @@ function WorkspaceDetails({
         </div>
       </div>
 
-      {/* What it is and its ports on the left; the machine in a fixed column, so neither side stretches. */}
       <div className="mt-5 grid gap-x-10 gap-y-6 @2xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="grid min-w-0 content-start gap-6">
           {sandbox ? (
@@ -869,7 +862,6 @@ function PortRow({
   );
 
   return (
-    // One bordered pill per port, so its close button reads as part of it; ports wrap side by side.
     <li className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg border border-line py-0.5 pr-0.5 pl-2 text-[13px]">
       {url ? (
         <a

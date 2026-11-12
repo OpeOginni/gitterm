@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
  * hairline panels and grids instead of filled cards, and status dots.
  */
 
-/** A section's heading: title on the left, a note or actions on the right. */
 export function SectionHeading({
   title,
   count,
@@ -52,7 +51,6 @@ export function Panel({ children, className }: { children: ReactNode; className?
   );
 }
 
-/** One row of a Panel. */
 export function PanelRow({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn("flex items-center gap-3.5 px-4 py-3.5 sm:px-5", className)}>{children}</div>
@@ -84,7 +82,6 @@ export function LineCell({ children, className }: { children: ReactNode; classNa
   );
 }
 
-/** A row of headline numbers in a LineGrid. */
 export function StatStrip({
   stats,
   className,
