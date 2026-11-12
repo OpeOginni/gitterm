@@ -94,7 +94,6 @@ async function originBase(root: string): Promise<string> {
   }
 }
 
-/** Why the capture script refused a local checkout, in the user's terms. */
 function captureFailure(stdout: string): string {
   let report: { reason?: string; path?: string; part?: string } = {};
   try {
@@ -153,7 +152,7 @@ export async function captureSnapshot(
   fullHistory = false,
 ): Promise<CheckoutSnapshot> {
   const root = await checkoutRoot(directory);
-  // Written outside the checkout, so nothing appears in it even for a moment.
+  // Keep capture output outside the checkout so it cannot enter the snapshot.
   const out = await mkdtemp(path.join(tmpdir(), "gitterm-handoff-"));
   try {
     const options = {
@@ -162,8 +161,7 @@ export async function captureSnapshot(
       screen: true,
       out,
     };
-    // The first argument names the upload directory a restore uses inside a checkout; a
-    // capture leaves it out of the snapshot.
+    // Exclude the restore staging directory from capture.
     const result = await runLocalScript(root, CAPTURE_SCRIPT, [
       ".gitterm-handoff-0",
       JSON.stringify(options),

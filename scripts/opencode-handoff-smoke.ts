@@ -27,7 +27,6 @@ const cloud = join(root, "cloud");
 const servers: ChildProcess[] = [];
 const password = "isolated-smoke-password";
 const signal = AbortSignal.timeout(120_000);
-// A checkout without an origin: the cloud workspace starts as an empty directory.
 const localOnly = process.env.OPENCODE_HANDOFF_SMOKE_LOCAL_ONLY === "1";
 
 function check(value: unknown, message: string): asserts value {
@@ -220,7 +219,6 @@ try {
     "Local file changed",
   );
 
-  // Work in the cloud, then bring the session back with /local's code path.
   await writeFile(join(cloud, "cloud.txt"), "made in the cloud\n");
   await git(cloud, ["add", "cloud.txt"]);
   await git(cloud, [
@@ -246,7 +244,6 @@ try {
       { signal },
     );
   }
-  // The local checkout is as it was handed off, so nothing needs confirming.
   const returned = await returnSession(record, {
     local: local.client,
     gitterm,

@@ -83,8 +83,7 @@ export function resolveProjectDirectory(
   providerKey?: string | null,
 ): string {
   const key = (providerKey ?? "").toLowerCase();
-  // Without a repository, these providers make an empty `workspace` directory, where a
-  // repository's clone would go. Daytona and Cloudflare use their root directory.
+  // Empty-workspace paths must match each provider's provisioning directory.
   const hint = buildProjectPathHint(
     repositoryUrl ||
       (["e2b", "gitterm", "vercel", "boat", "exedev", "railway", "aws"].includes(key)

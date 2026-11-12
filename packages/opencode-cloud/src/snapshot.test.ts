@@ -696,7 +696,6 @@ describe("coming back from the cloud", () => {
 });
 
 describe("a checkout without an origin", () => {
-  // The cloud workspace for it has no clone: an empty directory the restore makes a repository.
   beforeEach(async () => {
     await rm(cloud, { recursive: true, force: true });
     await mkdir(cloud);
@@ -719,7 +718,6 @@ describe("a checkout without an origin", () => {
     );
     expect(await readFile(path.join(cloud, "hello.txt"), "utf8")).toBe("uncommitted\n");
     expect(await readFile(path.join(cloud, "new.txt"), "utf8")).toBe("untracked\n");
-    // A retry of the same snapshot recognises its own restore.
     expect((await restore(snapshot)).stdout).toBe("GITTERM_HANDOFF_VERIFIED");
   });
 
@@ -738,7 +736,6 @@ describe("a checkout without an origin", () => {
     const snapshot = await captureSnapshot(source, false, true);
     await expect(restore(snapshot)).rejects.toThrow();
     expect(await readdir(cloud)).toEqual(["notes.txt"]);
-    // Nor over a repository someone made there and worked in without committing.
     await git(cloud, ["init", "-q"]);
     await expect(restore(snapshot)).rejects.toThrow();
     expect(await readFile(path.join(cloud, "notes.txt"), "utf8")).toBe("cloud work\n");
