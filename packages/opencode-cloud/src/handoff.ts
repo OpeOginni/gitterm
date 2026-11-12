@@ -400,7 +400,8 @@ export async function handoffSession(
   );
   const includeChanges = choice.changes === true;
   await assertIdle(local, sessionID, signal);
-  const snapshot = await captureSnapshot(root, includeChanges);
+  // Without an origin the cloud has nothing to clone, so the whole history goes up.
+  const snapshot = await captureSnapshot(root, includeChanges, !repo);
   const manifest = snapshot.changedPaths
     .slice(0, 100)
     .map((file) => JSON.stringify(file))
@@ -417,11 +418,11 @@ export async function handoffSession(
         required: true,
         default: false,
         description: [
-          `Repository: ${repo}\nCommit: ${snapshot.head}\nSnapshot: ${(snapshot.bytes / 1024 / 1024).toFixed(2)} MiB`,
+          `Repository: ${repo ?? "this checkout only (no origin)"}\nCommit: ${snapshot.head}\nSnapshot: ${(snapshot.bytes / 1024 / 1024).toFixed(2)} MiB`,
           includeChanges
             ? `${snapshot.changedPaths.length} changed paths${manifest ? `:\n${manifest}` : ""}${snapshot.changedPaths.length > 100 ? "\n(additional paths omitted)" : ""}`
             : "Uncommitted changes are excluded.",
-          "Uploads this conversation (which may contain secrets) and commits that are not on origin's default branch, including unpublished ones. Ignored files are not separately uploaded; tracked history can contain secrets. Review before approving.",
+          `Uploads this conversation (which may contain secrets) and ${repo ? "commits that are not on origin's default branch, including unpublished ones" : "the repository's whole history"}. Ignored files are not separately uploaded; tracked history can contain secrets. Review before approving.`,
           "Uses your GitTerm model/repository connections, not separately copied local credential stores. Cloud compute may incur charges until paused or terminated in GitTerm. Local work remains untouched; later local edits will not sync.",
         ].join("\n\n"),
       },
@@ -460,6 +461,7 @@ export async function handoffSession(
     );
     // Clone the remote's default branch first, then restore HEAD from the bundle.
     // Passing an unpublished local branch/SHA here would make provisioning fail.
+    // Without a remote the workspace starts as an empty directory.
     const create = (useProjectSnapshot: boolean) =>
       gitterm.workspaces.create({
         // The fresh fallback has its own key: the plain one answers with the failed start.
@@ -469,7 +471,10 @@ export async function handoffSession(
         agent: "opencode",
         provider: options.provider,
         persistent: options.persistent,
-        connections: options.connections,
+        // A GitHub connection needs a repository to be for.
+        connections: repo
+          ? options.connections
+          : options.connections?.filter((name) => name !== "github"),
         metadata: { "opencode.handoff": record.attemptID, "opencode.session": sessionID },
         useProjectSnapshot,
       });

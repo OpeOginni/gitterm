@@ -148,7 +148,8 @@ export type WorkspaceCreateInput = {
    * `opeoginni/gitterm-opencode-server` and keep its entrypoint.
    */
   image?: string;
-  repo: string;
+  /** Repository to clone. Leave it out for an empty project directory. */
+  repo?: string;
   branch?: string;
   /** Commit SHA to pin the checkout to after cloning `branch`/`checkoutRef`. */
   baseCommit?: string;

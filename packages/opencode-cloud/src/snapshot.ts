@@ -104,6 +104,8 @@ function captureFailure(stdout: string): string {
   }
   const file = report.path ? JSON.stringify(report.path) : "";
   switch (report.reason) {
+    case "no-commits":
+      return "Commit at least once before continuing in the cloud.";
     case "conflicts":
       return "Resolve merge conflicts before continuing in the cloud.";
     case "submodules":
@@ -174,7 +176,9 @@ export async function captureSnapshot(
   }
 }
 
-export async function repositoryUrl(root: string): Promise<string> {
+/** The origin to clone in the cloud, or undefined for a checkout without one. */
+export async function repositoryUrl(root: string): Promise<string | undefined> {
+  if (!(await git(root, ["remote"])).toString().split("\n").includes("origin")) return undefined;
   const url = (await git(root, ["remote", "get-url", "origin"])).toString().trim();
   // Don't forward embedded local credentials or machine-local paths to GitTerm.
   if (/^https:\/\//i.test(url)) {

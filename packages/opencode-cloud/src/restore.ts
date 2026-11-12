@@ -113,6 +113,17 @@ try {
   const bundle = take(snapshot.bundle), staged = take(snapshot.staged), unstaged = take(snapshot.unstaged);
   const files = snapshot.files.map(file => ({ path: file.path, executable: file.executable, data: take(file.size) }));
 
+  // A workspace made without a repository is an empty directory: the snapshot becomes its
+  // repository. Only ever going to the cloud, and only into a directory with nothing in it.
+  const others = () => fs.readdirSync(".").filter(name => name !== stage && name !== ".git");
+  if (!expected && !fs.existsSync(".git")) {
+    if (others().length) throw new Error("Cloud directory is not a Git checkout");
+    git("init", "-q");
+  }
+  // No commit yet: a repository this script made, or an earlier attempt of it left behind.
+  const fresh = !has("rev-parse", "-q", "--verify", "HEAD^{commit}");
+  if (fresh && expected) throw new Error("Local checkout has no commits");
+
   const note = path.join(text("rev-parse", "--git-dir"), "gitterm-handoff.json");
   let earlier = null;
   try { earlier = JSON.parse(fs.readFileSync(note, "utf8")); } catch {}
@@ -125,7 +136,7 @@ try {
     } else if (!untouched) {
       // Never replace work done in the cloud since an earlier restore, committed or not.
       if (earlier) throw new Error("Cloud checkout changed since the earlier handoff");
-      if (git("diff", "HEAD", "--").length || git("diff", "--cached", "HEAD", "--").length || untracked().length) throw new Error("Cloud checkout has existing changes");
+      if (fresh ? others().length : git("diff", "HEAD", "--").length || git("diff", "--cached", "HEAD", "--").length || untracked().length) throw new Error("Cloud checkout has existing changes");
     }
 
     // The bundle holds only commits this clone is expected to lack. If the clone does not
@@ -142,7 +153,7 @@ try {
 
     // Use the local branch name, so pushing from the cloud updates the branch the user expects.
     const branch = typeof snapshot.branch === "string" && has("check-ref-format", "--branch", snapshot.branch) ? snapshot.branch : "gitterm/" + stage.slice(".gitterm-handoff-".length);
-    const before = { sha: text("rev-parse", "HEAD"), branch: has("symbolic-ref", "-q", "HEAD") ? text("symbolic-ref", "--short", "HEAD") : null, target: has("show-ref", "--verify", "--quiet", "refs/heads/" + branch) ? text("rev-parse", "refs/heads/" + branch) : null };
+    const before = { sha: fresh ? null : text("rev-parse", "HEAD"), branch: has("symbolic-ref", "-q", "HEAD") ? text("symbolic-ref", "--short", "HEAD") : null, target: has("show-ref", "--verify", "--quiet", "refs/heads/" + branch) ? text("rev-parse", "refs/heads/" + branch) : null };
     // Moving the branch must not drop commits that exist only in this clone.
     const unique = commit => Boolean(commit) && text("rev-list", "-1", commit, "--not", "--remotes", snapshot.head) !== "";
     if (!expected && !earlier && unique(before.target)) throw new Error("Cloud branch has commits the snapshot lacks");
@@ -164,7 +175,8 @@ try {
       git(...identity, "stash", "push", "--include-untracked", "-q", "-m", "GitTerm: replaced by cloud handoff " + id, "--", ":(exclude)" + stage);
       saved = stashed() !== top;
     }
-    undo = () => {
+    // A fresh directory goes back to being empty; the next attempt starts it again.
+    undo = fresh ? () => { for (const name of fs.readdirSync(".")) if (name !== stage) fs.rmSync(name, { recursive: true, force: true }); } : () => {
       clean();
       if (before.branch) git("checkout", "-f", "-q", "-B", before.branch, before.sha); else git("checkout", "-f", "-q", "--detach", before.sha);
       if (branch !== before.branch) { if (before.target) git("branch", "-f", branch, before.target); else has("branch", "-D", branch); }
@@ -243,6 +255,7 @@ const paths = () => [...new Set([...list(git("diff", "--name-only", "-z", "--no-
 const read = () => options.changes ? state(paths()) : { head: text("rev-parse", "HEAD"), staged: "", unstaged: "", files: [], changedPaths: [] };
 try {
   if (base && !/^[a-f0-9]{40}([a-f0-9]{24})?$/.test(base)) throw new Error("Invalid base");
+  if (!has("rev-parse", "-q", "--verify", "HEAD^{commit}")) throw unsupported("no-commits");
   // Merge conflicts, submodules, intent-to-add entries and untracked special files need
   // more than patches and file contents to reproduce.
   if (git("ls-files", "--unmerged", "-z").length) throw unsupported("conflicts");
