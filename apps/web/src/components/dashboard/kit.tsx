@@ -118,11 +118,12 @@ export function StatStrip({
   );
 }
 
-export type Tone = "ok" | "busy" | "warn" | "danger" | "muted";
+export type Tone = "ok" | "busy" | "paused" | "warn" | "danger" | "muted";
 
 const TONE_TEXT: Record<Tone, string> = {
   ok: "text-[#6bd586]",
   busy: "text-primary",
+  paused: "text-yellow-600 dark:text-yellow-300",
   warn: "text-[#fb923c]",
   danger: "text-destructive",
   muted: "text-fg-3",
@@ -130,6 +131,7 @@ const TONE_TEXT: Record<Tone, string> = {
 const TONE_DOT: Record<Tone, string> = {
   ok: "bg-[#6bd586]",
   busy: "bg-primary",
+  paused: "bg-yellow-500 dark:bg-yellow-300",
   warn: "bg-[#fb923c]",
   danger: "bg-destructive",
   muted: "bg-fg-4",
