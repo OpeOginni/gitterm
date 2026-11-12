@@ -162,10 +162,7 @@ export function createDirectSandboxBackend(options: {
   };
   const ended = (info: SandboxProviderInfo) =>
     !!info.expiresAt && Date.parse(info.expiresAt) <= Date.now();
-  /**
-   * Where the provider deletes at the lifetime, a paused sandbox can escape it (E2B keeps
-   * paused sandboxes), so one seen paused past its lifetime is deleted here.
-   */
+  // E2B preserves paused sandboxes past expiry; enforce the approved lifetime here.
   const expire = async (info: SandboxProviderInfo): Promise<SandboxProviderInfo> => {
     if (info.state !== "paused" || transport.capabilities.expiry !== "hard" || !ended(info))
       return info;

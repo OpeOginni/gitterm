@@ -388,7 +388,6 @@ describe("providers without labels or expiry", () => {
 
 describe("paused direct sandboxes", () => {
   const { createDirectSandboxBackend } = backendModule;
-  /** One E2B-like sandbox: deleted at its lifetime by the provider, but not while paused. */
   function transport(provider: "e2b" | "vercel", expiresAt: string) {
     const box = { state: "running" as "running" | "paused" | "terminated", destroyed: 0 };
     const labels = { gitterm_account: "personal", gitterm_workload: "sandbox" };

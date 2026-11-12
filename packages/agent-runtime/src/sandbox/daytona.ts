@@ -155,8 +155,7 @@ export function createDaytonaSandboxTransport(config: {
     async pause(id) {
       try {
         const sandbox = await get(id);
-        // Direct sandboxes are deleted when they stop at their lifetime. Keep this one while
-        // it is paused; its TTL still deletes it at the lifetime.
+        // Prevent stop() from auto-deleting direct sandboxes; TTL still applies.
         if (sandbox.labels?.gitterm_expires_at) await sandbox.setAutoDeleteInterval(-1);
         await sandbox.stop();
       } catch (error) {

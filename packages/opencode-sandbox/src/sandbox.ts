@@ -34,7 +34,6 @@ const WATCH_INTERVAL_MS = 5_000;
 const MAX_WATCH_BACKOFF_MS = 60_000;
 /** Fallback check while job completions are pushed (Gitterm sandboxes on gitterm.dev). */
 const PUSHED_POLL_MS = 60_000;
-/** How often live sandboxes are reconciled, so pauses and deletions made elsewhere reach the sidebar. */
 const RECONCILE_MS = 30_000;
 /** Past a job's own time limit, its watchdog has stopped it; allow this long to read the result. */
 const LOST_MARGIN_MS = 10 * 60_000;
@@ -195,9 +194,8 @@ export async function registerSandboxTools(
       (effect) => effect !== null,
       () => true,
     ));
-  /** The account's snapshot effect when snapshots are in use for this call, else null. */
   const snapshotsNow = async () => (snapshotsOn ? snapshotEffect() : null);
-  /** Offered where the account can pause (not direct Vercel), or when it can't be resolved yet. */
+  // Keep the tool available during account-resolution failures; calls recheck support.
   const pauseOn =
     !!settings &&
     (await sandbox().then(
@@ -205,7 +203,6 @@ export async function registerSandboxTools(
       () => true,
     ));
 
-  /** What the agent should know about the setup snapshots it can use for this checkout. */
   function snapshotAdvice(
     effect: "pauses" | "stops",
     snapshots: SetupSnapshotStatus[],
@@ -1011,8 +1008,7 @@ export async function registerSandboxTools(
       .then(resumeWatches)
       .catch(() => {});
 
-  // The dashboard, the CLI, and idle timeouts change sandboxes without a tool call; the
-  // sidebar only reads the saved records, so refresh them while this account has live ones.
+  // Refresh the sidebar for changes made outside this plugin.
   const reconcile = settings
     ? setInterval(async () => {
         try {

@@ -26,7 +26,6 @@ export function sidebarRows(
       // Status first: when the line is cut to the sidebar width, only the description shortens.
       const detail = [
         record.state === "running" ? "" : record.state,
-        // A paused sandbox's jobs are frozen, not running.
         running && record.state === "running" ? `${running} running` : "",
         ...Object.values(record.previews).map((preview) => `:${preview.port}`),
         record.purpose || record.provider,
