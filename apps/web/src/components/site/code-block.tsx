@@ -97,16 +97,16 @@ export function InstallCommand({
   /** Where on the site this sits, for the copy event. */
   location: "hero" | "cta";
 }) {
-  // One line always. On phones the command scrolls in its box and Copy sits below it;
-  // from `sm` up, Copy sits inside the box.
+  // One line always, with Copy in the box. Where the command doesn't fit it scrolls and fades
+  // out; the padding under the fade keeps the end readable once scrolled to it.
   return (
     <div
       className={cn(
-        "inline-flex max-w-full flex-col items-center gap-2 font-mono text-[13.5px] text-fg-2 sm:flex-row sm:gap-3 sm:rounded-lg sm:border sm:border-line sm:bg-background/70 sm:py-2 sm:pr-2 sm:pl-3.5",
+        "inline-flex max-w-full items-center gap-2 rounded-lg border border-line bg-background/70 py-2 pr-2 pl-3.5 font-mono text-[13.5px] text-fg-2",
         className,
       )}
     >
-      <span className="max-w-full min-w-0 overflow-x-auto rounded-lg border border-line bg-background/70 px-3.5 py-2.5 whitespace-nowrap [scrollbar-width:none] sm:border-0 sm:bg-transparent sm:p-0">
+      <span className="min-w-0 overflow-x-auto pr-4 whitespace-nowrap [mask-image:linear-gradient(to_right,black_calc(100%-16px),transparent)] [scrollbar-width:none]">
         <span className="text-fg-4">$ </span>
         {command}
       </span>

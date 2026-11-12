@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { Fragment, type CSSProperties, type ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Band, PartHeading, SectionHead, Wrap } from "@/components/site/section";
 import { CodeBlock, InstallCommand } from "@/components/site/code-block";
 import { CopyButton } from "@/components/site/copy-button";
@@ -29,21 +29,19 @@ const cells = "grid gap-px border border-line bg-line [&>*]:bg-background";
 
 // ---------- Hero ----------
 
-/** A copyable shell command: one line where it fits, otherwise it breaks at a space. */
+/**
+ * A copyable shell command, always on one line: where it doesn't fit it scrolls, fading out. The
+ * padding under the fade keeps the end readable once scrolled to it.
+ */
 function Command({ value }: { value: string }) {
   return (
     <div className="flex items-center gap-2 rounded-lg bg-fill py-2 pr-1.5 pl-3.5 font-mono text-[12.5px] leading-[1.6] text-fg-2">
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 flex-1 overflow-x-auto pr-4 whitespace-nowrap [mask-image:linear-gradient(to_right,black_calc(100%-16px),transparent)] [scrollbar-width:none]">
         {/* A touch of the accent at rest; full gold while the card is hovered */}
         <span className="text-primary/60 transition-colors duration-300 select-none group-hover/lane:text-primary">
           ${" "}
         </span>
-        {value.split(" ").map((word, i) => (
-          <Fragment key={i}>
-            {i > 0 && " "}
-            <span className="whitespace-nowrap">{word}</span>
-          </Fragment>
-        ))}
+        {value}
       </span>
       {/* Icon only; the label stays for screen readers */}
       <CopyButton
@@ -89,7 +87,7 @@ function Lane({
     // lights its copy button, the way the setup prompt's does; only the button itself copies.
     <div
       className={cn(
-        "lane group/lane relative row-span-4 grid grid-rows-subgrid gap-y-0 bg-background px-7 pt-6 pb-7",
+        "lane group/lane relative row-span-4 grid grid-cols-1 grid-rows-subgrid gap-y-0 bg-background px-7 pt-6 pb-7",
         DRAW_EDGE,
       )}
     >
@@ -800,7 +798,7 @@ function RoundTrip() {
           </p>
         </div>
         <ol
-          className="rt-trip m-0 flex min-w-0 list-none flex-wrap content-center items-start justify-center gap-3 px-6 pt-[88px] pb-7 max-[640px]:px-[18px]"
+          className="rt-trip m-0 flex min-w-0 list-none flex-wrap content-center items-start justify-center gap-3 px-6 pt-[88px] pb-7 max-[640px]:px-[18px] max-[560px]:hidden"
           aria-label="Your laptop, then /cloud to Gitterm, which lets you continue in a browser, on your phone or on another computer, then /cloud-return to your laptop again."
         >
           <TripStop label="Your laptop" />
