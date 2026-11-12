@@ -154,7 +154,11 @@ export function createDaytonaSandboxTransport(config: {
 
     async pause(id) {
       try {
-        await (await get(id)).stop();
+        const sandbox = await get(id);
+        // Direct sandboxes are deleted when they stop at their lifetime. Keep this one while
+        // it is paused; its TTL still deletes it at the lifetime.
+        if (sandbox.labels?.gitterm_expires_at) await sandbox.setAutoDeleteInterval(-1);
+        await sandbox.stop();
       } catch (error) {
         throw failure(error, "stop the sandbox");
       }
@@ -162,7 +166,9 @@ export function createDaytonaSandboxTransport(config: {
 
     async resume(id) {
       try {
-        await (await get(id)).start();
+        const sandbox = await get(id);
+        await sandbox.start();
+        if (sandbox.labels?.gitterm_expires_at) await sandbox.setAutoDeleteInterval(0);
       } catch (error) {
         throw failure(error, "start the sandbox");
       }

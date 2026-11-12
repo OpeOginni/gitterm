@@ -105,6 +105,7 @@ gets a message when each job finishes.
 | `sandbox_artifact` | Download a file the command produced                                 |
 | `sandbox_apply`    | Copy that file into your checkout, if your copy did not change since |
 | `sandbox_snapshot` | Save or delete the project's setup snapshot (with `snapshots: true`) |
+| `sandbox_pause`    | Pause a sandbox, keeping its files; using it again resumes it        |
 | `sandbox_destroy`  | Delete a sandbox                                                     |
 
 The right sidebar lists this checkout's sandboxes, with what each is running.

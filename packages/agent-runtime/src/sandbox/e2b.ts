@@ -175,6 +175,11 @@ export function createE2BSandboxTransport(config: {
     },
 
     async resume(id) {
+      // A direct sandbox carries its deadline and resumes only for the rest of it.
+      if ((await info(id)).labels[EXPIRES_LABEL]) {
+        await connect(id);
+        return;
+      }
       try {
         await Sandbox.connect(id, opts);
       } catch (error) {

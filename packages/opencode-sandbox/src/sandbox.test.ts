@@ -7,6 +7,10 @@ let saved: unknown[] = [];
 let pushes = false;
 let pushed: ((event: { sandboxId: string; jobId: string }) => void) | undefined;
 let failRead: { code: string; message: string } | undefined;
+let canPause = false;
+let jobReads = 0;
+let lists = 0;
+const paused: string[] = [];
 const jobView = (status: string) => ({
   job: { id: "job1", command: "bun run build", cwd: "/w", snapshotId: null, timeoutMs: 60_000 },
   state: {
@@ -40,8 +44,18 @@ mock.module("@gitterm/sdk/sandbox", () => ({
     get capabilities() {
       return { previews };
     },
-    list: async () => [],
+    list: async () => {
+      lists++;
+      return [];
+    },
     snapshotEffect: "pauses",
+    get canPause() {
+      return canPause;
+    },
+    pause: async (ref: { id: string }) => {
+      paused.push(ref.id);
+      return { id: ref.id, state: "paused", jobs: { job1: { id: "job1", status: "running" } } };
+    },
     setupSnapshots: async () => setupSnapshots,
     store: { list: async () => saved },
     get onJobFinished() {
@@ -54,6 +68,7 @@ mock.module("@gitterm/sdk/sandbox", () => ({
     },
     exec: async () => jobView("running"),
     job: async () => {
+      jobReads++;
       if (failRead) throw Object.assign(new Error(failRead.message), { code: failRead.code });
       return jobView(jobStatus);
     },
@@ -149,7 +164,7 @@ test("where previews are always private, nothing is asked and nothing is made pu
   }
 });
 
-async function tools() {
+async function tools(reconcileMs?: number) {
   const added = new Map<string, (input: unknown, context: unknown) => Promise<any>>();
   const posted: Record<string, any>[] = [];
   const ctx = {
@@ -173,11 +188,61 @@ async function tools() {
     account: "e2b",
     accounts: { e2b: { provider: "e2b", apiKey: "k" } },
   };
-  const unload = await registerSandboxTools(ctx as never, settings as never, 10);
+  const unload = await registerSandboxTools(ctx as never, settings as never, 10, reconcileMs);
   const call = (name: string, input: unknown) =>
     added.get(name)!(input, { sessionID: "ses", agent: "a", messageID: "m", id: "t" });
-  return { call, posted, unload };
+  return { call, posted, unload, names: [...added.keys()] };
 }
+
+test("live sandboxes are reconciled, so a pause made in the dashboard reaches the sidebar", async () => {
+  saved = [];
+  const idle = await tools(10);
+  await Bun.sleep(20);
+  lists = 0;
+  await Bun.sleep(50);
+  expect(lists).toBe(0);
+  await idle.unload();
+  saved = [record({})];
+  const live = await tools(10);
+  await Bun.sleep(20);
+  lists = 0;
+  await Bun.sleep(50);
+  expect(lists).toBeGreaterThan(0);
+  await live.unload();
+  lists = 0;
+  await Bun.sleep(30);
+  expect(lists).toBe(0);
+  saved = [];
+});
+
+test("sandbox_pause is offered only where the account can pause", async () => {
+  canPause = false;
+  const direct = await tools();
+  expect(direct.names).not.toContain("sandbox_pause");
+  await direct.unload();
+  canPause = true;
+  const managed = await tools();
+  expect(managed.names).toContain("sandbox_pause");
+  await managed.unload();
+  canPause = false;
+});
+
+test("pausing stops the job watch, which would otherwise resume the sandbox", async () => {
+  canPause = true;
+  jobStatus = "running";
+  paused.length = 0;
+  const { call, posted, unload } = await tools();
+  await call("sandbox_exec", { sandboxId: "sbx", command: "bun run build", background: true });
+  const result = await call("sandbox_pause", { sandboxId: "sbx" });
+  expect(paused).toEqual(["sbx"]);
+  expect(result.content).toContain("Frozen job(s): job1");
+  jobReads = 0;
+  await Bun.sleep(60);
+  expect(jobReads).toBe(0);
+  expect(posted).toHaveLength(0);
+  await unload();
+  canPause = false;
+});
 
 test("a job left running posts one message to the session when it finishes", async () => {
   jobStatus = "running";

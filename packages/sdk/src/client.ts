@@ -214,6 +214,8 @@ export type GittermClient = {
       port: number,
       options?: { public?: boolean },
     ): Promise<{ url: string; headers: Record<string, string>; gittermUrl?: string }>;
+    /** Pause a running sandbox: billing stops and files are kept until it resumes. */
+    pause(sandboxId: string): Promise<void>;
     /** Resume a sandbox paused for inactivity. Subject to the same quota checks as creation. */
     resume(sandboxId: string): Promise<void>;
     terminate(sandboxId: string): Promise<void>;
@@ -820,6 +822,10 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           });
           if (!result) throw new GittermError("SERVER_ERROR", "Sandbox preview returned no result");
           return result;
+        }),
+      pause: (sandboxId) =>
+        run(async () => {
+          await trpc.workspace.pauseWorkspace.mutate({ workspaceId: sandboxId });
         }),
       resume: (sandboxId) =>
         run(async () => {

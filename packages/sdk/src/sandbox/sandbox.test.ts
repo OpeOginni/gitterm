@@ -386,6 +386,70 @@ describe("providers without labels or expiry", () => {
   });
 });
 
+describe("paused direct sandboxes", () => {
+  const { createDirectSandboxBackend } = backendModule;
+  /** One E2B-like sandbox: deleted at its lifetime by the provider, but not while paused. */
+  function transport(provider: "e2b" | "vercel", expiresAt: string) {
+    const box = { state: "running" as "running" | "paused" | "terminated", destroyed: 0 };
+    const labels = { gitterm_account: "personal", gitterm_workload: "sandbox" };
+    const info = () => ({ id: "sbx", state: box.state, labels, startedAt: null, expiresAt });
+    return {
+      box,
+      transport: {
+        provider,
+        home: "/home/user",
+        capabilities: {
+          expiry: "hard" as const,
+          previews: "private" as const,
+          pause: "stateful" as const,
+          maxLifetimeMs: 86_400_000,
+          snapshots: "none" as const,
+        },
+        info: async () => info(),
+        list: async () => [info()],
+        destroy: async () => {
+          box.destroyed++;
+          box.state = "terminated";
+        },
+        pause: async () => {
+          box.state = "paused";
+        },
+        resume: async () => {
+          box.state = "running";
+        },
+      } as unknown as Parameters<typeof createDirectSandboxBackend>[0]["transport"],
+    };
+  }
+  const later = () => new Date(Date.now() + 600_000).toISOString();
+  const earlier = () => new Date(Date.now() - 1_000).toISOString();
+
+  test("pause and resume within the lifetime", async () => {
+    const { box, transport: t } = transport("e2b", later());
+    const backend = createDirectSandboxBackend({ account: "personal", transport: t });
+    await backend.pause!("sbx");
+    expect((await backend.get("sbx")).state).toBe("paused");
+    await backend.resume!("sbx");
+    expect(box.state).toBe("running");
+  });
+
+  test("a sandbox paused past its lifetime is deleted, not resumed", async () => {
+    const { box, transport: t } = transport("e2b", earlier());
+    const backend = createDirectSandboxBackend({ account: "personal", transport: t });
+    box.state = "paused";
+    await expect(backend.resume!("sbx")).rejects.toThrow(/lifetime limit/);
+    expect((await backend.list())[0]!.state).toBe("terminated");
+    expect(box.destroyed).toBe(1);
+  });
+
+  test("direct Vercel sandboxes cannot pause: stopping discards them", () => {
+    const backend = createDirectSandboxBackend({
+      account: "personal",
+      transport: transport("vercel", later()).transport,
+    });
+    expect(backend.pause).toBeUndefined();
+  });
+});
+
 describe("paused managed sandboxes", () => {
   async function pausedClient(pause: "stateful" | "state-losing") {
     const identity = { mode: "managed" as const, provider: "e2b" as const, account: "hosted" };
@@ -403,6 +467,9 @@ describe("paused managed sandboxes", () => {
         expiresAt: null,
         labels: {},
       }),
+      pause: async () => {
+        sandbox.state = "paused";
+      },
       resume: async () => {
         sandbox.resumes++;
         sandbox.state = "running";
@@ -441,6 +508,14 @@ describe("paused managed sandboxes", () => {
     await expect(client.job(ref, "missing")).rejects.toThrow(/Sync again/);
     expect(sandbox.resumes).toBe(1);
     expect((await store.get(ref))?.snapshot).toBeNull();
+  });
+
+  test("pause stops a running sandbox and keeps its files", async () => {
+    const { client, ref } = await pausedClient("stateful");
+    await client.resume(ref);
+    const paused = await client.pause(ref);
+    expect(paused.state).toBe("paused");
+    expect(paused.snapshot).not.toBeNull();
   });
 
   test("an explicit resume also forgets files the provider discarded", async () => {

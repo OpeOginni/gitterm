@@ -615,10 +615,25 @@ export function createSandboxClient(options: {
       };
     },
 
+    /** Whether this account's sandboxes can be paused on request (not direct Vercel ones). */
+    canPause: !!backend.pause,
+
+    /** Pauses a running sandbox until its next use, which resumes it. */
+    async pause(ref: SandboxRef): Promise<SandboxRecord> {
+      assertRef(ref);
+      if (!backend.pause)
+        throw new Error(`${ref.provider} sandboxes on this account cannot be paused.`);
+      const record = await settled(ref);
+      if (record.state === "paused") return record;
+      if (record.state !== "running") throw new Error(`Sandbox ${ref.id} is ${record.state}.`);
+      await backend.pause(ref.id);
+      return load(ref);
+    },
+
     async resume(ref: SandboxRef): Promise<SandboxRecord> {
       assertRef(ref);
       if (!backend.resume)
-        throw new Error("Only managed sandboxes pause, so direct sandboxes cannot be resumed.");
+        throw new Error(`${ref.provider} sandboxes on this account cannot be resumed.`);
       return (await resumeSandbox(ref, backend.resume)).record;
     },
 

@@ -35,7 +35,12 @@ test("lists this checkout's live sandboxes, newest first, with what they are doi
         jobs: { j1: { status: "running" } as SandboxRecord["jobs"][string] },
         previews: { p: { port: 3000, jobId: null, url: "", public: false } },
       }),
-      record({ id: "paused", name: "Paused", state: "paused" }),
+      record({
+        id: "paused",
+        name: "Paused",
+        state: "paused",
+        jobs: { j1: { status: "running" } as SandboxRecord["jobs"][string] },
+      }),
       record({ id: "gone", state: "terminated" }),
       record({ id: "expired", expiresAt: "2026-11-03T11:59:00.000Z" }),
       record({ id: "elsewhere", project: "/other" }),

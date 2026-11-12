@@ -34,6 +34,8 @@ const WATCH_INTERVAL_MS = 5_000;
 const MAX_WATCH_BACKOFF_MS = 60_000;
 /** Fallback check while job completions are pushed (Gitterm sandboxes on gitterm.dev). */
 const PUSHED_POLL_MS = 60_000;
+/** How often live sandboxes are reconciled, so pauses and deletions made elsewhere reach the sidebar. */
+const RECONCILE_MS = 30_000;
 /** Past a job's own time limit, its watchdog has stopped it; allow this long to read the result. */
 const LOST_MARGIN_MS = 10 * 60_000;
 const NAMESPACE = "gitterm";
@@ -127,6 +129,7 @@ export async function registerSandboxTools(
   settings: SandboxSettings | undefined,
   /** Tests shorten the job watch interval. */
   watchIntervalMs = WATCH_INTERVAL_MS,
+  reconcileMs = RECONCILE_MS,
 ) {
   let resolved: { account: SandboxAccount; client: SandboxClient } | undefined;
   let resolving: Promise<{ account: SandboxAccount; client: SandboxClient }> | undefined;
@@ -194,6 +197,13 @@ export async function registerSandboxTools(
     ));
   /** The account's snapshot effect when snapshots are in use for this call, else null. */
   const snapshotsNow = async () => (snapshotsOn ? snapshotEffect() : null);
+  /** Offered where the account can pause (not direct Vercel), or when it can't be resolved yet. */
+  const pauseOn =
+    !!settings &&
+    (await sandbox().then(
+      (current) => current.canPause,
+      () => true,
+    ));
 
   /** What the agent should know about the setup snapshots it can use for this checkout. */
   function snapshotAdvice(
@@ -342,6 +352,11 @@ export async function registerSandboxTools(
         "Start independent work together: Promise.allSettled over jobs, or several sandboxes up to the account limit.",
         "Jobs in one sandbox share its files, so run setup such as installs once, before starting parallel jobs.",
         "Run long jobs with background: true, then carry on or end your turn. A message arrives when each job finishes, so never poll.",
+        "A sandbox you leave alone keeps its files and installs for later calls. Destroy one only when the user is done with it.",
+        pauseOn
+          ? "To stop paying for one but keep it, pause it with sandbox_pause; the next call that uses it resumes it. Idle sandboxes also pause on their own."
+          : "",
+        "Manage sandboxes only with these tools. If one you need is missing, tell the user instead of using the gitterm CLI.",
         snapshotsOn
           ? "This account keeps setup snapshots: new sandboxes can start from one with dependencies and services already set up. After a slow setup (installs, toolchains, databases) succeeds, save one with sandbox_snapshot; a checkout can have several. sandbox_create and sandbox_list show which exist and which are out of date."
           : "",
@@ -940,10 +955,43 @@ export async function registerSandboxTools(
         },
       });
 
+    if (pauseOn)
+      editor.add({
+        name: "sandbox_pause",
+        options: LISTED,
+        description:
+          "Pause a sandbox to stop billing while keeping its files and installs. The next call that uses it (sync, exec, job, preview) resumes it. Running jobs and preview servers are frozen until then.",
+        input: object({ sandboxId }, ["sandboxId"]),
+        async execute(input) {
+          const ref = await refFor(str((input as Record<string, unknown>).sandboxId, "sandboxId"));
+          // A job watch reads the job, which would resume the sandbox.
+          unwatch(ref.id);
+          for (const [key, proxy] of proxies)
+            if (key.startsWith(`${ref.id}:`)) {
+              await proxy.close();
+              proxies.delete(key);
+            }
+          const record = await (await sandbox()).pause(ref);
+          const running = Object.values(record.jobs).filter((job) => job.status === "running");
+          return {
+            content: [
+              `Sandbox ${ref.id} is ${record.state}. Its files are kept; using it again resumes it.`,
+              running.length
+                ? `Frozen job(s): ${running.map((job) => job.id).join(", ")}. No message will arrive for them; check with sandbox_job after resuming.`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" "),
+            metadata: { sandbox: ref.id, state: record.state },
+          };
+        },
+      });
+
     editor.add({
       name: "sandbox_destroy",
       options: LISTED,
-      description: "Delete a sandbox and confirm with the provider that it is gone.",
+      description:
+        "Delete a sandbox and everything in it, and confirm with the provider that it is gone. Only when the user is done with it; to keep its state, leave it.",
       input: object({ sandboxId }, ["sandboxId"]),
       async execute(input) {
         const ref = await refFor(str((input as Record<string, unknown>).sandboxId, "sandboxId"));
@@ -962,6 +1010,22 @@ export async function registerSandboxTools(
       .then((current) => current.list())
       .then(resumeWatches)
       .catch(() => {});
+
+  // The dashboard, the CLI, and idle timeouts change sandboxes without a tool call; the
+  // sidebar only reads the saved records, so refresh them while this account has live ones.
+  const reconcile = settings
+    ? setInterval(async () => {
+        try {
+          const current = await sandbox();
+          const { mode, account } = current.identity;
+          const live = (await current.store.list()).some(
+            (record) =>
+              record.mode === mode && record.account === account && record.state !== "terminated",
+          );
+          if (live) await current.list();
+        } catch {}
+      }, reconcileMs)
+    : undefined;
 
   /**
    * Jobs saved as running were never seen finishing, so each still owes its session a message:
@@ -992,6 +1056,7 @@ export async function registerSandboxTools(
   // destroyed or their provider-enforced lifetime ends.
   return async () => {
     unloaded = true;
+    clearInterval(reconcile);
     stopPushes?.();
     for (const proxy of proxies.values()) await proxy.close().catch(() => {});
   };
