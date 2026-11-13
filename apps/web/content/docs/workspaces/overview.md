@@ -39,7 +39,7 @@ Steps:
 1. Open **Workspaces** and click **New workspace**.
 2. Enter the repository. Optionally set a **Branch**; leave it empty to use the repository default.
 3. Pick an **Agent** and a **Cloud** provider. Where the provider offers them, pick a **Region** and a **Machine** size.
-4. Under **GitHub repository access**, pick a connection. **None (public repos only)** works for public repositories only.
+4. Under **GitHub account**, pick a connection. **None (public repos only)** works for public repositories only.
 5. Optional: open **Add integrations** to attach a **Google Cloud identity** or **MCP servers and Executor**.
 6. Optional: turn on **Keep running when idle**. See [Lifecycle](/docs/workspaces/lifecycle#keep-running-when-idle).
 7. Click **Create workspace**.

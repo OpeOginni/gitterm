@@ -123,6 +123,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   const mcpConnections = connections.filter(
     (connection) => connection.integration === "mcp" || connection.integration === "executor",
   );
+  const hasPickableIntegrations = isGoogleCloudAvailable || mcpConnections.length > 0;
   const hasConnection = (key: string) =>
     connections.some((connection) => connection.integration === key);
   // An enabled integration the user hasn't set up yet; the panel links to Integrations for it.
@@ -772,7 +773,7 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                     )}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start" className="w-(--radix-select-trigger-width)">
                   {/* Sizes the plan allows come first; locked ones follow, in their usual order. */}
                   {availableMachineProfiles
                     .toSorted(
@@ -783,22 +784,30 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                         key={profile.id}
                         value={profile.id}
                         disabled={profile.available === false}
+                        // Let the item's text fill the row, so "Paid plans" sits at the right edge.
+                        className="*:[span]:last:min-w-0 *:[span]:last:flex-1"
                       >
-                        {/* Fixed columns so name, size and price line up across rows. */}
-                        <span className="grid grid-cols-[4.5rem_6.5rem_4.25rem] items-baseline gap-x-2">
-                          <span className="truncate">{profile.name}</span>
-                          <span className="font-mono text-[12.5px] text-fg-4">
-                            {formatMachineSize(profile) ?? profile.key}
+                        {/* Two lines so the menu fits the trigger's width. */}
+                        <span className="grid min-w-0 flex-1 gap-0.5 py-0.5">
+                          <span className="flex items-baseline justify-between gap-3">
+                            <span className="truncate">{profile.name}</span>
+                            {profile.available === false && (
+                              <span className="shrink-0 text-[12px] text-[#e2c47c]">
+                                Paid plans
+                              </span>
+                            )}
                           </span>
-                          <span className="text-right font-mono text-[12.5px] text-fg-4">
-                            {profile.priceMicrosPerHour != null
-                              ? formatHourlyPrice(profile.priceMicrosPerHour)
-                              : ""}
+                          <span className="truncate font-mono text-[12px] text-fg-4">
+                            {[
+                              formatMachineSize(profile) ?? profile.key,
+                              profile.priceMicrosPerHour != null
+                                ? formatHourlyPrice(profile.priceMicrosPerHour)
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </span>
                         </span>
-                        {profile.available === false && (
-                          <span className="ml-3 text-[12.5px] text-[#e2c47c]">Paid plans</span>
-                        )}
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -842,16 +851,27 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
             <div
               className={cn("grid content-start gap-1.5", wideCell === "github" && "sm:col-span-2")}
             >
-              <Label className="flex items-center gap-1.5 text-[13px] font-medium text-fg-2">
-                GitHub repository access
+              {hasIntegrations ? (
+                <Label className="flex items-center gap-1.5 text-[13px] font-medium text-fg-2">
+                  GitHub account
+                  <Link
+                    href="/dashboard/integrations"
+                    aria-label="Manage integrations"
+                    className="text-fg-4 transition-colors hover:text-fg-2"
+                  >
+                    <ArrowUpRight className="size-3.5" />
+                  </Link>
+                </Label>
+              ) : (
+                // Nothing to pick yet, so the whole label leads to where an account is connected.
                 <Link
                   href="/dashboard/integrations"
-                  aria-label="Manage integrations"
-                  className="text-fg-4 transition-colors hover:text-fg-2"
+                  className="group flex w-fit items-center gap-1.5 text-[13px] font-medium text-fg-2 transition-colors hover:text-fg"
                 >
-                  <ArrowUpRight className="size-3.5" />
+                  GitHub account
+                  <ArrowUpRight className="size-3.5 text-fg-4 transition-colors group-hover:text-fg-2" />
                 </Link>
-              </Label>
+              )}
               <div className="flex items-center gap-2">
                 <Select
                   value={selectedGitIntegrationId}
@@ -1063,15 +1083,17 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
                   </div>
                 ) : null}
 
-                {/* One link, not a row per integration, so new connectors don't grow the dialog. */}
+                {/* One link, not a row per integration, so new connectors don't grow the dialog. With
+                    nothing to pick yet it is the whole section, so it sits centred. */}
                 <Link
                   href={"/dashboard/integrations" as Route}
-                  className="flex items-center gap-1.5 text-[13px] text-[#e2c47c] hover:underline underline-offset-2"
+                  className={cn(
+                    "flex items-center gap-1.5 text-[13px] text-[#e2c47c] hover:underline underline-offset-2",
+                    !hasPickableIntegrations && "mx-auto w-fit py-3",
+                  )}
                 >
                   <Plus className="size-3.5" />
-                  {isGoogleCloudAvailable || mcpConnections.length > 0
-                    ? "Add more integrations"
-                    : "Set up an integration"}
+                  {hasPickableIntegrations ? "Add more integrations" : "Set up an integration"}
                   <ArrowUpRight className="size-3.5" />
                 </Link>
               </div>
