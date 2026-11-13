@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { openStatusLine, WORKING } from "./status.js";
+import { openStatusLine, WORKING, workingOn } from "./status.js";
 import type { ChatAdapter } from "./types.js";
 
 const thread = { channel: "C1", thread: "1.0" };
@@ -51,4 +51,15 @@ test("with a status message, the final edit is the last one", async () => {
   await status.finish("Something went wrong");
 
   expect(edits).toEqual(["Creating a sandbox…", "Something went wrong"]);
+});
+
+test("the working status names up to three subagents and counts the rest", () => {
+  expect(workingOn([])).toBe(WORKING);
+  expect(workingOn([{ description: "Read the logs" }])).toEqual({
+    message: "On it… 1 helper working: Read the logs",
+    indicator: "is on it… (1 helper working)",
+  });
+  const four = ["A", "B", "C", "D"].map((description) => ({ description }));
+  expect(workingOn(four).message).toBe("On it… 4 helpers working: A · B · C and 1 more");
+  expect(workingOn([{ description: " " }]).message).toBe("On it… 1 helper working");
 });

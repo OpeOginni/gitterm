@@ -77,6 +77,7 @@ export function directRunOperations(
         error: derived.errorMessage,
         finalText: snapshot.finalText,
         pendingInputs: terminal(derived.status) ? [] : snapshot.pendingInputs,
+        subagents: terminal(derived.status) ? [] : snapshot.subagents,
         completedAt: terminal(derived.status) ? new Date().toISOString() : null,
       };
     } catch (error) {
@@ -200,7 +201,7 @@ export function directRunOperations(
         dirty = false;
         if (streamError) throw directError(streamError);
         current = await abortable(get(current, sessionError, controller.signal), controller.signal);
-        const key = JSON.stringify([current.status, current.pendingInputs]);
+        const key = JSON.stringify([current.status, current.pendingInputs, current.subagents]);
         if (key !== previous) {
           previous = key;
           yield current;

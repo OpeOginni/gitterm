@@ -6,10 +6,12 @@ import {
   askForm,
   handoffSession,
   HandoffCancelled,
+  markCloudSession,
   showConnection,
   type HandoffOptions,
   type HandoffRecord,
 } from "./handoff";
+import { CLOUD_KEY } from "./marker";
 import { confirmLocalPrompt, finishReturn, returnSession } from "./return";
 import { checkoutRoot } from "./snapshot";
 import { watchCloudSessions } from "./status";
@@ -241,6 +243,14 @@ export const GittermCloudPlugin = Plugin.define({
       const local = await localClient(options).catch(() => undefined);
       if (!local) return;
       await confirmLocalPrompt(local, record, controller.signal);
+    });
+
+    // A fork copies the session's metadata, but only the original lives in the cloud.
+    await ctx.session.hook("fork", async ({ sessionID }) => {
+      const local = await localClient(options);
+      const { metadata } = await local.session.get({ sessionID }, { signal: controller.signal });
+      if (metadata?.[CLOUD_KEY])
+        await markCloudSession(local, sessionID, undefined, controller.signal);
     });
     watch();
     return async () => {

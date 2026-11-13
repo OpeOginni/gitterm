@@ -449,10 +449,11 @@ try {
     (await readFile(join(direct.target.directory, "setup-proof.txt"), "utf8")) === "setup-ok",
     "Post-start PTY did not write the expected file",
   );
-  check(
-    (await sdk.auth.get(workspace, "anthropic")).connections.some(
-      (entry) => entry.type === "credential" && entry.label === "direct",
-    ),
+  // The credentials plugin imports in the background after the server starts.
+  await until(
+    () => sdk.auth.get(workspace, "anthropic").catch(() => null),
+    (info) =>
+      !!info?.connections.some((entry) => entry.type === "credential" && entry.label === "direct"),
     "Direct credentials were not imported",
   );
   const run = await sdk.runs.create({

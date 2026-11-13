@@ -8,6 +8,7 @@ import {
 } from "./v2";
 import { PASSIVE_REQUEST_HEADER } from "./http";
 import { parseModelRef } from "./types";
+import { deriveRunState, LOST_WORK_MESSAGE } from "./derive";
 
 test("model references split the native variant from provider and model IDs", () => {
   expect(parseModelRef("openai/gpt-6.1-sol#high")).toEqual({
@@ -348,7 +349,13 @@ test("snapshots page newest-first through the prompt and preserve supersession",
           cursor: { next: String(offset + limit) },
         });
       }
-      const data = url.pathname.endsWith("/permission") || url.pathname.endsWith("/form") ? [] : {};
+      const data =
+        url.pathname.endsWith("/permission") ||
+        url.pathname.endsWith("/form") ||
+        url.pathname.endsWith("/job") ||
+        url.pathname.endsWith("/inbox")
+          ? []
+          : {};
       return Response.json({ data });
     }) as typeof fetch,
   });
@@ -358,7 +365,8 @@ test("snapshots page newest-first through the prompt and preserve supersession",
   );
   expect(snapshot.finalText).toBe("reply 49");
   expect(snapshot.superseded).toBe(true);
-  expect(pages).toHaveLength(2);
+  // The run is quiet, so its messages are read again after that was established.
+  expect(pages).toHaveLength(4);
   expect(pages[0]!.searchParams.get("order")).toBe("desc");
   expect(pages[1]!.searchParams.has("order")).toBe(false);
 });
@@ -380,6 +388,9 @@ test("reading a run is marked passive, so it is not counted as use of the worksp
       const list =
         url.pathname.endsWith("/permission") ||
         url.pathname.endsWith("/form") ||
+        url.pathname.endsWith("/job") ||
+        url.pathname.endsWith("/inbox") ||
+        url.pathname === "/api/session" ||
         url.pathname.endsWith("/message");
       return Response.json(list ? { data: [], cursor: { next: null } } : { data: {} });
     }) as typeof fetch,
@@ -390,7 +401,315 @@ test("reading a run is marked passive, so it is not counted as use of the worksp
 
   requests.length = 0;
   await runtime.abort("ses_test");
-  expect(requests).toEqual([{ call: "POST /api/session/ses_test/interrupt", passive: false }]);
+  expect(requests.some((request) => request.call === "POST /api/session/ses_test/interrupt")).toBe(
+    true,
+  );
+  expect(requests.every((request) => !request.passive)).toBe(true);
+});
+
+describe("background subagents", () => {
+  const subagent = (started: number, childSessionID = "ses_child", status = "running") => ({
+    kind: "subagent",
+    id: `job_${childSessionID}`,
+    sessionID: "ses_test",
+    status,
+    time: { started },
+    childSessionID,
+    agent: "general",
+    description: "Child",
+  });
+  const report = (childID = "ses_child") => ({
+    id: "msg_report",
+    sessionID: "ses_test",
+    type: "synthetic",
+    delivery: "steer",
+    payload: { text: "<subagent>", metadata: { source: "subagent", childID, state: "completed" } },
+  });
+  // The run started ses_child; its tool part carries the child's session ID.
+  const runMessages = [
+    {
+      id: "reply",
+      type: "assistant",
+      time: { created: 110, completed: 120 },
+      content: [
+        {
+          type: "tool",
+          name: "subagent",
+          state: { status: "completed", metadata: { sessionID: "ses_child" } },
+        },
+        { type: "text", text: "Started a subagent" },
+      ],
+    },
+    { id: "run_prompt", type: "user", text: "run", time: { created: 100 } },
+  ];
+
+  type Server = {
+    jobs: unknown[];
+    inbox: Record<string, unknown[]>;
+    active: string[];
+    /** Each subagent session's parent. ses_child, which the run started, is always there. */
+    parents?: Record<string, string>;
+    /** When each subagent session was created; the run's prompt is at 100. */
+    created?: Record<string, number>;
+    /** Messages per read, newest first; defaults to `runMessages`. */
+    messages?: () => unknown[];
+    /** Requests to this path never answer. */
+    hang?: string;
+    /** Shells OpenCode still has; a shell job's shell may be missing after a restart. */
+    shells?: string[];
+    /** The job list read after the first one, when it differs. */
+    jobsAgain?: unknown[];
+  };
+  function fakeRuntime(server: Server, requests: string[] = [], onPost?: (path: string) => void) {
+    return createV2Runtime({
+      url: "http://opencode.test",
+      directory: "/w",
+      password: null,
+      fetch: (async (input, init) => {
+        const request = new Request(input, init);
+        const url = new URL(request.url);
+        requests.push(`${request.method} ${url.pathname}`);
+        if (url.pathname === server.hang)
+          return new Promise<Response>((_, reject) =>
+            request.signal.addEventListener("abort", () => reject(request.signal.reason)),
+          );
+        if (request.method !== "GET") {
+          onPost?.(url.pathname);
+          return Response.json({ data: { interrupted: true } });
+        }
+        if (url.pathname.endsWith("/job")) {
+          const jobs = server.jobs;
+          if (server.jobsAgain) server.jobs = server.jobsAgain;
+          return Response.json({ data: jobs });
+        }
+        if (url.pathname === "/api/shell")
+          return Response.json({
+            location: { directory: "/w" },
+            data: (server.shells ?? []).map((id) => ({ id, status: "running" })),
+          });
+        if (url.pathname.endsWith("/inbox"))
+          return Response.json({ data: server.inbox[url.pathname.split("/")[3]!] ?? [] });
+        if (url.pathname === "/api/session/active")
+          return Response.json({ data: Object.fromEntries(server.active.map((id) => [id, {}])) });
+        if (url.pathname.endsWith("/message"))
+          return Response.json({
+            data: server.messages?.() ?? runMessages,
+            cursor: { next: null },
+          });
+        if (url.pathname === "/api/session") {
+          const parents = { ses_child: "ses_test", ...server.parents };
+          const parentID = url.searchParams.get("parentID");
+          return Response.json({
+            data: Object.entries(parents)
+              .filter(([, parent]) => parent === parentID)
+              .map(([id]) => ({ id, parentID, time: { created: server.created?.[id] ?? 105 } })),
+            cursor: {},
+          });
+        }
+        const session = url.pathname.match(/^\/api\/session\/([^/]+)$/)?.[1];
+        if (session)
+          return Response.json({ data: { id: session, parentID: server.parents?.[session] } });
+        const list = url.pathname.endsWith("/permission") || url.pathname.endsWith("/form");
+        return Response.json({ data: list ? [] : {} });
+      }) as typeof fetch,
+    });
+  }
+  const status = async (server: Server) =>
+    deriveRunState(await fakeRuntime(server).snapshot("ses_test", "run_prompt"), {
+      submittedAt: null,
+    }).status;
+
+  test("a run is still working while a subagent it started has not reported back", async () => {
+    expect(await status({ jobs: [subagent(105)], inbox: {}, active: ["ses_child"] })).toBe(
+      "running",
+    );
+  });
+
+  test("the snapshot names the run's working subagents, not settled or older ones", async () => {
+    const snapshot = await fakeRuntime({
+      jobs: [subagent(105), subagent(106, "ses_done", "completed"), subagent(50, "ses_old")],
+      inbox: {},
+      active: ["ses_child"],
+    }).snapshot("ses_test", "run_prompt");
+    expect(snapshot.subagents).toEqual([{ id: "ses_child", description: "Child" }]);
+  });
+
+  test("a report admitted to the inbox before it wakes the session keeps the run working", async () => {
+    // OpenCode removes the job after admitting the report and before waking the session.
+    expect(await status({ jobs: [], inbox: { ses_test: [report()] }, active: [] })).toBe("running");
+  });
+
+  test("a subagent that is still busy, or has input waiting, keeps the run working", async () => {
+    expect(await status({ jobs: [], inbox: {}, active: ["ses_child"] })).toBe("running");
+    expect(
+      await status({ jobs: [], inbox: { ses_child: [report("ses_grandchild")] }, active: [] }),
+    ).toBe("running");
+  });
+
+  test("notes that never wake the session, and older runs' subagents, do not hold the run", async () => {
+    const note = { ...report(), payload: { text: "note", metadata: { gittermNote: "x" } } };
+    expect(
+      await status({ jobs: [subagent(50, "ses_old")], inbox: { ses_test: [note] }, active: [] }),
+    ).toBe("completed");
+  });
+
+  test("a run that finishes between reads completes with its final answer, not the earlier one", async () => {
+    const final = {
+      id: "final",
+      type: "assistant",
+      time: { created: 130, completed: 140 },
+      content: [{ type: "text", text: "The cookie expires early" }],
+    };
+    let reads = 0;
+    // The first read sees the turn that started the subagent; by the second, its report
+    // has been answered.
+    const messages = () => (reads++ === 0 ? runMessages : [final, ...runMessages]);
+    const snapshot = await fakeRuntime({ jobs: [], inbox: {}, active: [], messages }).snapshot(
+      "ses_test",
+      "run_prompt",
+    );
+    expect(snapshot.finalText).toBe("The cookie expires early");
+  });
+
+  test("a deeper subagent of this run still working keeps the run working", async () => {
+    const server: Server = {
+      jobs: [],
+      inbox: {},
+      active: ["ses_grandchild", "ses_other"],
+      parents: { ses_grandchild: "ses_child", ses_other: "ses_elsewhere" },
+    };
+    expect(await status(server)).toBe("running");
+    expect(await status({ ...server, active: ["ses_other"] })).toBe("completed");
+  });
+
+  test("a report waiting in a deeper subagent's inbox keeps the run working", async () => {
+    // During recovery nothing in the tree is active yet; the report is the only sign.
+    const server: Server = {
+      jobs: [],
+      inbox: { ses_grandchild: [report("ses_great_grandchild")] },
+      active: [],
+      parents: { ses_grandchild: "ses_child" },
+    };
+    expect(await status(server)).toBe("running");
+  });
+
+  test("subagents an earlier run started do not hold this run", async () => {
+    // ses_old was started by an earlier run of the same session and is still working.
+    const server: Server = {
+      jobs: [],
+      inbox: { ses_old: [report("ses_old_child")] },
+      active: ["ses_old"],
+      parents: { ses_old: "ses_test" },
+      created: { ses_old: 50 },
+    };
+    expect(await status(server)).toBe("completed");
+  });
+
+  test("jobs OpenCode lost in a restart fail the run instead of holding it", async () => {
+    // A restarted OpenCode can keep listing jobs as running whose subagent never resumes and
+    // whose shell is gone; nothing will ever finish them.
+    const shell = {
+      kind: "shell",
+      id: "job_shell",
+      sessionID: "ses_child",
+      status: "running",
+      time: { started: 105 },
+      shellID: "sh_1",
+      command: "sleep 30",
+    };
+    const lost = { jobs: [subagent(105), shell], inbox: {}, active: [] };
+    const snapshot = await fakeRuntime(lost).snapshot("ses_test", "run_prompt");
+    expect(snapshot).toMatchObject({ busy: false, lostWork: true, subagents: [] });
+    expect(deriveRunState(snapshot, { submittedAt: null })).toEqual({
+      status: "failed",
+      errorMessage: LOST_WORK_MESSAGE,
+    });
+    expect(await status({ ...lost, jobs: [shell], shells: ["sh_1"] })).toBe("running");
+  });
+
+  test("a subagent that ends while it is being checked is not taken for lost", async () => {
+    // Seen running, then idle: by the second look its job is no longer running and its
+    // report is on the way.
+    const server = {
+      jobs: [subagent(105)],
+      jobsAgain: [subagent(105, "ses_child", "completed")],
+      inbox: {},
+      active: [],
+    };
+    expect(await status(server)).toBe("running");
+  });
+
+  test("only subagent reports in a subagent's inbox hold the run", async () => {
+    // A shell notice or prompt marks its session active before its job goes, so it never
+    // waits unseen; one still there was parked, like the notices OpenCode leaves after a
+    // restart with `resume: false`, and wakes nothing.
+    const note = { type: "synthetic", payload: { text: "note", metadata: { gittermNote: "x" } } };
+    const shell = {
+      type: "synthetic",
+      payload: { text: "<shell>", metadata: { source: "shell" } },
+    };
+    const prompt = { type: "user", payload: { text: "also check the docs" } };
+    const inbox = { ses_child: [note, shell, prompt] };
+    expect(await status({ jobs: [], inbox, active: [] })).toBe("completed");
+    expect(
+      await status({ jobs: [], inbox: { ses_child: [report("ses_grandchild")] }, active: [] }),
+    ).toBe("running");
+  });
+
+  test("cancelling stops a subagent its own work woke, though it has no job", async () => {
+    const server: Server = {
+      jobs: [],
+      inbox: {},
+      active: ["ses_child"],
+    };
+    const interrupts: string[] = [];
+    await fakeRuntime(server, [], (path) => {
+      interrupts.push(path);
+      if (path === "/api/session/ses_child/interrupt") server.active = [];
+    }).abort("ses_test");
+    expect(interrupts).toContain("/api/session/ses_child/interrupt");
+  });
+
+  test("cancelling stops within its deadline even when OpenCode does not answer", async () => {
+    const requests: string[] = [];
+    const server: Server = { jobs: [], inbox: {}, active: [], hang: "/api/session/active" };
+    const started = Date.now();
+    await expect(fakeRuntime(server, requests).abort("ses_test")).rejects.toThrow(
+      "OpenCode kept working after the run was cancelled",
+    );
+    expect(Date.now() - started).toBeLessThan(2_000);
+    // Nothing is sent once cancelling has given up.
+    const sent = requests.length;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(requests).toHaveLength(sent);
+  });
+
+  test("cancelling keeps stopping the session until no subagent report can wake it", async () => {
+    const server: Server = { jobs: [subagent(105)], inbox: {}, active: ["ses_child"] };
+    const interrupts: string[] = [];
+    let wakes = 0;
+    await fakeRuntime(server, [], (path) => {
+      interrupts.push(path);
+      if (path === "/api/session/ses_child/interrupt") {
+        // The stopped child reports back, which wakes the session once more.
+        server.jobs = [];
+        server.active = ["ses_test"];
+      } else if (path === "/api/session/ses_test/interrupt" && server.active.includes("ses_test")) {
+        wakes++;
+        server.active = [];
+      }
+    }).abort("ses_test");
+    expect(interrupts).toContain("/api/session/ses_child/interrupt");
+    expect(wakes).toBe(1);
+    expect(server.active).toEqual([]);
+  });
+
+  test("cancelling gives up when the session will not stop", async () => {
+    const server: Server = { jobs: [], inbox: {}, active: ["ses_test"] };
+    await expect(fakeRuntime(server).abort("ses_test")).rejects.toThrow(
+      "OpenCode kept working after the run was cancelled",
+    );
+  });
 });
 
 describe("prompt", () => {

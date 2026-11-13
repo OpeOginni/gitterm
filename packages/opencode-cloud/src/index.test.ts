@@ -68,8 +68,8 @@ const record = (phase: HandoffRecord["phase"], sourceDirectory: string): Handoff
   createdAt: "2026-01-01T00:00:00.000Z",
 });
 
-test("registers /cloud and the prompt check, and no tools", async () => {
-  expect(await setup([])).toEqual({ commands: ["cloud"], hooks: ["prompt"] });
+test("registers /cloud, the prompt check and the fork cleanup, and no tools", async () => {
+  expect(await setup([])).toEqual({ commands: ["cloud"], hooks: ["prompt", "fork"] });
 });
 
 test("offers /cloud-return only while a session of this checkout is in the cloud", async () => {

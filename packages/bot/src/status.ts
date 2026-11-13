@@ -8,6 +8,25 @@ import type { ChatAdapter, ChatThread } from "./types.js";
 export type StatusText = { message: string; indicator: string };
 
 export const WORKING: StatusText = { message: "On it…", indicator: "is on it…" };
+/** Subagents named in the status line; the rest are counted. */
+const NAMED_SUBAGENTS = 3;
+
+/**
+ * WORKING, naming the subagents the agent is waiting on. The agent hands them work and stays
+ * quiet until they report back, so without this a long wait looks like nothing is happening.
+ */
+export function workingOn(subagents: readonly { description: string }[]): StatusText {
+  if (subagents.length === 0) return WORKING;
+  const count = subagents.length === 1 ? "1 helper" : `${subagents.length} helpers`;
+  const named = subagents
+    .slice(0, NAMED_SUBAGENTS)
+    .map((subagent) => subagent.description.trim())
+    .filter(Boolean);
+  const more = subagents.length - named.length;
+  const list = named.length ? `: ${named.join(" · ")}${more > 0 ? ` and ${more} more` : ""}` : "";
+  return { message: `On it… ${count} working${list}`, indicator: `is on it… (${count} working)` };
+}
+
 export const WAITING_FOR_APPROVAL: StatusText = {
   message: "Waiting for your OK below…",
   indicator: "",

@@ -92,10 +92,17 @@ export async function* runEvents<T extends AgentRun>(
   const seen = new Set<string>();
   let pending = new Set<string>();
   let status: T["status"] | undefined;
+  let subagents = "";
   for await (const run of states) {
     if (run.status !== status) {
       status = run.status;
       yield { type: "run.status", run };
+    }
+    const working = JSON.stringify(run.subagents ?? []);
+    if (working !== subagents && !terminal(run.status)) {
+      // The first state's list counts as a change only when there is something in it.
+      if (subagents || working !== "[]") yield { type: "run.subagents", run };
+      subagents = working;
     }
     const current = new Set(run.pendingInputs.map((request) => request.id));
     for (const requestId of pending) {

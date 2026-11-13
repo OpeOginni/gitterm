@@ -36,7 +36,7 @@
   "dependencies": {
     "@boatdev/sdk": "^1.13.0",
     "@daytonaio/sdk": "^0.207.0",
-    "@opencode/client": "2.2.6",
+    "@opencode/client": "2.3.0",
     "@vercel/sandbox": "^3.2.1",
     "e2b": "^2.46.1"
   },

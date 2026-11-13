@@ -564,6 +564,7 @@ export function createDirectGittermClient(options: DirectGittermClientOptions) {
             error: null,
             finalText: null,
             pendingInputs: [],
+            subagents: [],
             context: previous ? { type: "continued", runId: previous.id } : { type: "isolated" },
             createdAt: now,
             submittedAt: now,

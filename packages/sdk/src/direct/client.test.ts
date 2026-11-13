@@ -102,7 +102,12 @@ describe("createDirectGittermClient", () => {
       const path = new URL(request.url).pathname;
       if (path === "/api/session/active") return Response.json({ data: {} });
       if (path === "/api/session/session-1") return Response.json({ data: { id: "session-1" } });
-      if (path.endsWith("/permission") || path.endsWith("/form"))
+      if (
+        path.endsWith("/permission") ||
+        path.endsWith("/form") ||
+        path.endsWith("/job") ||
+        path.endsWith("/inbox")
+      )
         return Response.json({ data: [] });
       if (path === "/api/session/session-1/message")
         return Response.json({ data: [], cursor: { next: null } });
@@ -118,6 +123,7 @@ describe("createDirectGittermClient", () => {
         workspaceId: workspace.id,
         workspace,
         pendingInputs: [],
+        subagents: [],
         context: { type: "isolated" },
         createdAt: new Date().toISOString(),
         completedAt: null,
@@ -145,7 +151,12 @@ describe("createDirectGittermClient", () => {
       const request = new Request(input, init);
       const path = new URL(request.url).pathname;
       if (path === "/api/session/session-1") return Response.json({ data: { id: "session-1" } });
-      if (path.endsWith("/permission") || path.endsWith("/form"))
+      if (
+        path.endsWith("/permission") ||
+        path.endsWith("/form") ||
+        path.endsWith("/job") ||
+        path.endsWith("/inbox")
+      )
         return Response.json({ data: [] });
       if (path === "/api/session/active") {
         return Response.json({ data: { "session-1": {} } });
@@ -178,6 +189,7 @@ describe("createDirectGittermClient", () => {
         workspaceId: workspace.id,
         workspace,
         pendingInputs: [],
+        subagents: [],
         context: { type: "isolated" },
         createdAt: new Date().toISOString(),
         completedAt: null,

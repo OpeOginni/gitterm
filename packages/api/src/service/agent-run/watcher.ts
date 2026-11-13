@@ -61,6 +61,8 @@ type TrackedRun = {
   deadlineAt: Date | null;
   status: string;
   pendingInputs: string;
+  /** The subagent IDs last seen; not stored, only announced to subscribers. */
+  subagents: string;
   sessionError: string | null;
   debounce: ReturnType<typeof setTimeout> | null;
   refreshing: Promise<void> | null;
@@ -132,6 +134,7 @@ class WorkspaceWatcher implements RunWatcherHandle {
       deadlineAt: run.deadlineAt,
       status: run.status,
       pendingInputs: JSON.stringify(run.pendingInputs),
+      subagents: "[]",
       sessionError: null,
       debounce: null,
       refreshing: null,
@@ -280,8 +283,17 @@ class WorkspaceWatcher implements RunWatcherHandle {
     });
     const references = inputReferences(snapshot.pendingInputs);
     const pendingInputs = JSON.stringify(references);
+    const subagents = JSON.stringify(snapshot.subagents.map((subagent) => subagent.id));
     // Only lifecycle changes are persisted; message and token churn stays in OpenCode.
-    if (derived.status === tracked.status && pendingInputs === tracked.pendingInputs) return;
+    if (derived.status === tracked.status && pendingInputs === tracked.pendingInputs) {
+      if (subagents === tracked.subagents) return;
+      // Subscribers read the subagents from the workspace; the event only tells them to look.
+      tracked.subagents = subagents;
+      const row = await loadRun(tracked.id);
+      if (row) publishRun(row);
+      return;
+    }
+    tracked.subagents = subagents;
     const terminal = isTerminalRunStatus(derived.status);
     const [updated] = await db
       .update(agentRun)

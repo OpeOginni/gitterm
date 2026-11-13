@@ -7,6 +7,8 @@ export type AgentRunStatus =
   | "completed"
   | "failed"
   | "cancelled";
+/** A subagent the run started that is still working; the run waits for its report. */
+export type AgentRunSubagent = { id: string; description: string };
 export type AgentRunInputRequest = {
   id: string;
   /** Null when the runtime does not expose the original creation time. */
