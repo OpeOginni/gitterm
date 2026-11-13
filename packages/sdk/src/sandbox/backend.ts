@@ -64,7 +64,8 @@ export interface SandboxBackend {
   get(id: string): Promise<SandboxInfo>;
   list(): Promise<SandboxInfo[]>;
   destroy(id: string): Promise<void>;
-  /** Managed sandboxes pause when idle; direct sandboxes are deleted at their deadline instead. */
+  /** Managed sandboxes also pause when idle; direct ones only on request. */
+  pause?(id: string): Promise<void>;
   resume?(id: string): Promise<void>;
   run(
     id: string,
@@ -159,6 +160,15 @@ export function createDirectSandboxBackend(options: {
     if (info.state === "terminated")
       throw new SandboxProviderError("not_found", `Sandbox ${id} no longer exists.`);
   };
+  const ended = (info: SandboxProviderInfo) =>
+    !!info.expiresAt && Date.parse(info.expiresAt) <= Date.now();
+  // E2B preserves paused sandboxes past expiry; enforce the approved lifetime here.
+  const expire = async (info: SandboxProviderInfo): Promise<SandboxProviderInfo> => {
+    if (info.state !== "paused" || transport.capabilities.expiry !== "hard" || !ended(info))
+      return info;
+    await transport.destroy(info.id);
+    return { ...info, state: "terminated" };
+  };
 
   return {
     identity,
@@ -185,17 +195,34 @@ export function createDirectSandboxBackend(options: {
       );
     },
     async get(id) {
-      return toInfo(await owned(id));
+      return toInfo(await expire(await owned(id)));
     },
     async list() {
-      return (await transport.list({ [ACCOUNT_LABEL]: account, [WORKLOAD_LABEL]: "sandbox" })).map(
-        toInfo,
-      );
+      const items = await transport.list({ [ACCOUNT_LABEL]: account, [WORKLOAD_LABEL]: "sandbox" });
+      return Promise.all(items.map(async (info) => toInfo(await expire(info))));
     },
     async destroy(id) {
       await owned(id);
       await transport.destroy(id);
     },
+    // Direct Vercel sandboxes are not persistent, so stopping one discards it.
+    ...(transport.provider === "vercel"
+      ? {}
+      : {
+          async pause(id) {
+            await running(id);
+            await transport.pause(id);
+          },
+          async resume(id) {
+            const info = await owned(id);
+            if (info.state === "terminated" || ended(info))
+              throw new SandboxProviderError(
+                "not_found",
+                `Sandbox ${id} has reached its lifetime limit.`,
+              );
+            await transport.resume(id);
+          },
+        }),
     async run(id, command, runOptions) {
       await running(id);
       return transport.run(id, command, runOptions);
@@ -299,6 +326,7 @@ export function createManagedSandboxBackend(options: {
         .map(toInfo);
     },
     destroy: (id) => client.sandboxes.terminate(id),
+    pause: (id) => client.sandboxes.pause(id),
     resume: (id) => client.sandboxes.resume(id),
     // Only Gitterm's own sandboxes report finished jobs.
     ...(provider === "gitterm"
