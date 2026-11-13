@@ -517,6 +517,14 @@ describe("paused managed sandboxes", () => {
     expect(paused.snapshot).not.toBeNull();
   });
 
+  test("a provider that discards files on pause is not paused on request", async () => {
+    const { client, ref, sandbox } = await pausedClient("state-losing");
+    await client.resume(ref);
+    expect(client.canPause).toBe(false);
+    await expect(client.pause(ref)).rejects.toThrow(/cannot be paused/);
+    expect(sandbox.state).toBe("running");
+  });
+
   test("an explicit resume also forgets files the provider discarded", async () => {
     const { client, ref, store } = await pausedClient("state-losing");
     expect((await client.resume(ref)).snapshot).toBeNull();

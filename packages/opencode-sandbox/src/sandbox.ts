@@ -134,7 +134,10 @@ export async function registerSandboxTools(
   let resolving: Promise<{ account: SandboxAccount; client: SandboxClient }> | undefined;
   const proxies = new Map<string, PreviewProxy>();
   /** Jobs left running by a tool call, keyed `sandbox:job`; each posts one message when done. */
-  const watched = new Map<string, { stop: boolean; wake: () => void }>();
+  const watched = new Map<
+    string,
+    { stop: boolean; wake: () => void; reading?: Promise<JobView> }
+  >();
   /** Where the account pushes job completions, a push wakes the watch; polling is a fallback. */
   let stopPushes: (() => void) | undefined;
   let unloaded = false;
@@ -255,12 +258,16 @@ export async function registerSandboxTools(
     return stopPushes;
   }
 
+  /** Stops the watches; the promise settles when job reads already under way have finished. */
   const unwatch = (prefix: string) => {
+    const reading: Promise<unknown>[] = [];
     for (const [key, entry] of watched)
       if (key === prefix || key.startsWith(`${prefix}:`)) {
         entry.stop = true;
+        if (entry.reading) reading.push(entry.reading);
         watched.delete(key);
       }
+    return Promise.allSettled(reading);
   };
 
   /**
@@ -276,7 +283,10 @@ export async function registerSandboxTools(
   ) {
     const key = `${ref.id}:${jobId}`;
     if (watched.has(key)) return;
-    const entry = { stop: false, wake: () => {} };
+    const entry: { stop: boolean; wake: () => void; reading?: Promise<JobView> } = {
+      stop: false,
+      wake: () => {},
+    };
     watched.set(key, entry);
     const post = (text: string, description: string, metadata: Record<string, unknown>) =>
       ctx.session
@@ -304,7 +314,8 @@ export async function registerSandboxTools(
         if (entry.stop || unloaded) return;
         let view: JobView;
         try {
-          view = await (await sandbox()).job(ref, jobId, { tailBytes: 4096 });
+          entry.reading = sandbox().then((client) => client.job(ref, jobId, { tailBytes: 4096 }));
+          view = await entry.reading;
           delay = interval;
         } catch (error) {
           // A busy sandbox can be slow to answer: keep trying, less often, until the job's own
@@ -961,8 +972,9 @@ export async function registerSandboxTools(
         input: object({ sandboxId }, ["sandboxId"]),
         async execute(input) {
           const ref = await refFor(str((input as Record<string, unknown>).sandboxId, "sandboxId"));
-          // A job watch reads the job, which would resume the sandbox.
-          unwatch(ref.id);
+          // A job watch reads the job, which would resume the sandbox: stop the watches and let
+          // a read already under way finish before pausing.
+          await unwatch(ref.id);
           for (const [key, proxy] of proxies)
             if (key.startsWith(`${ref.id}:`)) {
               await proxy.close();

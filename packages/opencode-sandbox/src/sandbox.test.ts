@@ -9,6 +9,9 @@ let pushed: ((event: { sandboxId: string; jobId: string }) => void) | undefined;
 let failRead: { code: string; message: string } | undefined;
 let canPause = false;
 let jobReads = 0;
+/** While set, job reads wait for it, like a slow read still under way when a pause starts. */
+let heldRead: Promise<void> | undefined;
+const events: string[] = [];
 let lists = 0;
 const paused: string[] = [];
 const jobView = (status: string) => ({
@@ -53,6 +56,7 @@ mock.module("@gitterm/sdk/sandbox", () => ({
       return canPause;
     },
     pause: async (ref: { id: string }) => {
+      events.push("pause");
       paused.push(ref.id);
       return { id: ref.id, state: "paused", jobs: { job1: { id: "job1", status: "running" } } };
     },
@@ -69,6 +73,11 @@ mock.module("@gitterm/sdk/sandbox", () => ({
     exec: async () => jobView("running"),
     job: async () => {
       jobReads++;
+      if (heldRead) {
+        events.push("read started");
+        await heldRead;
+        events.push("read finished");
+      }
       if (failRead) throw Object.assign(new Error(failRead.message), { code: failRead.code });
       return jobView(jobStatus);
     },
@@ -240,6 +249,27 @@ test("pausing stops the job watch, which would otherwise resume the sandbox", as
   await Bun.sleep(60);
   expect(jobReads).toBe(0);
   expect(posted).toHaveLength(0);
+  await unload();
+  canPause = false;
+});
+
+test("pausing waits for a job read already under way, which would resume the sandbox", async () => {
+  canPause = true;
+  jobStatus = "running";
+  events.length = 0;
+  let release = () => {};
+  heldRead = new Promise((resolve) => (release = resolve));
+  const { call, unload } = await tools();
+  await call("sandbox_exec", { sandboxId: "sbx", command: "bun run build", background: true });
+  await Bun.sleep(30);
+  expect(events).toEqual(["read started"]);
+  const pausing = call("sandbox_pause", { sandboxId: "sbx" });
+  await Bun.sleep(20);
+  expect(events).toEqual(["read started"]);
+  release();
+  await pausing;
+  expect(events).toEqual(["read started", "read finished", "pause"]);
+  heldRead = undefined;
   await unload();
   canPause = false;
 });
