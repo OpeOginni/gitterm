@@ -7,7 +7,6 @@ import type { Route } from "next";
 import { ArrowUpRight, Box, ChevronLeft, ChevronRight, Search, Terminal, X } from "lucide-react";
 import { trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Seg } from "@/components/site/seg";
 import { CopyField } from "@/components/dashboard/copy-field";
@@ -62,14 +61,11 @@ export function InstanceList({ kind }: { kind: "agents" | "sandboxes" }) {
           label: (
             <span className="inline-flex items-center gap-2 sm:px-2">
               {value === "all" ? "All" : value === "running" ? "Running" : "Paused"}
-              <span
-                className={cn(
-                  "text-[13px] font-normal text-fg-4 tabular-nums",
-                  !counts && "invisible",
-                )}
-              >
-                {counts?.[value] ?? 0}
-              </span>
+              {counts && (
+                <span className="text-[13px] font-normal text-fg-4 tabular-nums">
+                  {counts[value]}
+                </span>
+              )}
             </span>
           ),
         }))}
