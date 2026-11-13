@@ -5,7 +5,7 @@ import { ArrowUpRight, Code2, TerminalSquare } from "lucide-react";
 import { ApiTokensSection } from "@/components/dashboard/api-tokens-section";
 import { CopyField } from "@/components/dashboard/copy-field";
 import { INSTALL_CLOUD, INSTALL_SANDBOX } from "@/lib/site/providers";
-import { LineCell, LineGrid, SectionHeading } from "@/components/dashboard/kit";
+import { SectionHeading } from "@/components/dashboard/kit";
 
 const TOOLS = [
   {
@@ -56,29 +56,34 @@ export function ApiSection() {
           title="Official tools"
           description="Each one signs in with a token from this page."
         />
-        <LineGrid className="md:grid-cols-2 xl:grid-cols-3">
+        {/* One row per tool so each install command fits on a single line. */}
+        <ul className="divide-y divide-line rounded-xl border border-line">
           {TOOLS.map((tool) => (
-            <LineCell key={tool.name} className="gap-3">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <span className="flex size-4 shrink-0 items-center justify-center">
+            <li
+              key={tool.name}
+              className="flex flex-col gap-3 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:gap-6"
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fill">
                   {tool.icon}
                 </span>
-                <span className="truncate font-mono text-[13.5px] text-fg">{tool.name}</span>
-                <a
-                  href={`https://www.npmjs.com/package/${tool.name}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="ml-auto inline-flex shrink-0 items-center gap-1 text-[12.5px] text-fg-3 transition-colors hover:text-fg"
-                >
-                  npm
-                  <ArrowUpRight className="size-3.5" />
-                </a>
+                <div className="min-w-0">
+                  <a
+                    href={`https://www.npmjs.com/package/${tool.name}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group inline-flex max-w-full items-center gap-1 font-mono text-[13.5px] text-fg"
+                  >
+                    <span className="truncate">{tool.name}</span>
+                    <ArrowUpRight className="size-3.5 shrink-0 text-fg-4 transition-colors group-hover:text-fg" />
+                  </a>
+                  <p className="mt-0.5 text-[13px] leading-relaxed text-fg-3">{tool.description}</p>
+                </div>
               </div>
-              <p className="text-[13.5px] leading-relaxed text-fg-3">{tool.description}</p>
-              <CopyField multiline value={tool.install} className="mt-auto" />
-            </LineCell>
+              <CopyField value={tool.install} className="lg:w-[30rem] lg:shrink-0" />
+            </li>
           ))}
-        </LineGrid>
+        </ul>
       </section>
     </div>
   );
