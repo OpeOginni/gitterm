@@ -97,6 +97,8 @@ describe("direct run interaction", () => {
       if (path === "/api/model")
         return Response.json({ data: [{ id: "test", modelID: "test", providerID: "openai" }] });
       if (path === "/api/session/ses_test") return Response.json({ data: { id: "ses_test" } });
+      if (path === "/api/experimental/job" || path.endsWith("/inbox"))
+        return Response.json({ data: [] });
       if (path === "/api/session/active")
         return Response.json({ data: phase === "done" ? {} : { ses_test: {} } });
       if (path.endsWith("/permission")) {

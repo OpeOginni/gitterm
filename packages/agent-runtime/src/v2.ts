@@ -28,8 +28,16 @@ import {
   type RuntimeTarget,
 } from "./types";
 
+/** A background job as OpenCode lists it. */
+type JobInfo = Awaited<
+  ReturnType<ReturnType<typeof createOpencodeClient>["experimental"]["job"]["list"]>
+>[number];
+
 /** How long a prompt waits for a freshly started OpenCode to list its model. */
 const MODEL_READY_MS = 30_000;
+/** Cancelling stops within this, inside the callers' own two-second limit. */
+const ABORT_SETTLE_MS = 1_500;
+const ABORT_POLL_MS = 50;
 
 /** OpenCode 2 through `@opencode/client` (`{ id, type, data }` events, questions as forms). */
 export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
@@ -116,7 +124,61 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
     },
 
     async abort(sessionID) {
-      await call(client.session.interrupt({ sessionID }, options()));
+      // Interrupting a session leaves its subagents running, and every subagent that stops
+      // reports back, which wakes the session again. Like `opencode run`, keep stopping the
+      // session and its subagents until nothing is left that would wake it. One deadline bounds
+      // every request, so nothing is interrupted after the caller has given up.
+      const deadline = AbortSignal.timeout(ABORT_SETTLE_MS);
+      const bounded = () =>
+        requestTimeout(AbortSignal.any([deadline, ...(target.signal ? [target.signal] : [])]));
+      try {
+        // Every subagent below the session, whichever run started it: any of them can wake it.
+        const subagents = new Set(await subtree([sessionID], bounded()));
+        for (let round = 0; ; round++) {
+          const { live: jobs } = await liveJobs(
+            sessionID,
+            (
+              await call(client.experimental.job.list({ sessionID, descendants: true }, bounded()))
+            ).filter((job) => job.kind === "subagent" || job.sessionID !== sessionID),
+            bounded(),
+          );
+          for (const job of jobs) {
+            if (job.sessionID !== sessionID) subagents.add(job.sessionID);
+            if (job.kind === "subagent") subagents.add(job.childSessionID);
+          }
+          const wakes = await pendingWakes(sessionID, [...subagents], bounded());
+          const active = await call(client.session.active(bounded()));
+          const working = [sessionID, ...subagents].filter((id) => id in active);
+          if (round > 0 && jobs.length === 0 && !wakes && working.length === 0) return;
+          const interrupt = new Set(round === 0 ? [sessionID, ...working] : working);
+          for (const job of jobs)
+            if (job.kind === "subagent" && job.status === "running")
+              interrupt.add(job.childSessionID);
+          await Promise.all([
+            ...[...interrupt].map((id) =>
+              call(client.session.interrupt({ sessionID: id }, bounded())),
+            ),
+            // A shell a subagent left running would wake it, and through it this session.
+            ...jobs.flatMap((job) =>
+              job.kind === "shell" && job.status === "running"
+                ? [
+                    call(
+                      client.shell.remove(
+                        { id: job.shellID, location: { directory: target.directory } },
+                        bounded(),
+                      ),
+                    ),
+                  ]
+                : [],
+            ),
+          ]);
+          await new Promise((resolve) => setTimeout(resolve, ABORT_POLL_MS));
+          deadline.throwIfAborted();
+        }
+      } catch (error) {
+        if (deadline.aborted) throw new Error("OpenCode kept working after the run was cancelled");
+        throw error;
+      }
     },
 
     async deleteSession(sessionID) {
@@ -130,12 +192,22 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
         if (isSessionNotFound(error)) return missingSessionSnapshot();
         throw error;
       }
-      const [active, messages, permissions, forms] = await Promise.all([
-        call(client.session.active(reading())),
+      const [read, permissions, forms] = await Promise.all([
         listRunMessages(sessionID, messageId),
         call(client.permission.list({ sessionID }, reading())),
         call(client.session.form.list({ sessionID }, reading())),
       ]);
+      const since = asRecord(read.find((message) => message.id === messageId)?.time).created;
+      const children = subagentSessions(selectRunMessages(read, messageId));
+      // The subagents this run started and theirs; older subagents belong to earlier runs.
+      const tree = [
+        ...children,
+        ...(await subtree(children, reading(), typeof since === "number" ? since : undefined)),
+      ];
+      const { busy, subagents, lost } = await runBusy(sessionID, tree, since);
+      // The session may have finished more work between the first read and finding it quiet;
+      // only messages read after that are its final state.
+      const messages = busy ? read : await listRunMessages(sessionID, messageId);
 
       const runMessages = selectRunMessages(messages, messageId);
       const userIndex = messages.findIndex((message) => message.id === messageId);
@@ -149,7 +221,9 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
       return {
         sessionExists: true,
         superseded,
-        busy: sessionID in active,
+        busy,
+        subagents,
+        lostWork: lost,
         retry: Boolean(assistant?.retry) && assistantTime.completed == null,
         messages: runMessages.map(normalizeMessage),
         finalText: finalText || null,
@@ -238,6 +312,128 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
   };
 
   /**
+   * Whether the session is working, or work the run started will wake it again: subagents run
+   * in the background and report back to the session when they go idle. That work moves from
+   * a job to an inbox to an active session, so they are read in that order and none is missed
+   * between reads.
+   */
+  async function runBusy(sessionID: string, tree: string[], since: unknown) {
+    const { live: jobs, lost } = await liveJobs(
+      sessionID,
+      (
+        await call(client.experimental.job.list({ sessionID, descendants: true }, reading()))
+      ).filter(
+        (job) =>
+          (job.kind === "subagent" || job.sessionID !== sessionID) &&
+          // Older runs' subagents belong to those runs.
+          (typeof since !== "number" || job.time.started >= since),
+      ),
+      reading(),
+    );
+    const subagents = jobs.flatMap((job) =>
+      job.kind === "subagent" && job.status === "running"
+        ? [{ id: job.childSessionID, description: job.description }]
+        : [],
+    );
+    if (jobs.length > 0) return { busy: true, subagents, lost };
+    if (await pendingWakes(sessionID, tree, reading())) return { busy: true, subagents, lost };
+    const active = await call(client.session.active(reading()));
+    return { busy: [sessionID, ...tree].some((id) => id in active), subagents, lost };
+  }
+
+  /**
+   * The jobs that are still doing something. After OpenCode restarts it can keep listing a
+   * job as running whose subagent no longer runs or whose shell is gone, and nothing will
+   * ever finish it. Such a job is still listed as running after its subagent was seen idle or
+   * its shell missing; a job that really ended in the meantime is not.
+   */
+  async function liveJobs<Job extends JobInfo>(
+    sessionID: string,
+    jobs: Job[],
+    requestOptions: ReturnType<typeof options>,
+  ): Promise<{ live: Job[]; lost: boolean }> {
+    const running = jobs.filter(
+      (job) => job.status === "running" && (job.kind === "subagent" || job.kind === "shell"),
+    );
+    if (running.length === 0) return { live: jobs, lost: false };
+    const active = await call(client.session.active(requestOptions));
+    const shells = running.some((job) => job.kind === "shell")
+      ? new Set(
+          (
+            await call(
+              client.shell.list({ location: { directory: target.directory } }, requestOptions),
+            )
+          ).data.map((shell) => shell.id),
+        )
+      : new Set<string>();
+    const unseen = running.filter((job) =>
+      job.kind === "subagent"
+        ? !(job.childSessionID in active)
+        : job.kind === "shell" && !shells.has(job.shellID),
+    );
+    if (unseen.length === 0) return { live: jobs, lost: false };
+    const again = new Map(
+      (
+        await call(client.experimental.job.list({ sessionID, descendants: true }, requestOptions))
+      ).map((job) => [job.id, job.status]),
+    );
+    const lost = new Set(
+      unseen.filter((job) => again.get(job.id) === "running").map((job) => job.id),
+    );
+    return { live: jobs.filter((job) => !lost.has(job.id)), lost: lost.size > 0 };
+  }
+
+  /**
+   * Whether a subagent's report waits in the inbox of the session or one of its subagents.
+   * OpenCode removes a subagent's job before the report wakes its parent, so only the inbox
+   * shows it then. Other input (prompts, shell notices) marks its session active before its
+   * job goes, so the job or `active` already shows it. Counting only reports also leaves out
+   * notes that never wake anything, like those OpenCode parks with `resume: false` after a
+   * restart.
+   */
+  async function pendingWakes(
+    sessionID: string,
+    subagents: string[],
+    requestOptions: ReturnType<typeof options>,
+  ) {
+    const [own, ...theirs] = await Promise.all(
+      [sessionID, ...subagents].map((id) =>
+        call(client.session.inbox.list({ sessionID: id }, requestOptions)),
+      ),
+    );
+    return [own!, ...theirs].some((items) => items.some(isSubagentReport));
+  }
+
+  /**
+   * The sessions below `roots`: their subagents, those subagents' own, and so on. `since`
+   * leaves out sessions created before it.
+   */
+  async function subtree(
+    roots: string[],
+    requestOptions: ReturnType<typeof options>,
+    since?: number,
+  ): Promise<string[]> {
+    const found = new Set<string>();
+    const queue = [...roots];
+    for (let parentID = queue.shift(); parentID; parentID = queue.shift()) {
+      let cursor: string | undefined;
+      do {
+        const page = await call(
+          client.session.list({ parentID, limit: 100, cursor }, requestOptions),
+        );
+        for (const session of page.data) {
+          if (found.has(session.id) || (since !== undefined && session.time.created < since))
+            continue;
+          found.add(session.id);
+          queue.push(session.id);
+        }
+        cursor = page.cursor.next ?? undefined;
+      } while (cursor);
+    }
+    return [...found];
+  }
+
+  /**
    * The run's prompt and everything after it, oldest first. Pages are read newest first
    * and stop at the prompt, so a snapshot costs the size of the run, not of the session.
    */
@@ -264,6 +460,29 @@ export function createV2Runtime(target: RuntimeTarget): OpencodeRuntime {
     }
     return messages.reverse();
   }
+}
+
+/** A `<subagent>` report waiting in a parent's inbox; it wakes the parent when delivered. */
+function isSubagentReport(item: unknown): boolean {
+  const record = asRecord(item);
+  return (
+    record.type === "synthetic" && asRecord(asRecord(record.payload).metadata).source === "subagent"
+  );
+}
+
+/** The subagent sessions a run's messages started or followed up. */
+export function subagentSessions(messages: Record<string, unknown>[]): string[] {
+  const sessions = new Set<string>();
+  for (const message of messages) {
+    for (const item of Array.isArray(message.content) ? message.content.map(asRecord) : []) {
+      if (item.type !== "tool" || item.name !== "subagent") continue;
+      const state = asRecord(item.state);
+      const id =
+        asString(asRecord(state.metadata).sessionID) ?? asString(asRecord(state.input).sessionID);
+      if (id) sessions.add(id);
+    }
+  }
+  return [...sessions];
 }
 
 /** v2 assistant messages have no parent id: a run owns its user message through the next user message. */

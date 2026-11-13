@@ -21,6 +21,7 @@ const base: AgentRun = {
   error: null,
   finalText: null,
   pendingInputs: [],
+  subagents: [],
   context: { type: "isolated" },
   createdAt: new Date().toISOString(),
   submittedAt: null,
@@ -94,4 +95,27 @@ test("failed and cancelled runs are not successful results", async () => {
       code: status === "failed" ? "RUN_FAILED" : "RUN_CANCELLED",
     });
   }
+});
+
+test("events announce each change to the run's working subagents, not repeats", async () => {
+  const child = { id: "ses_child", description: "Read the logs" };
+  const { api } = helpers([
+    base,
+    { ...base, subagents: [child] },
+    { ...base, subagents: [child] },
+    { ...base, subagents: [] },
+    completed,
+  ]);
+  const events: string[] = [];
+  for await (const event of api.events(base))
+    events.push(
+      event.type === "run.subagents" ? `subagents:${event.run.subagents.length}` : event.type,
+    );
+  expect(events).toEqual([
+    "run.status",
+    "subagents:1",
+    "subagents:0",
+    "run.status",
+    "run.completed",
+  ]);
 });

@@ -1,3 +1,4 @@
+import type { AgentRunSubagent } from "@gitterm/agent-runtime/contract";
 import type { AgentRun } from "@gitterm/db/schema/agent-run";
 
 export function publicRun(run: AgentRun) {
@@ -9,6 +10,7 @@ export function publicRun(run: AgentRun) {
     error: run.errorMessage ? "Agent run failed or was interrupted" : null,
     finalText: null as string | null,
     pendingInputs: [] as typeof run.pendingInputs,
+    subagents: [] as AgentRunSubagent[],
     context: run.parentRunId
       ? { type: "continued" as const, runId: run.parentRunId }
       : { type: "isolated" as const },

@@ -444,6 +444,8 @@ export type AgentRunReply =
   | { type: "question"; answers: Record<string, string[]> }
   | { type: "question"; reject: true };
 
+export type AgentRunSubagent = { id: string; description: string };
+
 export type AgentRun = {
   /** A runtime snapshot was read successfully, even if it contained no final text. */
   outputAvailable?: boolean;
@@ -459,6 +461,12 @@ export type AgentRun = {
    * Answer each with `runs.respond()`; the run resumes once none remain.
    */
   pendingInputs: AgentRunInputRequest[];
+  /**
+   * Subagents the run started that are still working. OpenCode runs them in the background
+   * and the run finishes only after they report back, so the agent can look idle meanwhile.
+   * Empty once the run ends. `id` is the subagent's session.
+   */
+  subagents: AgentRunSubagent[];
   context: { type: "isolated" } | { type: "continued"; runId: string };
   createdAt: string;
   /** When the prompt reached the agent; null while `pending`. */
@@ -579,6 +587,8 @@ export type AgentRunEvent<T extends AgentRun = AgentRun> =
   | { type: "run.status"; run: T }
   | { type: "input.required"; run: T; request: AgentRunInputRequest }
   | { type: "input.resolved"; run: T; requestId: string }
+  /** The run's working subagents changed; read them from `run.subagents`. */
+  | { type: "run.subagents"; run: T }
   | { type: "run.completed" | "run.failed" | "run.cancelled"; run: T };
 
 export type AgentRunMessage = {

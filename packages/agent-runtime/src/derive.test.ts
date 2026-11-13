@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { deriveRunState, MISSING_ASSISTANT_GRACE_MS } from "./derive";
+import { deriveRunState, LOST_WORK_MESSAGE, MISSING_ASSISTANT_GRACE_MS } from "./derive";
 import type { RuntimeSnapshot } from "./types";
 
 function snapshot(overrides: Partial<RuntimeSnapshot> = {}): RuntimeSnapshot {
@@ -11,6 +11,8 @@ function snapshot(overrides: Partial<RuntimeSnapshot> = {}): RuntimeSnapshot {
     finalText: null,
     assistant: { exists: true, completed: true, error: null },
     pendingInputs: [],
+    subagents: [],
+    lostWork: false,
     ...overrides,
   };
 }
@@ -104,5 +106,20 @@ describe("deriveRunState", () => {
       status: "cancelled",
       errorMessage: "Session was deleted before the run completed",
     });
+  });
+});
+
+describe("lost work", () => {
+  test("a run whose subagent's work a restart lost fails, so it can be continued", () => {
+    expect(deriveRunState(snapshot({ lostWork: true }), { submittedAt: null })).toEqual({
+      status: "failed",
+      errorMessage: LOST_WORK_MESSAGE,
+    });
+  });
+
+  test("lost work waits while the agent is still working", () => {
+    expect(
+      deriveRunState(snapshot({ lostWork: true, busy: true }), { submittedAt: null }).status,
+    ).toBe("running");
   });
 });

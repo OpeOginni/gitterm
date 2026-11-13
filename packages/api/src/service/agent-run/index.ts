@@ -427,6 +427,7 @@ export async function getAgentRun(workspaceId: string, runId: string, userId: st
         ...result,
         finalText: live.finalText,
         pendingInputs: live.pendingInputs,
+        subagents: live.subagents,
         outputAvailable: true,
       }
     : { ...result, outputAvailable: false };

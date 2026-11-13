@@ -40,6 +40,7 @@ export type {
   AgentRunMessagePart,
   AgentRunReply,
   AgentRunStatus,
+  AgentRunSubagent,
   AgentRunEvent,
   AgentRunResult,
   AgentRunReplyPermission,

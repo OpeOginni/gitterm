@@ -74,6 +74,7 @@ function run(id: string, status: AgentRun["status"], extra: Partial<AgentRun> = 
     error: null,
     finalText: status === "completed" ? "" : null,
     pendingInputs: [],
+    subagents: [],
     context: { type: "isolated" },
     createdAt: new Date().toISOString(),
     submittedAt: null,
@@ -484,6 +485,79 @@ describe("createBot", () => {
     await until(() => chat.log.replies.length === 1, "reply");
     expect(chat.log.replies[0]?.markdown).toBe("Opened #12");
     await until(() => chat.log.removed.includes("s1"), "status removal");
+  });
+
+  test("names the subagents it waits on, and posts one answer once they report back", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "why does login fail?" });
+    await until(() => gitterm.calls.runs.length === 1, "run");
+    const status = chat.log.posts.indexOf("On it…");
+    const statusId = `s${status + 1}`;
+
+    gitterm.stream("run1").push({
+      type: "run.subagents",
+      run: run("run1", "running", {
+        subagents: [
+          { id: "ses_a", description: "Find the failing test" },
+          { id: "ses_b", description: "Check the API docs" },
+        ],
+      }),
+    });
+    await until(
+      () =>
+        chat.log.edits.get(statusId) ===
+        "On it… 2 helpers working: Find the failing test · Check the API docs",
+      "subagent status",
+    );
+    gitterm.stream("run1").push({
+      type: "run.subagents",
+      run: run("run1", "running", { subagents: [] }),
+    });
+    await until(() => chat.log.edits.get(statusId) === "On it…", "status after the reports");
+
+    gitterm.stream("run1").push({
+      type: "run.completed",
+      run: run("run1", "completed", { finalText: "The session cookie expires early." }),
+    });
+    await until(() => chat.log.removed.includes(statusId), "status removal");
+    expect(chat.log.replies).toEqual([{ markdown: "The session cookie expires early." }]);
+  });
+
+  test("a message sent while the thread is busy is acknowledged, then handled next", async () => {
+    const gitterm = fakeGitterm();
+    const chat = fakeAdapter();
+    const bot = createBot({
+      adapter: chat.adapter,
+      gitterm: gitterm.client,
+      repo: "https://github.com/acme/app",
+      stateFile: await stateFile(),
+      logger: quiet,
+    });
+    await bot.start();
+    chat.send({ id: "100", text: "fix the login bug" });
+    await until(() => gitterm.calls.runs.length === 1, "run");
+    chat.send({ id: "101", text: "use the staging branch" });
+    await until(
+      () => chat.log.posts.some((post) => post.startsWith("Got it. I'll pick this up")),
+      "acknowledgement",
+    );
+    expect(gitterm.calls.runs).toHaveLength(1);
+
+    gitterm.stream("run1").push({
+      type: "run.completed",
+      run: run("run1", "completed", { finalText: "Fixed" }),
+    });
+    await until(() => gitterm.calls.runs.length === 2, "second run");
+    expect(gitterm.calls.runs[1]?.prompt).toContain("Request: use the staging branch");
   });
 
   test("sends the files the agent attached and says which could not be sent", async () => {

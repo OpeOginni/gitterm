@@ -29,6 +29,7 @@ import {
   WAITING_FOR_ANSWER,
   WAITING_FOR_APPROVAL,
   WORKING,
+  workingOn,
   type StatusLine,
   type StatusText,
 } from "./status.js";
@@ -452,6 +453,8 @@ export function createBot(initial: BotOptions): Bot {
     // Prompts are relayed concurrently with the event stream, so the run ending or a request
     // being answered elsewhere closes the prompt in the thread right away.
     const relays = new Map<string, AbortController>();
+    // What the status says while no prompt is open.
+    let progress = WORKING;
     const relay = async (request: AgentRunInputRequest) => {
       const controller = new AbortController();
       relays.set(request.id, controller);
@@ -469,7 +472,7 @@ export function createBot(initial: BotOptions): Bot {
         log.warn("Could not relay an agent prompt", { thread: job.key }, error);
       } finally {
         relays.delete(request.id);
-        if (relays.size === 0) status.set(WORKING);
+        if (relays.size === 0) status.set(progress);
       }
     };
 
@@ -484,6 +487,10 @@ export function createBot(initial: BotOptions): Bot {
               void relay(event.request);
             } else if (event.type === "input.resolved") {
               relays.get(event.requestId)?.abort("Answered elsewhere.");
+            } else if (event.type === "run.subagents") {
+              // Servers from before subagent progress send no list.
+              progress = workingOn(event.run.subagents ?? []);
+              if (relays.size === 0) status.set(progress);
             } else if (event.type === "run.completed") {
               completed = event.run;
               break;
@@ -874,6 +881,12 @@ export function createBot(initial: BotOptions): Bot {
       requester: message.author,
       sandbox: `${spaceOf(message, options.shareChannels)}:${repoKey(repo)}`,
     };
+    // Requests in a thread run one at a time; say so rather than stay quiet until it starts.
+    if (pending.get(key)?.size)
+      void say(
+        message.thread,
+        "Got it. I'll pick this up once I've finished what I'm doing here. Say *stop* to drop everything in this thread.",
+      );
     if (!pending.has(key)) pending.set(key, new Set());
     pending.get(key)!.add(pendingJob);
     // Threads run concurrently in the sandbox; messages within one thread wait their turn.

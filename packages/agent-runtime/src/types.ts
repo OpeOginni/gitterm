@@ -1,4 +1,4 @@
-import type { AgentRunInputRequest, AgentRunMessageSnapshot } from "./contract";
+import type { AgentRunInputRequest, AgentRunMessageSnapshot, AgentRunSubagent } from "./contract";
 
 export type RuntimeTarget = {
   url: string;
@@ -35,6 +35,13 @@ export type RuntimeSnapshot = {
     error: { kind: "aborted" | "error"; message: string } | null;
   };
   pendingInputs: AgentRunInputRequest[];
+  /** Subagents this run started that are still working. */
+  subagents: AgentRunSubagent[];
+  /**
+   * Work this run started that OpenCode lost, so it will never report back: after a restart
+   * OpenCode keeps listing a subagent it never resumes, or a shell that is gone, as running.
+   */
+  lostWork: boolean;
 };
 
 export type QuestionInputRequest = Extract<AgentRunInputRequest, { kind: "question" }>;
@@ -102,6 +109,8 @@ export function missingSessionSnapshot(): RuntimeSnapshot {
     finalText: null,
     assistant: { exists: false, completed: false, error: null },
     pendingInputs: [],
+    subagents: [],
+    lostWork: false,
   };
 }
 
