@@ -165,17 +165,23 @@ To stop being asked every time, allow actions in your OpenCode `permissions`:
 
 ### Environment variables
 
-A command gets only the variables the agent names in `secretEnv`, and OpenCode asks
-before it passes them. Values come from your local environment, or from env files you list:
+List env files and every command gets their variables, including dev servers that
+`sandbox_preview` starts:
 
 ```jsonc
-"options": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "envFiles": [".env", ".gitterm.env"] }
+"options": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "envFiles": [".env.development"] }
 ```
 
-Paths are relative to the project directory. A later file wins over an earlier one, and the
-files win over your local environment. Values are passed to the command, not saved as
-sandbox settings. Commands can still print them or write them to files that snapshots keep.
-Values must be at least four characters and contain no line breaks so output redaction can work.
+Paths are relative to the project directory, and a later file wins over an earlier one. The
+files are read on each command, so edits apply at once.
+
+Values are passed outside the conversation. In command output, each line of an env value
+with at least four characters is replaced with `[redacted]`. Shorter values or lines, such as `DEBUG=1`, can appear
+in output because replacing them would garble unrelated text.
+
+The agent can also pass a variable from your local environment by naming it in `secretEnv`.
+OpenCode asks first, and it wins over a file's variable of the same name.
+Commands can save values to files that snapshots retain.
 
 ### Setup snapshots
 

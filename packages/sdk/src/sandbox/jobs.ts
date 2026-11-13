@@ -70,8 +70,7 @@ pid_alive() {
  * Runs detached from the launching call. Args: job dir, timeout seconds, cwd.
  *
  * The job is its process group: when the command exits, anything it left running is
- * stopped too, so nothing outlives the job or its deadline. With secrets, output passes
- * through `redact.awk` inside the sandbox, so the stored log never contains their values.
+ * stopped too, so nothing outlives the job or its deadline.
  */
 const RUNNER = `J="$1"; T="$2"; C="$3"
 ${LIVENESS}
@@ -116,8 +115,21 @@ kill -TERM -"$dog" 2>/dev/null || kill "$dog" 2>/dev/null
 finish "$code"
 `;
 
-/** Replaces each secret value, read from the job's environment by name, line by line. */
-const REDACT_AWK = `BEGIN { while ((getline name < names) > 0) if ((name in ENVIRON) && length(ENVIRON[name]) >= 4) secret[++n] = ENVIRON[name] }
+const REDACT_AWK = `BEGIN {
+  while ((getline name < names) > 0) if (name in ENVIRON) {
+    k = split(ENVIRON[name], part, "\\n")
+    for (j = 1; j <= k; j++) {
+      sub(/\\r$/, "", part[j])
+      if (length(part[j]) < 4) continue
+      i = ++n
+      while (i > 1 && length(secret[i - 1]) < length(part[j])) {
+        secret[i] = secret[i - 1]
+        i--
+      }
+      secret[i] = part[j]
+    }
+  }
+}
 {
   line = $0
   for (i = 1; i <= n; i++) {
@@ -130,20 +142,10 @@ const REDACT_AWK = `BEGIN { while ((getline name < names) > 0) if ((name in ENVI
 }
 `;
 
-/**
- * Secret values are redacted line by line inside the sandbox, so a value spanning lines
- * (a PEM key, say) or one too short to match safely cannot be protected: refuse it before
- * anything is sent.
- */
-export function assertRedactableSecrets(env: Record<string, string> = {}) {
-  for (const [name, value] of Object.entries(env)) {
-    if (/[\r\n]/.test(value))
-      throw new Error(
-        `${name} contains a line break, which cannot be redacted from output. Base64-encode it and decode it in the command, e.g. "$(printf %s "$${name}" | base64 -d)".`,
-      );
-    if (value.length < 4)
-      throw new Error(`${name} is shorter than 4 characters and cannot be redacted reliably.`);
-  }
+export function redactablePieces(env: Record<string, string> = {}): string[] {
+  return Object.values(env)
+    .flatMap((value) => value.split(/\r?\n/))
+    .filter((piece) => piece.length >= 4);
 }
 
 function envScript(env: Record<string, string> = {}): string {
@@ -161,7 +163,6 @@ export async function startJob(
   id: string,
   input: JobStartInput,
 ): Promise<void> {
-  assertRedactableSecrets(input.env);
   const dir = jobDir(backend, id);
   const seconds = Math.max(1, Math.ceil(input.timeoutMs / 1000));
   const prepared = await backend.run(

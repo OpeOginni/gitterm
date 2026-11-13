@@ -116,7 +116,7 @@ type SandboxOptions = {
    * Off by default. An account's own `snapshot` setting always wins.
    */
   snapshots?: boolean;
-  /** Env files for `secretEnv`, relative to the project. Later files win over files and local env. */
+  /** Env files for all commands, relative to the project. Later files win; `secretEnv` overrides. */
   envFiles?: string[];
 };
 

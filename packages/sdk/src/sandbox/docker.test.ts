@@ -239,7 +239,8 @@ for (const [kind, createBackend] of Object.entries(backends))
     test("serves a private preview and returns a binary artifact with matching hashes", async () => {
       const preview = await client.preview(sandbox, {
         port: 8000,
-        command: `node -e 'require("http").createServer((q,r)=>r.end("hello preview")).listen(8000)'`,
+        command: `node -e 'require("http").createServer((q,r)=>r.end(process.env.PREVIEW_MESSAGE)).listen(8000)'`,
+        env: { PREVIEW_MESSAGE: "hello preview" },
         readyTimeoutMs: 30_000,
       });
       expect(preview.ready).toBe(true);
@@ -319,18 +320,18 @@ for (const [kind, createBackend] of Object.entries(backends))
       expect(raw.log.text).toContain("first=[redacted]");
     }, 60_000);
 
-    test("#3 secrets that cannot be redacted are refused before anything is sent", async () => {
-      const before = Object.keys((await client.get(sandbox)).jobs).length;
-      await expect(
-        client.exec(sandbox, {
-          command: "true",
-          env: { KEY: "-----BEGIN KEY-----\nabcdef\n-----END KEY-----" },
-        }),
-      ).rejects.toThrow(/line break/);
-      await expect(client.exec(sandbox, { command: "true", env: { PIN: "123" } })).rejects.toThrow(
-        /shorter than 4/,
+    test("#3 multi-line secrets are redacted line by line; short values pass unredacted", async () => {
+      const line = `line-${randomBytes(6).toString("hex")}`;
+      const key = `-----BEGIN KEY-----\r\n${line}\r\n${line}-longer\r\n-----END KEY-----`;
+      const job = await client.exec(sandbox, {
+        command: 'printf "%s\\n" "$KEY"; echo "debug=$DEBUG env=$APP_ENV"',
+        env: { KEY: key, DEBUG: "1", APP_ENV: "dev" },
+        waitMs: 30_000,
+      });
+      expect(job.state.status).toBe("succeeded");
+      expect(job.log.text).toBe(
+        "[redacted]\r\n[redacted]\r\n[redacted]\r\n[redacted]\ndebug=1 env=dev\n",
       );
-      expect(Object.keys((await client.get(sandbox)).jobs).length).toBe(before);
     }, 30_000);
 
     test("#7 processes a job leaves behind end with it", async () => {

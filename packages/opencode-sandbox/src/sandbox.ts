@@ -183,6 +183,19 @@ export async function registerSandboxTools(
     return realpath(session.location.directory);
   }
 
+  async function envFileVars(context: ToolContext) {
+    const vars: Record<string, string> = Object.create(null);
+    if (!settings?.envFiles?.length) return vars;
+    const directory = await sessionDirectory(context);
+    for (const file of settings.envFiles) {
+      const content = await readFile(path.resolve(directory, file), "utf8").catch(() => {
+        throw new Error(`Cannot read ${file} from the envFiles setting`);
+      });
+      Object.assign(vars, parseEnv(content));
+    }
+    return vars;
+  }
+
   /**
    * Setup snapshots are on when the user turned them on, the account's provider can snapshot,
    * and the user has not set a snapshot for the account themselves (theirs always wins).
@@ -621,7 +634,7 @@ export async function registerSandboxTools(
             type: "array",
             items: { type: "string" },
             description:
-              "Names of local environment variables, or variables from the envFiles setting, to pass. Values never enter the conversation.",
+              "Names of local environment variables to pass with approval. Output redacts lines of at least four characters. Variables from envFiles are already set in every command.",
           },
         },
         ["sandboxId", "command"],
@@ -640,21 +653,11 @@ export async function registerSandboxTools(
         const names = Array.isArray(args.secretEnv)
           ? args.secretEnv.filter((name): name is string => typeof name === "string")
           : [];
-        const env: Record<string, string> = Object.create(null);
+        const env = await envFileVars(context);
         if (names.length) {
           await assert(context, "gitterm.sandbox.secret", names, names, { sandbox: ref.id });
-          const fromFiles: Record<string, string> = Object.create(null);
-          if (settings?.envFiles?.length) {
-            const directory = await sessionDirectory(context);
-            for (const file of settings.envFiles) {
-              const content = await readFile(path.resolve(directory, file), "utf8").catch(() => {
-                throw new Error(`Cannot read ${file} from the envFiles setting`);
-              });
-              Object.assign(fromFiles, parseEnv(content));
-            }
-          }
           for (const name of names) {
-            const value = fromFiles[name] ?? process.env[name];
+            const value = process.env[name];
             if (value === undefined)
               throw new Error(`Local environment variable ${name} is not set`);
             env[name] = value;
@@ -779,6 +782,7 @@ export async function registerSandboxTools(
           port,
           command: typeof args.command === "string" ? args.command : undefined,
           cwd: typeof args.cwd === "string" ? args.cwd : undefined,
+          env: typeof args.command === "string" ? await envFileVars(context) : undefined,
         });
         let local = "";
         if (args.localProxy === true && !preview.public) {

@@ -8,7 +8,7 @@ import {
 } from "./backend.js";
 import { applyArtifact, fetchArtifact, type FetchedArtifact } from "./artifacts.js";
 import {
-  assertRedactableSecrets,
+  redactablePieces,
   cancelJob,
   newJobId,
   readJobLog,
@@ -67,7 +67,7 @@ export type SandboxExecOptions = {
   /** Relative to the synced project directory, or absolute. */
   cwd?: string;
   timeoutMinutes?: number;
-  /** Values reach only the sandbox process; records keep the names. */
+  /** Command env; output redacts lines of at least four characters. Records keep only names. */
   env?: Record<string, string>;
   /** Wait up to this long for completion before returning a running job. */
   waitMs?: number;
@@ -112,7 +112,7 @@ export function sanitizeOutput(text: string, secrets: string[] = []): string {
     .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, "")
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "");
   // oxlint-enable no-control-regex
-  for (const secret of secrets)
+  for (const secret of secrets.toSorted((a, b) => b.length - a.length))
     if (secret.length >= 4) clean = clean.replaceAll(secret, "[redacted]");
   return clean;
 }
@@ -286,9 +286,7 @@ export function createSandboxClient(options: {
     const timeoutMinutes = input.timeoutMinutes ?? Math.min(10, maxMinutes);
     if (!(timeoutMinutes > 0) || timeoutMinutes > maxMinutes)
       throw new Error(`Job timeout must be between 0 and ${maxMinutes} minutes`);
-    // Refused before any record is written or anything is sent.
-    assertRedactableSecrets(input.env);
-    for (const value of Object.values(input.env ?? {})) secrets.add(value);
+    for (const piece of redactablePieces(input.env)) secrets.add(piece);
     const id = newJobId();
     const cwd = resolveCwd(backend.home, input.cwd);
     const job: JobRecord = {
@@ -454,7 +452,13 @@ export function createSandboxClient(options: {
     /** Optionally starts `command` as a job, then waits until the port answers. */
     async preview(
       ref: SandboxRef,
-      input: { port: number; command?: string; cwd?: string; readyTimeoutMs?: number },
+      input: {
+        port: number;
+        command?: string;
+        cwd?: string;
+        readyTimeoutMs?: number;
+        env?: Record<string, string>;
+      },
     ): Promise<PreviewResult> {
       const record = await running(ref);
       if (backend.capabilities.previews === "none")
@@ -474,7 +478,7 @@ export function createSandboxClient(options: {
         jobId = (
           await launchJob(
             ref,
-            { command: input.command, cwd: input.cwd, timeoutMinutes: minutes },
+            { command: input.command, cwd: input.cwd, timeoutMinutes: minutes, env: input.env },
             minutes,
           )
         ).job.id;
