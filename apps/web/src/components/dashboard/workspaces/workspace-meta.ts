@@ -29,7 +29,7 @@ export const isLive = (workspace: Workspace) =>
 export const STATUS: Record<string, { label: string; tone: Tone }> = {
   running: { label: "Running", tone: "ok" },
   pending: { label: "Starting", tone: "busy" },
-  paused: { label: "Paused", tone: "muted" },
+  paused: { label: "Paused", tone: "paused" },
   terminated: { label: "Terminated", tone: "danger" },
 };
 

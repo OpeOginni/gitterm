@@ -87,10 +87,6 @@ const endsIn = (workspace: Workspace) => {
   return minutes < 60 ? `${minutes} min left` : `${Math.round(minutes / 60)} h left`;
 };
 
-/**
- * One workspace as a list row: what it is, its status, and the one action you most likely want.
- * Opening the row shows how to connect, its ports, the machine, and the rarer actions.
- */
 export function WorkspaceRow({
   workspace,
   provider,
@@ -181,7 +177,6 @@ export function WorkspaceRow({
     });
   };
 
-  // One click creates the code, copies its link and opens the dialog with both.
   const connectOpencodeApp = () => {
     trackConnection("desktop");
     setAppPairing(startOpencodePairing(workspace.id));
@@ -206,7 +201,6 @@ export function WorkspaceRow({
     tab.location.href = getT3PairingUrl(workspace.subdomain, credential);
   };
 
-  // The one action a row offers: connect when it runs, restart when it is paused.
   let primary: ReactNode = null;
   if (isRunning && sandbox) {
     // No agent runs in a sandbox, so there is nothing to open or attach.
@@ -516,7 +510,7 @@ function WorkspaceDetails({
   const showAccess = isRunning && workspaceUrl;
 
   return (
-    <div className="border-t border-line bg-card px-4 pt-4 pb-5 sm:px-5 sm:pl-[70px]">
+    <div className="@container border-t border-line bg-card px-4 pt-4 pb-5 sm:px-5 sm:pl-[70px]">
       <div className="flex flex-wrap items-center gap-2">
         {openInBrowser}
         {canPairOpencode && isRunning && (
@@ -560,156 +554,161 @@ function WorkspaceDetails({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
-        {sandbox ? (
-          <DetailGroup title="Agent sandbox">
-            <p className="text-[13px] leading-relaxed text-fg-3">
-              Runs commands for your local agent or your code through the SDK. No agent runs inside.
-            </p>
-            <p className="text-[13px] text-fg-2">{endsIn(workspace) ?? "No time limit"}</p>
-          </DetailGroup>
-        ) : showAccess ? (
-          <DetailGroup title="Connect">
-            <CopyField label="URL" value={workspaceUrl} />
-            {workspace.hasAccessCredential &&
-              (isT3 ? (
-                <SecretCopy
-                  label="Pairing link"
-                  hint="Works once"
-                  copiedMessage="Pairing link copied. It works once."
-                  reveal={async () => {
-                    const credential = await revealCredential();
-                    return credential && workspace.subdomain
-                      ? getT3PairingUrl(workspace.subdomain, credential)
-                      : null;
-                  }}
-                  extra={<NewPairingLink workspaceId={workspace.id} />}
-                />
-              ) : (
-                <SecretCopy
-                  label="Server password"
-                  hint="••••••••••••••••"
-                  copiedMessage="Password copied"
-                  reveal={revealCredential}
-                />
-              ))}
-            {isOpencode && (
-              <CopyField
-                label="Project path"
-                value={getWorkspaceProjectPath(providerKey, workspace.repositoryUrl)}
-              />
-            )}
-          </DetailGroup>
-        ) : (
-          <DetailGroup title="Connect">
-            <p className="text-[13px] text-fg-3">
-              {workspace.status === "pending"
-                ? "Connection details appear once it is running."
-                : "Restart it to connect."}
-            </p>
-          </DetailGroup>
-        )}
-
-        <DetailGroup title="Ports">
-          {ports.length === 0 && <p className="text-[13px] text-fg-3">No open ports.</p>}
-          {ports.length > 0 && (
-            <ul className="grid gap-1">
-              {ports.map(([port, exposed]) => (
-                <PortRow
-                  key={port}
-                  workspace={workspace}
-                  port={parseInt(port, 10)}
-                  name={exposed.name}
-                  isPublic={exposed.visibility === "public"}
-                />
-              ))}
-            </ul>
-          )}
-          {isRunning && (
-            <Button
-              size="sm"
-              variant="secondary"
-              className="w-fit"
-              onClick={() => onDialog("port")}
-            >
-              <Plus className="size-3.5" />
-              Open port
-            </Button>
-          )}
-        </DetailGroup>
-
-        <DetailGroup title="Machine">
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]">
-            <Fact label="Provider">
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                {providerKey && PROVIDER_LOGOS[providerKey] ? (
-                  <Image
-                    src={PROVIDER_LOGOS[providerKey]}
-                    alt=""
-                    width={14}
-                    height={14}
-                    className="size-3.5 shrink-0 object-contain"
+      <div className="mt-5 grid gap-x-10 gap-y-6 @2xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="grid min-w-0 content-start gap-6">
+          {sandbox ? (
+            <DetailGroup title="Agent sandbox">
+              <p className="max-w-prose text-[13px] leading-relaxed text-fg-3">
+                Runs commands for your local agent or your code through the SDK. No agent runs
+                inside.
+              </p>
+              <p className="text-[13px] text-fg-2">{endsIn(workspace) ?? "No time limit"}</p>
+            </DetailGroup>
+          ) : showAccess ? (
+            <DetailGroup title="Connect">
+              <CopyField label="URL" value={workspaceUrl} />
+              {workspace.hasAccessCredential &&
+                (isT3 ? (
+                  <SecretCopy
+                    label="Pairing link"
+                    hint="Works once"
+                    copiedMessage="Pairing link copied. It works once."
+                    reveal={async () => {
+                      const credential = await revealCredential();
+                      return credential && workspace.subdomain
+                        ? getT3PairingUrl(workspace.subdomain, credential)
+                        : null;
+                    }}
+                    extra={<NewPairingLink workspaceId={workspace.id} />}
                   />
                 ) : (
-                  <Server className="size-3.5 shrink-0 text-fg-4" />
-                )}
-                <span className="truncate">
-                  {providerName}
-                  {region && <span className="text-fg-3"> {region.name}</span>}
-                </span>
-              </span>
-            </Fact>
-            {(size || profile) && (
-              <Fact label="Size">
-                {size ?? profile?.name}
-                {profile?.priceMicrosPerHour != null && (
-                  <span className="text-fg-3">
-                    {" "}
-                    {formatHourlyPrice(profile.priceMicrosPerHour)}
-                  </span>
-                )}
-              </Fact>
-            )}
-            <Fact label="Started">{ago(workspace.startedAt)}</Fact>
-            {workspace.repositoryUrl && (
-              <Fact label="Repository">
-                {repoUrl ? (
-                  <a
-                    href={repoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex max-w-full items-center gap-1 font-mono text-[12.5px] text-fg-2 transition-colors hover:text-fg"
-                  >
-                    <span className="truncate">
-                      {repoName(workspace.repositoryUrl)}
-                      {workspace.repositoryBranch ? `:${workspace.repositoryBranch}` : ""}
-                    </span>
-                    <ExternalLink className="size-3 shrink-0 text-fg-4" />
-                  </a>
-                ) : (
-                  <span className="truncate font-mono text-[12.5px]">
-                    {workspace.repositoryUrl}
-                  </span>
-                )}
-              </Fact>
-            )}
-          </dl>
-          {workspace.hostingType === "cloud" && (
-            <label className="mt-1 flex cursor-pointer items-center justify-between gap-4 text-[13px] text-fg-2">
-              <span>
-                Keep on when idle
-                <span className="block text-[12px] text-fg-4">Spending limits still apply.</span>
-              </span>
-              <Switch
-                checked={workspace.alwaysOn}
-                disabled={setAlwaysOn.isPending}
-                onCheckedChange={(alwaysOn) =>
-                  setAlwaysOn.mutate({ workspaceId: workspace.id, alwaysOn })
-                }
-              />
-            </label>
+                  <SecretCopy
+                    label="Server password"
+                    hint="••••••••••••••••"
+                    copiedMessage="Password copied"
+                    reveal={revealCredential}
+                  />
+                ))}
+              {isOpencode && (
+                <CopyField
+                  label="Project path"
+                  value={getWorkspaceProjectPath(providerKey, workspace.repositoryUrl)}
+                />
+              )}
+            </DetailGroup>
+          ) : (
+            <DetailGroup title="Connect">
+              <p className="text-[13px] text-fg-3">
+                {workspace.status === "pending"
+                  ? "Connection details appear once it is running."
+                  : "Restart it to connect."}
+              </p>
+            </DetailGroup>
           )}
-        </DetailGroup>
+
+          <DetailGroup title="Ports">
+            {ports.length === 0 && <p className="text-[13px] text-fg-3">No open ports.</p>}
+            {ports.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {ports.map(([port, exposed]) => (
+                  <PortRow
+                    key={port}
+                    workspace={workspace}
+                    port={parseInt(port, 10)}
+                    name={exposed.name}
+                    isPublic={exposed.visibility === "public"}
+                  />
+                ))}
+              </ul>
+            )}
+            {isRunning && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="w-fit"
+                onClick={() => onDialog("port")}
+              >
+                <Plus className="size-3.5" />
+                Open port
+              </Button>
+            )}
+          </DetailGroup>
+        </div>
+
+        <div className="max-w-sm min-w-0 @2xl:max-w-none @2xl:border-l @2xl:border-line @2xl:pl-10">
+          <DetailGroup title="Machine">
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]">
+              <Fact label="Provider">
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  {providerKey && PROVIDER_LOGOS[providerKey] ? (
+                    <Image
+                      src={PROVIDER_LOGOS[providerKey]}
+                      alt=""
+                      width={14}
+                      height={14}
+                      className="size-3.5 shrink-0 object-contain"
+                    />
+                  ) : (
+                    <Server className="size-3.5 shrink-0 text-fg-4" />
+                  )}
+                  <span className="truncate">
+                    {providerName}
+                    {region && <span className="text-fg-3"> {region.name}</span>}
+                  </span>
+                </span>
+              </Fact>
+              {(size || profile) && (
+                <Fact label="Size">
+                  {size ?? profile?.name}
+                  {profile?.priceMicrosPerHour != null && (
+                    <span className="text-fg-3">
+                      {" "}
+                      {formatHourlyPrice(profile.priceMicrosPerHour)}
+                    </span>
+                  )}
+                </Fact>
+              )}
+              <Fact label="Started">{ago(workspace.startedAt)}</Fact>
+              {workspace.repositoryUrl && (
+                <Fact label="Repository">
+                  {repoUrl ? (
+                    <a
+                      href={repoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex max-w-full items-center gap-1 font-mono text-[12.5px] text-fg-2 transition-colors hover:text-fg"
+                    >
+                      <span className="truncate">
+                        {repoName(workspace.repositoryUrl)}
+                        {workspace.repositoryBranch ? `:${workspace.repositoryBranch}` : ""}
+                      </span>
+                      <ExternalLink className="size-3 shrink-0 text-fg-4" />
+                    </a>
+                  ) : (
+                    <span className="truncate font-mono text-[12.5px]">
+                      {workspace.repositoryUrl}
+                    </span>
+                  )}
+                </Fact>
+              )}
+            </dl>
+            {workspace.hostingType === "cloud" && (
+              <label className="mt-1 flex cursor-pointer items-center justify-between gap-4 text-[13px] text-fg-2">
+                <span>
+                  Keep on when idle
+                  <span className="block text-[12px] text-fg-4">Spending limits still apply.</span>
+                </span>
+                <Switch
+                  checked={workspace.alwaysOn}
+                  disabled={setAlwaysOn.isPending}
+                  onCheckedChange={(alwaysOn) =>
+                    setAlwaysOn.mutate({ workspaceId: workspace.id, alwaysOn })
+                  }
+                />
+              </label>
+            )}
+          </DetailGroup>
+        </div>
       </div>
     </div>
   );
@@ -863,14 +862,14 @@ function PortRow({
   );
 
   return (
-    <li className="flex min-w-0 items-center gap-2 py-0.5 text-[13px]">
+    <li className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg border border-line py-0.5 pr-0.5 pl-2 text-[13px]">
       {url ? (
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
           title={`Open :${port} in a new tab`}
-          className="-ml-1.5 inline-flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-fill-2"
+          className="-ml-1.5 inline-flex min-w-0 items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-fill-2"
         >
           <span className="font-mono text-[12.5px] text-fg">:{port}</span>
           <span className="truncate text-fg-3">{name || "Port"}</span>
@@ -914,7 +913,7 @@ function PortRow({
         disabled={close.isPending}
         title="Close port"
         aria-label={`Close port ${port}`}
-        className="ml-auto shrink-0 rounded-md p-1.5 text-fg-4 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-70"
+        className="shrink-0 rounded-md p-1.5 text-fg-4 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-70"
       >
         {close.isPending ? <Loader2 className="size-3 animate-spin" /> : <X className="size-3" />}
       </button>

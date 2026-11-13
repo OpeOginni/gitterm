@@ -40,6 +40,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const BAR_FILL: Record<Tone, string> = {
   ok: "bg-primary",
   busy: "bg-primary",
+  paused: "bg-yellow-500 dark:bg-yellow-300",
   warn: "bg-[#fb923c]",
   danger: "bg-destructive",
   muted: "bg-fg-4",
@@ -655,7 +656,6 @@ function WorkspaceListHeader() {
   );
 }
 
-/** The table's header over rows shaped like WorkspaceRow. */
 function WorkspaceListSkeleton() {
   return (
     <div className="overflow-hidden rounded-xl border border-line">
@@ -739,7 +739,7 @@ function WorkspaceRow({
   const repoLabel = repoLabelOf(ws.repositoryUrl);
   const minutes = runtime?.minutes ?? 0;
   const live = ws.status === "running" || ws.status === "pending";
-  const status = STATUS[ws.status] ?? { tone: "muted" as const, label: "Paused" };
+  const status = STATUS[ws.status] ?? { tone: "paused" as const, label: "Paused" };
   const lastActive = live
     ? "Running now"
     : ws.pausedAt
@@ -824,7 +824,6 @@ function WorkspaceRow({
         <p className="mt-0.5 truncate text-[12.5px] text-fg-4">{started}</p>
       </div>
 
-      {/* Phones: one compact meta line instead of columns. */}
       <p className="flex flex-wrap gap-x-2 pl-12 text-[12.5px] text-fg-3 sm:hidden">
         {minutes > 0 && <span className="font-mono text-fg-2">{formatRuntime(minutes)}</span>}
         {runtime && (
