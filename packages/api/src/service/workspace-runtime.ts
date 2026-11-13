@@ -83,7 +83,8 @@ export function resolveProjectDirectory(
   providerKey?: string | null,
 ): string {
   const key = (providerKey ?? "").toLowerCase();
-  // Empty-workspace paths must match each provider's provisioning directory.
+  // Empty-workspace paths must match each provider's provisioning directory, and
+  // getWorkspaceProjectPath in apps/web/src/lib/utils.ts.
   const hint = buildProjectPathHint(
     repositoryUrl ||
       (["e2b", "gitterm", "vercel", "boat", "exedev", "railway", "aws"].includes(key)

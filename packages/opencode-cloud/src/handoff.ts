@@ -298,6 +298,34 @@ export async function offersModel(
   }
 }
 
+const INTEGRATION_KEYS = new Set(["github", "google", "gitlab", "bitbucket", "executor", "mcp"]);
+
+/**
+ * Connection references that do not point at a GitHub connection, with the server's
+ * precedence: an integration key before a connection name. Only names and ids need the
+ * connection list (scope `integrations:read`); without it they are kept and workspace
+ * creation validates them as usual.
+ */
+export async function withoutGithub(
+  gitterm: GittermClient,
+  references: string[] | undefined,
+): Promise<string[] | undefined> {
+  if (!references?.length) return references;
+  const key = (reference: string) => reference.trim().toLowerCase();
+  const kept = references.filter((reference) => key(reference) !== "github");
+  if (kept.every((reference) => INTEGRATION_KEYS.has(key(reference)))) return kept;
+  const github = await gitterm.integrations.connections
+    .list({ integration: "github" })
+    .catch(() => []);
+  return kept.filter((reference) => {
+    const wanted = reference.trim();
+    return (
+      INTEGRATION_KEYS.has(key(reference)) ||
+      !github.some((c) => c.id === wanted || c.name.toLowerCase() === key(reference))
+    );
+  });
+}
+
 /** Checks workspace credentials before waiting for unmanaged models in the cloud catalog. */
 export async function cloudHasModel(
   gitterm: GittermClient,
@@ -449,6 +477,8 @@ export async function handoffSession(
     await deps.progress(
       "Creating a GitTerm workspace. Your local checkout and sessions remain unchanged.",
     );
+    // GitTerm rejects a GitHub connection on a workspace without a repository.
+    const nonGithub = repo ? undefined : await withoutGithub(gitterm, options.connections);
     // Restore unpublished branches from the bundle, not the remote clone.
     const create = (useProjectSnapshot: boolean) =>
       gitterm.workspaces.create({
@@ -459,9 +489,7 @@ export async function handoffSession(
         agent: "opencode",
         provider: options.provider,
         persistent: options.persistent,
-        connections: repo
-          ? options.connections
-          : options.connections?.filter((name) => name !== "github"),
+        connections: repo ? options.connections : nonGithub,
         metadata: { "opencode.handoff": record.attemptID, "opencode.session": sessionID },
         useProjectSnapshot,
       });

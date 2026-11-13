@@ -114,9 +114,12 @@ try {
 
   // Initialize only empty cloud destinations, never the local checkout on return.
   const others = () => fs.readdirSync(".").filter(name => name !== stage && name !== ".git");
+  // Only a repository this attempt made may be removed if it fails.
+  let created = false;
   if (!expected && !fs.existsSync(".git")) {
     if (others().length) throw new Error("Cloud directory is not a Git checkout");
     git("init", "-q");
+    created = true;
   }
   const fresh = !has("rev-parse", "-q", "--verify", "HEAD^{commit}");
   if (fresh && expected) throw new Error("Local checkout has no commits");
@@ -133,7 +136,7 @@ try {
     } else if (!untouched) {
       // Never replace work done in the cloud since an earlier restore, committed or not.
       if (earlier) throw new Error("Cloud checkout changed since the earlier handoff");
-      if (fresh ? others().length : git("diff", "HEAD", "--").length || git("diff", "--cached", "HEAD", "--").length || untracked().length) throw new Error("Cloud checkout has existing changes");
+      if (fresh ? others().length || git("ls-files").length : git("diff", "HEAD", "--").length || git("diff", "--cached", "HEAD", "--").length || untracked().length) throw new Error("Cloud checkout has existing changes");
     }
 
     // Missing bundle prerequisites require full history before the checkout can change.
@@ -170,7 +173,13 @@ try {
       git(...identity, "stash", "push", "--include-untracked", "-q", "-m", "GitTerm: replaced by cloud handoff " + id, "--", ":(exclude)" + stage);
       saved = stashed() !== top;
     }
-    undo = fresh ? () => { for (const name of fs.readdirSync(".")) if (name !== stage) fs.rmSync(name, { recursive: true, force: true }); } : () => {
+    undo = fresh ? () => {
+      for (const name of fs.readdirSync(".")) if (name !== stage && (created || name !== ".git")) fs.rmSync(name, { recursive: true, force: true });
+      if (created) return;
+      git("read-tree", "--empty");
+      git("symbolic-ref", "HEAD", "refs/heads/" + before.branch);
+      if (before.target) git("update-ref", "refs/heads/" + branch, before.target); else git("update-ref", "-d", "refs/heads/" + branch);
+    } : () => {
       clean();
       if (before.branch) git("checkout", "-f", "-q", "-B", before.branch, before.sha); else git("checkout", "-f", "-q", "--detach", before.sha);
       if (branch !== before.branch) { if (before.target) git("branch", "-f", branch, before.target); else has("branch", "-D", branch); }

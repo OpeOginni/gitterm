@@ -741,6 +741,28 @@ describe("a checkout without an origin", () => {
     expect(await readFile(path.join(cloud, "notes.txt"), "utf8")).toBe("cloud work\n");
   });
 
+  test("a failed restore keeps a repository that was already there", async () => {
+    await git(cloud, ["init", "-q"]);
+    const snapshot = await captureSnapshot(source, false, true);
+    const corrupt = tampered(snapshot, (inside) => {
+      inside.digest = "bad";
+    });
+    await expect(restore(corrupt)).rejects.toThrow();
+    expect(await readdir(cloud)).toEqual([".git"]);
+    expect((await git(cloud, ["ls-files"])).toString()).toBe("");
+    expect((await restore(snapshot)).stdout).toBe("GITTERM_HANDOFF_VERIFIED");
+  });
+
+  test("never restores over staged work in a repository without commits", async () => {
+    await git(cloud, ["init", "-q"]);
+    await writeFile(path.join(cloud, "staged.txt"), "staged\n");
+    await git(cloud, ["add", "staged.txt"]);
+    await rm(path.join(cloud, "staged.txt"));
+    const snapshot = await captureSnapshot(source, false, true);
+    await expect(restore(snapshot)).rejects.toThrow();
+    expect((await git(cloud, ["ls-files"])).toString().trim()).toBe("staged.txt");
+  });
+
   test("a repository without commits is refused before anything is uploaded", async () => {
     const empty = path.join(temporary, "empty");
     await mkdir(empty);
