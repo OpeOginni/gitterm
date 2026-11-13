@@ -21,5 +21,4 @@ export const CANCEL_KEY = "gittermCloudCancel";
 
 export type CloudProgress = { attemptID: string; step: string };
 
-/** Key of the link field on /cloud's "ready" form; the terminal UI shows that form as a dialog. */
 export const CONNECT_KEY = "gittermConnect";

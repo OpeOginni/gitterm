@@ -66,11 +66,6 @@ function useCloud(sessionID: () => string) {
   };
 }
 
-/**
- * /cloud's "ready" form as a dialog: a QR code for a phone, and the link for this computer.
- * The link is a one-time OpenCode pairing link (`/auth/connect/<code>`) when the workspace
- * can make one; OpenCode's app scanner and a phone camera both open it.
- */
 function CloudConnectDialog(props: { url: string }) {
   const context = usePlugin();
   const theme = () => context.theme as unknown as Theme;
@@ -105,7 +100,14 @@ function CloudConnectDialog(props: { url: string }) {
           <text fg={theme().text.muted}>Works once, for 5 minutes. /cloud makes a new one.</text>
         </Show>
       </box>
-      <text fg={theme().text.muted}>enter open c copy esc close</text>
+      <text fg={theme().text.muted}>
+        <span style={{ fg: theme().text.base }}>enter</span>
+        {" open    "}
+        <span style={{ fg: theme().text.base }}>c</span>
+        {" copy    "}
+        <span style={{ fg: theme().text.base }}>esc</span>
+        {" close"}
+      </text>
     </box>
   );
 }
@@ -217,7 +219,6 @@ export default Plugin.define({
       );
     };
 
-    // /cloud's "ready" form shows as a dialog. Closing it answers the form, which ends /cloud.
     let connect: { sessionID: string; formID: string } | undefined;
     const formCreated = context.data.on("form.created", (event) => {
       const form = event.data.form;
@@ -227,7 +228,6 @@ export default Plugin.define({
       if (!field || !("url" in field)) return;
       const route = context.ui.router.current();
       if (route.type !== "session" || route.sessionID !== form.sessionID) return;
-      // The progress dialog gives way; being replaced is not a cancel.
       open = undefined;
       const shown = { sessionID: form.sessionID, formID: form.id };
       connect = shown;
@@ -247,7 +247,6 @@ export default Plugin.define({
       );
       context.ui.dialog.set({ size: "large" });
     });
-    // The form can also end without the dialog (answered elsewhere, or timed out).
     const formEnded = (event: { data: { id: string } }) => {
       if (!connect || connect.formID !== event.data.id) return;
       connect = undefined;
@@ -276,8 +275,9 @@ export default Plugin.define({
       void context.attention.notify({ title, message });
     });
     return () => {
-      if (open) {
+      if (open || connect) {
         open = undefined;
+        connect = undefined;
         context.ui.dialog.clear();
       }
       clearInterval(timer);

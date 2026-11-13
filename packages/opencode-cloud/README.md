@@ -33,7 +33,8 @@ OpenCode.
 1. Choose whether to include uncommitted changes.
 2. Review the upload and approve starting the workspace. It is billed while it runs.
 3. A dialog shows each step. Esc cancels and deletes the workspace that was just created.
-4. Open the link to continue in the cloud.
+4. Scan the QR code with your phone, or open the link on your computer, to continue in the
+   cloud. Pairing links sign you in once and expire after five minutes; `/cloud` makes a new one.
 
 Run `/cloud` again later to reconnect to the same workspace. **Pause or delete the
 workspace in GitTerm when you are done**, or bring the session back.
