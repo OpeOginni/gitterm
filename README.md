@@ -1,4 +1,4 @@
-![GitTerm](./apps/web/public/og-card/og-card-v5.png)
+![GitTerm](./apps/web/public/og-card/og-card-v6.png)
 
 Give your agents more computers, from the cloud provider you choose. GitTerm gives the agent on your laptop sandboxes for tests, builds and previews, or runs the whole agent (OpenCode, or T3 Code with Codex and Claude Code) in a cloud workspace. The machines come from providers such as E2B, Daytona, Vercel, Railway and AWS. GitTerm sits in between, with one plugin and one dashboard for all of them, so switching providers is easy. Open source, with your own keys.
 

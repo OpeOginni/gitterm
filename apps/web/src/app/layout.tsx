@@ -43,7 +43,7 @@ const display = localFont({
 
 const TITLE = "Gitterm: give your agents more room to work";
 const DESCRIPTION =
-  "More computers for your coding agents, from the cloud provider you choose: E2B, Daytona, Vercel, Railway, AWS and more. Gitterm sits in between, so switching providers is easy. Open source.";
+  "Give your coding agents more room to work, on any cloud provider you choose. Switch anytime. Open source.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -56,9 +56,9 @@ export const metadata: Metadata = {
     siteName: "Gitterm",
     images: [
       {
-        url: "/og-card/og-card-v5.png",
-        width: 1200,
-        height: 630,
+        url: "/og-card/og-card-v6.png",
+        width: 2400,
+        height: 1260,
         alt: TITLE,
       },
     ],
@@ -69,7 +69,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/og-card/og-card-v5.png"],
+    images: ["/og-card/og-card-v6.png"],
   },
   manifest: "/favicon_io/site.webmanifest",
   icons: {
