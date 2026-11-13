@@ -65,6 +65,13 @@ export interface SystemWorkspaceEnv {
   WORKSPACE_REPO_DIR?: string;
 }
 
+const GOOGLE_CONNECTION_ENV_KEYS = [
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
+  "GOOGLE_CLOUD_PROJECT",
+  "CLOUDSDK_CORE_PROJECT",
+] as const satisfies readonly (keyof SystemWorkspaceEnv)[];
+
 /**
  * The full set of system-owned env keys. Listed explicitly so it can be used at
  * runtime to strip clashing user-defined vars. The `satisfies` clause rejects
@@ -82,10 +89,7 @@ export const SYSTEM_WORKSPACE_ENV_KEYS = [
   "USER_EMAIL",
   "GITHUB_APP_TOKEN",
   "GITHUB_APP_TOKEN_EXPIRY",
-  "GOOGLE_APPLICATION_CREDENTIALS",
-  "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
-  "GOOGLE_CLOUD_PROJECT",
-  "CLOUDSDK_CORE_PROJECT",
+  ...GOOGLE_CONNECTION_ENV_KEYS,
   "GITTERM_REMOTE_BOOTSTRAP",
   "GITTERM_REPOSITORY_USERNAME",
   "GITTERM_REPOSITORY_TOKEN",
@@ -140,16 +144,11 @@ type _MissingSystemEnvKeys = Exclude<
 const _ensureAllSystemKeysListed: _MissingSystemEnvKeys extends never ? true : never = true;
 void _ensureAllSystemKeysListed;
 
-const GOOGLE_CONNECTION_ENV_KEYS: ReadonlySet<string> = new Set([
-  "GOOGLE_APPLICATION_CREDENTIALS",
-  "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
-  "GOOGLE_CLOUD_PROJECT",
-  "CLOUDSDK_CORE_PROJECT",
-]);
-
 /** Reserved keys that user-defined env vars must not set. */
 export const RESERVED_WORKSPACE_ENV_KEYS: ReadonlySet<string> = new Set(
-  SYSTEM_WORKSPACE_ENV_KEYS.filter((key) => !GOOGLE_CONNECTION_ENV_KEYS.has(key)),
+  SYSTEM_WORKSPACE_ENV_KEYS.filter(
+    (key) => !GOOGLE_CONNECTION_ENV_KEYS.some((connectionKey) => connectionKey === key),
+  ),
 );
 
 export function isReservedWorkspaceEnvKey(key: string): boolean {

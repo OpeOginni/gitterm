@@ -71,11 +71,15 @@ test("Google variables are the user's to set when no Google connection sets them
     ...runtime("railway"),
     userEnv: {
       GOOGLE_APPLICATION_CREDENTIALS: "/workspace/key.json",
+      CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: "/workspace/key.json",
       GOOGLE_CLOUD_PROJECT: "my-project",
+      CLOUDSDK_CORE_PROJECT: "my-project",
     },
   });
   expect(env.GOOGLE_APPLICATION_CREDENTIALS).toBe("/workspace/key.json");
+  expect(env.CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE).toBe("/workspace/key.json");
   expect(env.GOOGLE_CLOUD_PROJECT).toBe("my-project");
+  expect(env.CLOUDSDK_CORE_PROJECT).toBe("my-project");
 });
 
 test("Google integration identity variables cannot be overridden by user env", () => {
@@ -85,7 +89,9 @@ test("Google integration identity variables cannot be overridden by user env", (
     googleProjectId: "trusted-project",
     userEnv: {
       GOOGLE_APPLICATION_CREDENTIALS: "/workspace/stolen.json",
+      CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: "/workspace/stolen.json",
       GOOGLE_CLOUD_PROJECT: "other-project",
+      CLOUDSDK_CORE_PROJECT: "other-project",
     },
   });
   expect(env.GOOGLE_APPLICATION_CREDENTIALS).toBe("/run/gitterm/google/adc.json");
