@@ -156,7 +156,7 @@ export function BillingSection() {
     <Panel>
       <PlanRow
         name="Free"
-        detail="Small E2B or Boat sandboxes and 60 minutes a day. Upgrade for every provider and machine size, always-on workspaces, sandbox snapshots, and a monthly compute balance."
+        detail="Small machines for 60 minutes a day. Upgrade for every machine size, always-on workspaces, sandbox snapshots, and a monthly compute balance."
         action={
           <Button asChild className="gap-1.5">
             <Link href={"/pricing" as Route}>
