@@ -4,6 +4,19 @@
 changes and is listed under **Breaking** below; patch releases never change public types or
 behaviour you could have relied on.
 
+## 0.16.0
+
+### Added
+
+- `workspaces.create()` accepts an omitted `repo` to start with an empty project directory. Deploy the updated API before using this option.
+- `client.sandboxes.pause()` pauses managed sandboxes.
+- `@gitterm/sdk/sandbox` adds `canPause` and `pause()` for accounts whose providers preserve state on pause. Using the sandbox again resumes it.
+
+### Fixed
+
+- Direct E2B sandboxes resume only for their remaining lifetime.
+- Pausing a direct Daytona sandbox no longer triggers deletion on stop.
+
 ## 0.15.0
 
 ### Breaking

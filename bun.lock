@@ -166,7 +166,7 @@
     },
     "packages/agent-runtime": {
       "name": "@gitterm/agent-runtime",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "dependencies": {
         "@boatdev/sdk": "^1.13.0",
         "@daytonaio/sdk": "^0.207.0",
@@ -291,9 +291,9 @@
     },
     "packages/bot": {
       "name": "@gitterm/bot",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "dependencies": {
-        "@gitterm/sdk": "workspace:^0.15.0",
+        "@gitterm/sdk": "workspace:^0.16.0",
       },
       "devDependencies": {
         "@types/bun": "^1.2.6",
@@ -302,7 +302,7 @@
     },
     "packages/cli": {
       "name": "@gitterm/cli",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "bin": {
         "gitterm": "dist/index.js",
       },
@@ -343,13 +343,13 @@
     },
     "packages/discord-bot": {
       "name": "@gitterm/discord-bot",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "bin": {
         "gitterm-discord-bot": "dist/cli.js",
       },
       "dependencies": {
         "@gitterm/bot": "workspace:^",
-        "@gitterm/sdk": "workspace:^0.15.0",
+        "@gitterm/sdk": "workspace:^0.16.0",
         "discord.js": "^14.28.1",
       },
       "devDependencies": {
@@ -372,7 +372,7 @@
     },
     "packages/opencode-cloud": {
       "name": "@gitterm/opencode-cloud",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "@opencode/client": "^2.2.6",
       },
@@ -394,7 +394,7 @@
     },
     "packages/opencode-sandbox": {
       "name": "@gitterm/opencode-sandbox",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "devDependencies": {
         "@gitterm/sdk": "workspace:*",
         "@opencode/plugin": "^2.2.6",
@@ -438,7 +438,7 @@
     },
     "packages/sdk": {
       "name": "@gitterm/sdk",
-      "version": "0.15.0",
+      "version": "0.16.0",
       "dependencies": {
         "@boatdev/sdk": "^1.13.0",
         "@daytonaio/sdk": "^0.207.0",
@@ -458,13 +458,13 @@
     },
     "packages/slack-bot": {
       "name": "@gitterm/slack-bot",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "bin": {
         "gitterm-slack-bot": "dist/cli.js",
       },
       "dependencies": {
         "@gitterm/bot": "workspace:^",
-        "@gitterm/sdk": "workspace:^0.15.0",
+        "@gitterm/sdk": "workspace:^0.16.0",
         "@slack/bolt": "^5.1.0",
       },
       "devDependencies": {
