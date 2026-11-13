@@ -93,12 +93,12 @@ All optional:
 }
 ```
 
-| Option        | What it does                                                               |
-| ------------- | -------------------------------------------------------------------------- |
-| `provider`    | Cloud provider to use, for example `{ "type": "e2b" }`                     |
-| `connections` | Saved GitTerm connections, for example `"github"` for private repositories |
-| `name`        | Workspace name; defaults to the conversation title                         |
-| `persistent`  | Keep storage between restarts, where the provider allows                   |
+| Option        | What it does                                                                                                                                                                                                     |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provider`    | Cloud provider to use, for example `{ "type": "e2b" }`                                                                                                                                                           |
+| `connections` | Saved GitTerm connections, for example `"github"` for private repositories. A checkout without an origin skips GitHub connections; naming one by name or id needs the `integrations:read` scope to be recognised |
+| `name`        | Workspace name; defaults to the conversation title                                                                                                                                                               |
+| `persistent`  | Keep storage between restarts, where the provider allows                                                                                                                                                         |
 
 Self-hosting GitTerm? Sign in with `gitterm login --server https://gitterm.example.com`.
 `/cloud` talks to the OpenCode server that holds your session. It finds OpenCode's background

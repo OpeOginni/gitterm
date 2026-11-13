@@ -77,7 +77,6 @@ const text = (...args) => git(...args).toString().trim();
 const has = (...args) => { try { git(...args); return true; } catch { return false; } };
 const safePath = file => typeof file === "string" && file.length > 0 && !file.includes("\\") && !file.includes("\0") && !path.posix.isAbsolute(file) && file.split("/").every(part => part && part !== "." && part !== ".." && part.toLowerCase() !== ".git");
 const untracked = () => git("ls-files", "--others", "--exclude-standard", "-z").toString().split("\0").filter(file => file && !file.startsWith(stage + "/")).sort();
-// The checkout as it is now, in the shape the snapshot digest is computed over.
 const state = changedPaths => ({ head: text("rev-parse", "HEAD"), staged: git("diff", ...diffArgs, "--cached", "HEAD", "--").toString("base64"), unstaged: git("diff", ...diffArgs, "--").toString("base64"), files: untracked().map(file => ({ path: file, data: fs.readFileSync(file).toString("base64"), executable: Boolean(fs.statSync(file).mode & 0o111) })), changedPaths });
 const digest = value => crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
 `;
@@ -113,6 +112,18 @@ try {
   const bundle = take(snapshot.bundle), staged = take(snapshot.staged), unstaged = take(snapshot.unstaged);
   const files = snapshot.files.map(file => ({ path: file.path, executable: file.executable, data: take(file.size) }));
 
+  // Initialize only empty cloud destinations, never the local checkout on return.
+  const others = () => fs.readdirSync(".").filter(name => name !== stage && name !== ".git");
+  // Only a repository this attempt made may be removed if it fails.
+  let created = false;
+  if (!expected && !fs.existsSync(".git")) {
+    if (others().length) throw new Error("Cloud directory is not a Git checkout");
+    git("init", "-q");
+    created = true;
+  }
+  const fresh = !has("rev-parse", "-q", "--verify", "HEAD^{commit}");
+  if (fresh && expected) throw new Error("Local checkout has no commits");
+
   const note = path.join(text("rev-parse", "--git-dir"), "gitterm-handoff.json");
   let earlier = null;
   try { earlier = JSON.parse(fs.readFileSync(note, "utf8")); } catch {}
@@ -125,11 +136,10 @@ try {
     } else if (!untouched) {
       // Never replace work done in the cloud since an earlier restore, committed or not.
       if (earlier) throw new Error("Cloud checkout changed since the earlier handoff");
-      if (git("diff", "HEAD", "--").length || git("diff", "--cached", "HEAD", "--").length || untracked().length) throw new Error("Cloud checkout has existing changes");
+      if (fresh ? others().length || git("ls-files").length : git("diff", "HEAD", "--").length || git("diff", "--cached", "HEAD", "--").length || untracked().length) throw new Error("Cloud checkout has existing changes");
     }
 
-    // The bundle holds only commits this clone is expected to lack. If the clone does not
-    // have what they build on, stop before touching anything and ask for the whole history.
+    // Missing bundle prerequisites require full history before the checkout can change.
     if (bundle.length) {
       const file = path.join(stage, "checkout.bundle");
       fs.writeFileSync(file, bundle, { mode: 0o600 });
@@ -142,14 +152,13 @@ try {
 
     // Use the local branch name, so pushing from the cloud updates the branch the user expects.
     const branch = typeof snapshot.branch === "string" && has("check-ref-format", "--branch", snapshot.branch) ? snapshot.branch : "gitterm/" + stage.slice(".gitterm-handoff-".length);
-    const before = { sha: text("rev-parse", "HEAD"), branch: has("symbolic-ref", "-q", "HEAD") ? text("symbolic-ref", "--short", "HEAD") : null, target: has("show-ref", "--verify", "--quiet", "refs/heads/" + branch) ? text("rev-parse", "refs/heads/" + branch) : null };
+    const before = { sha: fresh ? null : text("rev-parse", "HEAD"), branch: has("symbolic-ref", "-q", "HEAD") ? text("symbolic-ref", "--short", "HEAD") : null, target: has("show-ref", "--verify", "--quiet", "refs/heads/" + branch) ? text("rev-parse", "refs/heads/" + branch) : null };
     // Moving the branch must not drop commits that exist only in this clone.
     const unique = commit => Boolean(commit) && text("rev-list", "-1", commit, "--not", "--remotes", snapshot.head) !== "";
     if (!expected && !earlier && unique(before.target)) throw new Error("Cloud branch has commits the snapshot lacks");
     const id = stage.slice(".gitterm-handoff-".length);
     const kept = { stash: false, branch: null };
-    // What is replaced is kept aside until the new state is verified. Work the user did
-    // since the handoff stays kept afterwards; an earlier restore of ours does not.
+    // Keep post-handoff work after verification; discard backups of our own earlier restore.
     const keep = Boolean(expected) && !untouched;
     const tip = before.target || (before.branch ? null : before.sha);
     if (keep && unique(tip)) {
@@ -164,7 +173,13 @@ try {
       git(...identity, "stash", "push", "--include-untracked", "-q", "-m", "GitTerm: replaced by cloud handoff " + id, "--", ":(exclude)" + stage);
       saved = stashed() !== top;
     }
-    undo = () => {
+    undo = fresh ? () => {
+      for (const name of fs.readdirSync(".")) if (name !== stage && (created || name !== ".git")) fs.rmSync(name, { recursive: true, force: true });
+      if (created) return;
+      git("read-tree", "--empty");
+      git("symbolic-ref", "HEAD", "refs/heads/" + before.branch);
+      if (before.target) git("update-ref", "refs/heads/" + branch, before.target); else git("update-ref", "-d", "refs/heads/" + branch);
+    } : () => {
       clean();
       if (before.branch) git("checkout", "-f", "-q", "-B", before.branch, before.sha); else git("checkout", "-f", "-q", "--detach", before.sha);
       if (branch !== before.branch) { if (before.target) git("branch", "-f", branch, before.target); else has("branch", "-D", branch); }
@@ -201,10 +216,8 @@ try {
     if (expected) report = " " + JSON.stringify(kept);
   }
   if (subpath) fs.mkdirSync(subpath, { recursive: true });
-  // A return also says what it kept of the checkout it replaced.
   process.stdout.write("GITTERM_HANDOFF_VERIFIED" + report);
 } catch (error) {
-  // Put the checkout back, so the same workspace can take another attempt.
   if (undo) try { undo(); } catch {}
   // Never print patches, files, credentials, or upstream command output.
   process.stderr.write("GitTerm checkout restoration failed. Local files are unchanged.\n");
@@ -243,6 +256,7 @@ const paths = () => [...new Set([...list(git("diff", "--name-only", "-z", "--no-
 const read = () => options.changes ? state(paths()) : { head: text("rev-parse", "HEAD"), staged: "", unstaged: "", files: [], changedPaths: [] };
 try {
   if (base && !/^[a-f0-9]{40}([a-f0-9]{24})?$/.test(base)) throw new Error("Invalid base");
+  if (!has("rev-parse", "-q", "--verify", "HEAD^{commit}")) throw unsupported("no-commits");
   // Merge conflicts, submodules, intent-to-add entries and untracked special files need
   // more than patches and file contents to reproduce.
   if (git("ls-files", "--unmerged", "-z").length) throw unsupported("conflicts");
@@ -254,7 +268,6 @@ try {
       if (!safePath(file)) throw unsupported("unsafe-path");
       if (options.screen && sensitive.test(file)) throw fail(${CAPTURE_SECRET}, "secret-path", { path: file });
     }
-    // Look at sizes and kinds before reading anything into memory.
     let size = 0;
     for (const file of untracked()) {
       const info = fs.lstatSync(file);

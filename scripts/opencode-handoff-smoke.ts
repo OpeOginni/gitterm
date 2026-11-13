@@ -27,6 +27,7 @@ const cloud = join(root, "cloud");
 const servers: ChildProcess[] = [];
 const password = "isolated-smoke-password";
 const signal = AbortSignal.timeout(120_000);
+const localOnly = process.env.OPENCODE_HANDOFF_SMOKE_LOCAL_ONLY === "1";
 
 function check(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -78,8 +79,11 @@ try {
   await writeFile(join(source, "file.txt"), "initial\n");
   await git(source, ["add", "."]);
   await git(source, ["commit", "-m", "initial"]);
-  await git(root, ["clone", source, cloud]);
-  await git(source, ["remote", "add", "origin", "https://github.com/example/fixture.git"]);
+  if (localOnly) await mkdir(cloud);
+  else {
+    await git(root, ["clone", source, cloud]);
+    await git(source, ["remote", "add", "origin", "https://github.com/example/fixture.git"]);
+  }
   const plugin = fileURLToPath(new URL("../packages/opencode-cloud/dist", import.meta.url));
   await writeFile(join(source, ".git/info/exclude"), "opencode.json\n");
   await writeFile(
@@ -127,9 +131,13 @@ try {
   await writeFile(join(source, "file.txt"), "unstaged smoke\n");
   await writeFile(join(source, "new.bin"), Buffer.from([0, 255, 1]));
 
+  const created: Array<{ repo?: string }> = [];
   const gitterm = {
     workspaces: {
-      create: async () => ({ workspace: { id: "isolated-cloud" } }),
+      create: async (input: { repo?: string }) => {
+        created.push(input);
+        return { workspace: { id: "isolated-cloud" } };
+      },
       ensureRunning: async () => {},
       getRuntimeAccess: async () => ({
         url: remote.url,
@@ -172,6 +180,14 @@ try {
       progress: async (text) => console.log(text),
     });
     check(record.phase === "ready", "Handoff did not reach ready");
+    check(
+      created.every((input) =>
+        localOnly
+          ? input.repo === undefined
+          : input.repo === "https://github.com/example/fixture.git",
+      ),
+      "Workspace created with the wrong repository",
+    );
   } finally {
     formPolling.abort();
     await answering;
@@ -203,7 +219,6 @@ try {
     "Local file changed",
   );
 
-  // Work in the cloud, then bring the session back with /local's code path.
   await writeFile(join(cloud, "cloud.txt"), "made in the cloud\n");
   await git(cloud, ["add", "cloud.txt"]);
   await git(cloud, [
@@ -229,7 +244,6 @@ try {
       { signal },
     );
   }
-  // The local checkout is as it was handed off, so nothing needs confirming.
   const returned = await returnSession(record, {
     local: local.client,
     gitterm,
@@ -262,6 +276,7 @@ try {
     "Cloud conversation history did not come back",
   );
   console.log(
+    localOnly ? "(local-only checkout, empty cloud directory)" : "(checkout with an origin)",
     "OpenCode handoff smoke passed: real forms, binary HTTP upload, restore verification, staging state, unpublished commits, session history, and the return of cloud commits, changes and history; no model or cloud calls.",
   );
 } finally {

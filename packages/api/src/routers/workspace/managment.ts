@@ -450,7 +450,7 @@ const legacyWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
 });
 
 const intentWorkspaceCreateSchema = workspaceCreateBaseSchema.extend({
-  repo: z.string().trim().min(1),
+  repo: z.string().trim().min(1).optional(),
   agent: z.string().trim().min(1).default("opencode").optional(),
   provider: workspaceProviderSelectionSchema.optional(),
   persistent: z.boolean().optional(),
@@ -2090,14 +2090,6 @@ export const workspaceRouter = router({
               (billing.enabled
                 ? " Delete some workspaces or upgrade for more."
                 : " Delete some workspaces to create new ones."),
-          });
-        }
-
-        // For cloud workspaces, repo is required
-        if (!isLocal && !input.repo) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Repository URL is required for cloud workspaces",
           });
         }
 

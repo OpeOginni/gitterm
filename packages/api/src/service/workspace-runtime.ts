@@ -82,7 +82,15 @@ export function resolveProjectDirectory(
   repositoryUrl: string | null | undefined,
   providerKey?: string | null,
 ): string {
-  const hint = buildProjectPathHint(repositoryUrl);
+  const key = (providerKey ?? "").toLowerCase();
+  // Empty-workspace paths must match each provider's provisioning directory, and
+  // getWorkspaceProjectPath in apps/web/src/lib/utils.ts.
+  const hint = buildProjectPathHint(
+    repositoryUrl ||
+      (["e2b", "gitterm", "vercel", "boat", "exedev", "railway", "aws"].includes(key)
+        ? "workspace"
+        : null),
+  );
   if (["e2b", "gitterm"].includes((providerKey ?? "").toLowerCase())) {
     return hint.replace(/^\/workspace/, "/home/user/workspace");
   }

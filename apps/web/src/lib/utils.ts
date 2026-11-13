@@ -85,16 +85,22 @@ export function isOpencodeAgent(agentName: string, provisionerKey?: string): boo
  * picker. Mirrors each provider's workspace layout (see packages/api/src/providers).
  * OpenCode expands `~/`, so E2B's /home/user/workspace is shown as ~/workspace;
  * Daytona's /workspace is not under the home dir and stays absolute.
+ * Matches resolveProjectDirectory in packages/api/src/service/workspace-runtime.ts.
  */
 export function getWorkspaceProjectPath(
   providerKey: string | undefined,
   repositoryUrl?: string | null,
 ): string {
+  // Without a repository, these providers make an empty `workspace` directory instead.
   const repoName = repositoryUrl
-    ?.replace(/\/+$/, "")
-    .split("/")
-    .pop()
-    ?.replace(/\.git$/i, "");
+    ? repositoryUrl
+        .replace(/\/+$/, "")
+        .split("/")
+        .pop()
+        ?.replace(/\.git$/i, "")
+    : ["e2b", "gitterm", "vercel", "boat", "exedev", "railway", "aws"].includes(providerKey ?? "")
+      ? "workspace"
+      : undefined;
   const base =
     providerKey === "e2b" || providerKey === "gitterm"
       ? "~/workspace"

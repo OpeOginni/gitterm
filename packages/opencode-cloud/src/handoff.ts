@@ -252,7 +252,6 @@ export async function runRemoteShell(
     await remote.shell.create({ location, cwd: directory, command, timeout: 120_000 }, { signal })
   ).data;
   try {
-    // Most of these commands finish at once, so look early before settling into a poll.
     let wait = 100;
     while (shell.status === "running") {
       await delay(wait, undefined, { signal });
@@ -299,12 +298,35 @@ export async function offersModel(
   }
 }
 
+const INTEGRATION_KEYS = new Set(["github", "google", "gitlab", "bitbucket", "executor", "mcp"]);
+
 /**
- * Whether the cloud session can keep the local session's model. GitTerm knows at once which
- * model providers it gave the workspace credentials for, and uses OpenCode's provider IDs,
- * so that is asked first. Only a provider GitTerm does not manage (OpenCode's own free
- * models, for one) waits for the cloud's model catalog.
+ * Connection references that do not point at a GitHub connection, with the server's
+ * precedence: an integration key before a connection name. Only names and ids need the
+ * connection list (scope `integrations:read`); without it they are kept and workspace
+ * creation validates them as usual.
  */
+export async function withoutGithub(
+  gitterm: GittermClient,
+  references: string[] | undefined,
+): Promise<string[] | undefined> {
+  if (!references?.length) return references;
+  const key = (reference: string) => reference.trim().toLowerCase();
+  const kept = references.filter((reference) => key(reference) !== "github");
+  if (kept.every((reference) => INTEGRATION_KEYS.has(key(reference)))) return kept;
+  const github = await gitterm.integrations.connections
+    .list({ integration: "github" })
+    .catch(() => []);
+  return kept.filter((reference) => {
+    const wanted = reference.trim();
+    return (
+      INTEGRATION_KEYS.has(key(reference)) ||
+      !github.some((c) => c.id === wanted || c.name.toLowerCase() === key(reference))
+    );
+  });
+}
+
+/** Checks workspace credentials before waiting for unmanaged models in the cloud catalog. */
 export async function cloudHasModel(
   gitterm: GittermClient,
   workspaceID: string,
@@ -328,10 +350,7 @@ export function importPayload(
   directory: string,
   options: { keepModel?: boolean } = {},
 ): Parameters<OpenCodeClient["session"]["import"]>[0] {
-  // A child session can be continued independently; its parent is not on the destination.
-  // Local revert snapshots and filesystem permission grants must not cross machines.
-  // A model the destination does not offer would open the session on an unavailable one;
-  // without it, the session uses the destination's default.
+  // Machine-local state must not transfer; unavailable models use the destination default.
   const {
     parentID: _parent,
     fork: _fork,
@@ -400,7 +419,7 @@ export async function handoffSession(
   );
   const includeChanges = choice.changes === true;
   await assertIdle(local, sessionID, signal);
-  const snapshot = await captureSnapshot(root, includeChanges);
+  const snapshot = await captureSnapshot(root, includeChanges, !repo);
   const manifest = snapshot.changedPaths
     .slice(0, 100)
     .map((file) => JSON.stringify(file))
@@ -417,11 +436,11 @@ export async function handoffSession(
         required: true,
         default: false,
         description: [
-          `Repository: ${repo}\nCommit: ${snapshot.head}\nSnapshot: ${(snapshot.bytes / 1024 / 1024).toFixed(2)} MiB`,
+          `Repository: ${repo ?? "this checkout only (no origin)"}\nCommit: ${snapshot.head}\nSnapshot: ${(snapshot.bytes / 1024 / 1024).toFixed(2)} MiB`,
           includeChanges
             ? `${snapshot.changedPaths.length} changed paths${manifest ? `:\n${manifest}` : ""}${snapshot.changedPaths.length > 100 ? "\n(additional paths omitted)" : ""}`
             : "Uncommitted changes are excluded.",
-          "Uploads this conversation (which may contain secrets) and commits that are not on origin's default branch, including unpublished ones. Ignored files are not separately uploaded; tracked history can contain secrets. Review before approving.",
+          `Uploads this conversation (which may contain secrets) and ${repo ? "commits that are not on origin's default branch, including unpublished ones" : "the repository's whole history"}. Ignored files are not separately uploaded; tracked history can contain secrets. Review before approving.`,
           "Uses your GitTerm model/repository connections, not separately copied local credential stores. Cloud compute may incur charges until paused or terminated in GitTerm. Local work remains untouched; later local edits will not sync.",
         ].join("\n\n"),
       },
@@ -458,25 +477,22 @@ export async function handoffSession(
     await deps.progress(
       "Creating a GitTerm workspace. Your local checkout and sessions remain unchanged.",
     );
-    // Clone the remote's default branch first, then restore HEAD from the bundle.
-    // Passing an unpublished local branch/SHA here would make provisioning fail.
+    // GitTerm rejects a GitHub connection on a workspace without a repository.
+    const nonGithub = repo ? undefined : await withoutGithub(gitterm, options.connections);
+    // Restore unpublished branches from the bundle, not the remote clone.
     const create = (useProjectSnapshot: boolean) =>
       gitterm.workspaces.create({
-        // The fresh fallback has its own key: the plain one answers with the failed start.
+        // A failed snapshot start must not be reused for the fresh attempt.
         idempotencyKey: `opencode-handoff:${record.attemptID}${useProjectSnapshot ? "" : ":fresh"}`,
         name: options.name ?? session.title ?? "OpenCode cloud handoff",
         repo,
         agent: "opencode",
         provider: options.provider,
         persistent: options.persistent,
-        connections: options.connections,
+        connections: repo ? options.connections : nonGithub,
         metadata: { "opencode.handoff": record.attemptID, "opencode.session": sessionID },
         useProjectSnapshot,
       });
-    // Start from the snapshot kept of this repository's last cloud workspace when there is
-    // one: its agent is installed and its dependencies are in place. A snapshot that no
-    // longer starts must not stop the handoff, so start fresh then. That includes a retry
-    // of an attempt whose snapshot start already failed.
     let created = await create(true).catch((error: unknown) => {
       if (error instanceof Error && error.message.includes("PROJECT_SNAPSHOT_FAILED"))
         return undefined;
@@ -513,7 +529,6 @@ export async function handoffSession(
           },
           { signal },
         );
-        // The script also creates the session's directory, saving a round trip.
         const exit = await runRemoteShell(
           remote,
           runtime.directory,
@@ -524,8 +539,7 @@ export async function handoffSession(
         finished = true;
         return exit;
       } finally {
-        // The script removes its own upload when it runs to the end. If it did not (an
-        // error, a cancellation), remove only this attempt's upload.
+        // The restore script cleans up on completion; interruptions leave the upload behind.
         if (!finished)
           await runRemoteShell(
             remote,
@@ -535,16 +549,13 @@ export async function handoffSession(
           ).catch(() => {});
       }
     };
-    // A retry in the same workspace can find the session an earlier attempt imported. It is
-    // replaced with the current history only if nothing has happened in it since. Check
-    // before touching the checkout, so a refused retry leaves the cloud exactly as it was.
+    // Refuse retries before touching the checkout if the imported session has new activity.
     const untouchedSession = async () => {
       let earlier;
       try {
         earlier = await remote.session.export({ sessionID }, { signal });
       } catch (error) {
-        // Only OpenCode saying the session does not exist means there is nothing to protect.
-        // Any other failure could hide cloud work, so stop before touching the cloud.
+        // Only a missing session is safe to replace; other errors could hide cloud work.
         const missing =
           error instanceof Error &&
           error.name === "SessionNotFoundError" &&
@@ -563,8 +574,7 @@ export async function handoffSession(
     };
     const found = await untouchedSession();
     if ((await restore(snapshot)) === RESTORE_NEEDS_FULL_HISTORY) {
-      // The cloud clone lacks the commits the snapshot builds on. Send the whole history,
-      // but only for the checkout the user approved.
+      // A full-history retry must still match the checkout the user approved.
       const full = await captureSnapshot(root, includeChanges, true);
       if (full.digest !== snapshot.digest)
         throw new Error("The checkout changed during handoff. Retry after it is idle.");
@@ -589,7 +599,6 @@ export async function handoffSession(
         signal,
       });
     } catch (error) {
-      // Put the earlier session back rather than leave the cloud without one.
       if (earlier)
         await remote.session
           .import(
@@ -621,7 +630,6 @@ export async function handoffSession(
     );
     record.phase = "ready";
     await deps.save(record);
-    // Only a label for the UI; the saved record is what makes the session cloud-bound.
     await markCloudSession(local, sessionID, { workspaceID: record.workspaceID }, signal).catch(
       () => {},
     );
@@ -630,8 +638,7 @@ export async function handoffSession(
     const step = STEPS[record.phase];
     record.phase = "failed";
     await deps.save(record);
-    // The full error goes to OpenCode's local log. The message keeps only GitTerm's own
-    // (already redacted) reason: workspace responses could echo snapshots or credentials.
+    // Responses may echo credentials or snapshots; show only GitTerm's redacted reason.
     console.error("GitTerm cloud handoff failed while", step, error);
     const reason =
       error instanceof GittermError || error instanceof HandoffRefused ? ` ${error.message}` : "";

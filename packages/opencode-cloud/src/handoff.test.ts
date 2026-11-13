@@ -13,6 +13,7 @@ import {
   offersModel,
   runtimeClient,
   showConnection,
+  withoutGithub,
   type HandoffRecord,
 } from "./handoff";
 import { git } from "./snapshot";
@@ -642,4 +643,42 @@ test("a provider GitTerm gave the workspace credentials for keeps its model at o
   expect(
     await cloudHasModel(gitterm(new Error("old server")), "w", catalog, "/w", model, signal),
   ).toBe(true);
+});
+
+test("a workspace without a repository drops every reference to a GitHub connection", async () => {
+  let lists = 0;
+  const gitterm = (allowed: boolean) =>
+    ({
+      integrations: {
+        connections: {
+          list: async () => {
+            lists++;
+            if (!allowed) throw new Error("Missing scope integrations:read");
+            return [
+              { id: "github:shared", name: "GitHub (shared)" },
+              { id: "6f1c0d1e-0000-4000-8000-000000000001", name: "google" },
+            ];
+          },
+        },
+      },
+    }) as unknown as GittermClient;
+  // Integration keys are decided without listing connections, so no extra scope is needed.
+  expect(await withoutGithub(gitterm(false), ["GitHub", " github ", "mcp", "google"])).toEqual([
+    "mcp",
+    "google",
+  ]);
+  expect(lists).toBe(0);
+  // A key wins over a GitHub connection of the same name, as on the server.
+  expect(
+    await withoutGithub(gitterm(true), [
+      "google",
+      "GITHUB (shared)",
+      "github:shared",
+      "6f1c0d1e-0000-4000-8000-000000000001",
+      "linear",
+    ]),
+  ).toEqual(["google", "linear"]);
+  // Without the scope, names are left for workspace creation to validate.
+  expect(await withoutGithub(gitterm(false), ["linear"])).toEqual(["linear"]);
+  expect(await withoutGithub(gitterm(true), undefined)).toBeUndefined();
 });

@@ -33,7 +33,11 @@ describe("workspace runtime helpers", () => {
     expect(resolveProjectDirectory("https://github.com/acme/demo", "exedev")).toBe(
       "/home/exedev/demo",
     );
-    expect(resolveProjectDirectory(null, "railway")).toBe("/workspace");
+    expect(resolveProjectDirectory(null, "railway")).toBe("/workspace/workspace");
+    expect(resolveProjectDirectory(null, "e2b")).toBe("/home/user/workspace/workspace");
+    expect(resolveProjectDirectory(null, "gitterm")).toBe("/home/user/workspace/workspace");
+    expect(resolveProjectDirectory(null, "boat")).toBe("/home/user/workspace");
+    expect(resolveProjectDirectory(null, "daytona")).toBe("/workspace");
   });
 
   test("never exposes control-plane headers", () => {

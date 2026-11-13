@@ -94,7 +94,6 @@ async function originBase(root: string): Promise<string> {
   }
 }
 
-/** Why the capture script refused a local checkout, in the user's terms. */
 function captureFailure(stdout: string): string {
   let report: { reason?: string; path?: string; part?: string } = {};
   try {
@@ -104,6 +103,8 @@ function captureFailure(stdout: string): string {
   }
   const file = report.path ? JSON.stringify(report.path) : "";
   switch (report.reason) {
+    case "no-commits":
+      return "Commit at least once before continuing in the cloud.";
     case "conflicts":
       return "Resolve merge conflicts before continuing in the cloud.";
     case "submodules":
@@ -151,7 +152,7 @@ export async function captureSnapshot(
   fullHistory = false,
 ): Promise<CheckoutSnapshot> {
   const root = await checkoutRoot(directory);
-  // Written outside the checkout, so nothing appears in it even for a moment.
+  // Keep capture output outside the checkout so it cannot enter the snapshot.
   const out = await mkdtemp(path.join(tmpdir(), "gitterm-handoff-"));
   try {
     const options = {
@@ -160,8 +161,7 @@ export async function captureSnapshot(
       screen: true,
       out,
     };
-    // The first argument names the upload directory a restore uses inside a checkout; a
-    // capture leaves it out of the snapshot.
+    // Exclude the restore staging directory from capture.
     const result = await runLocalScript(root, CAPTURE_SCRIPT, [
       ".gitterm-handoff-0",
       JSON.stringify(options),
@@ -174,7 +174,9 @@ export async function captureSnapshot(
   }
 }
 
-export async function repositoryUrl(root: string): Promise<string> {
+/** The origin to clone in the cloud, or undefined for a checkout without one. */
+export async function repositoryUrl(root: string): Promise<string | undefined> {
+  if (!(await git(root, ["remote"])).toString().split("\n").includes("origin")) return undefined;
   const url = (await git(root, ["remote", "get-url", "origin"])).toString().trim();
   // Don't forward embedded local credentials or machine-local paths to GitTerm.
   if (/^https:\/\//i.test(url)) {
