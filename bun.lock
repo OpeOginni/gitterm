@@ -302,7 +302,7 @@
     },
     "packages/cli": {
       "name": "@gitterm/cli",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "bin": {
         "gitterm": "dist/index.js",
       },
@@ -372,7 +372,7 @@
     },
     "packages/opencode-cloud": {
       "name": "@gitterm/opencode-cloud",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "dependencies": {
         "@opencode/client": "^2.2.6",
       },
@@ -395,7 +395,7 @@
     },
     "packages/opencode-sandbox": {
       "name": "@gitterm/opencode-sandbox",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "devDependencies": {
         "@gitterm/sdk": "workspace:*",
         "@opencode/plugin": "^2.3.0",
@@ -439,7 +439,7 @@
     },
     "packages/sdk": {
       "name": "@gitterm/sdk",
-      "version": "0.17.1",
+      "version": "0.17.2",
       "dependencies": {
         "@boatdev/sdk": "^1.13.0",
         "@daytonaio/sdk": "^0.207.0",
