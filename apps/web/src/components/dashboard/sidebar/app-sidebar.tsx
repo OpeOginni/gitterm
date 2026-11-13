@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronsUpDown, LogOut, Menu, Settings } from "lucide-react";
+import { ArrowUpRight, BookOpen, ChevronsUpDown, LogOut, Menu, Settings } from "lucide-react";
 import { Brand as BrandMark } from "@/components/site/site-header";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -123,6 +123,17 @@ function UserMenu({ user, onNavigate }: { user: SessionUser; onNavigate?: () => 
             <Settings className="size-4" />
             Account settings
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          asChild
+          className="cursor-pointer gap-2 text-fg-2 focus:bg-fill focus:text-fg"
+        >
+          {/* A new tab keeps the dashboard open; self-hosted deployments redirect /docs to gitterm.dev. */}
+          <a href="/docs" target="_blank" rel="noreferrer" onClick={onNavigate}>
+            <BookOpen className="size-4" />
+            Docs
+            <ArrowUpRight className="ml-auto size-3.5 text-fg-4" />
+          </a>
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => authClient.signOut().then(() => router.push("/"))}
