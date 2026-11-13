@@ -134,8 +134,11 @@ test("declining billable upload never provisions compute", async () => {
   const f = fixture([{ changes: false }, { create: false }]);
   await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
   expect(f.creates()).toBe(0);
-  expect(f.forms[0]?.fields[0]?.description).toContain("Local files remain unchanged");
-  expect(f.forms[1]?.fields[0]?.description).toContain("Uncommitted changes are excluded");
+  expect(f.forms.map((form) => form.title)).toEqual([
+    "Bring your uncommitted changes to the cloud?",
+    "Start a cloud workspace for this session?",
+  ]);
+  expect(JSON.stringify(f.forms)).not.toContain('"default"');
 });
 
 test("a running source session is rejected, not interrupted", async () => {
@@ -701,9 +704,8 @@ test("envFiles become workspace variables, named but not shown in the confirmati
   await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("stop here");
   expect(sent).toEqual({ SHARED: "from-gitterm", API_KEY: "value-one", TOKEN: "value two" });
   const confirmation = JSON.stringify(f.forms.at(-1));
-  expect(confirmation).toContain(
-    "Environment variables from .env, .gitterm.env: SHARED, API_KEY, TOKEN",
-  );
+  expect(confirmation).toContain("Environment variables: SHARED, API_KEY, TOKEN");
+  expect(confirmation).toContain("conversation and repository history");
   expect(confirmation).not.toContain("value");
 });
 

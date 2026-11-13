@@ -3,221 +3,210 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Workspace Unavailable - GitTerm</title>
+    <meta name="color-scheme" content="dark light" />
+    <title>Workspace unavailable · GitTerm</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Hubot+Sans:wdth,wght@100..125,400..700&family=Martian+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <style>
       :root {
-        --background: #0d0d0d;
-        --foreground: #eaeaea;
-        --muted: #8a8a8a;
-        --border: #2a2a2a;
-        --primary: #eaeaea;
-        --primary-foreground: #0d0d0d;
+        --background: #101014;
+        --card: #16161b;
+        --fg: #f3f3f3;
+        --fg-3: #aeaeb0;
+        --fg-4: #939395;
+        --line: rgba(255, 255, 255, 0.11);
+        --gold: #d3ad55;
+        --error: #f07a72;
+        --button: #d3ad55;
+        --button-hover: #e0bf6f;
+        --button-text: #101014;
       }
-
+      @media (prefers-color-scheme: light) {
+        :root {
+          --background: #ffffff;
+          --card: #f5f5f5;
+          --fg: #141414;
+          --fg-3: #5b5b5b;
+          --fg-4: #767676;
+          --line: rgba(0, 0, 0, 0.1);
+          --gold: #9a7522;
+          --error: #c4352b;
+          --button: #141414;
+          --button-hover: #2e2e2e;
+          --button-text: #ffffff;
+        }
+      }
       * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
-
       body {
-        font-family:
-          "DM Sans",
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          Roboto,
-          sans-serif;
-        background-color: var(--background);
-        color: var(--foreground);
+        font-family: "Hubot Sans", ui-sans-serif, system-ui, sans-serif;
+        background: var(--background);
+        color: var(--fg);
         min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
+        display: grid;
+        place-items: center;
+        padding: 32px 16px;
       }
-
-      .container {
-        max-width: 480px;
+      main {
         width: 100%;
+        max-width: 560px;
         text-align: center;
       }
-
+      .mark {
+        display: block;
+        width: 28px;
+        height: 28px;
+        margin: 0 auto 32px;
+      }
       .terminal {
-        background: #1a1a1a;
+        background: #0b0b0e;
+        border: 1px solid var(--line);
         border-radius: 12px;
         overflow: hidden;
-        margin-bottom: 32px;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        margin-bottom: 36px;
+        text-align: left;
+        box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.45);
       }
-
-      .terminal-header {
-        background: #2a2a2a;
-        padding: 12px 16px;
+      .titlebar {
+        position: relative;
         display: flex;
-        align-items: center;
         gap: 8px;
+        align-items: center;
+        padding: 11px 14px;
+        background: #1c1c22;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       }
-
-      .terminal-dot {
+      .titlebar i {
         width: 12px;
         height: 12px;
         border-radius: 50%;
       }
-
-      .terminal-dot.red {
-        background: rgba(239, 68, 68, 0.8);
+      .titlebar i:nth-child(1) {
+        background: #ff5f57;
       }
-      .terminal-dot.yellow {
-        background: rgba(234, 179, 8, 0.8);
+      .titlebar i:nth-child(2) {
+        background: #febc2e;
       }
-      .terminal-dot.green {
-        background: rgba(34, 197, 94, 0.8);
+      .titlebar i:nth-child(3) {
+        background: #28c840;
       }
-
-      .terminal-body {
-        padding: 24px;
-        font-family: "Space Mono", monospace;
-        font-size: 14px;
-        color: #a0a0a0;
-        text-align: left;
+      .titlebar span {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font-family: "Martian Mono", ui-monospace, monospace;
+        font-size: 11px;
+        color: #8b8b92;
+        pointer-events: none;
       }
-
-      .terminal-line {
-        margin-bottom: 8px;
-        opacity: 0.9;
+      .session {
+        padding: 18px 20px 20px;
+        font-family: "Martian Mono", ui-monospace, monospace;
+        font-size: 13px;
+        line-height: 1.9;
+        color: #d6d6da;
+        overflow-wrap: anywhere;
       }
-
-      .terminal-prompt {
-        color: #22c55e;
+      .muted {
+        color: #8b8b92;
       }
-
-      .terminal-error {
-        color: #ef4444;
+      .prompt {
+        color: #d3ad55;
       }
-
+      .failed {
+        color: #f07a72;
+      }
       h1 {
-        font-size: 28px;
-        font-weight: 700;
+        font-stretch: 125%;
+        font-size: clamp(26px, 6vw, 32px);
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
         margin-bottom: 12px;
-        letter-spacing: -0.025em;
       }
-
       p {
-        color: var(--muted);
+        max-width: 440px;
+        margin-left: auto;
+        margin-right: auto;
+        color: var(--fg-3);
         font-size: 16px;
         line-height: 1.6;
-        margin-bottom: 24px;
+        margin-bottom: 28px;
       }
-
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 12px 24px;
+      }
       .button {
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        gap: 8px;
-        background: var(--primary);
-        color: var(--primary-foreground);
-        padding: 12px 24px;
+        background: var(--button);
+        color: var(--button-text);
+        padding: 12px 20px;
         border-radius: 8px;
-        font-size: 14px;
-        font-weight: 500;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 600;
         text-decoration: none;
-        transition: opacity 0.2s;
+        border: 0;
+        cursor: pointer;
       }
-
       .button:hover {
-        opacity: 0.9;
+        background: var(--button-hover);
       }
-
-      .button svg {
-        width: 16px;
-        height: 16px;
+      .link {
+        color: var(--fg-3);
+        font-size: 15px;
+        text-underline-offset: 4px;
       }
-
-      .footer {
-        margin-top: 48px;
-        padding-top: 24px;
-        border-top: 1px solid var(--border);
-        width: 100%;
+      .link:hover {
+        color: var(--fg);
       }
-
-      .logo {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        color: var(--muted);
-        font-size: 14px;
-        font-weight: 500;
-        text-decoration: none;
-      }
-
-      .logo:hover {
-        color: var(--foreground);
-      }
-
-      .logo svg {
-        width: 20px;
-        height: 20px;
+      :focus-visible {
+        outline: 2px solid var(--gold);
+        outline-offset: 3px;
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="terminal">
-        <div class="terminal-header">
-          <div class="terminal-dot red"></div>
-          <div class="terminal-dot yellow"></div>
-          <div class="terminal-dot green"></div>
-        </div>
-        <div class="terminal-body">
-          <div class="terminal-line">
-            <span class="terminal-prompt">$</span> curl workspace.gitterm.dev
+    <main>
+      <svg class="mark" viewBox="0 0 28 28" aria-label="GitTerm" role="img">
+        <path fill="#d3ad55" d="M0 7.5h13v7h7v13H0zM21 .5h7v7h-7z" />
+      </svg>
+      <div class="terminal" aria-hidden="true">
+        <div class="titlebar"><i></i><i></i><i></i><span>~ / zsh</span></div>
+        <div class="session">
+          <div>
+            <span class="prompt">~ $</span> curl
+            <span id="address">https://workspace.gitterm.dev</span>
           </div>
-          <div class="terminal-line">
-            <span class="terminal-error">error:</span> workspace unavailable
-          </div>
-          <div class="terminal-line">_</div>
+          <div><span class="failed">error:</span> workspace unavailable</div>
         </div>
       </div>
-
-      <h1>Workspace Unavailable</h1>
-      <p>This workspace doesn't exist, is offline, or you don't have permission to access it.</p>
-
-      <a href="https://gitterm.dev" class="button">
-        Go to GitTerm
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="2"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-          />
-        </svg>
-      </a>
-
-      <div class="footer">
-        <a href="https://gitterm.dev" class="logo">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path
-              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
-            />
-          </svg>
-          GitTerm
-        </a>
+      <h1>Workspace unavailable</h1>
+      <p>
+        It may be paused, deleted or still starting, or you may not have access to it. Try again in
+        a moment, or start it from GitTerm.
+      </p>
+      <div class="actions">
+        <a class="button" href="https://gitterm.dev">Go to GitTerm</a>
+        <a class="link" href="javascript:location.reload()">Try again</a>
       </div>
-    </div>
+    </main>
+    <script>
+      var match = location.pathname.match(/^\/ws\/[^/]+/);
+      document.getElementById("address").textContent = location.origin + (match ? match[0] : "");
+    </script>
   </body>
 </html>

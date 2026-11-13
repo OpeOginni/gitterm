@@ -31,8 +31,9 @@ In a Git repository, stop the agent and finish or stop its background jobs, then
 OpenCode.
 
 1. Choose whether to include uncommitted changes.
-2. Review what will be uploaded and approve it. The workspace is billed while it runs.
-3. Open the link to continue in the cloud.
+2. Review the upload and approve starting the workspace. It is billed while it runs.
+3. A dialog shows each step. Esc cancels and deletes the workspace that was just created.
+4. Open the link to continue in the cloud.
 
 Run `/cloud` again later to reconnect to the same workspace. **Pause or delete the
 workspace in GitTerm when you are done**, or bring the session back.

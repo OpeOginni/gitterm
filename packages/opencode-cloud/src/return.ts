@@ -151,7 +151,6 @@ export async function returnSession(
             key: "replace",
             type: "boolean",
             title: "Bring the cloud conversation back?",
-            default: false,
             required: true,
             description:
               "Messages were sent in this session after it moved to the cloud. The cloud conversation does not have them. They are kept in a copy of this session.",
@@ -199,7 +198,6 @@ export async function returnSession(
               key: "replace",
               type: "boolean",
               title: "Replace this checkout with the cloud checkout?",
-              default: false,
               required: true,
               description: [
                 "This checkout changed since the session moved to the cloud.",
@@ -403,7 +401,6 @@ export async function confirmLocalPrompt(
         key: "send",
         type: "boolean",
         title: "Send this message here anyway?",
-        default: false,
         required: true,
         description: `The conversation moved to cloud workspace ${record.workspaceID}. A message sent here is not seen there, and /cloud-return will ask before replacing it. Run /cloud to open the cloud session, or /cloud-return to bring it back.\n\nYes sends it here. No leaves it unsent.`,
       },

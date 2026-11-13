@@ -18,7 +18,7 @@ import {
   sharedCheckoutSessions,
   type CheckoutSnapshot,
 } from "./snapshot";
-import { CLOUD_KEY, type CloudMarker } from "./marker";
+import { CLOUD_KEY, CONNECT_KEY, type CloudMarker } from "./marker";
 import {
   PREPARE_STAGE_SCRIPT,
   RESTORE_NEEDS_FULL_HISTORY,
@@ -125,11 +125,10 @@ export class HandoffCancelled extends Error {
 
 export function changePrompt(sharedCount: number): string {
   return [
-    "Copies this checkout's tracked edits and non-ignored untracked files. Local files remain unchanged.",
+    "Yes copies your edited and new files. No starts from your last commit.",
     sharedCount > 0
       ? `${sharedCount} other active session(s) use this checkout. Their changes may be included too.`
       : "",
-    "Other OpenCode servers, editors, and background writers cannot all be detected. Pause writers for a consistent snapshot.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -212,10 +211,24 @@ export async function markCloudSession(
   marker: CloudMarker | undefined,
   signal: AbortSignal,
 ) {
-  const { [CLOUD_KEY]: _marker, ...metadata } =
-    (await local.session.get({ sessionID }, { signal })).metadata ?? {};
+  await setSessionMetadata(local, sessionID, { [CLOUD_KEY]: marker }, signal);
+}
+
+export async function setSessionMetadata(
+  local: OpenCodeClient,
+  sessionID: string,
+  values: Record<string, unknown>,
+  signal: AbortSignal,
+) {
+  const metadata: Record<string, unknown> = {
+    ...(await local.session.get({ sessionID }, { signal })).metadata,
+  };
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) delete metadata[key];
+    else metadata[key] = value;
+  }
   await local.session.update(
-    { sessionID, metadata: marker ? { ...metadata, [CLOUD_KEY]: marker } : metadata },
+    { sessionID, metadata } as Parameters<OpenCodeClient["session"]["update"]>[0],
     { signal },
   );
 }
@@ -418,16 +431,13 @@ export async function handoffSession(
   const choice = await askForm(
     local,
     sessionID,
-    // The terminal shows a single question's form title, not its field title, so the
-    // title is the question.
-    "Continue in the cloud. Include your uncommitted changes?",
+    "Bring your uncommitted changes to the cloud?",
     [
       {
         key: "changes",
         type: "boolean",
-        title: "Include uncommitted changes?",
+        title: "Bring your uncommitted changes to the cloud?",
         description: changePrompt(shared.length),
-        default: false,
         required: true,
       },
     ],
@@ -436,31 +446,23 @@ export async function handoffSession(
   const includeChanges = choice.changes === true;
   await assertIdle(local, sessionID, signal);
   const snapshot = await captureSnapshot(root, includeChanges, !repo);
-  const manifest = snapshot.changedPaths
-    .slice(0, 100)
-    .map((file) => JSON.stringify(file))
-    .join("\n");
   const confirmation = await askForm(
     local,
     sessionID,
-    "Upload this snapshot and start billable cloud compute?",
+    "Start a cloud workspace for this session?",
     [
       {
         key: "create",
         type: "boolean",
-        title: "Upload this snapshot and start billable cloud compute?",
+        title: "Start a cloud workspace for this session?",
         required: true,
-        default: false,
         description: [
-          `Repository: ${repo ?? "this checkout only (no origin)"}\nCommit: ${snapshot.head}\nSnapshot: ${(snapshot.bytes / 1024 / 1024).toFixed(2)} MiB`,
+          "Uploads this conversation and repository history, which may contain secrets. Local files stay unchanged.",
           includeChanges
-            ? `${snapshot.changedPaths.length} changed paths${manifest ? `:\n${manifest}` : ""}${snapshot.changedPaths.length > 100 ? "\n(additional paths omitted)" : ""}`
+            ? `Includes ${snapshot.changedPaths.length} changed paths.`
             : "Uncommitted changes are excluded.",
-          ...(envNames.length
-            ? [`Environment variables from ${options.envFiles!.join(", ")}: ${envNames.join(", ")}`]
-            : []),
-          `Uploads this conversation (which may contain secrets) and ${repo ? "commits that are not on origin's default branch, including unpublished ones" : "the repository's whole history"}. Ignored files are not separately uploaded; tracked history can contain secrets. Review before approving.`,
-          "Uses your GitTerm model/repository connections, not separately copied local credential stores. Cloud compute may incur charges until paused or terminated in GitTerm. Local work remains untouched; later local edits will not sync.",
+          ...(envNames.length ? [`Environment variables: ${envNames.join(", ")}.`] : []),
+          "It's billed until you pause or delete it in GitTerm.",
         ].join("\n\n"),
       },
     ],
@@ -493,9 +495,7 @@ export async function handoffSession(
   };
   await deps.save(record);
   try {
-    await deps.progress(
-      "Creating a GitTerm workspace. Your local checkout and sessions remain unchanged.",
-    );
+    await deps.progress("Creating the cloud workspace");
     // GitTerm rejects a GitHub connection on a workspace without a repository.
     const nonGithub = repo ? undefined : await withoutGithub(gitterm, options.connections);
     // Restore unpublished branches from the bundle, not the remote clone.
@@ -531,7 +531,7 @@ export async function handoffSession(
       throw new Error("The session moved outside its source checkout.");
     const directory = path.posix.join(runtime.directory, subpath);
     const stage = `.gitterm-handoff-${record.attemptID}`;
-    await deps.progress("Restoring and verifying the captured checkout in the cloud.");
+    await deps.progress("Copying your code");
     const restore = async (upload: CheckoutSnapshot) => {
       let finished = false;
       try {
@@ -602,6 +602,7 @@ export async function handoffSession(
     }
     record.phase = "importing";
     await deps.save(record);
+    await deps.progress("Copying the conversation");
     // Look again: the cloud session must still be untouched at the moment it is replaced.
     const earlier = found && (await untouchedSession());
     if (earlier) await remote.session.remove({ sessionID }, { signal });
@@ -659,7 +660,7 @@ export async function handoffSession(
     record.phase = "failed";
     await deps.save(record);
     // Responses may echo credentials or snapshots; show only GitTerm's redacted reason.
-    console.error("GitTerm cloud handoff failed while", step, error);
+    if (!signal.aborted) console.error("GitTerm cloud handoff failed while", step, error);
     const reason =
       error instanceof GittermError || error instanceof HandoffRefused ? ` ${error.message}` : "";
     throw new Error(
@@ -700,7 +701,7 @@ export async function showConnection(
     "Your cloud session is ready",
     [
       {
-        key: "open",
+        key: CONNECT_KEY,
         type: "external",
         url: connection,
         title: "Open cloud OpenCode",

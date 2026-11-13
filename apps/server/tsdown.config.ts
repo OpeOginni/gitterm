@@ -13,6 +13,6 @@ export default defineConfig({
   format: "esm",
   outDir: "./dist",
   clean: true,
-  // Bundle all dependencies
   noExternal: [/.*/],
+  loader: { ".html": "text" },
 });

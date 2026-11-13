@@ -458,6 +458,8 @@ export function createSandboxClient(options: {
         cwd?: string;
         readyTimeoutMs?: number;
         env?: Record<string, string>;
+        /** Per-port access for managed previews. Omit to keep the current setting. */
+        public?: boolean;
       },
     ): Promise<PreviewResult> {
       const record = await running(ref);
@@ -467,6 +469,20 @@ export function createSandboxClient(options: {
       if (backend.capabilities.previews === "public" && !record.publicPreviews)
         throw new Error(
           `${ref.provider} previews are reachable by anyone with the URL. Create the sandbox with publicPreviews to approve that.`,
+        );
+      const previews = backend.capabilities.previews;
+      const perPort = previews === "either" && identity.mode === "managed";
+      const fixed = previews === "public" || (previews === "either" && record.publicPreviews);
+      const wantPublic = perPort
+        ? (input.public ?? record.previews[String(input.port)]?.public ?? record.publicPreviews)
+        : fixed;
+      if (input.public !== undefined && input.public !== wantPublic)
+        throw new Error(
+          previews === "private"
+            ? `${ref.provider} previews are always private.`
+            : previews === "public"
+              ? `${ref.provider} previews are always public.`
+              : `${ref.provider} sets preview access when a sandbox is created. Create a new sandbox ${input.public ? "with" : "without"} publicPreviews.`,
         );
       let jobId: string | null = null;
       if (input.command) {
@@ -484,13 +500,9 @@ export function createSandboxClient(options: {
         ).job.id;
       }
       const { gittermUrl, ...access } = await backend.preview(ref.id, input.port, {
-        public: record.publicPreviews,
+        public: wantPublic,
       });
       const url = gittermUrl ?? access.url;
-      // Providers without a public mode keep previews private whatever the sandbox asked for.
-      const isPublic =
-        backend.capabilities.previews === "public" ||
-        (backend.capabilities.previews === "either" && record.publicPreviews);
       const deadline = Date.now() + (input.readyTimeoutMs ?? 60_000);
       let ready = false;
       while (!ready && Date.now() < deadline) {
@@ -531,13 +543,13 @@ export function createSandboxClient(options: {
           port: input.port,
           jobId,
           url,
-          public: isPublic,
+          public: wantPublic,
         };
       });
       return {
         url,
         port: input.port,
-        public: isPublic,
+        public: wantPublic,
         viaGitterm: Boolean(gittermUrl),
         access,
         ready,

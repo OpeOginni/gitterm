@@ -18,6 +18,7 @@ const events: string[] = [];
 let lists = 0;
 const paused: string[] = [];
 let execEnv: Record<string, string> | undefined;
+const previewed: Array<{ port: number; public?: boolean }> = [];
 let previewEnv: Record<string, string> | undefined;
 const jobView = (status: string) => ({
   job: { id: "job1", command: "bun run build", cwd: "/w", snapshotId: null, timeoutMs: 60_000 },
@@ -79,9 +80,18 @@ mock.module("@gitterm/sdk/sandbox", () => ({
       execEnv = input.env;
       return jobView("running");
     },
-    preview: async (_ref: unknown, input: { env?: Record<string, string> }) => {
+    preview: async (
+      _ref: unknown,
+      input: { port: number; public?: boolean; env?: Record<string, string> },
+    ) => {
       previewEnv = input.env;
-      return { url: "http://localhost:8000", ready: true, public: false, jobId: "job1" };
+      previewed.push(input);
+      return {
+        url: "http://localhost:8000",
+        ready: true,
+        public: input.public === true,
+        jobId: "job1",
+      };
     },
     job: async () => {
       jobReads++;
@@ -496,5 +506,43 @@ test("envFiles go to every command as secrets, with secretEnv values from the lo
       else process.env[name] = value;
     }
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("sandbox_preview can make a port public, asking first unless publicPreviews is set", async () => {
+  for (const publicPreviews of [false, true]) {
+    previewed.length = 0;
+    const asked: string[] = [];
+    const added = new Map<string, (input: unknown, context: unknown) => Promise<any>>();
+    const ctx = {
+      tool: {
+        transform: async (transform: (editor: unknown) => void) =>
+          transform({
+            namespace: () => {},
+            add: (tool: { name: string; execute: any }) => added.set(tool.name, tool.execute),
+          }),
+      },
+      session: {
+        get: async () => ({ location: { directory: process.cwd() } }),
+        synthetic: async () => {},
+      },
+      permission: { assert: async (request: { action: string }) => asked.push(request.action) },
+    };
+    const unload = await registerSandboxTools(
+      ctx as never,
+      {
+        provider: "e2b",
+        apiKey: "k",
+        publicPreviews,
+      } as never,
+    );
+    const result = await added.get("sandbox_preview")!(
+      { sandboxId: "sbx", port: 3000, public: true },
+      { sessionID: "ses", agent: "a", messageID: "m", id: "t" },
+    );
+    expect(previewed).toMatchObject([{ port: 3000, public: true }]);
+    expect(result.output.public).toBe(true);
+    expect(asked.includes("gitterm.sandbox.public")).toBe(!publicPreviews);
+    await unload?.();
   }
 });

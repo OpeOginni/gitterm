@@ -15,3 +15,11 @@ export const CLOUD_KEY = "gittermCloud";
 export type CloudStatus = "working" | "waiting" | "idle" | "paused" | "gone";
 
 export type CloudMarker = { workspaceID: string; status?: CloudStatus };
+
+export const PROGRESS_KEY = "gittermCloudProgress";
+export const CANCEL_KEY = "gittermCloudCancel";
+
+export type CloudProgress = { attemptID: string; step: string };
+
+/** Key of the link field on /cloud's "ready" form; the terminal UI shows that form as a dialog. */
+export const CONNECT_KEY = "gittermConnect";

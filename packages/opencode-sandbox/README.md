@@ -152,6 +152,10 @@ only show previews when created with public previews (this setting, or your appr
 the agent asks). With a GitTerm plan, GitTerm serves the preview, so it also works on Boat
 and exe.dev, and private previews open in your browser when you are signed in to GitTerm.
 
+With a GitTerm plan, the agent can also make one port public on a running sandbox, or private
+again, and OpenCode asks before it makes one public. With your own key, this is fixed when the
+sandbox is created.
+
 To stop being asked every time, allow actions in your OpenCode `permissions`:
 
 ```jsonc

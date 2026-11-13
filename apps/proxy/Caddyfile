@@ -164,7 +164,7 @@ http://compute.gitterm.dev {
 					@server_error status 500 502 504
 					handle_response @server_error {
 						root * /srv/errors
-						rewrite * /error.html
+						rewrite * /unavailable.html
 						method GET
 						file_server {
 							status {rp.status_code}
@@ -223,7 +223,7 @@ http://compute.gitterm.dev {
 					@server_error status 500 502 504
 					handle_response @server_error {
 						root * /srv/errors
-						rewrite * /error.html
+						rewrite * /unavailable.html
 						method GET
 						file_server {
 							status {rp.status_code}
@@ -258,7 +258,7 @@ http://compute.gitterm.dev {
 		handle @server_error {
 			header Content-Type text/html
 			root * /srv/errors
-			rewrite * /error.html
+			rewrite * /unavailable.html
 			file_server {
 				status {err.status_code}
 			}
@@ -269,7 +269,7 @@ http://compute.gitterm.dev {
 		handle @bad_request {
 			header Content-Type text/html
 			root * /srv/errors
-			rewrite * /error.html
+			rewrite * /unavailable.html
 			file_server {
 				status {err.status_code}
 			}
@@ -279,7 +279,7 @@ http://compute.gitterm.dev {
 		handle {
 			header Content-Type text/html
 			root * /srv/errors
-			rewrite * /error.html
+			rewrite * /unavailable.html
 			file_server {
 				status {err.status_code}
 			}

@@ -415,7 +415,7 @@ export async function registerSandboxTools(
         publicPreviews: {
           type: "boolean",
           description:
-            "Anyone with a preview URL can open it. Fixed at creation; requires separate approval unless the plugin options already turn it on. Required where previews are always public (Vercel); ignored where they are always private.",
+            "Anyone with a preview URL can open it. Requires separate approval unless the plugin options already turn it on. Required where previews are always public (Vercel); ignored where they are always private. Where Gitterm serves previews, sandbox_preview can also make a single port public later.",
         },
         ...(snapshotsOn
           ? {
@@ -760,6 +760,11 @@ export async function registerSandboxTools(
           command: { type: "string", description: "Server command, started as a job" },
           cwd: { type: "string" },
           localProxy: { type: "boolean" },
+          public: {
+            type: "boolean",
+            description:
+              "true makes this port's URL open to anyone (needs the user's approval); false makes it private again. Omit to keep it as it is. Where Gitterm serves the preview this works on any running sandbox; elsewhere it is fixed when the sandbox is created.",
+          },
         },
         ["sandboxId", "port"],
       ),
@@ -776,10 +781,15 @@ export async function registerSandboxTools(
             [`${ref.account}:*`],
             { command: args.command },
           );
+        if (args.public === true && !settings!.publicPreviews)
+          await assert(context, "gitterm.sandbox.public", [`${ref.account}`], [], {
+            warning: `Port ${port} of this sandbox will be reachable by anyone with its URL.`,
+          });
         const preview = await (
           await sandbox()
         ).preview(ref, {
           port,
+          public: typeof args.public === "boolean" ? args.public : undefined,
           command: typeof args.command === "string" ? args.command : undefined,
           cwd: typeof args.cwd === "string" ? args.cwd : undefined,
           env: typeof args.command === "string" ? await envFileVars(context) : undefined,

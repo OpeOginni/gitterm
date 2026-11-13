@@ -760,3 +760,84 @@ describe("source snapshots", () => {
     }
   });
 });
+
+test("a port can be made public and private again where Gitterm serves previews", async () => {
+  const server = Bun.serve({ port: 0, fetch: () => new Response("ok") });
+  const asked: unknown[] = [];
+  const directories: string[] = [];
+  const previewBackend = (mode: "direct" | "managed", previews: "private" | "either") => {
+    const identity = { mode, provider: "e2b" as const, account: "a" };
+    return {
+      identity,
+      home: "/home/user",
+      capabilities: { expiry: "hard" as const, previews, pause: "stateful" as const },
+      get: async (id: string) => ({
+        ...identity,
+        id,
+        state: "running",
+        name: "s",
+        createdAt: null,
+        expiresAt: null,
+        labels: {},
+      }),
+      preview: async (_id: string, _port: number, options: unknown) => {
+        asked.push(options);
+        return { url: `http://localhost:${server.port}/`, headers: {} };
+      },
+    } as unknown as Parameters<typeof createSandboxClient>[0]["backend"];
+  };
+  const previewClient = async (mode: "direct" | "managed", previews: "private" | "either") => {
+    const backend = previewBackend(mode, previews);
+    const directory = await mkdtemp(path.join(tmpdir(), "gitterm-store-"));
+    directories.push(directory);
+    const store = createFileSandboxStore(directory);
+    const ref = { ...backend.identity, id: "sbx1" };
+    await store.put({
+      ...ref,
+      name: "s",
+      purpose: "",
+      project: null,
+      sessionId: null,
+      state: "running",
+      publicPreviews: false,
+      createdAt: new Date().toISOString(),
+      expiresAt: null,
+      snapshot: null,
+      jobs: {},
+      previews: {},
+      updatedAt: new Date().toISOString(),
+    });
+    return { client: createSandboxClient({ backend, store }), ref };
+  };
+  try {
+    const managed = await previewClient("managed", "either");
+    expect((await managed.client.preview(managed.ref, { port: 3000 })).public).toBe(false);
+    expect((await managed.client.preview(managed.ref, { port: 3000, public: true })).public).toBe(
+      true,
+    );
+    expect((await managed.client.preview(managed.ref, { port: 3000 })).public).toBe(true);
+    expect((await managed.client.preview(managed.ref, { port: 3000, public: false })).public).toBe(
+      false,
+    );
+    expect(asked).toEqual([
+      { public: false },
+      { public: true },
+      { public: true },
+      { public: false },
+    ]);
+
+    const direct = await previewClient("direct", "either");
+    await expect(direct.client.preview(direct.ref, { port: 3000, public: true })).rejects.toThrow(
+      "e2b sets preview access when a sandbox is created. Create a new sandbox with publicPreviews.",
+    );
+    const closed = await previewClient("managed", "private");
+    await expect(closed.client.preview(closed.ref, { port: 3000, public: true })).rejects.toThrow(
+      "e2b previews are always private.",
+    );
+  } finally {
+    server.stop(true);
+    await Promise.all(
+      directories.map((directory) => rm(directory, { recursive: true, force: true })),
+    );
+  }
+});

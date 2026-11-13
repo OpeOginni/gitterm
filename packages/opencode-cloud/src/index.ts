@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Plugin } from "@opencode/plugin";
 import { OpenCode, type OpenCodeClient } from "@opencode/client";
 import { Service } from "@opencode/client/service";
@@ -7,11 +8,12 @@ import {
   handoffSession,
   HandoffCancelled,
   markCloudSession,
+  setSessionMetadata,
   showConnection,
   type HandoffOptions,
   type HandoffRecord,
 } from "./handoff";
-import { CLOUD_KEY } from "./marker";
+import { CANCEL_KEY, CLOUD_KEY, PROGRESS_KEY, type CloudProgress } from "./marker";
 import { confirmLocalPrompt, finishReturn, returnSession } from "./return";
 import { checkoutRoot } from "./snapshot";
 import { watchCloudSessions } from "./status";
@@ -124,6 +126,51 @@ export const GittermCloudPlugin = Plugin.define({
       watch();
     };
 
+    const CANCELLED = Symbol("cancelled");
+    async function withProgress<T>(
+      local: OpenCodeClient,
+      sessionID: string,
+      work: (progress: (step: string) => Promise<void>, signal: AbortSignal) => Promise<T>,
+    ): Promise<T | typeof CANCELLED> {
+      const attemptID = randomUUID();
+      const cancel = new AbortController();
+      const signal = AbortSignal.any([controller.signal, cancel.signal]);
+      const progress = (step: string) =>
+        setSessionMetadata(
+          local,
+          sessionID,
+          { [PROGRESS_KEY]: { attemptID, step } satisfies CloudProgress },
+          signal,
+        ).catch(() => {});
+      const finished = new AbortController();
+      const watcher = (async () => {
+        for await (const event of ctx.event.subscribe({
+          types: ["session.metadata.updated"],
+          signal: finished.signal,
+        })) {
+          if (event.data.sessionID === sessionID && event.data.metadata[CANCEL_KEY] === attemptID)
+            return cancel.abort();
+        }
+      })().catch((error) => {
+        if (!finished.signal.aborted) cancel.abort(error);
+      });
+      try {
+        return await work(progress, signal);
+      } catch (error) {
+        if (cancel.signal.aborted) return CANCELLED;
+        throw error;
+      } finally {
+        finished.abort();
+        await watcher;
+        await setSessionMetadata(
+          local,
+          sessionID,
+          { [PROGRESS_KEY]: undefined, [CANCEL_KEY]: undefined },
+          AbortSignal.timeout(5_000),
+        ).catch(() => {});
+      }
+    }
+
     await ctx.command.transform((editor) => {
       editor.add({
         name: "cloud",
@@ -152,6 +199,14 @@ export const GittermCloudPlugin = Plugin.define({
               record?.phase === "returned" ? undefined : record,
             );
             if (previous?.phase === "ready") {
+              const woken = await withProgress(local, sessionID, (progress, signal) =>
+                progress("Starting the cloud workspace").then(() =>
+                  client.workspaces.ensureRunning(previous.workspaceID!, {
+                    signal,
+                  }),
+                ),
+              );
+              if (woken === CANCELLED) return;
               await showConnection(local, client, previous, controller.signal);
               return;
             }
@@ -166,7 +221,6 @@ export const GittermCloudPlugin = Plugin.define({
                     key: "reuse",
                     type: "boolean",
                     title: "Retry in the same cloud workspace?",
-                    default: true,
                     required: true,
                     description: `Previous attempt: ${previous.attemptID}${previous.workspaceID ? `; workspace: ${previous.workspaceID}` : ""}. Yes retries that attempt, so no second workspace is created. No starts a new workspace: the earlier one is NOT deleted and may keep incurring charges until you remove it in GitTerm.`,
                   },
@@ -175,22 +229,30 @@ export const GittermCloudPlugin = Plugin.define({
               );
               if (answer.reuse === true) attemptID = previous.attemptID;
             }
+            const reused = attemptID !== undefined;
+            const attempt = attemptID ?? randomUUID();
             // Validate login before capture or billable provisioning.
             await client.auth.status();
-            const record = await handoffSession(
-              sessionID,
-              {
-                local,
-                gitterm: client,
-                options,
-                signal: controller.signal,
-                save,
-                progress: async (text) => {
-                  console.info(`GitTerm: ${text}`);
-                },
-              },
-              attemptID,
+            const record = await withProgress(local, sessionID, (progress, signal) =>
+              handoffSession(
+                sessionID,
+                { local, gitterm: client, options, signal, save, progress },
+                attempt,
+              ),
             );
+            if (record === CANCELLED) {
+              const latest = await load(sessionID);
+              if (!reused && latest?.attemptID === attempt) {
+                if (latest.workspaceID)
+                  await client.workspaces.terminate(latest.workspaceID).catch(() => {
+                    throw new Error(
+                      `/cloud was cancelled, but workspace ${latest.workspaceID} could not be deleted. Delete it in GitTerm.`,
+                    );
+                  });
+                await ctx.storage.remove(sessionKey(sessionID));
+              }
+              return;
+            }
             await showConnection(local, client, record, controller.signal);
           } catch (error) {
             if (!(error instanceof HandoffCancelled)) throw error;
