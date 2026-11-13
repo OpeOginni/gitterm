@@ -1,4 +1,7 @@
 import { expect, mock, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 const created: { publicPreviews?: boolean; snapshot?: string }[] = [];
 let setupSnapshots: unknown[] = [];
@@ -14,6 +17,7 @@ let heldRead: Promise<void> | undefined;
 const events: string[] = [];
 let lists = 0;
 const paused: string[] = [];
+let execEnv: Record<string, string> | undefined;
 const jobView = (status: string) => ({
   job: { id: "job1", command: "bun run build", cwd: "/w", snapshotId: null, timeoutMs: 60_000 },
   state: {
@@ -70,7 +74,10 @@ mock.module("@gitterm/sdk/sandbox", () => ({
           }
         : undefined;
     },
-    exec: async () => jobView("running"),
+    exec: async (_ref: unknown, input: { env: Record<string, string> }) => {
+      execEnv = input.env;
+      return jobView("running");
+    },
     job: async () => {
       jobReads++;
       if (heldRead) {
@@ -173,7 +180,7 @@ test("where previews are always private, nothing is asked and nothing is made pu
   }
 });
 
-async function tools(reconcileMs?: number) {
+async function tools(reconcileMs?: number, options: Record<string, unknown> = {}) {
   const added = new Map<string, (input: unknown, context: unknown) => Promise<any>>();
   const posted: Record<string, any>[] = [];
   const ctx = {
@@ -196,6 +203,7 @@ async function tools(reconcileMs?: number) {
   const settings = {
     account: "e2b",
     accounts: { e2b: { provider: "e2b", apiKey: "k" } },
+    ...options,
   };
   const unload = await registerSandboxTools(ctx as never, settings as never, 10, reconcileMs);
   const call = (name: string, input: unknown) =>
@@ -436,5 +444,42 @@ test("with snapshots on, a sandbox starts from the checkout's newest snapshot un
     expect(off.names).not.toContain("sandbox_snapshot");
   } finally {
     setupSnapshots = [];
+  }
+});
+
+test("secretEnv reads names from envFiles first, then the local environment", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "gitterm-env-files-"));
+  await writeFile(path.join(dir, ".env"), "API_KEY=earlier-file\nUNREQUESTED=not-sent\n");
+  await writeFile(path.join(dir, ".gitterm.env"), "API_KEY=from-file\n");
+  const original = Object.fromEntries(
+    ["GITTERM_TEST_LOCAL", "API_KEY", "constructor"].map((name) => [name, process.env[name]]),
+  );
+  process.env.GITTERM_TEST_LOCAL = "from-process";
+  process.env.API_KEY = "shadowed";
+  Reflect.set(process.env, "constructor", "from-process");
+  let unload: (() => Promise<void>) | undefined;
+  try {
+    const registered = await tools(undefined, {
+      envFiles: [path.join(dir, ".env"), path.join(dir, ".gitterm.env")],
+    });
+    unload = registered.unload;
+    await registered.call("sandbox_exec", {
+      sandboxId: "sbx",
+      command: "bun run build",
+      background: true,
+      secretEnv: ["API_KEY", "GITTERM_TEST_LOCAL", "constructor"],
+    });
+    expect(execEnv).toEqual({
+      API_KEY: "from-file",
+      GITTERM_TEST_LOCAL: "from-process",
+      constructor: "from-process",
+    });
+  } finally {
+    await unload?.();
+    for (const [name, value] of Object.entries(original)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    await rm(dir, { recursive: true, force: true });
   }
 });

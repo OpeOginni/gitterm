@@ -116,6 +116,8 @@ type SandboxOptions = {
    * Off by default. An account's own `snapshot` setting always wins.
    */
   snapshots?: boolean;
+  /** Env files for `secretEnv`, relative to the project. Later files win over files and local env. */
+  envFiles?: string[];
 };
 
 /**
@@ -168,7 +170,14 @@ const isOwnKey = (config: SandboxAccountConfig): config is OwnKeyAccountConfig =
 
 function selected(settings: SandboxSettings, accountName?: string) {
   if (!settings.accounts) {
-    const { limits: _l, exclude: _e, publicPreviews: _p, snapshots: _s, ...config } = settings;
+    const {
+      limits: _l,
+      exclude: _e,
+      publicPreviews: _p,
+      snapshots: _s,
+      envFiles: _f,
+      ...config
+    } = settings;
     const name = config.provider ?? "gitterm";
     if (accountName && accountName !== name)
       throw new Error(`Sandbox account ${JSON.stringify(accountName)} is not configured.`);

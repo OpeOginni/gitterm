@@ -160,10 +160,7 @@ export function buildWorkspaceEnv(
   return mergeEnv(system, spec.agent.env, runtime.userEnv);
 }
 
-/**
- * Merge agent-derived and user-defined env vars under the system env. User
- * vars win over agent vars; nothing overrides a reserved system key.
- */
+/** Merge agent < user < system, keeping unset reserved keys protected. */
 function mergeEnv(
   system: SystemWorkspaceEnv,
   agentEnv: Record<string, string>,
@@ -172,7 +169,10 @@ function mergeEnv(
   const merged: WorkspaceEnvironmentVariables = { ...system };
 
   for (const [key, value] of Object.entries(agentEnv)) {
-    if (RESERVED_WORKSPACE_ENV_KEYS.has(key)) {
+    if (
+      RESERVED_WORKSPACE_ENV_KEYS.has(key) ||
+      (Object.hasOwn(system, key) && system[key as keyof SystemWorkspaceEnv] !== undefined)
+    ) {
       continue;
     }
     merged[key] = value;
@@ -180,7 +180,10 @@ function mergeEnv(
 
   if (userEnv) {
     for (const [key, value] of Object.entries(userEnv)) {
-      if (isReservedWorkspaceEnvKey(key)) {
+      if (
+        isReservedWorkspaceEnvKey(key) ||
+        (Object.hasOwn(system, key) && system[key as keyof SystemWorkspaceEnv] !== undefined)
+      ) {
         continue;
       }
       merged[key] = value;

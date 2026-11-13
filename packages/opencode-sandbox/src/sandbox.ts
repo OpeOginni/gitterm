@@ -1,4 +1,6 @@
-import { realpath } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
+import path from "node:path";
+import { parseEnv } from "node:util";
 import type { Plugin } from "@opencode/plugin";
 import {
   captureSource,
@@ -619,7 +621,7 @@ export async function registerSandboxTools(
             type: "array",
             items: { type: "string" },
             description:
-              "Names of local environment variables to pass. Values never enter the conversation.",
+              "Names of local environment variables, or variables from the envFiles setting, to pass. Values never enter the conversation.",
           },
         },
         ["sandboxId", "command"],
@@ -638,11 +640,21 @@ export async function registerSandboxTools(
         const names = Array.isArray(args.secretEnv)
           ? args.secretEnv.filter((name): name is string => typeof name === "string")
           : [];
-        const env: Record<string, string> = {};
+        const env: Record<string, string> = Object.create(null);
         if (names.length) {
           await assert(context, "gitterm.sandbox.secret", names, names, { sandbox: ref.id });
+          const fromFiles: Record<string, string> = Object.create(null);
+          if (settings?.envFiles?.length) {
+            const directory = await sessionDirectory(context);
+            for (const file of settings.envFiles) {
+              const content = await readFile(path.resolve(directory, file), "utf8").catch(() => {
+                throw new Error(`Cannot read ${file} from the envFiles setting`);
+              });
+              Object.assign(fromFiles, parseEnv(content));
+            }
+          }
           for (const name of names) {
-            const value = process.env[name];
+            const value = fromFiles[name] ?? process.env[name];
             if (value === undefined)
               throw new Error(`Local environment variable ${name} is not set`);
             env[name] = value;

@@ -99,6 +99,7 @@ All optional:
 | `connections` | Saved GitTerm connections, for example `"github"` for private repositories. A checkout without an origin skips GitHub connections; naming one by name or id needs the `integrations:read` scope to be recognised |
 | `name`        | Workspace name; defaults to the conversation title                                                                                                                                                               |
 | `persistent`  | Keep storage between restarts, where the provider allows                                                                                                                                                         |
+| `envFiles`    | Env files whose variables the workspace gets, for example `[".env", ".gitterm.env"]`. Paths are relative to the checkout root, and a later file wins. The upload confirmation lists the variable names           |
 
 Self-hosting GitTerm? Sign in with `gitterm login --server https://gitterm.example.com`.
 `/cloud` talks to the OpenCode server that holds your session. It finds OpenCode's background
@@ -110,7 +111,9 @@ can't reach; instead run `opencode serve --port 4096`, open it with
 ## Good to know
 
 - Only the current conversation moves. Running processes, ignored files (such as `.env`),
-  and your global OpenCode settings do not.
+  and your global OpenCode settings do not. To give the workspace your env variables, list
+  the files in `envFiles`. Only send the ones the workspace should have. They are set
+  when the workspace is created, so after editing a file, start a new workspace.
 - Nothing syncs while the session is in the cloud: later local edits are not sent. `/cloud-return`
   replaces the local checkout with the cloud's; it does not merge the two.
 - `/cloud-return` brings back at most 25 MiB of new commits and uncommitted changes. For more, push
