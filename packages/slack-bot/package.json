@@ -1,6 +1,6 @@
 {
   "name": "@gitterm/slack-bot",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Slack bot that runs a coding agent on your repository in a GitTerm sandbox",
   "keywords": [
     "agent",
@@ -47,8 +47,8 @@
     "start:local": "bun --watch src/cli.ts"
   },
   "dependencies": {
-    "@gitterm/bot": "workspace:^",
-    "@gitterm/sdk": "workspace:^0.16.0",
+    "@gitterm/bot": "workspace:^0.4.0",
+    "@gitterm/sdk": "workspace:^0.17.0",
     "@slack/bolt": "^5.1.0"
   },
   "devDependencies": {
