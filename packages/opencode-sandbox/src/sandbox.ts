@@ -1,4 +1,6 @@
-import { realpath } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
+import path from "node:path";
+import { parseEnv } from "node:util";
 import type { Plugin } from "@opencode/plugin";
 import {
   captureSource,
@@ -179,6 +181,19 @@ export async function registerSandboxTools(
   async function sessionDirectory(context: ToolContext): Promise<string> {
     const session = await ctx.session.get({ sessionID: context.sessionID });
     return realpath(session.location.directory);
+  }
+
+  async function envFileVars(context: ToolContext) {
+    const vars: Record<string, string> = Object.create(null);
+    if (!settings?.envFiles?.length) return vars;
+    const directory = await sessionDirectory(context);
+    for (const file of settings.envFiles) {
+      const content = await readFile(path.resolve(directory, file), "utf8").catch(() => {
+        throw new Error(`Cannot read ${file} from the envFiles setting`);
+      });
+      Object.assign(vars, parseEnv(content));
+    }
+    return vars;
   }
 
   /**
@@ -619,7 +634,7 @@ export async function registerSandboxTools(
             type: "array",
             items: { type: "string" },
             description:
-              "Names of local environment variables to pass. Values never enter the conversation.",
+              "Names of local environment variables to pass with approval. Output redacts lines of at least four characters. Variables from envFiles are already set in every command.",
           },
         },
         ["sandboxId", "command"],
@@ -638,7 +653,7 @@ export async function registerSandboxTools(
         const names = Array.isArray(args.secretEnv)
           ? args.secretEnv.filter((name): name is string => typeof name === "string")
           : [];
-        const env: Record<string, string> = {};
+        const env = await envFileVars(context);
         if (names.length) {
           await assert(context, "gitterm.sandbox.secret", names, names, { sandbox: ref.id });
           for (const name of names) {
@@ -767,6 +782,7 @@ export async function registerSandboxTools(
           port,
           command: typeof args.command === "string" ? args.command : undefined,
           cwd: typeof args.cwd === "string" ? args.cwd : undefined,
+          env: typeof args.command === "string" ? await envFileVars(context) : undefined,
         });
         let local = "";
         if (args.localProxy === true && !preview.public) {

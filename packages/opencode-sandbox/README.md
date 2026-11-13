@@ -163,6 +163,26 @@ To stop being asked every time, allow actions in your OpenCode `permissions`:
 `e2b` is the account name: its name under `accounts`, or for a single account its
 `provider` (`gitterm` when it has none).
 
+### Environment variables
+
+List env files and every command gets their variables, including dev servers that
+`sandbox_preview` starts:
+
+```jsonc
+"options": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}", "envFiles": [".env.development"] }
+```
+
+Paths are relative to the project directory, and a later file wins over an earlier one. The
+files are read on each command, so edits apply at once.
+
+Values are passed outside the conversation. In command output, each line of an env value
+with at least four characters is replaced with `[redacted]`. Shorter values or lines, such as `DEBUG=1`, can appear
+in output because replacing them would garble unrelated text.
+
+The agent can also pass a variable from your local environment by naming it in `secretEnv`.
+OpenCode asks first, and it wins over a file's variable of the same name.
+Commands can save values to files that snapshots retain.
+
 ### Setup snapshots
 
 For a project with a slow setup, let the agent save a sandbox once dependencies are

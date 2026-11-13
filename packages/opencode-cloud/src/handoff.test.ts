@@ -682,3 +682,36 @@ test("a workspace without a repository drops every reference to a GitHub connect
   expect(await withoutGithub(gitterm(false), ["linear"])).toEqual(["linear"]);
   expect(await withoutGithub(gitterm(true), undefined)).toBeUndefined();
 });
+
+test("envFiles become workspace variables, named but not shown in the confirmation", async () => {
+  await writeFile(path.join(root, ".env"), "SHARED=from-env\nAPI_KEY=value-one\n");
+  await writeFile(
+    path.join(root, ".gitterm.env"),
+    'SHARED=from-gitterm\nexport TOKEN="value two"\n',
+  );
+  const f = fixture([{ changes: false }, { create: true }]);
+  f.deps.options = { envFiles: [".env", ".gitterm.env"] };
+  let sent: Record<string, string> | undefined;
+  f.gitterm.workspaces.create = (async (input: {
+    environmentVariables?: Record<string, string>;
+  }) => {
+    sent = input.environmentVariables;
+    throw new GittermError("SERVER_ERROR", "stop here");
+  }) as unknown as typeof f.gitterm.workspaces.create;
+  await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("stop here");
+  expect(sent).toEqual({ SHARED: "from-gitterm", API_KEY: "value-one", TOKEN: "value two" });
+  const confirmation = JSON.stringify(f.forms.at(-1));
+  expect(confirmation).toContain(
+    "Environment variables from .env, .gitterm.env: SHARED, API_KEY, TOKEN",
+  );
+  expect(confirmation).not.toContain("value");
+});
+
+test("a missing env file stops the handoff before anything is asked", async () => {
+  const f = fixture([]);
+  f.deps.options = { envFiles: [".gitterm.env"] };
+  await expect(handoffSession("ses_test", f.deps)).rejects.toThrow(
+    "Cannot read .gitterm.env from the envFiles setting.",
+  );
+  expect(f.forms).toEqual([]);
+});

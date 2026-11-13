@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
-import { realpath } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { parseEnv } from "node:util";
 import { OpenCode, type OpenCodeClient } from "@opencode/client";
 import {
   GittermError,
@@ -34,6 +35,8 @@ export type HandoffOptions = {
   connections?: string[];
   localServerUrl?: string;
   localServerPassword?: string;
+  /** Env files, relative to the checkout root, whose variables the workspace gets. Later files win. */
+  envFiles?: string[];
 };
 
 export type HandoffRecord = {
@@ -74,6 +77,17 @@ const STEPS: Record<HandoffRecord["phase"], string> = {
 
 /** A failure whose message is safe and useful to show the user as is. */
 export class HandoffRefused extends Error {}
+
+async function readEnvFiles(root: string, files: string[] = []) {
+  const variables: Record<string, string> = Object.create(null);
+  for (const file of files) {
+    const content = await readFile(path.resolve(root, file), "utf8").catch(() => {
+      throw new HandoffRefused(`Cannot read ${file} from the envFiles setting.`);
+    });
+    Object.assign(variables, parseEnv(content));
+  }
+  return variables;
+}
 
 /** Session metadata key holding the digest of the history a handoff imported. */
 export const HISTORY_KEY = "gittermHandoffHistory";
@@ -388,6 +402,8 @@ export async function handoffSession(
   const sourceDirectory = await realpath(session.location.directory);
   const root = await checkoutRoot(sourceDirectory);
   const repo = await repositoryUrl(root);
+  const environmentVariables = await readEnvFiles(root, options.envFiles);
+  const envNames = Object.keys(environmentVariables);
   const active = await local.session.active({ signal });
   const activeSessions = await Promise.all(
     Object.keys(active)
@@ -440,6 +456,9 @@ export async function handoffSession(
           includeChanges
             ? `${snapshot.changedPaths.length} changed paths${manifest ? `:\n${manifest}` : ""}${snapshot.changedPaths.length > 100 ? "\n(additional paths omitted)" : ""}`
             : "Uncommitted changes are excluded.",
+          ...(envNames.length
+            ? [`Environment variables from ${options.envFiles!.join(", ")}: ${envNames.join(", ")}`]
+            : []),
           `Uploads this conversation (which may contain secrets) and ${repo ? "commits that are not on origin's default branch, including unpublished ones" : "the repository's whole history"}. Ignored files are not separately uploaded; tracked history can contain secrets. Review before approving.`,
           "Uses your GitTerm model/repository connections, not separately copied local credential stores. Cloud compute may incur charges until paused or terminated in GitTerm. Local work remains untouched; later local edits will not sync.",
         ].join("\n\n"),
@@ -491,6 +510,7 @@ export async function handoffSession(
         persistent: options.persistent,
         connections: repo ? options.connections : nonGithub,
         metadata: { "opencode.handoff": record.attemptID, "opencode.session": sessionID },
+        environmentVariables: envNames.length ? environmentVariables : undefined,
         useProjectSnapshot,
       });
     let created = await create(true).catch((error: unknown) => {

@@ -15,12 +15,7 @@ export type WorkspaceStatus = "pending" | "running" | "paused" | "terminated";
 /**
  * System-owned workspace environment variables.
  *
- * These keys are assembled by GitTerm and are *reserved*: user-defined env vars
- * can never override them (see `RESERVED_WORKSPACE_ENV_KEYS`).
- *
- * Adding a new system env key is a single edit here — the env builder
- * (`buildWorkspaceEnv`) constructs this exact shape, so it fails to compile
- * until the new key is supplied.
+ * Reserved except for Google keys, which users may set without a connection.
  */
 export interface SystemWorkspaceEnv {
   REPO_URL?: string;
@@ -70,6 +65,13 @@ export interface SystemWorkspaceEnv {
   WORKSPACE_REPO_DIR?: string;
 }
 
+const GOOGLE_CONNECTION_ENV_KEYS = [
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
+  "GOOGLE_CLOUD_PROJECT",
+  "CLOUDSDK_CORE_PROJECT",
+] as const satisfies readonly (keyof SystemWorkspaceEnv)[];
+
 /**
  * The full set of system-owned env keys. Listed explicitly so it can be used at
  * runtime to strip clashing user-defined vars. The `satisfies` clause rejects
@@ -87,10 +89,7 @@ export const SYSTEM_WORKSPACE_ENV_KEYS = [
   "USER_EMAIL",
   "GITHUB_APP_TOKEN",
   "GITHUB_APP_TOKEN_EXPIRY",
-  "GOOGLE_APPLICATION_CREDENTIALS",
-  "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
-  "GOOGLE_CLOUD_PROJECT",
-  "CLOUDSDK_CORE_PROJECT",
+  ...GOOGLE_CONNECTION_ENV_KEYS,
   "GITTERM_REMOTE_BOOTSTRAP",
   "GITTERM_REPOSITORY_USERNAME",
   "GITTERM_REPOSITORY_TOKEN",
@@ -145,8 +144,12 @@ type _MissingSystemEnvKeys = Exclude<
 const _ensureAllSystemKeysListed: _MissingSystemEnvKeys extends never ? true : never = true;
 void _ensureAllSystemKeysListed;
 
-/** Reserved keys that user-defined env vars must not override. */
-export const RESERVED_WORKSPACE_ENV_KEYS: ReadonlySet<string> = new Set(SYSTEM_WORKSPACE_ENV_KEYS);
+/** Reserved keys that user-defined env vars must not set. */
+export const RESERVED_WORKSPACE_ENV_KEYS: ReadonlySet<string> = new Set(
+  SYSTEM_WORKSPACE_ENV_KEYS.filter(
+    (key) => !GOOGLE_CONNECTION_ENV_KEYS.some((connectionKey) => connectionKey === key),
+  ),
+);
 
 export function isReservedWorkspaceEnvKey(key: string): boolean {
   return RESERVED_WORKSPACE_ENV_KEYS.has(key) || key.startsWith("GITTERM_MCP_");
