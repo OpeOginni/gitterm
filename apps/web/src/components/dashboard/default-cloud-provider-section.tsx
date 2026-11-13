@@ -76,11 +76,16 @@ export function DefaultCloudProviderSection() {
     <section className="space-y-4">
       <SectionHeading
         title="Default provider"
-        count={providers.length || undefined}
+        count={providers.length > 1 ? providers.length : undefined}
         description={
-          hasPrices || isLoadingProviders
-            ? "Hourly prices on your plan. Any workspace can still pick another."
-            : "Any workspace can still pick another when you create it."
+          // With one provider there is nothing else to pick.
+          providers.length === 1
+            ? hasPrices
+              ? "Hourly prices on your plan."
+              : undefined
+            : hasPrices || isLoadingProviders
+              ? "Hourly prices on your plan. Any workspace can still pick another."
+              : "Any workspace can still pick another when you create it."
         }
       />
       {isLoadingProviders || isLoadingDefault ? (
@@ -107,7 +112,8 @@ export function DefaultCloudProviderSection() {
           )}
         </div>
       ) : (
-        <LineGrid className="md:grid-cols-2">
+        // A lone provider gets a card of its own width, not half of an empty grid.
+        <LineGrid className={providers.length === 1 ? "max-w-xl" : "md:grid-cols-2"}>
           <div role="radiogroup" aria-label="Default provider" className="contents">
             {providers.map((provider) => (
               <ProviderCell
@@ -119,7 +125,7 @@ export function DefaultCloudProviderSection() {
                 onSelect={() => handleSelect(provider.id)}
               />
             ))}
-            {providers.length % 2 === 1 ? (
+            {providers.length > 1 && providers.length % 2 === 1 ? (
               <LineCell className="hidden md:flex">{null}</LineCell>
             ) : null}
           </div>
