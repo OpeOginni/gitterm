@@ -9,7 +9,6 @@ import {
   GITHUB_URL,
   INSTALL_CLOUD,
   INSTALL_SANDBOX,
-  PLANNED_PROVIDERS,
   SANDBOX_PROVIDERS,
   T3_LOGO,
 } from "@/lib/site/providers";
@@ -231,7 +230,7 @@ export function ProvidersStrip() {
           data-prov-strip
           role="group"
           aria-label="Sandbox providers"
-          className="grid grid-cols-8 border-y border-line max-[860px]:grid-cols-4"
+          className="grid grid-cols-7 border-y border-line max-[860px]:grid-cols-4"
         >
           {SANDBOX_PROVIDERS.map((p) => (
             <button
@@ -252,19 +251,6 @@ export function ProvidersStrip() {
                 )}
               />
               {p.name}
-            </button>
-          ))}
-          {PLANNED_PROVIDERS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              aria-disabled
-              title="Sandboxes on Cloudflare are planned. Cloud workspaces run there today."
-              className={cn(stripButton, "cursor-default text-fg-4")}
-            >
-              <Logo src={p.logo} className={cn(stripLogo, "opacity-35")} />
-              {p.name}
-              <small className="-mt-1 text-[12.5px] font-normal text-fg-4">Soon</small>
             </button>
           ))}
         </div>

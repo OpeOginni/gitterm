@@ -78,11 +78,6 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
   },
 ];
 
-/** Shown in provider rows, but not selectable: sandboxes there are planned. */
-export const PLANNED_PROVIDERS = [
-  { id: "cloudflare", name: "Cloudflare", logo: "/cloudflare.svg" },
-];
-
 export type AgentId = "opencode" | "codex" | "claude";
 
 /** Agents a cloud workspace can run. Codex and Claude Code run inside T3 Code. */
