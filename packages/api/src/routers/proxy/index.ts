@@ -274,7 +274,7 @@ export const proxyResolverRouter = async (c: Context) => {
     }
 
     // OpenCode server workspaces own their Basic auth challenge and validation.
-    // GitTerm only resolves the primary route and preserves client credentials.
+    // GitTerm only resolves the primary route; the client's credentials pass through Caddy.
     if (!extractedPort && ws.serverOnly) {
       if (!ws.upstreamUrl) {
         return htmlError(c, 500);
@@ -282,7 +282,6 @@ export const proxyResolverRouter = async (c: Context) => {
 
       const upstreamUrl = new URL(ws.upstreamUrl);
       const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
-      const clientAuthorization = c.req.header("Authorization");
       if (!passive) touchWorkspace(ws.id);
 
       return c.body(
@@ -295,7 +294,6 @@ export const proxyResolverRouter = async (c: Context) => {
             "X-Container-Port": port,
             "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
             "X-Hosting-Type": ws.hostingType,
-            ...(clientAuthorization ? { Authorization: clientAuthorization } : {}),
           },
           upstreamAccessHeaders,
         ),

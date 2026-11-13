@@ -1,4 +1,4 @@
-FROM caddy:2-alpine
+FROM caddy:2.11.9-alpine
 
 # Copy the managed Caddyfile
 COPY ./apps/proxy/Caddyfile /etc/caddy/Caddyfile

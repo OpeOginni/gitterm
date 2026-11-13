@@ -16,7 +16,7 @@
 # - INTERNAL_API_KEY -> Shared key for internal API calls
 # =============================================================================
 
-FROM caddy:2-alpine
+FROM caddy:2.11.9-alpine
 
 # Copy the railway Caddyfile
 COPY ./apps/proxy/Caddyfile.railway /etc/caddy/Caddyfile

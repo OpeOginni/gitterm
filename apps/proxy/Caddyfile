@@ -32,8 +32,9 @@ http://compute.gitterm.dev {
 # Listen on port 80 for all requests
 :80 {
 	# Routing and provider-access headers are internal: drop any a client sends. Caddy
-	# 2.10 forward_auth copies a header from the auth response but leaves a client-supplied
-	# one in place when the response does not set it.
+	# 2.10 forward_auth leaves a client-supplied copy_headers header in place when the auth
+	# response does not set it (2.11 removes it). Never list Authorization in copy_headers:
+	# it belongs to the app a request is for, and 2.11 would strip it from every port.
 	request_header -X-Subdomain
 	request_header -X-Hosting-Type
 	request_header -X-Workspace-ID
@@ -69,13 +70,12 @@ http://compute.gitterm.dev {
 			uri /api/internal/proxy-resolve
 
 			# Copy headers from auth response into request including some for specific providers
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key Authorization X-GitTerm-Boat-Token X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key X-GitTerm-Boat-Token X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning x-gitterm-cf-sandbox-id x-gitterm-cf-internal-key x-gitterm-cf-port
 
 			# Copy original headers
 			header_up Host {host}
 			header_up X-Internal-Key {$INTERNAL_API_KEY}
 			header_up Cookie {header.Cookie}
-			header_up Authorization {header.Authorization}
 			header_up X-Original-URI {uri}
 			header_up X-Original-Method {method}
 			header_up X-Routing-Mode subdomain
