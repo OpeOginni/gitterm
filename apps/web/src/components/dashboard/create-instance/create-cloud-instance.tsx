@@ -756,7 +756,21 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
               <Label className="text-[13px] font-medium text-fg-2">Machine</Label>
               <Select value={selectedMachineProfileId} onValueChange={setUserMachineProfileId}>
                 <SelectTrigger className="h-9 w-full">
-                  <SelectValue placeholder="Select machine size" />
+                  <SelectValue placeholder="Select machine size">
+                    {selectedMachineProfile && (
+                      <span className="flex min-w-0 items-baseline gap-2">
+                        <span className="truncate">{selectedMachineProfile.name}</span>
+                        <span className="font-mono text-[12.5px] whitespace-nowrap text-fg-4">
+                          {formatMachineSize(selectedMachineProfile) ?? selectedMachineProfile.key}
+                        </span>
+                        {selectedMachineProfile.priceMicrosPerHour != null && (
+                          <span className="font-mono text-[12.5px] text-fg-4">
+                            {formatHourlyPrice(selectedMachineProfile.priceMicrosPerHour)}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {/* Sizes the plan allows come first; locked ones follow, in their usual order. */}

@@ -101,6 +101,15 @@ http://compute.gitterm.dev {
 			# is only exchanged for that cookie via a redirect, which proxied API calls can't follow.
 			@boat_private header X-GitTerm-Boat-Token *
 			request_header @boat_private Cookie "{header.Cookie}; _port_auth={header.X-GitTerm-Boat-Token}"
+			# OpenCode accepts its session cookie only when Origin matches Host, and Host is
+			# rewritten to the container below. Same-origin requests to the agent route drop
+			# Origin so the cookie still works; cross-site requests keep it and are rejected.
+			# Port routes (<port>-<subdomain>) serve user apps and keep Origin untouched.
+			@agent_same_origin {
+				header_regexp agent_host Host ^[^.-]+\.
+				expression {header.Origin} == "https://" + {host}
+			}
+			request_header @agent_same_origin -Origin
 			handle @cloud_workspace_https {
 				reverse_proxy {header.X-Container-Host}:{header.X-Container-Port} {
 					# Standard proxy headers

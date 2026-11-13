@@ -238,16 +238,32 @@ export function WorkspaceRow({
       );
     } else {
       primary = (
-        <Button
-          size="sm"
-          variant="secondary"
-          className="w-full"
-          title="Copy a command that opens this workspace in your terminal"
-          onClick={() => void attachTui()}
-        >
-          <Copy className="size-3.5" />
-          Attach TUI
-        </Button>
+        <>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="w-full max-sm:hidden"
+            title="Copy a command that opens this workspace in your terminal"
+            onClick={() => void attachTui()}
+          >
+            <Copy className="size-3.5" />
+            Attach TUI
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="w-full sm:hidden"
+            onClick={() => {
+              trackConnection("browser");
+              if (canPairOpencode) void openOpencodeInBrowser(workspace.id, workspaceUrl);
+              else window.open(workspaceUrl, "_blank", "noreferrer");
+            }}
+          >
+            <Globe className="size-3.5" />
+            Open in browser
+            <ExternalLink className="size-3 text-fg-4" />
+          </Button>
+        </>
       );
     }
   } else if (isPaused) {
@@ -554,7 +570,7 @@ function WorkspaceDetails({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-x-10 gap-y-6 @2xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="mt-5 grid gap-x-10 gap-y-6 @2xl:grid-cols-[minmax(0,3fr)_minmax(280px,2fr)]">
         <div className="grid min-w-0 content-start gap-6">
           {sandbox ? (
             <DetailGroup title="Agent sandbox">
