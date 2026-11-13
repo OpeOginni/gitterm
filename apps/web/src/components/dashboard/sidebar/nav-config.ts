@@ -5,6 +5,7 @@ import {
   Cpu,
   Gauge,
   History,
+  Layers,
   Plug,
   Server,
   Settings2,
@@ -33,6 +34,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "Workspaces", icon: LayoutDashboard },
       { href: "/dashboard/sandboxes", label: "Agent sandboxes", icon: Box },
+      { href: "/dashboard/snapshots", label: "Snapshots", icon: Layers },
       { href: "/dashboard/bots", label: "Bots", icon: Bot },
     ],
   },
@@ -42,7 +44,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/models", label: "Models", icon: Sparkles },
       { href: "/dashboard/integrations", label: "Integrations", icon: Link2 },
       { href: "/dashboard/compute", label: "Compute", icon: Cloud },
-      { href: "/dashboard/settings/api", label: "API tokens", icon: Braces },
     ],
   },
   {
@@ -57,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       // Hidden while editor (SSH) access is not offered; see settings/ssh/page.tsx.
       // { href: "/dashboard/settings/ssh", label: "SSH keys", icon: KeyRound },
+      { href: "/dashboard/settings/api", label: "API tokens", icon: Braces },
       { href: "/dashboard/settings/privacy", label: "Privacy", icon: ShieldCheck },
     ],
   },

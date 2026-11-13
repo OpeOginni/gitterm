@@ -153,7 +153,7 @@ For a project with a slow setup, let the agent save a sandbox once dependencies 
 - A project can have several snapshots, such as one with dependencies and one with dependencies and a database. New sandboxes start from the project's newest one unless the agent picks another.
 - When a lockfile changed since a snapshot, the agent is told. It can then save a replacement, which deletes the old one. Until it does, the old one is still used.
 - On Vercel, saving a snapshot ends the sandbox it was saved from.
-- Snapshots stay in the provider account until deleted. On a Gitterm plan they are listed under **Agent sandboxes** in the dashboard, where you can delete them.
+- Snapshots stay in the provider account until deleted. On a Gitterm plan they are listed under **Snapshots** in the dashboard, where you can delete them.
 
 To start every sandbox from a snapshot you made yourself, set `snapshot` on the account instead. The agent then does not manage snapshots for that account.
 

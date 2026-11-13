@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowUpRight, Box, ChevronLeft, ChevronRight, Search, Terminal, X } from "lucide-react";
-import { trpc, trpcClient } from "@/utils/trpc";
+import { trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,7 +14,7 @@ import { CopyField } from "@/components/dashboard/copy-field";
 import { INSTALL_SANDBOX } from "@/lib/site/providers";
 import { formatHourlyPrice } from "@/components/dashboard/create-instance/types";
 import { WorkspaceRow } from "@/components/dashboard/workspaces/workspace-row";
-import { SnapshotsSection } from "@/components/dashboard/workspaces/snapshots-section";
+import { useActiveWorkspaces } from "@/components/dashboard/workspaces/use-active-workspaces";
 import {
   isLive,
   isSandbox,
@@ -24,7 +24,6 @@ import {
   type Workspace,
 } from "@/components/dashboard/workspaces/workspace-meta";
 
-const FETCH_LIMIT = 100;
 const PAGE_SIZE = 8;
 
 type StatusFilter = "all" | "running" | "paused";
@@ -41,30 +40,7 @@ export function InstanceList({ kind }: { kind: "agents" | "sandboxes" }) {
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
 
-  // Every active workspace, so search and filters work on the whole set.
-  const workspacesQuery = useQuery({
-    ...trpc.workspace.listWorkspaces.queryOptions({ status: "active", limit: FETCH_LIMIT }),
-    queryFn: async () => {
-      const first = await trpcClient.workspace.listWorkspaces.query({
-        status: "active",
-        limit: FETCH_LIMIT,
-      });
-      const workspaces = [...first.workspaces];
-      while (workspaces.length < first.pagination.total) {
-        const next = await trpcClient.workspace.listWorkspaces.query({
-          status: "active",
-          limit: FETCH_LIMIT,
-          offset: workspaces.length,
-        });
-        if (next.workspaces.length === 0) break;
-        workspaces.push(...next.workspaces);
-      }
-      return { ...first, workspaces };
-    },
-    // Starting workspaces turn running on their own; check back until they do.
-    refetchInterval: (q) =>
-      q.state.data?.workspaces.some((w) => w.status === "pending") ? 4000 : false,
-  });
+  const workspacesQuery = useActiveWorkspaces();
   const providersQuery = useQuery(trpc.workspace.listCloudProviders.queryOptions());
   const snapshotsQuery = useQuery(trpc.sandbox.snapshots.queryOptions());
   // Most agents need a model key to answer, so the empty list offers that step too.
@@ -152,8 +128,10 @@ export function InstanceList({ kind }: { kind: "agents" | "sandboxes" }) {
     snapshotsQuery.data?.find((snapshot) => snapshot.id === workspace.snapshotId)?.label;
 
   if (workspaces.length === 0) {
+    // Keep the toolbar from the loading state so the page doesn't jump when the list arrives.
     return sandboxes ? (
-      <div className="space-y-12">
+      <div className="space-y-8">
+        {toolbar()}
         <div className="flex flex-col items-center rounded-xl border border-line px-6 py-14 text-center">
           <span className="flex size-10 items-center justify-center rounded-lg bg-fill">
             <Box className="size-[18px] text-fg-3" />
@@ -174,24 +152,26 @@ export function InstanceList({ kind }: { kind: "agents" | "sandboxes" }) {
             <ArrowUpRight className="size-3.5" />
           </Link>
         </div>
-        <SnapshotsSection workspaces={workspaces} providers={providers} />
       </div>
     ) : (
-      <div className="flex flex-col items-center rounded-xl border border-line px-6 py-16 text-center">
-        <span className="flex size-10 items-center justify-center rounded-lg bg-fill">
-          <Terminal className="size-[18px] text-fg-3" />
-        </span>
-        <h2 className="mt-4 font-display text-[18px] font-semibold tracking-[-0.01em] text-fg">
-          No workspaces yet
-        </h2>
-        <p className="mt-1.5 max-w-sm text-[13.5px] leading-relaxed text-fg-3">
-          Start one from a GitHub repo, or from a blank terminal.
-        </p>
-        {needsModelKey && (
-          <Button size="sm" variant="secondary" className="mt-5" asChild>
-            <Link href={"/dashboard/models" as Route}>Add a model key</Link>
-          </Button>
-        )}
+      <div className="space-y-8">
+        {toolbar()}
+        <div className="flex flex-col items-center rounded-xl border border-line px-6 py-16 text-center">
+          <span className="flex size-10 items-center justify-center rounded-lg bg-fill">
+            <Terminal className="size-[18px] text-fg-3" />
+          </span>
+          <h2 className="mt-4 font-display text-[18px] font-semibold tracking-[-0.01em] text-fg">
+            No workspaces yet
+          </h2>
+          <p className="mt-1.5 max-w-sm text-[13.5px] leading-relaxed text-fg-3">
+            Start one from a GitHub repo, or from a blank terminal.
+          </p>
+          {needsModelKey && (
+            <Button size="sm" variant="secondary" className="mt-5" asChild>
+              <Link href={"/dashboard/models" as Route}>Add a model key</Link>
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
@@ -239,8 +219,6 @@ export function InstanceList({ kind }: { kind: "agents" | "sandboxes" }) {
           snapshotLabelOf={snapshotLabelOf}
         />
       )}
-
-      {sandboxes && <SnapshotsSection workspaces={workspaces} providers={providers} />}
     </div>
   );
 }
