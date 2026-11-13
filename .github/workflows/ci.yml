@@ -5,10 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   checks:
     name: Lint, Format & Typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -25,6 +30,7 @@ jobs:
         run: bun run build:bots
 
       - name: Test
+        timeout-minutes: 5
         run: bun run test
 
       - name: Check formatting
@@ -39,6 +45,7 @@ jobs:
   opencode:
     name: OpenCode and T3 compatibility
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2

@@ -135,11 +135,11 @@ const commandInput = (name: string) =>
 describe("AWS workspace lifecycle", () => {
   test("persists its handle before readiness and rejects an auth challenge", async () => {
     const onProvisioned = mock(async () => {});
-    const future = Date.now() + 180001;
     spyOn(globalThis, "fetch").mockImplementation(
       Object.assign(
         async () => {
           expect(onProvisioned).toHaveBeenCalledTimes(1);
+          const future = Date.now() + 180001;
           spyOn(Date, "now").mockReturnValue(future);
           return new Response("unauthorized", { status: 401 });
         },
