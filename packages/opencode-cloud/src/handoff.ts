@@ -18,7 +18,7 @@ import {
   sharedCheckoutSessions,
   type CheckoutSnapshot,
 } from "./snapshot";
-import { CLOUD_KEY, CONNECT_KEY, FORM_KEY, type CloudMarker } from "./marker";
+import { CLOUD_KEY, CONNECT_KEY, type CloudMarker } from "./marker";
 import {
   PREPARE_STAGE_SCRIPT,
   RESTORE_NEEDS_FULL_HISTORY,
@@ -136,10 +136,7 @@ export async function askForm(
   fields: FormFields,
   signal: AbortSignal,
 ): Promise<Record<string, string | number | boolean | readonly string[]>> {
-  const form = await client.session.form.create(
-    { sessionID, title, fields, metadata: { [FORM_KEY]: true } },
-    { signal },
-  );
+  const form = await client.session.form.create({ sessionID, title, fields }, { signal });
   const deadline = Date.now() + 10 * 60_000;
   try {
     while (Date.now() < deadline) {
@@ -429,7 +426,7 @@ export async function handoffSession(
   const choice = await askForm(
     local,
     sessionID,
-    "Bring your uncommitted changes to the cloud?",
+    "Move to the cloud",
     [
       {
         key: "changes",
@@ -458,14 +455,7 @@ export async function handoffSession(
         type: "boolean",
         title: "Start a cloud workspace for this session?",
         required: true,
-        description: [
-          "Uploads this conversation and repository history, which may contain secrets. Local files stay unchanged.",
-          includeChanges
-            ? `Includes ${snapshot.changedPaths.length} changed paths.`
-            : "Uncommitted changes are excluded.",
-          ...(envNames.length ? [`Environment variables: ${envNames.join(", ")}.`] : []),
-          "It's billed until you pause or delete it in GitTerm.",
-        ].join("\n\n"),
+        description: "It's billed until you pause or delete it in GitTerm.",
       },
     ],
     signal,

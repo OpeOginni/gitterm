@@ -30,8 +30,8 @@ In GitTerm, add your model credentials and repository access first.
 In a Git repository, stop the agent and finish or stop its background jobs, then type `/cloud` in
 OpenCode.
 
-1. Choose in a dialog whether to include uncommitted changes.
-2. Review the upload and approve starting the workspace. It is billed while it runs.
+1. Choose whether to include uncommitted changes.
+2. Approve starting the workspace. It is billed while it runs.
 3. A dialog shows each step. Esc cancels and deletes the workspace that was just created.
 4. Scan the QR code with your phone, or open the link on your computer, to continue in the
    cloud. Pairing links sign you in once and expire after five minutes; `/cloud` makes a new one.
@@ -101,7 +101,7 @@ All optional:
 | `connections` | Saved GitTerm connections, for example `"github"` for private repositories. A checkout without an origin skips GitHub connections; naming one by name or id needs the `integrations:read` scope to be recognised |
 | `name`        | Workspace name; defaults to the conversation title                                                                                                                                                               |
 | `persistent`  | Keep storage between restarts, where the provider allows                                                                                                                                                         |
-| `envFiles`    | Env files whose variables the workspace gets, for example `[".env", ".gitterm.env"]`. Paths are relative to the checkout root, and a later file wins. The upload confirmation lists the variable names           |
+| `envFiles`    | Env files whose variables the workspace gets, for example `[".env", ".gitterm.env"]`. Paths are relative to the checkout root, and a later file wins.                                                            |
 
 Self-hosting GitTerm? Sign in with `gitterm login --server https://gitterm.example.com`.
 `/cloud` talks to the OpenCode server that holds your session. It finds OpenCode's background

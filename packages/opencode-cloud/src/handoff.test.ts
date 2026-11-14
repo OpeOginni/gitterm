@@ -134,7 +134,7 @@ test("declining billable upload never provisions compute", async () => {
   const f = fixture([{ changes: "no" }, { create: false }]);
   await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
   expect(f.creates()).toBe(0);
-  expect(f.forms.map((form) => form.title)).toEqual([
+  expect(f.forms.map((form) => (form.fields[0] as { title?: string }).title)).toEqual([
     "Bring your uncommitted changes to the cloud?",
     "Start a cloud workspace for this session?",
   ]);
@@ -686,7 +686,7 @@ test("a workspace without a repository drops every reference to a GitHub connect
   expect(await withoutGithub(gitterm(true), undefined)).toBeUndefined();
 });
 
-test("envFiles become workspace variables, named but not shown in the confirmation", async () => {
+test("envFiles become workspace variables without exposing names or values in the confirmation", async () => {
   await writeFile(path.join(root, ".env"), "SHARED=from-env\nAPI_KEY=value-one\n");
   await writeFile(
     path.join(root, ".gitterm.env"),
@@ -704,8 +704,7 @@ test("envFiles become workspace variables, named but not shown in the confirmati
   await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("stop here");
   expect(sent).toEqual({ SHARED: "from-gitterm", API_KEY: "value-one", TOKEN: "value two" });
   const confirmation = JSON.stringify(f.forms.at(-1));
-  expect(confirmation).toContain("Environment variables: SHARED, API_KEY, TOKEN");
-  expect(confirmation).toContain("conversation and repository history");
+  expect(confirmation).not.toContain("SHARED");
   expect(confirmation).not.toContain("value");
 });
 
