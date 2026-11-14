@@ -148,6 +148,15 @@ http://compute.gitterm.dev {
 						write_buffer 32768
 					}
 
+					# Preserve JSON errors for API clients instead of serving HTML.
+					@app_json {
+						status 4xx 5xx
+						header Content-Type application/json*
+					}
+					handle_response @app_json {
+						copy_response
+					}
+
 					# Serve error pages with the upstream status so clients see the
 					# real failure. `method GET` is required: file_server rejects
 					# other methods with 405, which masked every failing POST.
@@ -205,6 +214,15 @@ http://compute.gitterm.dev {
 						keepalive_idle_conns_per_host 32
 						read_buffer 32768
 						write_buffer 32768
+					}
+
+					# Preserve JSON errors for API clients instead of serving HTML.
+					@app_json {
+						status 4xx 5xx
+						header Content-Type application/json*
+					}
+					handle_response @app_json {
+						copy_response
 					}
 
 					# Serve error pages with the upstream status so clients see the
