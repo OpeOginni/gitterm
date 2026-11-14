@@ -22,3 +22,4 @@ export const CANCEL_KEY = "gittermCloudCancel";
 export type CloudProgress = { attemptID: string; step: string };
 
 export const CONNECT_KEY = "gittermConnect";
+export const FORM_KEY = "gittermCloudForm";

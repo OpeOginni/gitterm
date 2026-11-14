@@ -5,6 +5,7 @@ import { renderUnicodeCompact } from "@opencode/util/qr";
 import type { RGBA } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
 import { createSignal, onCleanup, Show } from "solid-js";
+import { cloudFormDialogs } from "./form-dialog";
 import {
   CANCEL_KEY,
   CLOUD_KEY,
@@ -147,6 +148,7 @@ function CloudBanner(props: { sessionID: string }) {
 export default Plugin.define({
   id: "gitterm.cloud",
   setup(context) {
+    const forms = cloudFormDialogs(context);
     const sidebar = context.ui.slot({
       append: "sidebar.content",
       render: (input) => <CloudSidebar sessionID={input.sessionID} />,
@@ -289,6 +291,7 @@ export default Plugin.define({
       formCancelled();
       sidebar();
       banner();
+      forms();
     };
   },
 });

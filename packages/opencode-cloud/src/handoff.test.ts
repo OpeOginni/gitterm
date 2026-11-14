@@ -43,7 +43,7 @@ const sessionNotFound = () =>
     { status: 404 },
   );
 
-function fixture(answers: Array<Record<string, boolean> | "cancelled">) {
+function fixture(answers: Array<Record<string, boolean | string> | "cancelled">) {
   const forms: Array<{ title: string; fields: Array<{ description?: string }> }> = [];
   const session = {
     id: "ses_test",
@@ -118,7 +118,7 @@ function fixture(answers: Array<Record<string, boolean> | "cancelled">) {
 }
 
 test("prompts differ only by shared-checkout warning", () => {
-  expect(changePrompt(0)).not.toContain("other active session");
+  expect(changePrompt(0)).toBeUndefined();
   expect(changePrompt(2)).toContain("2 other active session(s)");
   expect(changePrompt(2)).toContain("Their changes may be included");
 });
@@ -131,7 +131,7 @@ test("cancelled prompt never provisions compute", async () => {
 });
 
 test("declining billable upload never provisions compute", async () => {
-  const f = fixture([{ changes: false }, { create: false }]);
+  const f = fixture([{ changes: "no" }, { create: false }]);
   await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
   expect(f.creates()).toBe(0);
   expect(f.forms.map((form) => form.title)).toEqual([
@@ -170,7 +170,7 @@ test("background jobs prevent handoff even when the source session is idle", asy
 
 test("warns about another active session in a subdirectory of the same checkout", async () => {
   await mkdir(path.join(root, "nested"));
-  const f = fixture([{ changes: false }, { create: false }]);
+  const f = fixture([{ changes: "no" }, { create: false }]);
   const get = f.local.session.get;
   f.local.session.active = async () => ({ ses_other: { type: "running" } });
   f.local.session.get = async (input) => {
@@ -216,7 +216,7 @@ test("restores before importing, records ready state, and never stores credentia
       return new Response("not found", { status: 404 });
     },
   });
-  const f = fixture([{ changes: true }, { create: true }]);
+  const f = fixture([{ changes: "yes" }, { create: true }]);
   const record = await handoffSession("ses_test", f.deps);
   expect(record.phase).toBe("ready");
   expect(uploaded!.toString("latin1")).toContain("local edit");
@@ -270,7 +270,7 @@ test("sends the whole history when the cloud clone lacks the commits a smaller u
       return new Response("not found", { status: 404 });
     },
   });
-  const f = fixture([{ changes: false }, { create: true }]);
+  const f = fixture([{ changes: "no" }, { create: true }]);
   const record = await handoffSession("ses_test", f.deps);
   expect(record.phase).toBe("ready");
   expect(uploads.map((upload) => upload.bundle === 0)).toEqual([true, false]);
@@ -345,7 +345,7 @@ const message = (id: string, text: string) => ({ id, time: { created: 1 }, text,
 /** Runs an attempt that imports the session and then fails, and returns what retries need. */
 async function failAfterImport() {
   const cloud = cloudWithSession();
-  const f = fixture([{ changes: false }, { create: true }, { changes: false }, { create: true }]);
+  const f = fixture([{ changes: "no" }, { create: true }, { changes: "no" }, { create: true }]);
   const local = { messages: [message("msg_1", "one")] };
   const get = f.local.session.get;
   f.local.session.export = (async (input: { sessionID: string }) => ({
@@ -440,7 +440,7 @@ test("starts from the project snapshot, and fresh when that snapshot no longer s
   const attempts: Array<{ key: string; snapshot: boolean | undefined }> = [];
   const run = async (outcome: "starts" | "fails" | "failed earlier") => {
     attempts.length = 0;
-    const f = fixture([{ changes: false }, { create: true }]);
+    const f = fixture([{ changes: "no" }, { create: true }]);
     f.gitterm.workspaces.create = (async (input: {
       idempotencyKey: string;
       useProjectSnapshot?: boolean;
@@ -468,7 +468,7 @@ test("starts from the project snapshot, and fresh when that snapshot no longer s
 });
 
 test("a failed create says which step failed and GitTerm's reason", async () => {
-  const f = fixture([{ changes: false }, { create: true }]);
+  const f = fixture([{ changes: "no" }, { create: true }]);
   f.gitterm.workspaces.create = async () => {
     throw new GittermError(
       "SERVER_ERROR",
@@ -489,7 +489,7 @@ test("failed transfer retains recovery metadata without terminating the cloud or
     port: 0,
     fetch: () => new Response("secret upstream body", { status: 500 }),
   });
-  const f = fixture([{ changes: false }, { create: true }]);
+  const f = fixture([{ changes: "no" }, { create: true }]);
   const failure = handoffSession("ses_test", f.deps);
   await expect(failure).rejects.toThrow(
     "while restoring your checkout in the cloud for workspace workspace-test",
@@ -692,7 +692,7 @@ test("envFiles become workspace variables, named but not shown in the confirmati
     path.join(root, ".gitterm.env"),
     'SHARED=from-gitterm\nexport TOKEN="value two"\n',
   );
-  const f = fixture([{ changes: false }, { create: true }]);
+  const f = fixture([{ changes: "no" }, { create: true }]);
   f.deps.options = { envFiles: [".env", ".gitterm.env"] };
   let sent: Record<string, string> | undefined;
   f.gitterm.workspaces.create = (async (input: {

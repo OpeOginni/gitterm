@@ -18,7 +18,7 @@ import {
   sharedCheckoutSessions,
   type CheckoutSnapshot,
 } from "./snapshot";
-import { CLOUD_KEY, CONNECT_KEY, type CloudMarker } from "./marker";
+import { CLOUD_KEY, CONNECT_KEY, FORM_KEY, type CloudMarker } from "./marker";
 import {
   PREPARE_STAGE_SCRIPT,
   RESTORE_NEEDS_FULL_HISTORY,
@@ -123,15 +123,10 @@ export class HandoffCancelled extends Error {
   }
 }
 
-export function changePrompt(sharedCount: number): string {
-  return [
-    "Yes copies your edited and new files. No starts from your last commit.",
-    sharedCount > 0
-      ? `${sharedCount} other active session(s) use this checkout. Their changes may be included too.`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+export function changePrompt(sharedCount: number): string | undefined {
+  return sharedCount > 0
+    ? `${sharedCount} other active session(s) use this checkout. Their changes may be included too.`
+    : undefined;
 }
 
 export async function askForm(
@@ -141,7 +136,10 @@ export async function askForm(
   fields: FormFields,
   signal: AbortSignal,
 ): Promise<Record<string, string | number | boolean | readonly string[]>> {
-  const form = await client.session.form.create({ sessionID, title, fields }, { signal });
+  const form = await client.session.form.create(
+    { sessionID, title, fields, metadata: { [FORM_KEY]: true } },
+    { signal },
+  );
   const deadline = Date.now() + 10 * 60_000;
   try {
     while (Date.now() < deadline) {
@@ -435,15 +433,19 @@ export async function handoffSession(
     [
       {
         key: "changes",
-        type: "boolean",
+        type: "string",
         title: "Bring your uncommitted changes to the cloud?",
         description: changePrompt(shared.length),
+        options: [
+          { value: "yes", label: "Yes (copies your edited and new files)" },
+          { value: "no", label: "No (starts from your last commit)" },
+        ],
         required: true,
       },
     ],
     signal,
   );
-  const includeChanges = choice.changes === true;
+  const includeChanges = choice.changes === "yes";
   await assertIdle(local, sessionID, signal);
   const snapshot = await captureSnapshot(root, includeChanges, !repo);
   const confirmation = await askForm(
