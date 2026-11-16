@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-export const EXECUTOR_MCP_URL =
-  "https://v2.executor.sh/org/<organization-id-or-slug>/mcp?elicitation_mode=browser";
+/** Executor Cloud. Self-hosted Executor serves the same `/mcp` path on its own origin. */
+export const EXECUTOR_MCP_URL = "https://mcp.executor.sh/mcp";
 export const mcpIntegrationKey = z.enum(["mcp", "executor"]);
 
 export const mcpEndpoint = z
@@ -61,6 +61,8 @@ export const mcpHeaders = z
 
 export const mcpAuthentication = z.discriminatedUnion("type", [
   z.object({ type: z.literal("none") }),
+  /** Sign in through the server's OAuth flow; GitTerm keeps the refresh token. */
+  z.object({ type: z.literal("oauth") }),
   z.object({
     type: z.literal("headers"),
     headers: mcpHeaders.refine(

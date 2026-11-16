@@ -1,10 +1,26 @@
+import { createHash } from "node:crypto";
+import {
+  OPENCODE_CREDENTIAL_LABEL,
+  type OpencodeCredentialEntry,
+} from "@gitterm/agent-runtime/opencode-credentials";
+
+/** The client ID workspaces present when refreshing; their workspace identity is the secret. */
+export const MCP_OAUTH_WORKSPACE_CLIENT = "gitterm-workspace";
+
 export type McpWorkspaceConnection = {
   connectionId: string;
   name: string;
   url: string;
   codemode: boolean;
   headers: Record<string, string>;
+  /** Set for OAuth connections: OpenCode refreshes their tokens through GitTerm. */
+  oauthMetadataUrl?: string;
 };
+
+/** The integration OpenCode registers for a remote MCP server, which holds its credential. */
+export function opencodeMcpIntegrationId(name: string, url: string): string {
+  return `mcp_${createHash("sha1").update(`${name}\u0000${url}`).digest("hex").slice(0, 16)}`;
+}
 
 /**
  * The name the user saved, so it is recognisable in OpenCode, in the characters OpenCode allows.
@@ -23,9 +39,14 @@ function serverName(connection: McpWorkspaceConnection, taken: (name: string) =>
 export function withMcpConnections(
   config: Record<string, unknown> | null | undefined,
   connections: McpWorkspaceConnection[],
-): { config: Record<string, unknown> | null | undefined; env: Record<string, string> } {
+): {
+  config: Record<string, unknown> | null | undefined;
+  env: Record<string, string>;
+  credentials: OpencodeCredentialEntry[];
+} {
   const env: Record<string, string> = {};
-  if (!connections.length) return { config, env };
+  const credentials: OpencodeCredentialEntry[] = [];
+  if (!connections.length) return { config, env, credentials };
   const raw = config?.mcp;
   const mcp =
     raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
@@ -46,10 +67,25 @@ export function withMcpConnections(
       env[key] = value;
       headers[header] = `{env:${key}}`;
     });
+    if (connection.oauthMetadataUrl) {
+      // OpenCode refreshes this placeholder against GitTerm, which keeps the real refresh token.
+      // The workspace identity authenticates the refresh.
+      credentials.push({
+        integration: opencodeMcpIntegrationId(name, connection.url),
+        label: OPENCODE_CREDENTIAL_LABEL,
+        value: { type: "oauth", refresh: connection.connectionId, access: "", expires: 0 },
+      });
+    }
     servers[name] = {
       type: "remote",
       url: connection.url,
-      oauth: false,
+      oauth: connection.oauthMetadataUrl
+        ? {
+            client_id: MCP_OAUTH_WORKSPACE_CLIENT,
+            client_secret: "{env:WORKSPACE_AGENT_AUTH_TOKEN}",
+            auth_server_metadata_url: connection.oauthMetadataUrl,
+          }
+        : false,
       codemode: connection.codemode,
       protocol: "legacy",
       // A resumed VM retains Bun's HTTP pool, but its old TCP connections are
@@ -57,5 +93,5 @@ export function withMcpConnections(
       headers: { ...headers, Connection: "close" },
     };
   }
-  return { config: { ...config, mcp: { ...mcp, servers } }, env };
+  return { config: { ...config, mcp: { ...mcp, servers } }, env, credentials };
 }

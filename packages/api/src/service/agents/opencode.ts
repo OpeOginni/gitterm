@@ -162,7 +162,10 @@ export const opencodeProvisioner: AgentProvisioner = {
           path: OPENCODE_CLI_CONFIG_PATH,
           contentBase64: toBase64(JSON.stringify(buildOpencodeCliConfig(opencodeConfig))),
         },
-        ...opencodeCredentialFiles(buildOpencodeCredentials(ctx.credentials)),
+        ...opencodeCredentialFiles([
+          ...buildOpencodeCredentials(ctx.credentials),
+          ...mcp.credentials,
+        ]),
         {
           path: OPENCODE_GITTERM_INSTRUCTIONS_PATH,
           contentBase64: toBase64(buildGittermInstructions(ctx.additionalAgentInstructions)),

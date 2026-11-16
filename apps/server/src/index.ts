@@ -20,7 +20,15 @@ import {
 } from "@gitterm/api/service/workload-identity/google";
 import { integrationPolicy } from "@gitterm/api/service/integrations/catalog";
 import { recordCredentialAudit } from "@gitterm/api/service/credential-audit";
+import {
+  completeMcpOAuth,
+  issueWorkspaceMcpToken,
+  McpOAuthError,
+  mcpOAuthServerMetadata,
+} from "@gitterm/api/service/integrations/mcp-oauth";
+import { testMcpConnection } from "@gitterm/api/service/integrations/mcp";
 
+import { TRPCError } from "@trpc/server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
@@ -127,6 +135,44 @@ app.get("/api/github/callback", async (c) => {
     console.error("[GitHub Setup] Callback error:", error);
     return c.redirect(`${webUrl}/dashboard/integrations?error=callback_failed`);
   }
+});
+
+// MCP OAuth (e.g. Executor): the browser returns here after signing in.
+app.get("/api/mcp/oauth/callback", async (c) => {
+  const webUrl = env.BASE_URL || `http://${env.BASE_DOMAIN}`;
+  const done = (result: "success" | "error", message: string) =>
+    c.redirect(
+      `${webUrl}/dashboard/integrations?${result}=${result === "success" ? "mcp_connected" : "mcp_sign_in"}&message=${encodeURIComponent(message)}`,
+    );
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  if (!session) return c.redirect(`${webUrl}/login?returnTo=/dashboard/integrations`);
+  const state = c.req.query("state");
+  const code = c.req.query("code");
+  const denied = c.req.query("error_description") ?? c.req.query("error");
+  if (denied || !state || !code) return done("error", denied ?? "The sign-in did not complete.");
+  try {
+    const id = await completeMcpOAuth(session.user.id, { state, code, iss: c.req.query("iss") });
+    const result = await testMcpConnection(session.user.id, id);
+    return done(result.status === "connected" ? "success" : "error", result.message);
+  } catch (error) {
+    if (!(error instanceof McpOAuthError)) console.error("[mcp] OAuth callback failed:", error);
+    return done(
+      "error",
+      error instanceof McpOAuthError || error instanceof TRPCError
+        ? error.message
+        : "The sign-in could not be saved. Try again.",
+    );
+  }
+});
+
+// Workspaces' OpenCode refreshes MCP OAuth tokens here; GitTerm keeps the refresh tokens.
+app.get("/api/mcp/oauth/authorization-server", (c) =>
+  c.json(mcpOAuthServerMetadata(), 200, { "Cache-Control": "public, max-age=300" }),
+);
+app.post("/api/mcp/oauth/token", async (c) => {
+  const form = new URLSearchParams(await c.req.text().catch(() => ""));
+  const { status, body } = await issueWorkspaceMcpToken(form);
+  return c.json(body, status, { "Cache-Control": "no-store" });
 });
 
 // Device code flow for CLI/agent login.

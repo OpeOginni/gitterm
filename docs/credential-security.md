@@ -35,8 +35,13 @@ claiming secrets are inaccessible to an authorized workspace.
 - **MCP and Executor:** personal connection headers are envelope-encrypted with a connection-specific
   authenticated context. Selected workspaces receive their values as `GITTERM_MCP_*` environment
   variables; OpenCode config contains environment references, not literal secrets. OpenCode connects
-  directly to the endpoint: GitTerm is not a tool relay or OAuth broker. The workspace agent can
-  read these values, including an Executor PAT. Executor may keep underlying service credentials
+  directly to the endpoint: GitTerm is not a tool relay. The workspace agent can read these
+  values, including an Executor PAT. OAuth (sign-in) connections are different: GitTerm keeps the
+  encrypted refresh token, and the workspace's OpenCode refreshes against GitTerm's
+  `/api/mcp/oauth/token` with its agent identity as the client secret. GitTerm refreshes under a
+  row lock, so providers that rotate refresh tokens (Executor) see one refresh at a time, and it
+  only answers running or starting workspaces the connection is attached to. Workspaces hold
+  only access tokens (Executor: one hour). Executor may keep underlying service credentials
   behind its gateway, but the PAT still grants the workspace access to the gateway's allowed tools.
   Use narrowly scoped credentials and verify the gateway's actual policy and approval behavior.
 - **Caller secret files:** encrypted in transit/provider storage and materialized under
@@ -249,8 +254,10 @@ encrypt every profile field or protect against an attacker controlling the runni
 - Revoking or deleting a model credential stops every workspace from getting new access tokens
   for it; tokens already issued last until they expire.
 - Removing or disabling an MCP connection prevents future attachments, not existing direct
-  access. Existing workspaces retain their configuration and credentials. Revoke the credential
-  at the MCP provider/Executor to invalidate those copies; updates apply to newly created workspaces.
+  access. Existing workspaces retain their configuration and token/header credentials. Revoke the
+  credential at the MCP provider/Executor to invalidate those copies; updates apply to newly
+  created workspaces. Signed-in (OAuth) connections stop issuing tokens to workspaces at once;
+  access tokens already issued last until they expire.
 - Runtime bundles are deleted on failed provisioning and termination.
 - Incrementing `workspace.authVersion` revokes all tokens for that workspace. The workspace must be
   reprovisioned because its runtime no longer has a valid identity.

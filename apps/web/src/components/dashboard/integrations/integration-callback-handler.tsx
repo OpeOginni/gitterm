@@ -31,7 +31,12 @@ export function IntegrationCallbackHandler() {
         ? router.replace(returnTo as Route)
         : window.history.replaceState({}, "", "/dashboard/integrations");
 
-    if (success === "github_connected") {
+    if (success === "mcp_connected" || error === "mcp_sign_in") {
+      const message = searchParams.get("message") ?? undefined;
+      if (success) toast.success("Signed in", { description: message });
+      else toast.error("Sign-in didn't finish", { description: message });
+      leave();
+    } else if (success === "github_connected") {
       trackIntegrationAdded("github");
       toast.success("GitHub connected", {
         description: "Your workspaces can now use git with these repositories.",

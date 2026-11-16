@@ -259,7 +259,7 @@ export type McpConnectionDetails = {
   revision?: number;
   integration: "mcp" | "executor";
   url: string;
-  authType: "none" | "bearer" | "headers";
+  authType: "none" | "bearer" | "headers" | "oauth";
   codemode: boolean;
   toolCount: number | null;
   serverInfo: { name: string; version: string } | null;
@@ -267,6 +267,8 @@ export type McpConnectionDetails = {
 };
 export type McpAuthentication =
   | { type: "none" }
+  /** Browser sign-in: creating returns `status: "pending"` with the URL to open. */
+  | { type: "oauth" }
   | { type: "headers"; headers: Record<string, string> };
 export type CreateMcpConnectionInput = {
   integration: "mcp" | "executor";

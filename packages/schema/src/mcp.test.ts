@@ -5,7 +5,7 @@ test.each([
   "",
   "not a url",
   "https://",
-  "https://v2.executor.sh/org/<organization-id-or-slug>/mcp",
+  "https://mcp.executor.sh/org/<organization-id-or-slug>/mcp",
 ])("malformed URLs and placeholders produce validation errors instead of throwing: %s", (url) => {
   expect(mcpEndpoint.safeParse(url).success).toBe(false);
 });
@@ -57,13 +57,13 @@ test("rejects header injection, duplicate casing, empty credentials and oversize
       .success,
   ).toBe(true);
 });
-test("managed OAuth is explicitly outside the thin connection API", () => {
+test("OAuth sign-in carries no credentials in the request", () => {
   expect(
-    mcpConnectionInput.safeParse({
-      integration: "mcp",
-      name: "Tools",
-      url: "https://example.com/mcp",
-      authentication: { type: "oauth" },
-    }).success,
-  ).toBe(false);
+    mcpConnectionInput.parse({
+      integration: "executor",
+      name: "Executor",
+      url: "https://mcp.executor.sh/mcp",
+      authentication: { type: "oauth", headers: { Authorization: "Bearer x" } },
+    }).authentication,
+  ).toEqual({ type: "oauth" });
 });

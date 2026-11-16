@@ -15,13 +15,21 @@ import type { Connection, CreateConnectionResult } from "./connections";
 import type { McpWorkspaceConnection } from "./mcp-config";
 import { McpNetworkError, mcpFetchWithin, resolveMcpEndpoint } from "./mcp-network";
 import { coordinate } from "../coordination";
+import {
+  getMcpAccessToken,
+  McpOAuthError,
+  mcpOAuthMetadataUrl,
+  startMcpOAuth,
+  storedMcpOAuth,
+  type StoredMcpOAuth,
+} from "./mcp-oauth";
 
 type McpRow = typeof mcpConnection.$inferSelect;
 export const mcpAuthContext = (id: string) => `gitterm:mcp:${id}:auth`;
 
 /** Bearer tokens are stored as an Authorization header; label them so the edit form can tell. */
 function mcpAuthType(auth: McpAuthentication): McpRow["authType"] {
-  if (auth.type === "none") return "none";
+  if (auth.type === "none" || auth.type === "oauth") return auth.type;
   const names = Object.keys(auth.headers);
   return names.length === 1 && /^Bearer \S/.test(auth.headers.Authorization ?? "")
     ? "bearer"
@@ -78,11 +86,15 @@ export async function listMcpConnections(userId: string): Promise<Connection[]> 
     .map(mcpPublicConnection);
 }
 
-export function readMcpAuth(row: McpRow): McpAuthentication {
-  return mcpAuthentication.parse(
-    JSON.parse(getEncryptionService().decrypt(row.encryptedAuth, mcpAuthContext(row.id))),
+export function readMcpAuth(row: McpRow): McpAuthentication | StoredMcpOAuth {
+  const value = JSON.parse(
+    getEncryptionService().decrypt(row.encryptedAuth, mcpAuthContext(row.id)),
   );
+  return value?.type === "oauth" ? storedMcpOAuth.parse(value) : mcpAuthentication.parse(value);
 }
+
+const encryptAuth = (id: string, auth: McpAuthentication) =>
+  getEncryptionService().encrypt(JSON.stringify(auth), mcpAuthContext(id));
 
 /** Only provisioning can read credentials. Read/list APIs never return them. */
 export async function resolveMcpWorkspaceConnection(
@@ -102,6 +114,7 @@ export async function resolveMcpWorkspaceConnection(
     url: row.url,
     codemode: row.codemode,
     headers: auth.type === "headers" ? auth.headers : {},
+    ...(auth.type === "oauth" ? { oauthMetadataUrl: mcpOAuthMetadataUrl() } : {}),
   };
 }
 
@@ -125,9 +138,15 @@ export async function testMcpConnection(userId: string, id: string) {
   let serverInfo: McpRow["serverInfo"] = null;
   try {
     const auth = readMcpAuth(row);
+    const headers =
+      auth.type === "headers"
+        ? auth.headers
+        : auth.type === "oauth"
+          ? { Authorization: `Bearer ${(await getMcpAccessToken(row.id)).access}` }
+          : {};
     transport = new StreamableHTTPClientTransport(new URL(row.url), {
       fetch: mcpFetchWithin(AbortSignal.timeout(60_000)),
-      requestInit: { headers: auth.type === "headers" ? auth.headers : {} },
+      requestInit: { headers },
       reconnectionOptions: {
         maxRetries: 0,
         maxReconnectionDelay: 1000,
@@ -154,14 +173,17 @@ export async function testMcpConnection(userId: string, id: string) {
   } catch (error) {
     console.warn(`[mcp] connection test failed for ${row.id}:`, error);
     status =
-      error instanceof StreamableHTTPError && [401, 403].includes(error.code ?? 0)
+      error instanceof McpOAuthError ||
+      (error instanceof StreamableHTTPError && [401, 403].includes(error.code ?? 0))
         ? "needs_auth"
         : "error";
     message =
-      error instanceof McpNetworkError
+      error instanceof McpNetworkError || error instanceof McpOAuthError
         ? error.message
         : status === "needs_auth"
-          ? "Authentication was rejected. Update the token or headers. GitTerm-managed OAuth is not supported."
+          ? row.authType === "oauth"
+            ? "The server rejected the sign-in. Sign in again."
+            : "Authentication was rejected. Update the token or headers."
           : "Could not initialize this MCP server. Check its endpoint and classic Streamable HTTP support.";
   } finally {
     await transport?.terminateSession().catch(() => undefined);
@@ -225,12 +247,15 @@ export async function createMcpConnection(
       url: input.url,
       authType: mcpAuthType(input.authentication),
       codemode: input.codemode,
-      encryptedAuth: getEncryptionService().encrypt(
-        JSON.stringify(input.authentication),
-        mcpAuthContext(id),
-      ),
+      encryptedAuth: encryptAuth(id, input.authentication),
+      ...(input.authentication.type === "oauth" ? { status: "needs_auth" as const } : {}),
     });
   });
+  if (input.authentication.type === "oauth") {
+    // Saved either way; a sign-in that cannot start can be retried from the connection.
+    const authorizeUrl = await startMcpOAuth(await requireMcpRow(userId, id));
+    return { status: "pending", integration: input.integration, authorizeUrl };
+  }
   // The connection is saved either way; a refused or failed test leaves it to test later.
   const result = await testMcpConnection(userId, id).catch(async (error: unknown) => ({
     status: "saved" as const,
@@ -280,18 +305,32 @@ export async function updateMcpConnection(
         ...(input.authentication
           ? {
               authType: mcpAuthType(input.authentication),
-              encryptedAuth: getEncryptionService().encrypt(
-                JSON.stringify(input.authentication),
-                mcpAuthContext(row.id),
-              ),
+              encryptedAuth: encryptAuth(row.id, input.authentication),
             }
           : {}),
         ...(changed
-          ? { status: "untested" as const, toolCount: null, serverInfo: null, lastCheckedAt: null }
+          ? {
+              // An OAuth connection needs a new sign-in for its new settings.
+              status:
+                (input.authentication?.type ?? row.authType) === "oauth"
+                  ? ("needs_auth" as const)
+                  : ("untested" as const),
+              toolCount: null,
+              serverInfo: null,
+              lastCheckedAt: null,
+            }
           : {}),
       })
       .where(eq(mcpConnection.id, row.id))
       .returning();
     return mcpPublicConnection(updated!);
   });
+}
+
+/** Starts (or restarts) the browser sign-in for an OAuth connection. */
+export async function authorizeMcpConnection(userId: string, id: string) {
+  const row = await requireMcpRow(userId, id);
+  if (row.authType !== "oauth")
+    throw new TRPCError({ code: "BAD_REQUEST", message: "This connection does not use sign-in" });
+  return { authorizeUrl: await startMcpOAuth(row) };
 }
