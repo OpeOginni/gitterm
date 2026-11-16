@@ -81,6 +81,7 @@ export function AuthForm({ redirectUrl, authError }: AuthFormProps) {
     authClient.signIn.social({
       provider: "github",
       callbackURL: getCallbackURL(),
+      errorCallbackURL: `${window.location.origin}/login${redirectUrl ? `?redirect=${encodeURIComponent(redirectUrl)}` : ""}`,
     });
   };
 

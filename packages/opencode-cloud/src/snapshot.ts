@@ -174,7 +174,7 @@ export async function captureSnapshot(
   }
 }
 
-/** The origin to clone in the cloud, or undefined for a checkout without one. */
+/** A cloud-cloneable origin, if available. */
 export async function repositoryUrl(root: string): Promise<string | undefined> {
   if (!(await git(root, ["remote"])).toString().split("\n").includes("origin")) return undefined;
   const url = (await git(root, ["remote", "get-url", "origin"])).toString().trim();
@@ -187,9 +187,8 @@ export async function repositoryUrl(root: string): Promise<string | undefined> {
   }
   const ssh = /^(?:git@github\.com:|ssh:\/\/git@github\.com\/)([^\s]+)$/.exec(url);
   if (ssh?.[1]) return `https://github.com/${ssh[1]}`;
-  throw new Error(
-    "Cloud handoff needs an HTTPS origin (or a GitHub SSH origin). Configure repository access in GitTerm.",
-  );
+  // Unsupported origins use the Git bundle instead.
+  return undefined;
 }
 
 export async function sharedCheckoutSessions(

@@ -14,6 +14,7 @@ import {
 } from "./handoff";
 import { CLOUD_KEY, CLOUD_RPC, type CloudProgress } from "./marker";
 import { confirmLocalPrompt, endWorkspace, returnSession } from "./return";
+import { suggestModels, signedIn } from "./signin";
 import { checkoutRoot } from "./snapshot";
 import { deleteLeftover, watchCloudSessions, workspaceGone } from "./status";
 
@@ -53,6 +54,20 @@ async function localClient(options: HandoffOptions): Promise<OpenCodeClient> {
     headers: Service.headers(endpoint),
     fetch: ((input, init) => fetch(input, { ...init, redirect: "error" })) as typeof fetch,
   });
+}
+
+/** The oldest OpenCode with every API /cloud uses, such as the session fork hook. */
+const MINIMUM_OPENCODE = "2.3.0";
+
+async function assertSupported(local: OpenCodeClient, signal: AbortSignal) {
+  const { version } = await local.server.info({ signal });
+  const [major = 0, minor = 0] = version.split(".").map(Number);
+  // A development build has no number to compare.
+  if (Number.isNaN(major) || Number.isNaN(minor)) return;
+  if (major < 2 || (major === 2 && minor < 3))
+    throw new Error(
+      `GitTerm cloud needs OpenCode ${MINIMUM_OPENCODE} or newer, and this is ${version}. Run \`opencode upgrade\`, then restart OpenCode.`,
+    );
 }
 
 export const GittermCloudPlugin = Plugin.define({
@@ -182,6 +197,7 @@ export const GittermCloudPlugin = Plugin.define({
             if (process.env.WORKSPACE_ID)
               throw new Error("This session is already running in a GitTerm workspace.");
             const local = await localClient(options);
+            await assertSupported(local, controller.signal);
             const source = await ctx.session.get({ sessionID });
             const connected = await local.session.get({ sessionID }, { signal: controller.signal });
             if (
@@ -192,7 +208,8 @@ export const GittermCloudPlugin = Plugin.define({
                 "/cloud can't reach the OpenCode server holding this session (opencode --standalone uses a private one). Run `opencode serve --port 4096`, open it with `opencode --server http://127.0.0.1:4096`, and set the plugin's localServerUrl to that address.",
               );
             }
-            const client = gitterm();
+            // Signs the user in first if they are not, before anything is captured or billed.
+            const client = await signedIn(local, sessionID, options, controller.signal);
             const message = prompt.text.trim();
             const previous = await load(sessionID);
             if (
@@ -212,8 +229,7 @@ export const GittermCloudPlugin = Plugin.define({
             // OpenCode closed during an earlier /cloud: delete what it left before starting over.
             if (previous && previous.phase !== "ready" && previous.phase !== "returned")
               await deleteLeftover(client, previous);
-            // Validate login before capture or billable provisioning.
-            await client.auth.status();
+            await suggestModels(local, client, sessionID, controller.signal);
             const moved = await withProgress(sessionID, TO_CLOUD, (progress, signal) =>
               handoffSession(
                 sessionID,
@@ -245,7 +261,8 @@ export const GittermCloudPlugin = Plugin.define({
                 "This session is not in a cloud workspace. Run /cloud to move it there.",
               );
             const local = await localClient(options);
-            const client = gitterm();
+            await assertSupported(local, controller.signal);
+            const client = await signedIn(local, sessionID, options, controller.signal);
             // Once the checkout is being replaced, stopping halfway would leave it and the
             // conversation out of step, so Esc only hides the dialog.
             await withProgress(
@@ -290,12 +307,15 @@ export const GittermCloudPlugin = Plugin.define({
     });
 
     // A fork copies the session's metadata, but only the original lives in the cloud.
-    await ctx.session.hook("fork", async ({ sessionID }) => {
-      const local = await localClient(options);
-      const { metadata } = await local.session.get({ sessionID }, { signal: controller.signal });
-      if (metadata?.[CLOUD_KEY])
-        await markCloudSession(local, sessionID, undefined, controller.signal);
-    });
+    // Older OpenCode has no fork hook: still load, so /cloud can say to upgrade.
+    await ctx.session
+      .hook("fork", async ({ sessionID }) => {
+        const local = await localClient(options);
+        const { metadata } = await local.session.get({ sessionID }, { signal: controller.signal });
+        if (metadata?.[CLOUD_KEY])
+          await markCloudSession(local, sessionID, undefined, controller.signal);
+      })
+      .catch((error) => console.error("GitTerm cloud: OpenCode has no session fork hook", error));
     watch();
     return async () => {
       controller.abort();

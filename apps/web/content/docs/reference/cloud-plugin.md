@@ -6,7 +6,7 @@ description: Install, options, environment variables, and the /cloud and /cloud-
 
 This is the reference for `@gitterm/opencode-cloud`, the OpenCode plugin that adds the `/cloud` and `/cloud-return` commands: every option, environment variable, and command. Use it to look up a field. For step-by-step use, see [Move a session](/docs/workspaces/move-a-session) and [Bring a session back](/docs/workspaces/return-a-session).
 
-Version 0.2.0 or later, with OpenCode 2.2.6 or later. It also needs a Gitterm server that includes cloud return (managed Gitterm does); against an older self-hosted server, `/cloud` fails until the server is updated.
+Version 0.2.0 or later, with OpenCode 2.3.0 or later. It also needs a Gitterm server that includes cloud return (managed Gitterm does); against an older self-hosted server, `/cloud` fails until the server is updated.
 
 Formerly part of `@gitterm/opencode-plugin`. The `sandbox_*` tools are now a separate plugin; see [Sandbox plugin reference](/docs/reference/sandbox-plugin).
 
@@ -45,14 +45,11 @@ Restart OpenCode if `/cloud` does not appear. `/cloud-return` appears only while
 
 ## Sign in
 
-Both commands need a Gitterm login.
+Both commands need a Gitterm account. You don't have to sign in first: if you aren't signed in, or your login expired, `/cloud` shows a link, a QR code and a code. Open the link, sign in or create an account, and approve the code. The dialog closes by itself and `/cloud` carries on. Esc cancels.
 
-```sh
-npm install -g @gitterm/cli
-gitterm login
-```
+The login is saved where the CLI keeps it, so `gitterm login` signs the plugin in too, and the plugin's login signs in the CLI. For a self-hosted deployment, set the `serverUrl` option, or run `gitterm login --server <url>`, where `<url>` is your Gitterm API URL. You can instead set `GITTERM_API_TOKEN` (and `GITTERM_SERVER_URL`) before starting OpenCode; a token set this way or in `token` is never replaced by signing in.
 
-The plugin uses the CLI's saved login. For a self-hosted deployment, run `gitterm login --server <url>`, where `<url>` is your Gitterm API URL. You can instead set `GITTERM_API_TOKEN` (and `GITTERM_SERVER_URL`) before starting OpenCode.
+Your model keys stay on your computer. In the cloud, the agent can use free models, or the models you add under **Models** in Gitterm, which we recommend. With none added, `/cloud` suggests it before creating a workspace: continue with the free models, or add one at the link it shows and choose **Check again**; the same `/cloud` carries on.
 
 ## Options
 

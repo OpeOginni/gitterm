@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -339,6 +340,68 @@ test("sends the whole history when the cloud clone lacks the commits a smaller u
   expect(uploads.map((upload) => upload.bundle === 0)).toEqual([true, false]);
   expect(uploads[1]!.digest).toBe(uploads[0]!.digest);
   expect(f.creates()).toBe(1);
+});
+
+test("a repository GitTerm can't reach goes with its whole history instead", async () => {
+  // HEAD is on origin's default branch, so a clone would need no commits from here.
+  await git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  await git(root, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+  const cloud = cloudServer();
+  const f = fixture([]);
+  f.deps.options = { connections: ["github", "mcp"] };
+  const attempts: Array<{ repo?: string; connections?: string[]; idempotencyKey: string }> = [];
+  f.gitterm.workspaces.create = (async (input: (typeof attempts)[number]) => {
+    attempts.push(input);
+    if (input.repo)
+      throw new GittermError(
+        "BAD_REQUEST",
+        "Can't access repository. Configure Repository Access to use private repos (connect one in Integrations if needed).",
+      );
+    return { workspace: { id: "workspace-test", status: "running" } };
+  }) as unknown as typeof f.gitterm.workspaces.create;
+  expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+  expect(attempts.map((attempt) => [attempt.repo, attempt.connections])).toEqual([
+    ["https://github.com/example/repo.git", ["github", "mcp"]],
+    [undefined, ["mcp"]],
+  ]);
+  expect(new Set(attempts.map((attempt) => attempt.idempotencyKey)).size).toBe(2);
+  // One upload, and it carries the commits.
+  expect(cloud.uploads.map((upload) => manifest(upload).bundle > 0)).toEqual([true]);
+  expect(cloud.entry).toContain("copied without one");
+});
+
+test("when the history is too big to send instead, both reasons and the fix are shown", async () => {
+  // Over the 25 MiB limit once the whole history goes: an incompressible committed file.
+  await writeFile(path.join(root, "big.bin"), randomBytes(26 * 1024 * 1024));
+  await git(root, ["add", "big.bin"]);
+  await git(root, ["commit", "-m", "big"]);
+  await git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  await git(root, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+  cloudServer();
+  const f = fixture([]);
+  Object.assign(f.gitterm, { serverUrl: "https://api.gitterm.dev" });
+  f.gitterm.workspaces.create = (async () => {
+    throw new GittermError(
+      "BAD_REQUEST",
+      "Can't access repository, check URL or github integration",
+    );
+  }) as unknown as typeof f.gitterm.workspaces.create;
+  const failure = await handoffSession("ses_test", f.deps).catch((error: Error) => error);
+  expect(String(failure)).toContain("GitTerm can't access this repository");
+  expect(String(failure)).toContain("25 MiB");
+  expect(String(failure)).toContain("https://gitterm.dev/dashboard/integrations");
+});
+
+test("other refusals are not retried without the repository", async () => {
+  cloudServer();
+  const f = fixture([]);
+  let creates = 0;
+  f.gitterm.workspaces.create = (async () => {
+    creates++;
+    throw new GittermError("FORBIDDEN", "You've reached your plan limit of 2 workspaces.");
+  }) as unknown as typeof f.gitterm.workspaces.create;
+  await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("plan limit");
+  expect(creates).toBe(1);
 });
 
 test("starts from the project snapshot, and fresh when that snapshot no longer starts", async () => {

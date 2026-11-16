@@ -9,6 +9,7 @@ import {
   CLOUD_KEY,
   CLOUD_RPC,
   CONNECT_KEY,
+  SIGN_IN_KEY,
   type CloudMarker,
   type CloudProgress,
   type CloudStatus,
@@ -104,6 +105,56 @@ function CloudConnectDialog(props: { url: string; title: string }) {
         {" copy    "}
         <span style={{ fg: theme().text.base }}>esc</span>
         {" close"}
+      </text>
+    </box>
+  );
+}
+
+function SignInDialog(props: { url: string }) {
+  const context = usePlugin();
+  const theme = () => context.theme as unknown as Theme;
+  const code = new URL(props.url).searchParams.get("code");
+  const open = () => void openUrl(props.url).catch(() => {});
+  useKeyboard((key) => {
+    if (key.ctrl || key.meta) return;
+    if (key.name === "return") open();
+    if (key.name === "c") {
+      context.renderer.copyToClipboardOSC52(props.url);
+      context.ui.toast.show({ message: "Link copied", variant: "success" });
+    }
+  });
+  return (
+    <box flexDirection="column" gap={1} paddingLeft={2} paddingRight={2} paddingBottom={1}>
+      <text fg={theme().text.base}>
+        <b>Sign in to GitTerm</b>
+      </text>
+      <text fg={theme().text.muted}>
+        /cloud runs your session on a GitTerm cloud computer. Open the link, sign in or create an
+        account, and approve this code:
+      </text>
+      <box alignItems="center">
+        <text fg={theme().text.base}>
+          <b>{code}</b>
+        </text>
+      </box>
+      <box alignItems="center">
+        <text fg={theme().text.base}>{renderUnicodeCompact(props.url, { border: 1 })}</text>
+      </box>
+      <box flexDirection="column">
+        <text fg={theme().text.base} onMouseUp={open}>
+          <a href={props.url}>{props.url}</a>
+        </text>
+        <text fg={theme().text.muted}>
+          This closes by itself once you approve, and /cloud carries on.
+        </text>
+      </box>
+      <text fg={theme().text.muted}>
+        <span style={{ fg: theme().text.base }}>enter</span>
+        {" open    "}
+        <span style={{ fg: theme().text.base }}>c</span>
+        {" copy    "}
+        <span style={{ fg: theme().text.base }}>esc</span>
+        {" cancel"}
       </text>
     </box>
   );
@@ -251,25 +302,35 @@ export default Plugin.define({
       const form = event.data.form;
       hideProgress(form.sessionID);
       const field = form.fields.find(
-        (item) => item.key === CONNECT_KEY && item.type === "external",
+        (item) =>
+          (item.key === CONNECT_KEY || item.key === SIGN_IN_KEY) && item.type === "external",
       );
       if (!field || !("url" in field)) return;
       const route = context.ui.router.current();
       if (route.type !== "session" || route.sessionID !== form.sessionID) return;
       const shown = { sessionID: form.sessionID, formID: form.id };
       connect = shown;
+      const signIn = field.key === SIGN_IN_KEY;
       context.ui.dialog.show(
-        () => <CloudConnectDialog url={field.url} title={form.title} />,
+        () =>
+          signIn ? (
+            <SignInDialog url={field.url} />
+          ) : (
+            <CloudConnectDialog url={field.url} title={form.title} />
+          ),
         () => {
           if (connect !== shown) return;
           connect = undefined;
-          void context.data.session.form
-            .reply({
-              sessionID: shown.sessionID,
-              formID: shown.formID,
-              answer: { [CONNECT_KEY]: true, done: true },
-            } as Parameters<typeof context.data.session.form.reply>[0])
-            .catch(() => {});
+          const target = { sessionID: shown.sessionID, formID: shown.formID };
+          // Closing the sign-in dialog cancels /cloud.
+          void (
+            signIn
+              ? context.data.session.form.cancel(target)
+              : context.data.session.form.reply({
+                  ...target,
+                  answer: { [CONNECT_KEY]: true, done: true },
+                } as Parameters<typeof context.data.session.form.reply>[0])
+          ).catch(() => {});
         },
       );
       context.ui.dialog.set({ size: "large" });

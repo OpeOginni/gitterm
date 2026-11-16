@@ -339,7 +339,12 @@ function resolveCredentials(options: GittermClientOptions): Credentials {
     envValue("GITTERM_SERVER_URL") ??
     config?.serverUrl ??
     DEFAULT_GITTERM_SERVER_URL;
-  const token = options.token ?? envValue("GITTERM_API_TOKEN") ?? config?.token;
+  // A saved login only goes to the server it was made for.
+  const saved =
+    config && normalizeServerUrl(config.serverUrl) === normalizeServerUrl(serverUrl)
+      ? config.token
+      : undefined;
+  const token = options.token ?? envValue("GITTERM_API_TOKEN") ?? saved;
 
   if (!serverUrl || !token) {
     throw new GittermError("NOT_LOGGED_IN", "Not logged in. Run: gitterm login");

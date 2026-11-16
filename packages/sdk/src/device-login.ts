@@ -1,6 +1,4 @@
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { setTimeout as sleep } from "node:timers/promises";
 
 export type DeviceCodeInfo = {
   deviceCode: string;
@@ -14,6 +12,8 @@ export type LoginWithDeviceCodeOptions = {
   clientName?: string;
   fetch?: typeof fetch;
   onCode?: (code: Omit<DeviceCodeInfo, "deviceCode">) => void | Promise<void>;
+  /** Stops waiting for approval. */
+  signal?: AbortSignal;
 };
 
 export async function loginWithDeviceCode(
@@ -22,10 +22,12 @@ export async function loginWithDeviceCode(
 ): Promise<{ token: string }> {
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
   const fetchImpl = createNoRedirectFetch(options.fetch);
+  const signal = options.signal;
   const codeRes = await fetchImpl(apiEndpoint(normalizedServerUrl, "device/code"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ clientName: options.clientName ?? "gitterm" }),
+    signal,
   });
 
   if (!codeRes.ok) throw new Error(`Failed to start device login: ${codeRes.status}`);
@@ -44,6 +46,7 @@ export async function loginWithDeviceCode(
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ deviceCode: codeJson.deviceCode }),
+      signal,
     });
 
     if (tokenRes.ok) {
@@ -56,7 +59,7 @@ export async function loginWithDeviceCode(
       throw new Error(`Login failed: ${tokenRes.status} ${errText}`);
     }
 
-    await sleep(Math.max(1, codeJson.intervalSeconds) * 1000);
+    await sleep(Math.max(1, codeJson.intervalSeconds) * 1000, undefined, { signal });
   }
 
   throw new Error("Device code expired; try again.");

@@ -105,18 +105,7 @@ const saveOrder = (order: PolarOrder) =>
 // Refunds carry no customer external id; reports link them through their order.
 const saveRefund = (refund: PolarRefund) => recordRefund(refund, "webhook", null);
 
-/**
- * Better Auth plugins for Polar checkout, the customer portal, and
- * subscription and payment webhooks. Empty when Polar is not configured.
- *
- * Handlers throw on storage failures so Polar retries; every write is
- * idempotent, so retries and replays are safe. The plugin verifies both
- * Polar's legacy and Standard Webhooks signatures. Polar's `usage()`
- * extension is intentionally not installed: it would let signed-in users
- * ingest their own usage events, and only the server reports usage.
- *
- * Typed as plain plugins so Polar's types never leak into the auth instance.
- */
+// Omit Polar's usage plugin: only the server may report usage.
 export function createBillingAuthPlugins(): BetterAuthPlugin[] {
   if (!polarClient) return [];
   return [

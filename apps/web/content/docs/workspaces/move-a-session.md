@@ -18,20 +18,24 @@ While the session is in the cloud, nothing syncs: later local edits are not uplo
 
   See the [Cloud plugin reference](/docs/reference/cloud-plugin).
 
-- You are signed in with `gitterm login`, or `GITTERM_API_TOKEN` is set before OpenCode starts.
-- Gitterm has a model credential under **Models**, and for a private repository, a GitHub connection under **Integrations**.
-- The repository's `origin` remote is a credential-free HTTPS URL or a GitHub SSH URL.
-- OpenCode on your computer is up to date.
+- You have a Gitterm account. If you aren't signed in, `/cloud` asks you to sign in or create one first.
+- Recommended: a model under **Models** in Gitterm. Your local model keys don't move; without one, the cloud agent uses free models. `/cloud` suggests adding one if you have none.
+- For a private repository, a GitHub connection under **Integrations** is best. Without one, `/cloud` uploads the repository's history instead (up to 25 MiB), and the cloud checkout has no remote, so the agent can't push or pull there.
+- If the repository has an `origin` remote, it is a credential-free HTTPS URL or a GitHub SSH URL.
+- OpenCode 2.3.0 or newer.
 
 ## Move the session
 
-1. Stop the agent, and answer or cancel any pending question.
-2. In OpenCode, type `/cloud`.
-3. Choose whether to include uncommitted changes. If other active sessions share the checkout, you are warned that their changes may be included too.
-4. Review the repository, commit, changed paths and upload size. Approve the upload and the cloud compute.
-5. Open the connection link in your browser, or paste the one-time link into **Connect server** in the OpenCode desktop app. Select the imported session.
+1. In OpenCode, type `/cloud`. Text after it is sent to the cloud agent: `/cloud finish the migration and run the tests`.
+2. If you have uncommitted changes, choose whether to bring them. If other active sessions share the checkout, you are warned that their changes may be included too.
+3. A dialog shows each step. Esc cancels and deletes the workspace that was just created.
+4. Scan the QR code with your phone, or open the link on your computer. You can also paste the link into **Connect server** in the OpenCode desktop app.
 
-You should see your conversation in the cloud workspace, on the same branch name as your local checkout, with your checkout restored. No agent run starts on its own. Your local files and sessions are unchanged.
+The agent doesn't have to be idle. If it is working, `/cloud` stops it here, and it continues where it left off in the cloud.
+
+You should see your conversation in the cloud workspace, on the same branch name as your local checkout, with your checkout restored. The agent there is told the session moved, so it doesn't mistake earlier answers about your machine for errors. Without a message, and if the agent wasn't working, nothing runs until you send something. Your local files and sessions are unchanged.
+
+`/cloud` refuses to move a session with background commands running or a message waiting to be sent. Let them finish, or stop them, first.
 
 If you kept a [project snapshot](#start-from-a-project-snapshot) for this repository, the workspace starts from it.
 
@@ -73,9 +77,9 @@ Links work once and expire after five minutes; run `/cloud` again for a new one.
 
 ## If a move fails
 
-Run `/cloud` again in the same session and choose to retry. The retry continues in the workspace the failed attempt created, instead of starting a second one. It replaces what that attempt left with your current checkout and conversation.
+`/cloud` undoes what it did: it deletes the workspace it created, and if it stopped the agent, the agent continues here. The error says which step failed and why. Run `/cloud` again to start over.
 
-A retry stops and leaves the cloud as it is if anything happened there since the failed attempt: a commit or edit in the cloud checkout, a message, a queued prompt, or a running agent. Continue in the cloud, or choose not to retry, which starts a new workspace. The earlier workspace is not deleted by that, so remove it in Gitterm.
+If the workspace could not be deleted, the error names it: delete it in Gitterm. If OpenCode closed during a move, the next `/cloud` in that session deletes what the move left before it starts again.
 
 ## Start from a project snapshot
 
@@ -112,10 +116,10 @@ Every option is listed in the [Cloud plugin reference](/docs/reference/cloud-plu
 - `/cloud` refuses to run inside a Gitterm workspace. Run it from your local OpenCode.
 - The upload and the conversation history are each limited to 25 MiB. Commits count toward the upload.
 - Merge conflicts, submodules, intent-to-add files, and untracked symlinks or special files are not supported. Resolve or remove them first.
-- Common secret file names and private-key markers in changed files are blocked. This is not full secret scanning: conversation history, tracked files and Git history can still hold secrets. Review the upload before you approve it.
+- Common secret file names and private-key markers in changed files are blocked. This is not full secret scanning: conversation history, tracked files and Git history can still hold secrets.
 
 > [!WARNING]
-> The cloud workspace keeps running, and can be billed, on its own. Return the session, or pause or terminate the workspace, when you are done. A failed move does not delete the workspace it created: retry with `/cloud`, or check the workspace or attempt id in the error.
+> The cloud workspace keeps running, and can be billed, on its own. Return the session, or pause or delete the workspace, when you are done.
 
 ## Related
 
