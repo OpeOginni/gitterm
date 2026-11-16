@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     siteName: "Gitterm",
     images: [
       {
-        url: "/og-card/og-card-v6.png",
+        url: "/og-card/og-card-v7.png",
         width: 2400,
         height: 1260,
         alt: TITLE,
@@ -69,7 +69,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/og-card/og-card-v6.png"],
+    images: ["/og-card/og-card-v7.png"],
   },
   manifest: "/favicon_io/site.webmanifest",
   icons: {
