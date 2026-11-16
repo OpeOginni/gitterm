@@ -372,9 +372,9 @@
     },
     "packages/opencode-cloud": {
       "name": "@gitterm/opencode-cloud",
-      "version": "0.3.5",
+      "version": "0.3.6",
       "dependencies": {
-        "@opencode/client": "^2.2.6",
+        "@opencode/client": "^2.3.0",
       },
       "devDependencies": {
         "@gitterm/sdk": "workspace:*",
@@ -387,7 +387,7 @@
         "typescript": "^5.8.2",
       },
       "peerDependencies": {
-        "@opencode/plugin": "^2.2.6",
+        "@opencode/plugin": "^2.3.0",
         "@opentui/core": ">=0.8.0",
         "@opentui/solid": ">=0.8.0",
         "solid-js": ">=1.9.0",

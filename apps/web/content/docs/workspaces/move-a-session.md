@@ -19,10 +19,10 @@ While the session is in the cloud, nothing syncs: later local edits are not uplo
   See the [Cloud plugin reference](/docs/reference/cloud-plugin).
 
 - You have a Gitterm account. If you aren't signed in, `/cloud` asks you to sign in or create one first.
-- Gitterm has a model under **Models**. Your local model keys don't move; the cloud agent uses the models you add in Gitterm. `/cloud` asks before moving if you have none.
+- Recommended: a model under **Models** in Gitterm. Your local model keys don't move; without one, the cloud agent uses free models. `/cloud` suggests adding one if you have none.
 - For a private repository, a GitHub connection under **Integrations** is best. Without one, `/cloud` uploads the repository's history instead (up to 25 MiB), and the cloud checkout has no remote, so the agent can't push or pull there.
 - If the repository has an `origin` remote, it is a credential-free HTTPS URL or a GitHub SSH URL.
-- OpenCode 2.2.6 or newer.
+- OpenCode 2.3.0 or newer.
 
 ## Move the session
 

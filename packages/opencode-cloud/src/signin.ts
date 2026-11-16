@@ -8,7 +8,7 @@ import {
   saveConfig,
   type GittermClient,
 } from "@gitterm/sdk";
-import { askForm, HandoffCancelled, type HandoffOptions } from "./handoff";
+import { askForm, dashboardUrl, HandoffCancelled, type HandoffOptions } from "./handoff";
 import { SIGN_IN_KEY } from "./marker";
 
 export async function signedIn(
@@ -84,39 +84,43 @@ export async function signedIn(
   return connect();
 }
 
-/** GitTerm's web app: gitterm.dev for api.gitterm.dev; a self-hosted server serves both. */
-export function dashboardUrl(serverUrl: string, path: string): string {
-  const url = new URL(serverUrl);
-  if (url.hostname.startsWith("api.")) url.hostname = url.hostname.slice(4);
-  return new URL(path, url.origin).href;
-}
-
-export async function confirmNoModels(
+/** Suggest saved credentials without blocking access to the cloud's free models. */
+export async function suggestModels(
   local: OpenCodeClient,
   gitterm: GittermClient,
   sessionID: string,
   signal: AbortSignal,
 ): Promise<void> {
-  const saved = await gitterm.credentials.list().catch(() => undefined);
-  if (!saved || saved.some((credential) => credential.isActive)) return;
-  const choice = await askForm(
-    local,
-    sessionID,
-    "You have no models in GitTerm",
-    [
-      {
-        key: "models",
-        type: "string",
-        title: "You have no models in GitTerm",
-        description: `Your model keys stay on this machine. The cloud agent uses the models you add at ${dashboardUrl(gitterm.serverUrl, "/dashboard/models")}`,
-        options: [
-          { value: "stop", label: "Stop, I'll add one first" },
-          { value: "continue", label: "Continue with the cloud's own models" },
-        ],
-        required: true,
-      },
-    ],
-    signal,
-  );
-  if (choice.models !== "continue") throw new HandoffCancelled();
+  const page = dashboardUrl(gitterm.serverUrl, "/dashboard/models");
+  let last: string | undefined;
+  for (;;) {
+    const saved = await gitterm.credentials.list().catch((error) => {
+      console.error("GitTerm cloud: could not list models", error);
+      return undefined;
+    });
+    if (!saved || saved.some((credential) => credential.isActive)) return;
+    const title =
+      last === "check" ? "Still no models in GitTerm" : "Use your own models in the cloud?";
+    const choice = await askForm(
+      local,
+      sessionID,
+      title,
+      [
+        {
+          key: "models",
+          type: "string",
+          title,
+          description: `The cloud agent can use free models. For your own, add them at ${page} (recommended). Your model keys on this machine don't go to the cloud.`,
+          options: [
+            { value: "continue", label: "Continue with the free models" },
+            { value: "check", label: "Check again (after adding one)" },
+          ],
+          required: true,
+        },
+      ],
+      signal,
+    );
+    last = String(choice.models);
+    if (last !== "check") return;
+  }
 }

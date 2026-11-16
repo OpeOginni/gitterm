@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -367,6 +368,28 @@ test("a repository GitTerm can't reach goes with its whole history instead", asy
   // One upload, and it carries the commits.
   expect(cloud.uploads.map((upload) => manifest(upload).bundle > 0)).toEqual([true]);
   expect(cloud.entry).toContain("copied without one");
+});
+
+test("when the history is too big to send instead, both reasons and the fix are shown", async () => {
+  // Over the 25 MiB limit once the whole history goes: an incompressible committed file.
+  await writeFile(path.join(root, "big.bin"), randomBytes(26 * 1024 * 1024));
+  await git(root, ["add", "big.bin"]);
+  await git(root, ["commit", "-m", "big"]);
+  await git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  await git(root, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+  cloudServer();
+  const f = fixture([]);
+  Object.assign(f.gitterm, { serverUrl: "https://api.gitterm.dev" });
+  f.gitterm.workspaces.create = (async () => {
+    throw new GittermError(
+      "BAD_REQUEST",
+      "Can't access repository, check URL or github integration",
+    );
+  }) as unknown as typeof f.gitterm.workspaces.create;
+  const failure = await handoffSession("ses_test", f.deps).catch((error: Error) => error);
+  expect(String(failure)).toContain("GitTerm can't access this repository");
+  expect(String(failure)).toContain("25 MiB");
+  expect(String(failure)).toContain("https://gitterm.dev/dashboard/integrations");
 });
 
 test("other refusals are not retried without the repository", async () => {

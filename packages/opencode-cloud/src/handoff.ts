@@ -76,6 +76,13 @@ export type HandoffDependencies = {
 /** A failure whose message is safe and useful to show the user as is. */
 export class HandoffRefused extends Error {}
 
+/** GitTerm's web app: gitterm.dev for api.gitterm.dev; a self-hosted server serves both. */
+export function dashboardUrl(serverUrl: string, pathname: string): string {
+  const url = new URL(serverUrl);
+  if (url.hostname.startsWith("api.")) url.hostname = url.hostname.slice(4);
+  return new URL(pathname, url.origin).href;
+}
+
 async function readEnvFiles(root: string, files: string[] = []) {
   const variables: Record<string, string> = Object.create(null);
   for (const file of files) {
@@ -593,9 +600,10 @@ export async function handoffSession(
     };
     const created = await createWorkspace().catch(async (error: unknown) => {
       if (!repo || !(error instanceof GittermError) || !unreachableRepository(error)) throw error;
-      // Preserve the actionable repository error if a full upload is not possible.
-      const full = await captureSnapshot(root, includeChanges, true).catch(() => {
-        throw error;
+      const full = await captureSnapshot(root, includeChanges, true).catch((upload: unknown) => {
+        throw new HandoffRefused(
+          `GitTerm can't access this repository, and uploading it instead failed: ${upload instanceof Error ? upload.message : String(upload)} Connect the repository at ${dashboardUrl(gitterm.serverUrl, "/dashboard/integrations")}, then run /cloud again.`,
+        );
       });
       if (full.digest !== snapshot.digest)
         throw new HandoffRefused("The checkout changed while it was being copied. Try again.");
