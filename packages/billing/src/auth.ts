@@ -1,7 +1,6 @@
 import { polar, checkout, portal, webhooks } from "@polar-sh/better-auth";
 import type { BetterAuthPlugin } from "better-auth";
 import type { models } from "@polar-sh/sdk/2026-10";
-import { createCustomers } from "@polar-sh/sdk/2026-10/services/customers";
 import env from "@gitterm/env/auth";
 import { recordCancellation, setPlan, type SubscriptionEvent } from "./accounts";
 import { recordOrder, recordRefund, type PolarOrder, type PolarRefund } from "./analytics/payments";
@@ -109,34 +108,10 @@ const saveRefund = (refund: PolarRefund) => recordRefund(refund, "webhook", null
 // Omit Polar's usage plugin: only the server may report usage.
 export function createBillingAuthPlugins(): BetterAuthPlugin[] {
   if (!polarClient) return [];
-  const client = polarClient;
   return [
-    // A Polar outage must not prevent sign-up; checkout can create the customer later.
-    {
-      id: "gitterm-polar-customer",
-      init: () => ({
-        options: {
-          databaseHooks: {
-            user: {
-              create: {
-                after: async (user) => {
-                  await createCustomers(client)({
-                    email: user.email,
-                    name: user.name,
-                    external_id: user.id,
-                  }).catch((error) =>
-                    console.error(`[polar] No customer created for user ${user.id}`, error),
-                  );
-                },
-              },
-            },
-          },
-        },
-      }),
-    } satisfies BetterAuthPlugin,
     polar({
       client: polarClient,
-      createCustomerOnSignUp: false,
+      createCustomerOnSignUp: true,
       use: [
         checkout({
           authenticatedUsersOnly: true,
