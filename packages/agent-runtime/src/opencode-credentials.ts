@@ -259,8 +259,7 @@ export default {
     };
 
     if (groups.size) await register([...groups.keys()]);
-    // OpenCode registers each remote MCP server as an integration only after plugins load, and
-    // reconnects the server when its credential arrives, so those are imported once they appear.
+    // MCP integrations register after plugins load.
     const later = [];
     for (const id of groups.keys()) {
       const info = await get(id);

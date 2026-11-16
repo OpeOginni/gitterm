@@ -4,7 +4,6 @@ import {
   type OpencodeCredentialEntry,
 } from "@gitterm/agent-runtime/opencode-credentials";
 
-/** The client ID workspaces present when refreshing; their workspace identity is the secret. */
 export const MCP_OAUTH_WORKSPACE_CLIENT = "gitterm-workspace";
 
 export type McpWorkspaceConnection = {
@@ -13,11 +12,10 @@ export type McpWorkspaceConnection = {
   url: string;
   codemode: boolean;
   headers: Record<string, string>;
-  /** Set for OAuth connections: OpenCode refreshes their tokens through GitTerm. */
   oauthMetadataUrl?: string;
 };
 
-/** The integration OpenCode registers for a remote MCP server, which holds its credential. */
+/** Matches OpenCode's remote MCP integration ID. */
 export function opencodeMcpIntegrationId(name: string, url: string): string {
   return `mcp_${createHash("sha1").update(`${name}\u0000${url}`).digest("hex").slice(0, 16)}`;
 }
@@ -68,8 +66,7 @@ export function withMcpConnections(
       headers[header] = `{env:${key}}`;
     });
     if (connection.oauthMetadataUrl) {
-      // OpenCode refreshes this placeholder against GitTerm, which keeps the real refresh token.
-      // The workspace identity authenticates the refresh.
+      // Seed a connection ID, never the provider's refresh token.
       credentials.push({
         integration: opencodeMcpIntegrationId(name, connection.url),
         label: OPENCODE_CREDENTIAL_LABEL,
