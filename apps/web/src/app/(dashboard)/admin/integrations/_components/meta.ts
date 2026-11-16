@@ -50,14 +50,14 @@ export const INTEGRATION_META: Record<IntegrationKey, IntegrationMeta> = {
     name: "Executor",
     summary: "Connect a user's Executor tool catalog over MCP.",
     description:
-      "Users connect an Executor organization endpoint and PAT through the same setup as custom MCP servers. OpenCode connects directly. Credentials are encrypted at rest but accessible to attached workspace agents. Personal connections only.",
+      "Users sign in to Executor Cloud or a self-hosted Executor, or use a PAT. Gitterm keeps signed-in refresh tokens and workspaces get short-lived access tokens; a PAT is readable by attached workspace agents. OpenCode connects directly. Personal connections only.",
     logo: "/executor.png",
   },
   mcp: {
     name: "MCP servers",
     summary: "Bring your own MCP servers.",
     description:
-      "Users add public HTTPS Streamable HTTP servers with no auth or encrypted authentication headers and attach connections to OpenCode workspaces. No GitTerm relay or managed OAuth. Workspace agents can read credentials. Personal connections only.",
+      "Users add public HTTPS Streamable HTTP servers with OAuth sign-in, no auth, or encrypted authentication headers and attach connections to OpenCode workspaces. No Gitterm relay. Workspace agents can read tokens and headers. Personal connections only.",
     logo: "/mcp.svg",
   },
 };

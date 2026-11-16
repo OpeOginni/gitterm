@@ -69,6 +69,10 @@
       "types": "./src/service/integrations/mcp.ts",
       "default": "./src/service/integrations/mcp.ts"
     },
+    "./service/integrations/mcp-oauth": {
+      "types": "./src/service/integrations/mcp-oauth.ts",
+      "default": "./src/service/integrations/mcp-oauth.ts"
+    },
     "./service/compute-provider": {
       "default": "./src/service/compute-provider.ts"
     },

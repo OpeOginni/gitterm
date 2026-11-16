@@ -299,6 +299,8 @@ export type GittermClient = {
     mcp: {
       test(id: string): Promise<McpConnectionTestResult>;
       update(input: UpdateMcpConnectionInput): Promise<Connection>;
+      /** Starts the browser sign-in again for an OAuth connection; open `authorizeUrl`. */
+      authorize(id: string): Promise<{ authorizeUrl: string }>;
     };
   };
 };
@@ -1011,6 +1013,7 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
           }),
         update: (input) =>
           run(async () => toConnection(await trpc.integrations.mcp.update.mutate(input))),
+        authorize: (id) => run(() => trpc.integrations.mcp.authorize.mutate({ id })),
       },
     },
     bots: {

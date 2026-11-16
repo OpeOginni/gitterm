@@ -61,21 +61,23 @@ MCP connections give an OpenCode workspace extra tools. OpenCode connects to the
 
 1. Under **Integrations**, click **Add MCP server**.
 2. Enter a **Connection name** and the **MCP endpoint**: a public HTTPS URL that speaks Streamable HTTP.
-3. Under **Authentication**, choose **None**, **Bearer token**, or **Headers** (a JSON object of headers).
-4. Click **Save and test**. The test lists the server's tools without calling any. You should see **Test passed**; a connection that hasn't passed can't be attached.
+3. Under **Authentication**, choose **Sign in** (the server's own OAuth sign-in page), **None**, **Bearer token**, or **Headers** (a JSON object of headers).
+4. Click **Save and test**, or **Save and sign in** and finish signing in. The test lists the server's tools without calling any. You should see **Test passed**; a connection that hasn't passed can't be attached.
 5. When you create an OpenCode workspace, open **Add integrations** and select the connection under **MCP servers and Executor**.
 6. In the workspace, run `opencode mcp list` or `/mcps`. You should see the server listed.
 
-For **Executor**, click **Connect Executor**. Paste your Executor organization's MCP URL, choose **Bearer token**, and paste an organization token from Executor. Check what that token can reach: it isn't necessarily limited to the tools you picked in Executor.
+For **Executor**, click **Connect Executor**, then **Save and sign in**. The endpoint defaults to Executor Cloud (`https://mcp.executor.sh/mcp`); for self-hosted Executor, use your own public HTTPS origin's `/mcp`. On Executor's sign-in page you pick the organization, which apps your agents can reach (all, or one of your scoped connections), and how tool calls are approved. To use a personal access token instead, choose **Bearer token**: a token keeps full access to its organization, and Executor refuses tokens on scoped connection URLs.
+
+Signed-in connections stay signed in: Gitterm keeps the refresh token and workspaces get short-lived access tokens from Gitterm. If the sign-in expires or is revoked, the connection shows **Needs sign-in**; click **Sign in** and running workspaces recover without a restart.
 
 Limits:
 
 - 50 saved MCP and Executor connections per user.
 - 32 connections per workspace in total.
-- OAuth-only servers and private endpoints aren't supported through Gitterm. Configure those in OpenCode directly.
+- Sign-in needs a server that supports MCP OAuth with dynamic client registration. Private endpoints aren't supported through Gitterm; configure those in OpenCode directly.
 
 > [!WARNING]
-> MCP credentials become environment variables in the workspace, so the agent can read them. Removing a connection, or the admin turning the integration off, doesn't revoke credentials a workspace already received. Revoke them at the provider.
+> Tokens and headers become environment variables in the workspace, so the agent can read them. Removing a connection, or the admin turning the integration off, doesn't revoke a token or headers a workspace already received. Revoke them at the provider. Signed-in connections are different: workspaces only ever hold an access token that lasts up to an hour, and removing the connection stops new ones.
 
 ## Reference a connection
 

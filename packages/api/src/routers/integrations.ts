@@ -25,6 +25,7 @@ import {
 import { integrationPolicy } from "../service/integrations/catalog";
 import { botConnections, botRepo } from "../service/auth/bot-policy";
 import {
+  authorizeMcpConnection,
   testMcpConnection,
   updateMcpConnection,
   updateMcpConnectionInput,
@@ -117,6 +118,10 @@ export const integrationsRouter = router({
     update: accountProcedure("integrations:write")
       .input(updateMcpConnectionInput)
       .mutation(({ ctx, input }) => updateMcpConnection(ctx.session.user.id, input)),
+    /** Browser sign-in for an OAuth connection; open the returned URL. */
+    authorize: accountProcedure("integrations:write")
+      .input(z.object({ id: z.uuid() }))
+      .mutation(({ ctx, input }) => authorizeMcpConnection(ctx.session.user.id, input.id)),
   }),
 
   github: router({

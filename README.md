@@ -222,13 +222,15 @@ takes precedence. See
 ## MCP and Executor
 
 An admin enables **MCP servers** and/or **Executor** in **Admin → Integrations**. Users save
-personal HTTPS MCP endpoints with no auth, bearer tokens, or custom headers and explicitly select
-them when creating an OpenCode workspace. Multiple servers and accounts are supported.
+personal HTTPS MCP endpoints that use OAuth sign-in, no auth, bearer tokens, or custom headers and
+explicitly select them when creating an OpenCode workspace. Multiple servers and accounts are
+supported.
 
 OpenCode connects directly to each server. Executor is an optional preset, not a required
-dependency: use its organization endpoint and PAT to access an existing tool catalog. GitTerm
-does not aggregate tools, proxy tool traffic, or manage MCP OAuth. Credentials are encrypted at
-rest, but attached workspace agents can read them. See [the MCP guide](docs/mcp-integrations.md)
+dependency: it defaults to Executor Cloud with OAuth sign-in (a PAT also works). For signed-in
+connections GitTerm keeps the refresh token and workspaces refresh short-lived access tokens
+through GitTerm; GitTerm does not aggregate tools or proxy tool traffic. Token and header
+credentials are encrypted at rest, but attached workspace agents can read them. See [the MCP guide](docs/mcp-integrations.md)
 for setup, SDK examples, supported protocols, and revocation limitations.
 
 GitLab and Bitbucket remain planned connectors. The deployment encryption master key stays in

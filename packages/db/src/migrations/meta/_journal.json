@@ -358,6 +358,13 @@
       "when": 1794395406752,
       "tag": "0050_project_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1794850454003,
+      "tag": "0051_mcp_binding_url",
+      "breakpoints": true
     }
   ]
 }

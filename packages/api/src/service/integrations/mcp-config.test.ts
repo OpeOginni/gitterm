@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { withMcpConnections, type McpWorkspaceConnection } from "./mcp-config";
+import {
+  opencodeMcpIntegrationId,
+  withMcpConnections,
+  type McpWorkspaceConnection,
+} from "./mcp-config";
 import { opencodeProvisioner, OPENCODE_CONFIG_PATH } from "../agents/opencode";
 
 const connections: McpWorkspaceConnection[] = [
@@ -113,4 +117,39 @@ test("no-auth servers do not mint credentials, and no attachments leave user con
   expect(Object.values((result.config!.mcp as any).servers)[0]).toHaveProperty("headers", {
     Connection: "close",
   });
+});
+test("OAuth connections refresh through GitTerm with the workspace identity and a seeded placeholder", () => {
+  const connectionId = "33333333-3333-4333-8333-333333333333";
+  const { config, env, credentials } = withMcpConnections({}, [
+    {
+      connectionId,
+      name: "Executor",
+      url: "https://mcp.executor.sh/mcp",
+      codemode: true,
+      headers: {},
+      oauthMetadataUrl: "https://api.test/api/mcp/oauth/authorization-server",
+    },
+  ]);
+  expect(env).toEqual({});
+  expect((config!.mcp as any).servers.Executor).toMatchObject({
+    url: "https://mcp.executor.sh/mcp",
+    oauth: {
+      client_id: "gitterm-workspace",
+      client_secret: "{env:WORKSPACE_AGENT_AUTH_TOKEN}",
+      auth_server_metadata_url: "https://api.test/api/mcp/oauth/authorization-server",
+    },
+  });
+  // OpenCode keys a remote server's credentials on sha1(name + NUL + url).
+  expect(credentials).toEqual([
+    {
+      integration: "mcp_9cc4b9bc150ba11d",
+      label: "Gitterm",
+      value: { type: "oauth", refresh: connectionId, access: "", expires: 0 },
+    },
+  ]);
+  expect(withMcpConnections({}, connections).credentials).toEqual([]);
+  // The ID OpenCode 2.3.0 registered for this server in a local run.
+  expect(opencodeMcpIntegrationId("Executor", "http://127.0.0.1:47811/mcp")).toBe(
+    "mcp_3d4ca00398f6ca3e",
+  );
 });

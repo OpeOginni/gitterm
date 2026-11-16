@@ -15,7 +15,7 @@ import { StatusDot } from "@/components/dashboard/kit";
 import { queryClient, trpc } from "@/utils/trpc";
 import { track } from "@/lib/analytics";
 
-type AuthMode = "none" | "bearer" | "headers";
+type AuthMode = "oauth" | "none" | "bearer" | "headers";
 type Form = {
   id?: string;
   integration: "mcp" | "executor";
@@ -31,8 +31,8 @@ type Form = {
 const emptyForm = (integration: "mcp" | "executor"): Form => ({
   integration,
   name: integration === "executor" ? "Executor" : "",
-  url: "",
-  authMode: integration === "executor" ? "bearer" : "none",
+  url: integration === "executor" ? EXECUTOR_MCP_URL : "",
+  authMode: integration === "executor" ? "oauth" : "none",
   token: "",
   headers: "",
   codemode: true,
@@ -40,7 +40,7 @@ const emptyForm = (integration: "mcp" | "executor"): Form => ({
 const statusLabels: Record<string, string> = {
   connected: "Test passed",
   untested: "Not tested",
-  needs_auth: "Authentication rejected",
+  needs_auth: "Needs sign-in",
   error: "Connection failed",
   suspended: "Suspended",
 };
@@ -113,8 +113,10 @@ function authentication(current: Form): McpAuthentication | undefined {
     current.id &&
     current.url === current.originalUrl &&
     current.authMode === current.originalAuthType;
-  if (keep && !current.token && !current.headers) return undefined;
-  if (current.authMode === "none") return { type: "none" };
+  if (keep && (current.authMode === "oauth" || (!current.token && !current.headers)))
+    return undefined;
+  if (current.authMode === "none" || current.authMode === "oauth")
+    return { type: current.authMode };
   if (current.authMode === "bearer") {
     if (!current.token.trim()) throw new Error("Enter a bearer token");
     return { type: "headers", headers: { Authorization: `Bearer ${current.token.trim()}` } };
@@ -136,6 +138,7 @@ function authentication(current: Form): McpAuthentication | undefined {
 }
 
 const AUTH_OPTIONS: { value: AuthMode; label: string }[] = [
+  { value: "oauth", label: "Sign in" },
   { value: "none", label: "None" },
   { value: "bearer", label: "Bearer token" },
   { value: "headers", label: "Headers" },
@@ -168,7 +171,11 @@ export function McpConnections({
   const update = useMutation(trpc.integrations.mcp.update.mutationOptions());
   const test = useMutation(trpc.integrations.mcp.test.mutationOptions());
   const remove = useMutation(trpc.integrations.connections.remove.mutationOptions());
-  const saving = create.isPending || update.isPending;
+  const authorize = useMutation(trpc.integrations.mcp.authorize.mutationOptions());
+  const saving = create.isPending || update.isPending || authorize.isPending;
+  // The provider's sign-in page returns to the API, which redirects back here.
+  const signIn = async (id: string) =>
+    window.location.assign((await authorize.mutateAsync({ id })).authorizeUrl);
   const change = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((current) => (current ? { ...current, [key]: value } : current));
 
@@ -185,6 +192,7 @@ export function McpConnections({
           codemode: form.codemode,
           authentication: auth,
         });
+        if (auth?.type === "oauth") return await signIn(form.id);
         toast.success(
           "Connection updated for new workspaces. Test it again if the endpoint or credentials changed.",
         );
@@ -198,13 +206,13 @@ export function McpConnections({
         });
         // Added means persisted, not necessarily authenticated or passing its connection test.
         track("integration_added", { integration_type: form.integration });
-        if (result.status !== "pending")
-          toast[result.status === "connected" ? "success" : "warning"](
-            result.status === "connected"
-              ? "MCP connection test passed"
-              : "Connection saved. It needs attention before you can attach it.",
-            { description: result.status === "saved" ? result.message : undefined },
-          );
+        if (result.status === "pending") return window.location.assign(result.authorizeUrl);
+        toast[result.status === "connected" ? "success" : "warning"](
+          result.status === "connected"
+            ? "MCP connection test passed"
+            : "Connection saved. It needs attention before you can attach it.",
+          { description: result.status === "saved" ? result.message : undefined },
+        );
       }
       setForm(null);
     } catch (cause) {
@@ -218,7 +226,7 @@ export function McpConnections({
     if (
       kind === "remove" &&
       !window.confirm(
-        "Remove this saved connection? Existing workspaces keep their credentials. Revoke the token at the MCP provider or Executor to stop their access.",
+        "Remove this saved connection? Workspaces that use its sign-in lose access within an hour. Workspaces given a token or headers keep them; revoke those at the MCP provider or Executor.",
       )
     )
       return;
@@ -273,9 +281,9 @@ export function McpConnections({
           >
             Executor
           </a>
-          , then copy your organization&apos;s MCP endpoint and PAT from its API keys page and
-          replace the organization in the example URL below. Public HTTPS self-hosted endpoints work
-          too. Check the permissions and approval settings of your Executor deployment.
+          , then sign in. You choose the organization, which apps your agents can reach, and how
+          tool calls are approved on Executor&apos;s sign-in page. For self-hosted Executor, use
+          your own public HTTPS origin. To use a personal access token instead, choose Bearer token.
         </p>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -317,9 +325,11 @@ export function McpConnections({
           className="sm:w-auto"
         />
         <span className="block text-[12.5px] leading-relaxed text-fg-4">
-          {form.id
-            ? "Leave credential fields blank to keep the current authentication while the endpoint is unchanged."
-            : "Bearer tokens (API keys) and custom headers work. Gitterm doesn't manage OAuth."}
+          {form.authMode === "oauth"
+            ? "Sign in through the server's own page. Gitterm keeps the refresh token; workspaces get short-lived access tokens."
+            : form.id
+              ? "Leave credential fields blank to keep the current authentication while the endpoint is unchanged."
+              : "Bearer tokens (API keys) and custom headers are encrypted at rest."}
         </span>
       </div>
       {form.authMode === "bearer" ? (
@@ -370,7 +380,12 @@ export function McpConnections({
         </Button>
         <Button type="submit" disabled={saving} className="gap-2">
           {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-          {form.id ? "Save changes" : "Save and test"}
+          {form.authMode === "oauth" &&
+          (!form.id || form.originalAuthType !== "oauth" || form.url !== form.originalUrl)
+            ? "Save and sign in"
+            : form.id
+              ? "Save changes"
+              : "Save and test"}
         </Button>
       </div>
     </form>
@@ -493,11 +508,13 @@ export function McpConnections({
                         </StatusDot>
                         <span>
                           {details.toolCount !== null ? `${details.toolCount} tools · ` : ""}
-                          {details.authType === "none"
-                            ? "No auth"
-                            : details.authType === "bearer"
-                              ? "Bearer token"
-                              : "Encrypted headers"}
+                          {details.authType === "oauth"
+                            ? "Sign-in"
+                            : details.authType === "none"
+                              ? "No auth"
+                              : details.authType === "bearer"
+                                ? "Bearer token"
+                                : "Encrypted headers"}
                         </span>
                       </p>
                     </div>
@@ -506,15 +523,32 @@ export function McpConnections({
                     {busyId === connection.id ? (
                       <Loader2 className="mr-2 size-4 animate-spin text-fg-3" />
                     ) : null}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={busyId !== null || saving}
-                      onClick={() => action(connection.id, "test")}
-                    >
-                      Test
-                    </Button>
+                    {details.authType === "oauth" && connection.status === "needs_auth" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={busyId !== null || saving}
+                        onClick={() =>
+                          signIn(connection.id).catch((cause) =>
+                            toast.error(
+                              cause instanceof Error ? cause.message : "Couldn't start sign-in",
+                            ),
+                          )
+                        }
+                      >
+                        Sign in
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={busyId !== null || saving}
+                        onClick={() => action(connection.id, "test")}
+                      >
+                        Test
+                      </Button>
+                    )}
                     <CopyConnectionId id={connection.id} name={connection.name} />
                     <Button
                       type="button"

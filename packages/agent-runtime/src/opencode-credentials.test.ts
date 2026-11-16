@@ -410,3 +410,27 @@ test("GitTerm-managed accounts refresh through the GitTerm API, never a local re
     metadata: { orgID: "org_2", gittermCredentialId: "cred-1" },
   });
 });
+
+test("plugin imports MCP credentials once OpenCode registers the server after plugins load", async () => {
+  const value = { type: "oauth" as const, refresh: "connection-id", access: "", expires: 0 };
+  const plugin = await loadPlugin([
+    { integration: "mcp_0123456789abcdef", label: "Gitterm", value },
+  ]);
+  const { ctx, stored, state } = fakeContext({ integrations: {} });
+  await plugin.setup(ctx);
+  expect(stored).toEqual([]);
+
+  state.mcp_0123456789abcdef = {
+    methods: [{ type: "oauth", id: "mcp_0123456789abcdef" }],
+    connections: [],
+  };
+  for (let i = 0; i < 40 && !stored.length; i++)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(stored).toEqual([
+    {
+      integrationID: "mcp_0123456789abcdef",
+      label: "Gitterm",
+      value: { ...value, methodID: "mcp_0123456789abcdef" },
+    },
+  ]);
+});

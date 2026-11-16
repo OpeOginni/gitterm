@@ -79,6 +79,7 @@ const DEVICE_FLOW = ["github-copilot", "opencode", "xai"];
 // OpenCode only enables ChatGPT routing for its own method IDs. The browser method cannot
 // complete in a remote workspace (its callback is loopback), so managed accounts take it over.
 const MANAGED_METHOD = { openai: "chatgpt-browser" };
+const MCP_POLL_MS = 500;
 const log = (message, detail) => console.log("[gitterm-credentials] " + message + (detail ? ": " + detail : ""));
 
 // Groups entries by integration and orders each group so the active account is created
@@ -193,11 +194,12 @@ export default {
     const groups = readCredentials();
     // One import method per integration; the pending OAuth entry is handed over per attempt.
     const pending = new Map();
-    const oauthIntegrations = [...groups].filter(([, entries]) => entries.some((entry) => entry.value.type === "oauth"));
-    if (oauthIntegrations.length) {
-      await ctx.integration.transform((editor) => {
-        for (const [id, entries] of oauthIntegrations) {
-          if (!editor.get(id)) continue;
+    const get = (id) => ctx.integration.get({ integrationID: id }).then((result) => result.data, () => undefined);
+    const register = (ids) =>
+      ctx.integration.transform((editor) => {
+        for (const id of ids) {
+          const entries = groups.get(id);
+          if (!editor.get(id) || !entries.some((entry) => entry.value.type === "oauth")) continue;
           const builtin = builtinOAuthMethod(id, editor.method.list(id));
           const managed = entries.some((entry) => isManaged(entry.value));
           if (!builtin && !managed) continue;
@@ -227,18 +229,12 @@ export default {
           }
         }
       });
-    }
-    for (const [id, entries] of groups) {
-      const info = await ctx.integration.get({ integrationID: id }).then((result) => result.data, () => undefined);
-      if (!info) {
-        log("unknown integration, skipping", id);
-        continue;
-      }
+    const importGroup = async (id, info) => {
       const existing = new Set(
         info.connections.filter((connection) => connection.type === "credential").map((connection) => connection.label),
       );
       const importable = info.methods.some((method) => method.type === "oauth" && method.id === METHOD_ID);
-      for (const entry of entries) {
+      for (const entry of groups.get(id)) {
         const target = id + " (" + entry.label + ")";
         if (existing.has(entry.label)) continue;
         try {
@@ -260,7 +256,29 @@ export default {
           log("import failed", target + " (" + String(error?.message ?? error) + ")");
         }
       }
+    };
+
+    if (groups.size) await register([...groups.keys()]);
+    // MCP integrations register after plugins load.
+    const later = [];
+    for (const id of groups.keys()) {
+      const info = await get(id);
+      if (info) await importGroup(id, info);
+      else if (id.startsWith("mcp_")) later.push(id);
+      else log("unknown integration, skipping", id);
     }
+    if (!later.length) return;
+    void (async () => {
+      while (later.length) {
+        await new Promise((resolve) => setTimeout(resolve, MCP_POLL_MS));
+        for (const id of [...later]) {
+          if (!(await get(id))) continue;
+          later.splice(later.indexOf(id), 1);
+          await register([id]);
+          await importGroup(id, await get(id));
+        }
+      }
+    })().catch((error) => log("MCP credential import failed", String(error?.message ?? error)));
   },
 };
 `;

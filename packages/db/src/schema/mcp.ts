@@ -23,7 +23,7 @@ export const mcpConnection = pgTable(
     integration: text("integration").$type<"mcp" | "executor">().notNull(),
     name: text("name").notNull(),
     url: text("url").notNull(),
-    authType: text("auth_type").$type<"none" | "bearer" | "headers">().notNull(),
+    authType: text("auth_type").$type<"none" | "bearer" | "headers" | "oauth">().notNull(),
     encryptedAuth: text("encrypted_auth").notNull(),
     status: text("status")
       .$type<"untested" | "connected" | "needs_auth" | "error">()
@@ -49,6 +49,8 @@ export const workspaceMcpConnection = pgTable(
     connectionId: uuid("connection_id")
       .notNull()
       .references(() => mcpConnection.id, { onDelete: "cascade" }),
+    /** Endpoint configured at provisioning, used to bind OAuth token issuance. */
+    url: text("url"),
   },
   (table) => [primaryKey({ columns: [table.workspaceId, table.connectionId] })],
 );
