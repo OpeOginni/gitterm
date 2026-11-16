@@ -27,17 +27,19 @@ In GitTerm, add your model credentials and repository access first.
 
 ## 3. Use it
 
-In a Git repository, stop the agent and finish or stop its background jobs, then type `/cloud` in
-OpenCode.
+In a Git repository, type `/cloud` in OpenCode. The workspace is billed while it runs.
 
-1. Choose whether to include uncommitted changes.
-2. Approve starting the workspace. It is billed while it runs.
-3. A dialog shows each step. Esc cancels and deletes the workspace that was just created.
-4. Scan the QR code with your phone, or open the link on your computer, to continue in the
+1. If you have uncommitted changes, choose whether to bring them.
+2. A dialog shows each step. Esc cancels and deletes the workspace that was just created.
+3. Scan the QR code with your phone, or open the link on your computer, to continue in the
    cloud. Pairing links sign you in once and expire after five minutes; `/cloud` makes a new one.
 
-Run `/cloud` again later to reconnect to the same workspace. **Pause or delete the
-workspace in GitTerm when you are done**, or bring the session back.
+The agent doesn't have to be idle. If it is working, `/cloud` stops it here and it picks up
+where it left off in the cloud. Text after the command is sent to the cloud agent:
+`/cloud finish the migration and run the tests`.
+
+Run `/cloud` again later to reconnect to the same workspace, with or without a message.
+**Pause or delete the workspace in GitTerm when you are done**, or bring the session back.
 
 ### Come back
 
@@ -60,19 +62,19 @@ The cloud's new commits, its uncommitted changes and its conversation replace th
 - If you changed them since, `/cloud-return` asks first. Your uncommitted changes are kept in a Git
   stash, your commits on a `gitterm/before-return-…` branch, and your messages in a copy of
   the session.
-- At the end the workspace is deleted, since its work is now local. Files Git ignores in
-  the cloud (such as `.env`) do not come back.
+- It first asks whether to delete the workspace or pause it, since its work is now local.
+  Files Git ignores in the cloud (such as `.env`) do not come back. Nothing changes until
+  you answer, and a progress dialog shows each step after that.
 
 ### Snapshots: a faster start next time
 
 On E2B, Daytona, Vercel, Boat and GitTerm's own machines, with a plan that includes
-snapshots, `/cloud-return` first asks whether to keep a snapshot of the workspace for the
-project. If you do, the next `/cloud` for that repository starts from it: the agent is
+snapshots, `/cloud-return` instead first asks whether to keep a snapshot of the workspace
+for the project. Either way the workspace is then deleted. If you do, the next `/cloud` for that repository starts from it: the agent is
 already installed and the files Git ignores (installed dependencies, build output) are in
 place, so there is nothing to set up again.
 
-- There is one snapshot per repository. Keeping one again replaces the older one, and once
-  you have kept one, "yes" is preselected.
+- There is one snapshot per repository. Keeping one again replaces the older one.
 - Before it is saved, the workspace's credentials and its conversations are removed from it.
 - If a snapshot cannot be started any more, `/cloud` starts a fresh workspace instead.
 - Snapshots are listed in the GitTerm dashboard, where you can delete them.
@@ -122,9 +124,10 @@ can't reach; instead run `opencode serve --port 4096`, open it with
   the branch from the cloud and pull it.
 - GitTerm must be able to clone your repository's `origin`.
 - The cloud checkout is on a branch with the same name as your local one.
-- If a handoff fails partway, run `/cloud` again and choose to retry: it continues in the
-  workspace that attempt created instead of starting a second one. If you already worked in
-  that cloud checkout or session, the retry stops and leaves your cloud work as it is.
+- If moving fails or you cancel it, the workspace it created is deleted and an agent it
+  stopped carries on here. Run `/cloud` to try again.
+- Background commands (running processes) can't move: let them finish first. A message waiting
+  to be sent has to run or be removed first too.
 - The checkout and the conversation are each limited to 25 MiB. Submodules and merge
   conflicts are not supported.
 - Common secret files are blocked, but this is not full secret scanning. Check the

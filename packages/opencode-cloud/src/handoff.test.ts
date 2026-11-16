@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OpenCodeClient } from "@opencode/client";
 import { GittermError, type GittermClient } from "@gitterm/sdk";
 import {
   changePrompt,
+  CONTINUE_TEXT,
   handoffSession,
   HandoffCancelled,
+  sessionBusy,
   cloudHasModel,
   importPayload,
   offersModel,
@@ -36,12 +38,8 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-// What OpenCode answers when the cloud has no session of that ID.
-const sessionNotFound = () =>
-  Response.json(
-    { _tag: "SessionNotFoundError", sessionID: "ses_test", message: "Session not found" },
-    { status: 404 },
-  );
+type Inbox = Awaited<ReturnType<OpenCodeClient["session"]["inbox"]["list"]>>;
+type Jobs = Awaited<ReturnType<OpenCodeClient["experimental"]["job"]["list"]>>;
 
 function fixture(answers: Array<Record<string, boolean | string> | "cancelled">) {
   const forms: Array<{ title: string; fields: Array<{ description?: string }> }> = [];
@@ -54,12 +52,19 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
     cost: 0,
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   };
+  /** Notes sent to the local session, such as "continue where you left off". */
+  const notes: Array<{ text: string; resume?: boolean | null }> = [];
   const local = {
-    experimental: { job: { list: async () => [] } },
+    experimental: { job: { list: async (): Promise<Jobs> => [] } },
     session: {
       active: async () => ({}),
       get: async () => session,
-      inbox: { list: async () => [] },
+      inbox: { list: async (): Promise<Inbox> => [] },
+      interrupt: async () => ({ interrupted: true }),
+      synthetic: async (input: (typeof notes)[number]) => {
+        notes.push(input);
+        return {};
+      },
       export: async () => ({ info: session, messages: [] }),
       form: {
         create: async (input: (typeof forms)[number]) => {
@@ -78,6 +83,7 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
     },
   } as unknown as OpenCodeClient;
   const records: HandoffRecord[] = [];
+  const discarded: HandoffRecord[] = [];
   let creates = 0;
   let terminates = 0;
   const gitterm = {
@@ -92,6 +98,7 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
         password: "password",
         directory: root,
       }),
+      models: async () => ({ providers: [] }),
       terminate: async () => {
         terminates++;
       },
@@ -101,7 +108,9 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
     local,
     gitterm,
     forms,
+    notes,
     records,
+    discarded,
     creates: () => creates,
     terminates: () => terminates,
     deps: {
@@ -112,10 +121,73 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
       save: async (record: HandoffRecord) => {
         records.push({ ...record });
       },
-      progress: async () => {},
+      discard: async (record: HandoffRecord) => {
+        discarded.push({ ...record });
+      },
+      progress: async (_step: string) => {},
     },
   };
 }
+
+/** A cloud OpenCode: records what it is sent. `restoreExits` are the restore script's exit codes. */
+function cloudServer(restoreExits: number[] = []) {
+  const cloud = {
+    requests: [] as string[],
+    uploads: [] as Buffer[],
+    prompts: [] as Array<{ text: string }>,
+    notes: [] as Array<{ text: string; resume?: boolean; metadata?: unknown }>,
+    entry: undefined as string | undefined,
+  };
+  server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      const route = new URL(request.url).pathname;
+      cloud.requests.push(route);
+      expect(request.headers.get("authorization")).toBe(
+        `Basic ${Buffer.from("opencode:password").toString("base64")}`,
+      );
+      if (route === "/api/info") return Response.json({ version: "2.3.0" });
+      if (route === "/api/shell") {
+        const { command } = (await request.json()) as { command: string };
+        // The restore script is the only command that reads the uploaded snapshot.
+        const exit = command.includes("snapshot.bin") ? (restoreExits.shift() ?? 0) : 0;
+        return Response.json({
+          location: { directory: root },
+          data: { id: "shell", status: "exited", exit },
+        });
+      }
+      if (route === "/api/experimental/fs/write") {
+        cloud.uploads.push(Buffer.from(await request.arrayBuffer()));
+        return Response.json({ location: { directory: root }, data: {} });
+      }
+      if (route === "/api/experimental/session/import") {
+        const input = (await request.json()) as { info: { id: string } };
+        return Response.json({ data: { ...input.info, location: { directory: root } } });
+      }
+      if (route.endsWith("/instructions/entries/gitterm-moved")) {
+        cloud.entry = ((await request.json()) as { value: string }).value;
+        return new Response(null, { status: 204 });
+      }
+      if (route.endsWith("/prompt")) {
+        cloud.prompts.push((await request.json()) as { text: string });
+        return Response.json({ data: {} });
+      }
+      if (route.endsWith("/synthetic")) {
+        cloud.notes.push((await request.json()) as { text: string });
+        return Response.json({ data: {} });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  return cloud;
+}
+
+const manifest = (upload: Buffer) =>
+  JSON.parse(upload.subarray(4, 4 + upload.readUInt32BE(0)).toString()) as {
+    bundle: number;
+    digest: string;
+  };
 
 test("prompts differ only by shared-checkout warning", () => {
   expect(changePrompt(0)).toBeUndefined();
@@ -123,54 +195,189 @@ test("prompts differ only by shared-checkout warning", () => {
   expect(changePrompt(2)).toContain("Their changes may be included");
 });
 
-test("cancelled prompt never provisions compute", async () => {
+test("a clean checkout moves without a question and stores no credentials", async () => {
+  const cloud = cloudServer();
+  const f = fixture([]);
+  const { record, continuing } = await handoffSession("ses_test", f.deps);
+  expect(record.phase).toBe("ready");
+  expect(continuing).toBe(false);
+  expect(f.forms).toEqual([]);
+  expect(f.records.map((item) => [item.phase, item.workspaceID])).toEqual([
+    ["moving", undefined],
+    ["moving", "workspace-test"],
+    ["ready", "workspace-test"],
+  ]);
+  expect(cloud.requests.indexOf("/api/experimental/fs/write")).toBeLessThan(
+    cloud.requests.indexOf("/api/experimental/session/import"),
+  );
+  expect(cloud.entry).toContain(`(local checkout ${await realpath(root)})`);
+  // The same words sit in the conversation where the move happened, without starting the agent.
+  expect(cloud.notes).toEqual([
+    {
+      text: `<session-moved source="gitterm">\nA notice from GitTerm, not a message from the user.\n${cloud.entry}\n</session-moved>`,
+      resume: false,
+      metadata: { source: "gitterm" },
+    },
+  ]);
+  expect(cloud.prompts).toEqual([]);
+  expect(JSON.stringify(f.records)).not.toContain("password");
+  expect(f.terminates()).toBe(0);
+});
+
+test("uncommitted changes are asked about and go along when the user says so", async () => {
+  await writeFile(path.join(root, "file.txt"), "local edit\n");
+  const cloud = cloudServer();
+  const f = fixture([{ changes: "yes" }]);
+  expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+  expect(f.forms.map((form) => (form.fields[0] as { title?: string }).title)).toEqual([
+    "Bring your uncommitted changes to the cloud?",
+  ]);
+  expect(JSON.stringify(f.forms)).not.toContain('"default"');
+  expect(cloud.uploads[0]!.toString("latin1")).toContain("local edit");
+  expect(JSON.stringify(f.records)).not.toContain("local edit");
+});
+
+test("cancelling the question never provisions compute", async () => {
+  await writeFile(path.join(root, "file.txt"), "local edit\n");
   const f = fixture(["cancelled"]);
   await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
   expect(f.creates()).toBe(0);
   expect(f.records).toEqual([]);
 });
 
-test("declining billable upload never provisions compute", async () => {
-  const f = fixture([{ changes: "no" }, { create: false }]);
-  await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
-  expect(f.creates()).toBe(0);
-  expect(f.forms.map((form) => (form.fields[0] as { title?: string }).title)).toEqual([
-    "Bring your uncommitted changes to the cloud?",
-    "Start a cloud workspace for this session?",
-  ]);
-  expect(JSON.stringify(f.forms)).not.toContain('"default"');
-});
-
-test("a running source session is rejected, not interrupted", async () => {
+test("a running agent and its subagent are stopped here and continue in the cloud", async () => {
+  const cloud = cloudServer();
   const f = fixture([]);
-  f.local.session.active = async () => ({ ses_test: { type: "running" } });
-  await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("Stop this session");
-  expect(f.creates()).toBe(0);
-});
-
-test("background jobs prevent handoff even when the source session is idle", async () => {
-  const f = fixture([]);
-  f.local.experimental.job.list = async (input) => {
-    expect(input).toEqual({ sessionID: "ses_test", status: "running", descendants: true });
-    return [
-      {
-        kind: "shell",
-        id: "job_test",
-        sessionID: "ses_test",
-        status: "running",
-        time: { started: 1 },
-        shellID: "sh_test",
-        command: "sleep 60",
-      },
-    ];
+  // The parent runs and a subagent works in a child session. Stopping the child makes it
+  // report back, which wakes the parent once more.
+  const running = new Set(["ses_test", "ses_child"]);
+  let wakes = 1;
+  const interrupted: string[] = [];
+  f.local.session.active = (async () =>
+    Object.fromEntries([...running].map((id) => [id, {}]))) as typeof f.local.session.active;
+  f.local.experimental.job.list = async () =>
+    running.has("ses_child")
+      ? ([
+          {
+            kind: "subagent",
+            id: "job",
+            sessionID: "ses_test",
+            childSessionID: "ses_child",
+            status: "running",
+          },
+        ] as unknown as Jobs)
+      : [];
+  f.local.session.interrupt = (async ({ sessionID }: { sessionID: string }) => {
+    interrupted.push(sessionID);
+    running.delete(sessionID);
+    if (sessionID === "ses_child" && wakes-- > 0) running.add("ses_test");
+    return { interrupted: true };
+  }) as typeof f.local.session.interrupt;
+  const steps: string[] = [];
+  f.deps.progress = async (step) => {
+    steps.push(step);
   };
-  await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("background jobs");
-  expect(f.creates()).toBe(0);
+  const { record, continuing } = await handoffSession("ses_test", f.deps);
+  expect(record.phase).toBe("ready");
+  expect(continuing).toBe(true);
+  expect(steps[0]).toBe("Stopping the agent here");
+  expect(interrupted.toSorted()).toEqual(["ses_child", "ses_test", "ses_test"]);
+  expect(cloud.notes).toEqual([
+    expect.objectContaining({ text: expect.stringContaining(cloud.entry!), resume: false }),
+    expect.objectContaining({ text: CONTINUE_TEXT, resume: true }),
+  ]);
+  expect(f.notes).toEqual([]);
+});
+
+test("text after /cloud is sent to the cloud agent", async () => {
+  const cloud = cloudServer();
+  const f = fixture([]);
+  const moved = await handoffSession("ses_test", f.deps, "finish the migration");
+  expect(moved.continuing).toBe(true);
+  expect(cloud.prompts).toEqual([expect.objectContaining({ text: "finish the migration" })]);
+  expect(cloud.notes).toEqual([
+    expect.objectContaining({ text: expect.stringContaining(cloud.entry!), resume: false }),
+  ]);
+});
+
+test("running commands and messages waiting to be sent are refused before anything is asked", async () => {
+  await writeFile(path.join(root, "file.txt"), "local edit\n");
+  const shell = fixture([]);
+  shell.local.experimental.job.list = async () =>
+    [{ kind: "shell", id: "job", sessionID: "ses_test", status: "running" }] as unknown as Jobs;
+  await expect(handoffSession("ses_test", shell.deps)).rejects.toThrow("background commands");
+  const queued = fixture([]);
+  queued.local.session.inbox.list = async () =>
+    [{ id: "msg", type: "user", delivery: "queue", payload: { text: "next" } }] as unknown as Inbox;
+  await expect(handoffSession("ses_test", queued.deps)).rejects.toThrow("message waiting");
+  expect(shell.forms).toEqual([]);
+  expect(queued.forms).toEqual([]);
+  expect(shell.creates() + queued.creates()).toBe(0);
+});
+
+test("a !shell result waiting for the next prompt does not make a session busy", async () => {
+  const f = fixture([]);
+  const busy = async (item: unknown) => {
+    f.local.session.inbox.list = async () => [item] as Inbox;
+    return sessionBusy(f.local, "ses_test", f.deps.signal);
+  };
+  const synthetic = (source: string) => ({ type: "synthetic", payload: { metadata: { source } } });
+  expect(await busy(synthetic("shell"))).toBe(false);
+  // A subagent's report wakes the agent; a message starts it.
+  expect(await busy(synthetic("subagent"))).toBe(true);
+  expect(await busy({ type: "user", payload: { text: "next" } })).toBe(true);
+});
+
+test("sends the whole history when the cloud clone lacks the commits a smaller upload builds on", async () => {
+  // HEAD is on origin's default branch, so the first upload carries no commits.
+  await git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  await git(root, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+  const cloud = cloudServer([3]);
+  const f = fixture([]);
+  expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+  const uploads = cloud.uploads.map(manifest);
+  expect(uploads.map((upload) => upload.bundle === 0)).toEqual([true, false]);
+  expect(uploads[1]!.digest).toBe(uploads[0]!.digest);
+  expect(f.creates()).toBe(1);
+});
+
+test("starts from the project snapshot, and fresh when that snapshot no longer starts", async () => {
+  cloudServer();
+  const run = async (outcome: "starts" | "fails" | "terminated") => {
+    const attempts: Array<{ fresh: boolean; snapshot: boolean | undefined }> = [];
+    const f = fixture([]);
+    f.gitterm.workspaces.create = (async (input: {
+      idempotencyKey: string;
+      useProjectSnapshot?: boolean;
+    }) => {
+      attempts.push({
+        fresh: input.idempotencyKey.endsWith(":fresh"),
+        snapshot: input.useProjectSnapshot,
+      });
+      if (input.useProjectSnapshot && outcome === "fails")
+        throw new GittermError(
+          "SERVER_ERROR",
+          "PROJECT_SNAPSHOT_FAILED: The project snapshot could not be started.",
+        );
+      const terminated = input.useProjectSnapshot && outcome === "terminated";
+      return { workspace: { id: "workspace-test", status: terminated ? "terminated" : "running" } };
+    }) as unknown as typeof f.gitterm.workspaces.create;
+    expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+    return attempts;
+  };
+  expect(await run("starts")).toEqual([{ fresh: false, snapshot: true }]);
+  const fallback = [
+    { fresh: false, snapshot: true },
+    { fresh: true, snapshot: false },
+  ];
+  expect(await run("fails")).toEqual(fallback);
+  expect(await run("terminated")).toEqual(fallback);
 });
 
 test("warns about another active session in a subdirectory of the same checkout", async () => {
   await mkdir(path.join(root, "nested"));
-  const f = fixture([{ changes: "no" }, { create: false }]);
+  await writeFile(path.join(root, "file.txt"), "local edit\n");
+  const f = fixture(["cancelled"]);
   const get = f.local.session.get;
   f.local.session.active = async () => ({ ses_other: { type: "running" } });
   f.local.session.get = async (input) => {
@@ -181,294 +388,10 @@ test("warns about another active session in a subdirectory of the same checkout"
   };
   await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
   expect(f.forms[0]?.fields[0]?.description).toContain("1 other active session(s)");
-  expect(f.creates()).toBe(0);
 });
 
-test("restores before importing, records ready state, and never stores credentials or snapshot contents", async () => {
-  await writeFile(path.join(root, "file.txt"), "local edit\n");
-  const requests: string[] = [];
-  let uploaded: Buffer | undefined;
-  server = Bun.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    async fetch(request) {
-      const route = new URL(request.url).pathname;
-      requests.push(route);
-      expect(request.headers.get("authorization")).toBe(
-        `Basic ${Buffer.from("opencode:password").toString("base64")}`,
-      );
-      if (route === "/api/info") return Response.json({ version: "2.0.30" });
-      if (route === "/api/shell")
-        return Response.json({
-          location: { directory: root },
-          data: { id: "shell", status: "exited", exit: 0 },
-        });
-      if (route === "/api/experimental/fs/write") {
-        uploaded = Buffer.from(await request.arrayBuffer());
-        return Response.json({ location: { directory: root }, data: {} });
-      }
-      if (route === "/api/experimental/session/import") {
-        const input = (await request.json()) as { info: { id: string } };
-        return Response.json({ data: { ...input.info, location: { directory: root } } });
-      }
-      if (route.endsWith("/synthetic")) return Response.json({ data: {} });
-      if (route === "/api/experimental/session/ses_test/export") return sessionNotFound();
-      return new Response("not found", { status: 404 });
-    },
-  });
-  const f = fixture([{ changes: "yes" }, { create: true }]);
-  const record = await handoffSession("ses_test", f.deps);
-  expect(record.phase).toBe("ready");
-  expect(uploaded!.toString("latin1")).toContain("local edit");
-  expect(requests.indexOf("/api/experimental/fs/write")).toBeLessThan(
-    requests.indexOf("/api/experimental/session/import"),
-  );
-  expect(f.records.map((item) => item.phase)).toEqual([
-    "creating",
-    "restoring",
-    "importing",
-    "ready",
-  ]);
-  expect(JSON.stringify(f.records)).not.toContain("password");
-  expect(JSON.stringify(f.records)).not.toContain("local edit");
-  expect(f.terminates()).toBe(0);
-});
-
-test("sends the whole history when the cloud clone lacks the commits a smaller upload builds on", async () => {
-  // HEAD is on origin's default branch, so the first upload carries no commits.
-  await git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
-  await git(root, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
-  // The upload starts with a 4-byte length and a JSON manifest; `bundle` is its byte count.
-  const uploads: Array<{ bundle: number; digest: string }> = [];
-  let restores = 0;
-  server = Bun.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    async fetch(request) {
-      const route = new URL(request.url).pathname;
-      if (route === "/api/info") return Response.json({ version: "2.0.30" });
-      if (route === "/api/shell") {
-        const { command } = (await request.json()) as { command: string };
-        // The restore script is the only command that reads the uploaded snapshot.
-        const exit = command.includes("snapshot.bin") && restores++ === 0 ? 3 : 0;
-        return Response.json({
-          location: { directory: root },
-          data: { id: "shell", status: "exited", exit },
-        });
-      }
-      if (route === "/api/experimental/fs/write") {
-        const body = Buffer.from(await request.arrayBuffer());
-        uploads.push(JSON.parse(body.subarray(4, 4 + body.readUInt32BE(0)).toString()));
-        return Response.json({ location: { directory: root }, data: {} });
-      }
-      if (route === "/api/experimental/session/import") {
-        const input = (await request.json()) as { info: { id: string } };
-        return Response.json({ data: { ...input.info, location: { directory: root } } });
-      }
-      if (route.endsWith("/synthetic")) return Response.json({ data: {} });
-      if (route === "/api/experimental/session/ses_test/export") return sessionNotFound();
-      return new Response("not found", { status: 404 });
-    },
-  });
-  const f = fixture([{ changes: "no" }, { create: true }]);
-  const record = await handoffSession("ses_test", f.deps);
-  expect(record.phase).toBe("ready");
-  expect(uploads.map((upload) => upload.bundle === 0)).toEqual([true, false]);
-  expect(uploads[1]!.digest).toBe(uploads[0]!.digest);
-  expect(f.creates()).toBe(1);
-});
-
-/** A cloud OpenCode that keeps one session, so a retry meets what the earlier attempt left. */
-type CloudSession = { info: Record<string, unknown>; messages: unknown[] };
-function cloudWithSession() {
-  const cloud = {
-    session: undefined as CloudSession | undefined,
-    requests: [] as string[],
-    /** Input waiting in the session, as OpenCode's inbox lists it. */
-    inbox: [] as unknown[],
-    active: false,
-    failImports: 0,
-    failExports: 0,
-  };
-  server = Bun.serve({
-    port: 0,
-    async fetch(request) {
-      const route = new URL(request.url).pathname;
-      cloud.requests.push(`${request.method} ${route}`);
-      if (route === "/api/info") return Response.json({ version: "2.0.30" });
-      if (route === "/api/shell")
-        return Response.json({
-          location: { directory: root },
-          data: { id: "shell", status: "exited", exit: 0 },
-        });
-      if (route === "/api/experimental/fs/write")
-        return Response.json({ location: { directory: root }, data: {} });
-      if (route === "/api/experimental/session/ses_test/export") {
-        if (cloud.failExports-- > 0) return new Response("broken", { status: 500 });
-        return cloud.session
-          ? Response.json({ data: structuredClone(cloud.session) })
-          : sessionNotFound();
-      }
-      if (route === "/api/session/ses_test/inbox") return Response.json({ data: cloud.inbox });
-      if (route === "/api/session/active")
-        return Response.json({ data: cloud.active ? { ses_test: {} } : {} });
-      if (route === "/api/experimental/job") return Response.json({ data: [] });
-      if (request.method === "DELETE" && route === "/api/session/ses_test") {
-        cloud.session = undefined;
-        cloud.inbox = [];
-        return new Response(null, { status: 204 });
-      }
-      if (route === "/api/experimental/session/import") {
-        if (cloud.failImports-- > 0) return new Response("broken", { status: 500 });
-        if (cloud.session) return Response.json({ message: "exists" }, { status: 409 });
-        const input = (await request.json()) as CloudSession;
-        cloud.session = { info: input.info, messages: input.messages };
-        return Response.json({ data: input.info });
-      }
-      if (route.endsWith("/synthetic")) {
-        const input = (await request.json()) as { text: string; metadata?: unknown };
-        cloud.inbox.push({
-          id: `msg_note_${cloud.inbox.length}`,
-          type: "synthetic",
-          payload: { text: input.text, metadata: input.metadata },
-        });
-        return Response.json({ data: {} });
-      }
-      return new Response("not found", { status: 404 });
-    },
-  });
-  return cloud;
-}
-
-const message = (id: string, text: string) => ({ id, time: { created: 1 }, text, type: "user" });
-
-/** Runs an attempt that imports the session and then fails, and returns what retries need. */
-async function failAfterImport() {
-  const cloud = cloudWithSession();
-  const f = fixture([{ changes: "no" }, { create: true }, { changes: "no" }, { create: true }]);
-  const local = { messages: [message("msg_1", "one")] };
-  const get = f.local.session.get;
-  f.local.session.export = (async (input: { sessionID: string }) => ({
-    info: await get(input),
-    messages: local.messages,
-  })) as typeof f.local.session.export;
-  const keys: string[] = [];
-  f.gitterm.workspaces.create = (async (input: { idempotencyKey: string }) => {
-    keys.push(input.idempotencyKey);
-    return { workspace: { id: "workspace-test" } };
-  }) as unknown as typeof f.gitterm.workspaces.create;
-  // Everything reaches the cloud, then the last local save fails.
-  const save = f.deps.save;
-  let failSave = true;
-  f.deps.save = async (record) => {
-    if (record.phase === "ready" && failSave) throw new Error("disk full");
-    await save(record);
-  };
-  await expect(handoffSession("ses_test", f.deps, "1111-aaaa")).rejects.toThrow();
-  expect(cloud.session?.messages).toEqual(local.messages);
-  // The attempt's own note is waiting in the cloud session.
-  expect(cloud.inbox.length).toBe(1);
-  failSave = false;
-  cloud.requests.length = 0;
-  return { cloud, f, local, keys, retry: () => handoffSession("ses_test", f.deps, "1111-aaaa") };
-}
-
-test("a retry uses the same workspace and replaces the session it imported with newer history", async () => {
-  const { cloud, local, keys, retry } = await failAfterImport();
-  local.messages = [message("msg_1", "one"), message("msg_2", "two")];
-  expect(await retry()).toMatchObject({ attemptID: "1111-aaaa", phase: "ready" });
-  expect(keys).toEqual(["opencode-handoff:1111-aaaa", "opencode-handoff:1111-aaaa"]);
-  expect(cloud.session?.messages).toEqual(local.messages);
-  const removed = cloud.requests.indexOf("DELETE /api/session/ses_test");
-  expect(removed).toBeGreaterThan(-1);
-  expect(cloud.requests.indexOf("POST /api/experimental/session/import")).toBeGreaterThan(removed);
-  // Two shell commands on the way: make the upload directory, run the restore.
-  expect(cloud.requests.filter((request) => request === "POST /api/shell").length).toBe(2);
-});
-
-test("a retry leaves a cloud session that has moved on since the earlier import", async () => {
-  const { cloud, retry } = await failAfterImport();
-  cloud.session!.messages.push(message("msg_cloud", "asked in the cloud"));
-  await expect(retry()).rejects.toThrow("The cloud session has new activity");
-  expect(cloud.requests).not.toContain("DELETE /api/session/ses_test");
-  expect(cloud.session?.messages.at(-1)).toEqual(message("msg_cloud", "asked in the cloud"));
-  // Refused before anything was uploaded or run: the cloud checkout is as it was.
-  expect(cloud.requests).not.toContain("POST /api/shell");
-  expect(cloud.requests).not.toContain("POST /api/experimental/fs/write");
-});
-
-test("a retry leaves a cloud session that has a prompt queued", async () => {
-  const { cloud, retry } = await failAfterImport();
-  const queued = { id: "msg_queued", type: "user", payload: { text: "asked in the cloud" } };
-  cloud.inbox.push(queued);
-  await expect(retry()).rejects.toThrow("The cloud session has new activity");
-  expect(cloud.inbox).toContainEqual(queued);
-  expect(cloud.requests).not.toContain("DELETE /api/session/ses_test");
-  expect(cloud.requests).not.toContain("POST /api/shell");
-});
-
-test("a retry that cannot read the cloud session stops before touching the cloud", async () => {
-  const { cloud, retry } = await failAfterImport();
-  const queued = { id: "msg_queued", type: "user", payload: { text: "asked in the cloud" } };
-  cloud.inbox.push(queued);
-  cloud.failExports = 1;
-  await expect(retry()).rejects.toThrow("Cloud handoff failed while restoring");
-  expect(cloud.inbox).toContainEqual(queued);
-  expect(cloud.requests).not.toContain("POST /api/shell");
-  expect(cloud.requests).not.toContain("POST /api/experimental/session/import");
-});
-
-test("a retry leaves a cloud session whose agent is running", async () => {
-  const { cloud, retry } = await failAfterImport();
-  cloud.active = true;
-  await expect(retry()).rejects.toThrow("The cloud session has new activity");
-  expect(cloud.requests).not.toContain("DELETE /api/session/ses_test");
-  expect(cloud.requests).not.toContain("POST /api/shell");
-});
-
-test("a retry whose import fails puts the earlier cloud session back", async () => {
-  const { cloud, local, retry } = await failAfterImport();
-  const earlier = structuredClone(cloud.session);
-  local.messages = [message("msg_1", "one"), message("msg_2", "two")];
-  cloud.failImports = 1;
-  await expect(retry()).rejects.toThrow();
-  expect(cloud.session).toEqual(earlier);
-});
-
-test("starts from the project snapshot, and fresh when that snapshot no longer starts", async () => {
-  cloudWithSession();
-  const attempts: Array<{ key: string; snapshot: boolean | undefined }> = [];
-  const run = async (outcome: "starts" | "fails" | "failed earlier") => {
-    attempts.length = 0;
-    const f = fixture([{ changes: "no" }, { create: true }]);
-    f.gitterm.workspaces.create = (async (input: {
-      idempotencyKey: string;
-      useProjectSnapshot?: boolean;
-    }) => {
-      attempts.push({ key: input.idempotencyKey, snapshot: input.useProjectSnapshot });
-      if (input.useProjectSnapshot && outcome === "fails")
-        throw new GittermError(
-          "SERVER_ERROR",
-          "PROJECT_SNAPSHOT_FAILED: The project snapshot could not be started.",
-        );
-      // A retry of an attempt whose snapshot start failed is answered with that workspace.
-      const terminated = input.useProjectSnapshot && outcome === "failed earlier";
-      return { workspace: { id: "workspace-test", status: terminated ? "terminated" : "running" } };
-    }) as unknown as typeof f.gitterm.workspaces.create;
-    expect((await handoffSession("ses_test", f.deps, "1111-aaaa")).phase).toBe("ready");
-    return [...attempts];
-  };
-  expect(await run("starts")).toEqual([{ key: "opencode-handoff:1111-aaaa", snapshot: true }]);
-  const fallback = [
-    { key: "opencode-handoff:1111-aaaa", snapshot: true },
-    { key: "opencode-handoff:1111-aaaa:fresh", snapshot: false },
-  ];
-  expect(await run("fails")).toEqual(fallback);
-  expect(await run("failed earlier")).toEqual(fallback);
-});
-
-test("a failed create says which step failed and GitTerm's reason", async () => {
-  const f = fixture([{ changes: "no" }, { create: true }]);
+test("a failed create says why, and the attempt is forgotten", async () => {
+  const f = fixture([]);
   f.gitterm.workspaces.create = async () => {
     throw new GittermError(
       "SERVER_ERROR",
@@ -477,28 +400,47 @@ test("a failed create says which step failed and GitTerm's reason", async () => 
   };
   const failure = handoffSession("ses_test", f.deps);
   await expect(failure).rejects.toThrow(
-    "Cloud handoff failed while creating the cloud workspace (attempt",
+    "Moving to the cloud failed while creating the cloud workspace. Gitterm couldn't start a small machine. Reference: ws1 Local files",
   );
-  await expect(failure).rejects.toThrow("Gitterm couldn't start a small machine. Reference: ws1");
-  expect(f.records.at(-1)?.phase).toBe("failed");
+  expect(f.terminates()).toBe(0);
+  expect(f.discarded.length).toBe(1);
 });
 
-test("failed transfer retains recovery metadata without terminating the cloud or touching local work", async () => {
+test("a failure part way deletes the workspace and lets a stopped agent continue here", async () => {
   server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     fetch: () => new Response("secret upstream body", { status: 500 }),
   });
-  const f = fixture([{ changes: "no" }, { create: true }]);
+  const f = fixture([]);
+  let running = true;
+  f.local.session.active = (async () =>
+    running ? { ses_test: {} } : {}) as typeof f.local.session.active;
+  f.local.session.interrupt = (async () => {
+    running = false;
+    return { interrupted: true };
+  }) as typeof f.local.session.interrupt;
   const failure = handoffSession("ses_test", f.deps);
   await expect(failure).rejects.toThrow(
-    "while restoring your checkout in the cloud for workspace workspace-test",
+    "Moving to the cloud failed while connecting to the cloud workspace. The cloud workspace was deleted.",
   );
   await expect(failure).rejects.not.toThrow("secret upstream body");
-  expect(f.records.at(-1)?.phase).toBe("failed");
-  expect(f.records.at(-1)?.workspaceID).toBe("workspace-test");
-  expect(JSON.stringify(f.records)).not.toContain("secret upstream body");
-  expect(f.terminates()).toBe(0);
+  expect(f.terminates()).toBe(1);
+  expect(f.discarded.map((record) => record.workspaceID)).toEqual(["workspace-test"]);
+  expect(f.notes).toEqual([expect.objectContaining({ resume: true })]);
+});
+
+test("cancelling part way deletes the workspace", async () => {
+  cloudServer();
+  const f = fixture([]);
+  const cancel = new AbortController();
+  f.deps.signal = cancel.signal;
+  f.deps.progress = async (step) => {
+    if (step === "Copying your code") cancel.abort();
+  };
+  await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
+  expect(f.terminates()).toBe(1);
+  expect(f.discarded.length).toBe(1);
 });
 
 test("import detaches parent/fork, local revert state, and local permission grants", () => {
@@ -550,7 +492,6 @@ test("reconnect offers a fresh pairing link without creating compute or saving t
     sourceDirectory: root,
     head: "head",
     includeChanges: true,
-    sharedSessions: 0,
     createdAt: "now",
   };
   await showConnection(f.local, f.gitterm, record, f.deps.signal);
@@ -686,13 +627,13 @@ test("a workspace without a repository drops every reference to a GitHub connect
   expect(await withoutGithub(gitterm(true), undefined)).toBeUndefined();
 });
 
-test("envFiles become workspace variables without exposing names or values in the confirmation", async () => {
+test("envFiles become workspace variables without exposing names or values in the question", async () => {
   await writeFile(path.join(root, ".env"), "SHARED=from-env\nAPI_KEY=value-one\n");
   await writeFile(
     path.join(root, ".gitterm.env"),
     'SHARED=from-gitterm\nexport TOKEN="value two"\n',
   );
-  const f = fixture([{ changes: "no" }, { create: true }]);
+  const f = fixture([{ changes: "no" }]);
   f.deps.options = { envFiles: [".env", ".gitterm.env"] };
   let sent: Record<string, string> | undefined;
   f.gitterm.workspaces.create = (async (input: {
@@ -703,9 +644,9 @@ test("envFiles become workspace variables without exposing names or values in th
   }) as unknown as typeof f.gitterm.workspaces.create;
   await expect(handoffSession("ses_test", f.deps)).rejects.toThrow("stop here");
   expect(sent).toEqual({ SHARED: "from-gitterm", API_KEY: "value-one", TOKEN: "value two" });
-  const confirmation = JSON.stringify(f.forms.at(-1));
-  expect(confirmation).not.toContain("SHARED");
-  expect(confirmation).not.toContain("value");
+  const question = JSON.stringify(f.forms);
+  for (const secret of ["SHARED", "API_KEY", "value-one", "from-env"])
+    expect(question).not.toContain(secret);
 });
 
 test("a missing env file stops the handoff before anything is asked", async () => {

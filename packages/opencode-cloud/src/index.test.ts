@@ -23,6 +23,7 @@ type Transform = Context["command"]["transform"];
 async function setup(stored: HandoffRecord[]) {
   const commands: string[] = [];
   const hooks: string[] = [];
+  const rpc: string[] = [];
   const context = {
     options: {},
     location: { directory: root },
@@ -45,6 +46,12 @@ async function setup(stored: HandoffRecord[]) {
         hooks.push(name);
       },
     },
+    rpc: {
+      register: async (definition: { id: string; methods: object }) => {
+        rpc.push(`${definition.id}: ${Object.keys(definition.methods).join(", ")}`);
+        return { events: { emit: async () => {} }, dispose: async () => {} };
+      },
+    },
     tool: {
       transform: async () => {
         throw new Error("The handoff plugin must not register tools");
@@ -53,7 +60,7 @@ async function setup(stored: HandoffRecord[]) {
   } as unknown as Context;
   const cleanup = await GittermCloudPlugin.setup(context);
   if (cleanup) await cleanup();
-  return { commands, hooks };
+  return { commands, hooks, rpc };
 }
 
 const record = (phase: HandoffRecord["phase"], sourceDirectory: string): HandoffRecord => ({
@@ -64,12 +71,15 @@ const record = (phase: HandoffRecord["phase"], sourceDirectory: string): Handoff
   sourceDirectory,
   head: "0".repeat(40),
   includeChanges: true,
-  sharedSessions: 0,
   createdAt: "2026-01-01T00:00:00.000Z",
 });
 
-test("registers /cloud, the prompt check and the fork cleanup, and no tools", async () => {
-  expect(await setup([])).toEqual({ commands: ["cloud"], hooks: ["prompt", "fork"] });
+test("registers /cloud, the prompt check, the fork cleanup and the terminal channel, and no tools", async () => {
+  expect(await setup([])).toEqual({
+    commands: ["cloud"],
+    hooks: ["prompt", "fork"],
+    rpc: ["gitterm.cloud: cancel"],
+  });
 });
 
 test("offers /cloud-return only while a session of this checkout is in the cloud", async () => {

@@ -1,9 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 import type { OpenCodeClient } from "@opencode/client";
-import { PASSIVE_REQUEST_HEADER, type GittermClient } from "@gitterm/sdk";
+import { GittermError, PASSIVE_REQUEST_HEADER, type GittermClient } from "@gitterm/sdk";
 import type { HandoffRecord } from "./handoff";
 import { CLOUD_KEY, type CloudStatus } from "./marker";
-import { cloudStatus, watchCloudSessions } from "./status";
+import { cloudStatus, deleteLeftover, watchCloudSessions, workspaceGone } from "./status";
 
 let server: ReturnType<typeof Bun.serve> | undefined;
 afterEach(() => {
@@ -19,7 +19,6 @@ const record: HandoffRecord = {
   sourceDirectory: "/checkout",
   head: "0".repeat(40),
   includeChanges: true,
-  sharedSessions: 0,
   createdAt: "2026-01-01T00:00:00.000Z",
 };
 
@@ -135,4 +134,74 @@ test("keeps the session's marker in step, writing only when the status changes",
   });
   expect(marks).toEqual(["idle", "working", "idle", "gone"]);
   expect(gone).toEqual(["ses_test"]);
+});
+
+test("a deleted or missing workspace is gone; other failures are not taken for it", async () => {
+  const lookup = (get: () => Promise<unknown>) =>
+    ({ workspaces: { get } }) as unknown as GittermClient;
+  expect(
+    await workspaceGone(
+      lookup(async () => ({ status: "terminated" })),
+      "w",
+    ),
+  ).toBe(true);
+  expect(
+    await workspaceGone(
+      lookup(async () => ({ status: "paused" })),
+      "w",
+    ),
+  ).toBe(false);
+  expect(
+    await workspaceGone(
+      lookup(async () => ({ status: "running" })),
+      "w",
+    ),
+  ).toBe(false);
+  const missing = new GittermError("NOT_FOUND", "Workspace not found");
+  expect(
+    await workspaceGone(
+      lookup(() => Promise.reject(missing)),
+      "w",
+    ),
+  ).toBe(true);
+  const down = new GittermError("SERVER_ERROR", "unavailable");
+  expect(
+    workspaceGone(
+      lookup(() => Promise.reject(down)),
+      "w",
+    ),
+  ).rejects.toBe(down);
+});
+
+test("what an unfinished /cloud left is deleted, found by attempt when it has no workspace ID", async () => {
+  const terminated: string[] = [];
+  const listed: unknown[] = [];
+  const gitterm = (failure?: GittermError) =>
+    ({
+      workspaces: {
+        list: async (input: unknown) => {
+          listed.push(input);
+          return { workspaces: [{ id: "w-found" }] };
+        },
+        terminate: async (id: string) => {
+          if (failure) throw failure;
+          terminated.push(id);
+        },
+      },
+    }) as unknown as GittermClient;
+  await deleteLeftover(gitterm(), { attemptID: "a1", workspaceID: "w1" });
+  await deleteLeftover(gitterm(), { attemptID: "a2" });
+  expect(terminated).toEqual(["w1", "w-found"]);
+  expect(listed).toEqual([{ status: "active", metadata: { "opencode.handoff": "a2" }, limit: 5 }]);
+  // Already gone is fine; anything else is said, so nothing is left running unnoticed.
+  await deleteLeftover(gitterm(new GittermError("NOT_FOUND", "gone")), {
+    attemptID: "a3",
+    workspaceID: "w3",
+  });
+  await expect(
+    deleteLeftover(gitterm(new GittermError("SERVER_ERROR", "down")), {
+      attemptID: "a4",
+      workspaceID: "w4",
+    }),
+  ).rejects.toThrow("An earlier /cloud left workspace w4");
 });

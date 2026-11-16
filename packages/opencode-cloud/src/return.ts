@@ -6,14 +6,13 @@ import {
   askForm,
   HandoffCancelled,
   HandoffRefused,
-  HISTORY_KEY,
   conversationDigest,
   importPayload,
   markCloudSession,
-  NOTE_KEY,
   runRemoteShell,
   runtimeClient,
   sessionBusy,
+  tellMoved,
   type HandoffRecord,
 } from "./handoff";
 import {
@@ -38,15 +37,8 @@ export type ReturnDependencies = {
   progress(text: string): Promise<void>;
 };
 
-/** What a return left behind of the local work it replaced. */
-export type ReturnKept = {
-  /** The replaced uncommitted changes are in a Git stash. */
-  stash: boolean;
-  /** The replaced local commits are on this branch. */
-  branch: string | null;
-  /** The replaced local conversation is in this session. */
-  sessionID: string | null;
-};
+/** What happens to the cloud workspace once its work is here. */
+export type WorkspaceEnd = "delete" | "pause" | "snapshot";
 
 const VERIFIED = "GITTERM_HANDOFF_VERIFIED";
 const CAPTURE_FAILURES: Record<number, string> = {
@@ -66,7 +58,7 @@ const CAPTURE_FAILURES: Record<number, string> = {
 export async function returnSession(
   record: HandoffRecord,
   deps: ReturnDependencies,
-): Promise<{ record: HandoffRecord; kept: ReturnKept }> {
+): Promise<{ record: HandoffRecord; end: WorkspaceEnd }> {
   const { local, gitterm, signal } = deps;
   const { sessionID, workspaceID } = record;
   if (record.phase !== "ready" || !workspaceID)
@@ -79,11 +71,34 @@ export async function returnSession(
   const root = await checkoutRoot(await realpath(session.location.directory));
   if (root !== record.sourceDirectory)
     throw new Error("This session is no longer in the checkout it was handed off from.");
+  // Asked while nothing has changed yet, here in the session the user is looking at.
+  const end = await askWorkspaceEnd(local, gitterm, record, signal);
+
+  // A question asked when something here changed since the handoff. No cancels the return.
+  const askQuestion = async (question: string, yes: string) =>
+    askForm(
+      local,
+      sessionID,
+      "Bring this session back",
+      [
+        {
+          key: "replace",
+          type: "string",
+          title: question,
+          required: true,
+          options: [
+            { value: "yes", label: `Yes (${yes})` },
+            { value: "no", label: "No (stops here, nothing changes)" },
+          ],
+        },
+      ],
+      signal,
+    );
 
   let step = "connecting to the cloud workspace";
   const stage = `.gitterm-handoff-${record.attemptID}`;
   try {
-    await deps.progress("Connecting to the cloud workspace.");
+    await deps.progress("Connecting to the cloud workspace");
     await gitterm.workspaces.ensureRunning(workspaceID, { signal });
     const runtime = await gitterm.workspaces.getRuntimeAccess(workspaceID);
     const remote = runtimeClient(runtime);
@@ -97,7 +112,7 @@ export async function returnSession(
     const cloud = await atRest();
 
     step = "capturing the cloud checkout";
-    await deps.progress("Capturing the cloud checkout.");
+    await deps.progress("Copying the cloud checkout");
     // `base` is a commit this machine has, so only what the cloud added is downloaded.
     const capture = async (base: string) => {
       const run = (script: string, args: string[], accept: number[] = []) =>
@@ -142,27 +157,15 @@ export async function returnSession(
     const diverged =
       localHistory !== record.history && localHistory !== conversationDigest(cloud.messages);
     if (diverged) {
-      const answer = await askForm(
-        local,
-        sessionID,
+      const answer = await askQuestion(
         "Replace this conversation with the cloud's?",
-        [
-          {
-            key: "replace",
-            type: "boolean",
-            title: "Bring the cloud conversation back?",
-            required: true,
-            description:
-              "Messages were sent in this session after it moved to the cloud. The cloud conversation does not have them. They are kept in a copy of this session.",
-          },
-        ],
-        signal,
+        "messages sent here since are kept in a copy of this session",
       );
-      if (answer.replace !== true) throw new HandoffCancelled();
+      if (answer.replace !== "yes") throw new HandoffCancelled();
     }
 
     step = "restoring the checkout on this machine";
-    await deps.progress("Restoring the cloud checkout on this machine.");
+    await deps.progress("Restoring it on this machine");
     const restore = async (force: boolean) => {
       const directory = path.join(root, stage);
       try {
@@ -188,30 +191,11 @@ export async function returnSession(
       (result.exit === RESTORE_NEEDS_FULL_HISTORY && !full)
     ) {
       if (result.exit === RESTORE_NEEDS_CONFIRMATION) {
-        const paths = summary.changedPaths.slice(0, 50).map((file) => JSON.stringify(file));
-        const answer = await askForm(
-          local,
-          sessionID,
+        const answer = await askQuestion(
           "Replace your local changes with the cloud's?",
-          [
-            {
-              key: "replace",
-              type: "boolean",
-              title: "Replace this checkout with the cloud checkout?",
-              required: true,
-              description: [
-                "This checkout changed since the session moved to the cloud.",
-                "Your uncommitted changes will be kept in a Git stash, and commits the cloud does not have on a gitterm/before-return branch.",
-                `Cloud commit: ${summary.head}${summary.branch ? ` on ${summary.branch}` : ""}`,
-                paths.length
-                  ? `Uncommitted in the cloud (${summary.changedPaths.length}):\n${paths.join("\n")}`
-                  : "The cloud has no uncommitted changes.",
-              ].join("\n\n"),
-            },
-          ],
-          signal,
+          "yours are kept in a Git stash and a gitterm/before-return branch",
         );
-        if (answer.replace !== true) throw new HandoffCancelled();
+        if (answer.replace !== "yes") throw new HandoffCancelled();
         force = true;
       } else {
         // This machine no longer has the commit that was handed off: fetch everything.
@@ -228,23 +212,17 @@ export async function returnSession(
       throw new HandoffRefused(
         "The cloud checkout could not be applied here, so this checkout was left as it was. A file ignored by Git may be in the way of one the cloud added.",
       );
-    const kept: ReturnKept = {
-      stash: false,
-      branch: null,
-      sessionID: null,
-      ...(JSON.parse(result.stdout.slice(VERIFIED.length) || "{}") as Partial<ReturnKept>),
-    };
 
     step = "bringing the conversation back";
-    if (localHistory !== conversationDigest(cloud.messages)) {
-      if (diverged) kept.sessionID = (await local.session.fork({ sessionID }, { signal })).id;
+    const replaced = localHistory !== conversationDigest(cloud.messages);
+    if (replaced) {
+      await deps.progress("Bringing the conversation back");
+      // The questions before this told the user where their replaced work is kept.
+      if (diverged) await local.session.fork({ sessionID }, { signal });
       await local.session.remove({ sessionID }, { signal });
       try {
-        const payload = importPayload(cloud, session.location.directory);
-        // The cloud copy's own bookkeeping does not belong on the local session.
-        const { [HISTORY_KEY]: _digest, ...metadata } = payload.info.metadata ?? {};
         const imported = await local.session.import(
-          { ...payload, info: { ...payload.info, metadata } },
+          importPayload(cloud, session.location.directory),
           { signal },
         );
         if (imported.id !== sessionID) throw new Error("Session verification failed.");
@@ -261,23 +239,22 @@ export async function returnSession(
         throw error;
       }
     }
-    await local.session.synthetic(
-      {
-        sessionID,
-        resume: false,
-        metadata: { [NOTE_KEY]: record.attemptID },
-        text: [
-          `Returned from a cloud workspace to the local checkout ${root}.`,
-          `Recent history ran in the cloud: absolute paths under ${runtime.directory} refer to that machine. Its commits and uncommitted changes are now in this checkout; processes it started are not running here.`,
-        ].join("\n"),
-      },
-      { signal },
+    await tellMoved(
+      local,
+      sessionID,
+      [
+        `This session moved back from a GitTerm cloud workspace to the user's machine (local checkout ${root}).`,
+        `Messages from before this move, back to when the session went to the cloud, ran in the cloud workspace under ${runtime.directory}. What you said in them about the machine, paths or environment was true then; it is not a mistake.`,
+        "The cloud's commits and uncommitted changes are now in this checkout; processes it started are not running here.",
+      ],
+      replaced,
+      signal,
     );
     record.phase = "returned";
     await deps.save(record);
     // An imported conversation has no cloud label; one that needed no import still does.
     await markCloudSession(local, sessionID, undefined, signal).catch(() => {});
-    return { record, kept };
+    return { record, end };
   } catch (error) {
     if (error instanceof HandoffCancelled) throw error;
     console.error("GitTerm cloud return failed while", step, error);
@@ -290,87 +267,66 @@ export async function returnSession(
 }
 
 /**
- * Tells the user what came back and what was kept, then ends the cloud workspace. Its work
- * is here now, and a workspace left behind costs money, so it is deleted. Where the
- * provider and the plan allow it, the user is first asked whether to keep a snapshot of it
- * for this project: the next /cloud for the repository starts from that instead of from
- * scratch. Dismissing a question only pauses the workspace, because deleting cannot be undone.
+ * Asks what happens to the cloud workspace once its work is here. A workspace left behind
+ * costs money, so it is deleted or paused. Where the provider and the plan allow it, a
+ * snapshot of it can be kept for this project: the next /cloud for the repository starts
+ * from that instead of from scratch. Dismissing the question cancels the return.
  */
-export async function finishReturn(
+export async function askWorkspaceEnd(
   local: OpenCodeClient,
   gitterm: GittermClient,
   record: HandoffRecord,
-  kept: ReturnKept,
   signal: AbortSignal,
-) {
-  const workspaceID = record.workspaceID!;
-  const came = [
-    "The cloud's commits, uncommitted changes and conversation are now here.",
-    kept.stash && "Your earlier uncommitted changes are in a Git stash (git stash list).",
-    kept.branch && `Your earlier local commits are on the branch ${kept.branch}.`,
-    kept.sessionID && `Your earlier local conversation is kept as session ${kept.sessionID}.`,
-  ].filter(Boolean);
-  const ask = (title: string, key: string, question: string, yes: boolean, detail: string) =>
-    askForm(
+): Promise<WorkspaceEnd> {
+  const ask = async (question: string, yes: string, no: string) => {
+    const answer = await askForm(
       local,
       record.sessionID,
-      // The terminal shows a single question's form title, not its field title.
-      title,
+      "Bring this session back",
       [
         {
-          key,
-          type: "boolean",
+          key: "end",
+          type: "string",
           title: question,
-          default: yes,
           required: true,
-          description: [...came, detail].join("\n\n"),
+          options: [
+            { value: "yes", label: `Yes (${yes})` },
+            { value: "no", label: `No (${no})` },
+          ],
         },
       ],
       signal,
-    ).then(
-      (answer) => answer[key] === true,
-      () => undefined,
     );
-
-  // A workspace that cannot be kept as a snapshot is simply deleted or paused.
-  const snapshot = await gitterm.workspaces.projectSnapshot(workspaceID).catch(() => undefined);
-  if (!snapshot?.available) {
-    const remove = await ask(
-      "Back on this machine. Delete the cloud workspace?",
-      "remove",
-      "Delete the cloud workspace?",
-      true,
-      `Yes deletes workspace ${workspaceID} for good. Files Git ignores there, such as .env files and build output, did not come back and are deleted with it. No pauses it instead.`,
-    );
-    if (remove) await gitterm.workspaces.terminate(workspaceID);
-    else await gitterm.workspaces.pause(workspaceID);
-    return;
-  }
-
-  const keep = await ask(
+    return answer.end === "yes";
+  };
+  const snapshot = await gitterm.workspaces
+    .projectSnapshot(record.workspaceID!)
+    .catch(() => undefined);
+  if (!snapshot?.available)
+    return (await ask(
+      "Delete the cloud workspace once it's back?",
+      "deletes it for good, with files Git ignores there, such as .env",
+      "pauses it",
+    ))
+      ? "delete"
+      : "pause";
+  return (await ask(
     snapshot.existing
-      ? "Back on this machine. Update this project's cloud snapshot?"
-      : "Back on this machine. Keep a snapshot for this project's next cloud session?",
-    "keep",
-    "Keep a snapshot of the cloud workspace?",
-    // Someone who kept one before most likely wants it kept up to date.
-    Boolean(snapshot.existing),
-    [
-      snapshot.existing
-        ? `Yes replaces the snapshot kept on ${snapshot.existing.createdAt.slice(0, 10)} with this workspace.`
-        : "Yes keeps this workspace's disk as the snapshot for this repository. It counts towards your plan's snapshots.",
-      "The next /cloud for this repository then starts from it, with the agent installed and the files Git ignores (installed dependencies, build output) in place. Saving can take a few minutes.",
-      `Either way workspace ${workspaceID} is deleted. No deletes it without a snapshot.`,
-    ].join(" "),
-  );
-  if (keep === undefined) {
-    await gitterm.workspaces.pause(workspaceID);
-    return;
-  }
-  if (!keep) {
-    await gitterm.workspaces.terminate(workspaceID);
-    return;
-  }
+      ? "Update this project's cloud snapshot?"
+      : "Keep a snapshot for this project's next /cloud?",
+    snapshot.existing
+      ? `replaces the one from ${snapshot.existing.createdAt.slice(0, 10)}, then deletes the workspace`
+      : "the next /cloud starts from it, then deletes the workspace",
+    "deletes the workspace",
+  ))
+    ? "snapshot"
+    : "delete";
+}
+
+/** Ends the cloud workspace the way the user chose. */
+export async function endWorkspace(gitterm: GittermClient, workspaceID: string, end: WorkspaceEnd) {
+  if (end === "pause") return gitterm.workspaces.pause(workspaceID);
+  if (end === "delete") return gitterm.workspaces.terminate(workspaceID);
   try {
     await gitterm.workspaces.terminate(workspaceID, { saveSnapshot: true });
   } catch (error) {

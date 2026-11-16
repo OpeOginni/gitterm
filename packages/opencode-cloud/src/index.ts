@@ -4,19 +4,18 @@ import { OpenCode, type OpenCodeClient } from "@opencode/client";
 import { Service } from "@opencode/client/service";
 import { createGittermClient } from "@gitterm/sdk";
 import {
-  askForm,
   handoffSession,
   HandoffCancelled,
   markCloudSession,
-  setSessionMetadata,
+  sendToCloud,
   showConnection,
   type HandoffOptions,
   type HandoffRecord,
 } from "./handoff";
-import { CANCEL_KEY, CLOUD_KEY, PROGRESS_KEY, type CloudProgress } from "./marker";
-import { confirmLocalPrompt, finishReturn, returnSession } from "./return";
+import { CLOUD_KEY, CLOUD_RPC, type CloudProgress } from "./marker";
+import { confirmLocalPrompt, endWorkspace, returnSession } from "./return";
 import { checkoutRoot } from "./snapshot";
-import { watchCloudSessions } from "./status";
+import { deleteLeftover, watchCloudSessions, workspaceGone } from "./status";
 
 const sessionKey = (sessionID: string) => `handoff/session/${sessionID}`;
 
@@ -115,7 +114,6 @@ export const GittermCloudPlugin = Plugin.define({
     };
     const save = async (record: HandoffRecord) => {
       // Snapshot contents and access credentials never enter plugin storage.
-      await ctx.storage.set(`handoff/attempt/${record.attemptID}`, { ...record });
       await ctx.storage.set(sessionKey(record.sessionID), { ...record });
       const offered = inCloud.size > 0;
       if (record.phase === "ready" && record.sourceDirectory === here)
@@ -126,56 +124,57 @@ export const GittermCloudPlugin = Plugin.define({
       watch();
     };
 
+    const discard = (record: HandoffRecord) => ctx.storage.remove(sessionKey(record.sessionID));
+
+    // The terminal plugin shows each step of a run and can cancel it, through this channel.
+    const runs = new Map<string, AbortController>();
+    const rpc = await ctx.rpc.register(CLOUD_RPC, {
+      cancel: async (input) => {
+        const { attemptID } = input as { sessionID: string; attemptID: string };
+        const run = runs.get(attemptID);
+        run?.abort();
+        return { cancelled: Boolean(run) };
+      },
+    });
+
     const CANCELLED = Symbol("cancelled");
+    const TO_CLOUD = { title: "Moving to the cloud", cancellable: true };
     async function withProgress<T>(
-      local: OpenCodeClient,
       sessionID: string,
+      dialog: { title: string; cancellable: boolean },
       work: (progress: (step: string) => Promise<void>, signal: AbortSignal) => Promise<T>,
     ): Promise<T | typeof CANCELLED> {
       const attemptID = randomUUID();
       const cancel = new AbortController();
+      runs.set(attemptID, cancel);
       const signal = AbortSignal.any([controller.signal, cancel.signal]);
-      const progress = (step: string) =>
-        setSessionMetadata(
-          local,
-          sessionID,
-          { [PROGRESS_KEY]: { attemptID, step } satisfies CloudProgress },
-          signal,
-        ).catch(() => {});
-      const finished = new AbortController();
-      const watcher = (async () => {
-        for await (const event of ctx.event.subscribe({
-          types: ["session.metadata.updated"],
-          signal: finished.signal,
-        })) {
-          if (event.data.sessionID === sessionID && event.data.metadata[CANCEL_KEY] === attemptID)
-            return cancel.abort();
-        }
-      })().catch((error) => {
-        if (!finished.signal.aborted) cancel.abort(error);
-      });
+      // No step ends the run. The key is left out: RPC rejects a property set to undefined.
+      const report = (step: string | undefined) =>
+        rpc.events
+          .emit("progress", {
+            sessionID,
+            attemptID,
+            ...dialog,
+            ...(step === undefined ? {} : { step }),
+          } satisfies CloudProgress)
+          .catch((error) => console.error("GitTerm cloud progress was not sent", error));
       try {
-        return await work(progress, signal);
+        return await work(report, signal);
       } catch (error) {
         if (cancel.signal.aborted) return CANCELLED;
         throw error;
       } finally {
-        finished.abort();
-        await watcher;
-        await setSessionMetadata(
-          local,
-          sessionID,
-          { [PROGRESS_KEY]: undefined, [CANCEL_KEY]: undefined },
-          AbortSignal.timeout(5_000),
-        ).catch(() => {});
+        runs.delete(attemptID);
+        await report(undefined);
       }
     }
 
     await ctx.command.transform((editor) => {
       editor.add({
         name: "cloud",
-        description: "Continue in GitTerm, or reconnect to this session's existing cloud workspace",
-        async execute({ sessionID }) {
+        description:
+          "Continue in a GitTerm cloud workspace (billed while it runs). Text after it is sent there",
+        async execute({ sessionID, prompt }) {
           if (busy.has(sessionID))
             throw new Error("A cloud handoff is already in progress for this session.");
           busy.add(sessionID);
@@ -194,66 +193,36 @@ export const GittermCloudPlugin = Plugin.define({
               );
             }
             const client = gitterm();
-            // A session that came back with /cloud-return starts over.
-            const previous = await load(sessionID).then((record) =>
-              record?.phase === "returned" ? undefined : record,
-            );
-            if (previous?.phase === "ready") {
-              const woken = await withProgress(local, sessionID, (progress, signal) =>
-                progress("Starting the cloud workspace").then(() =>
-                  client.workspaces.ensureRunning(previous.workspaceID!, {
-                    signal,
-                  }),
-                ),
+            const message = prompt.text.trim();
+            const previous = await load(sessionID);
+            if (
+              previous?.phase === "ready" &&
+              !(await workspaceGone(client, previous.workspaceID!))
+            ) {
+              const woken = await withProgress(sessionID, TO_CLOUD, (progress, signal) =>
+                progress("Starting the cloud workspace").then(async () => {
+                  await client.workspaces.ensureRunning(previous.workspaceID!, { signal });
+                  if (message) await sendToCloud(client, previous, message, signal);
+                }),
               );
               if (woken === CANCELLED) return;
-              await showConnection(local, client, previous, controller.signal);
+              await showConnection(local, client, previous, controller.signal, Boolean(message));
               return;
             }
-            let attemptID: string | undefined;
-            if (previous) {
-              const answer = await askForm(
-                local,
-                sessionID,
-                "The last cloud handoff did not finish. Retry in the same workspace?",
-                [
-                  {
-                    key: "reuse",
-                    type: "boolean",
-                    title: "Retry in the same cloud workspace?",
-                    required: true,
-                    description: `Previous attempt: ${previous.attemptID}${previous.workspaceID ? `; workspace: ${previous.workspaceID}` : ""}. Yes retries that attempt, so no second workspace is created. No starts a new workspace: the earlier one is NOT deleted and may keep incurring charges until you remove it in GitTerm.`,
-                  },
-                ],
-                controller.signal,
-              );
-              if (answer.reuse === true) attemptID = previous.attemptID;
-            }
-            const reused = attemptID !== undefined;
-            const attempt = attemptID ?? randomUUID();
+            // OpenCode closed during an earlier /cloud: delete what it left before starting over.
+            if (previous && previous.phase !== "ready" && previous.phase !== "returned")
+              await deleteLeftover(client, previous);
             // Validate login before capture or billable provisioning.
             await client.auth.status();
-            const record = await withProgress(local, sessionID, (progress, signal) =>
+            const moved = await withProgress(sessionID, TO_CLOUD, (progress, signal) =>
               handoffSession(
                 sessionID,
-                { local, gitterm: client, options, signal, save, progress },
-                attempt,
+                { local, gitterm: client, options, signal, save, discard, progress },
+                message,
               ),
             );
-            if (record === CANCELLED) {
-              const latest = await load(sessionID);
-              if (!reused && latest?.attemptID === attempt) {
-                if (latest.workspaceID)
-                  await client.workspaces.terminate(latest.workspaceID).catch(() => {
-                    throw new Error(
-                      `/cloud was cancelled, but workspace ${latest.workspaceID} could not be deleted. Delete it in GitTerm.`,
-                    );
-                  });
-                await ctx.storage.remove(sessionKey(sessionID));
-              }
-              return;
-            }
-            await showConnection(local, client, record, controller.signal);
+            if (moved === CANCELLED) return;
+            await showConnection(local, client, moved.record, controller.signal, moved.continuing);
           } catch (error) {
             if (!(error instanceof HandoffCancelled)) throw error;
           } finally {
@@ -277,16 +246,29 @@ export const GittermCloudPlugin = Plugin.define({
               );
             const local = await localClient(options);
             const client = gitterm();
-            const { record, kept } = await returnSession(previous, {
-              local,
-              gitterm: client,
-              signal: controller.signal,
-              save,
-              progress: async (text) => {
-                console.info(`GitTerm: ${text}`);
+            // Once the checkout is being replaced, stopping halfway would leave it and the
+            // conversation out of step, so Esc only hides the dialog.
+            await withProgress(
+              sessionID,
+              { title: "Bringing it back from the cloud", cancellable: false },
+              async (progress, signal) => {
+                const { record, end } = await returnSession(previous, {
+                  local,
+                  gitterm: client,
+                  signal,
+                  save,
+                  progress,
+                });
+                await progress(
+                  end === "pause"
+                    ? "Pausing the cloud workspace"
+                    : end === "snapshot"
+                      ? "Saving the snapshot and deleting the cloud workspace"
+                      : "Deleting the cloud workspace",
+                );
+                await endWorkspace(client, record.workspaceID!, end);
               },
-            });
-            await finishReturn(local, client, record, kept, controller.signal);
+            );
           } catch (error) {
             if (!(error instanceof HandoffCancelled)) throw error;
           } finally {
