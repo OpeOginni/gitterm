@@ -45,14 +45,11 @@ Restart OpenCode if `/cloud` does not appear. `/cloud-return` appears only while
 
 ## Sign in
 
-Both commands need a Gitterm login.
+Both commands need a Gitterm account. You don't have to sign in first: if you aren't signed in, or your login expired, `/cloud` shows a link, a QR code and a code. Open the link, sign in or create an account, and approve the code. The dialog closes by itself and `/cloud` carries on. Esc cancels.
 
-```sh
-npm install -g @gitterm/cli
-gitterm login
-```
+The login is saved where the CLI keeps it, so `gitterm login` signs the plugin in too, and the plugin's login signs in the CLI. For a self-hosted deployment, set the `serverUrl` option, or run `gitterm login --server <url>`, where `<url>` is your Gitterm API URL. You can instead set `GITTERM_API_TOKEN` (and `GITTERM_SERVER_URL`) before starting OpenCode; a token set this way or in `token` is never replaced by signing in.
 
-The plugin uses the CLI's saved login. For a self-hosted deployment, run `gitterm login --server <url>`, where `<url>` is your Gitterm API URL. You can instead set `GITTERM_API_TOKEN` (and `GITTERM_SERVER_URL`) before starting OpenCode.
+If you have no model saved under **Models** in Gitterm, `/cloud` asks before it creates a workspace: your model keys stay on your computer, and the cloud agent uses the models you add in Gitterm.
 
 ## Options
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,16 +22,29 @@ function formatCode(value: string) {
 }
 
 export default function DevicePage() {
+  return (
+    <Suspense>
+      <DeviceContent />
+    </Suspense>
+  );
+}
+
+function DeviceContent() {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
-  const [code, setCode] = useState("");
+  // OpenCode's /cloud links here with the code filled in.
+  const linked = useSearchParams().get("code");
+  const [code, setCode] = useState(() => formatCode(linked ?? ""));
   const [submitting, setSubmitting] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
 
   useEffect(() => {
-    if (!isPending && !session) router.push("/login?redirect=/device");
-  }, [session, isPending, router]);
+    if (!isPending && !session) {
+      const back = linked ? `/device?code=${encodeURIComponent(linked)}` : "/device";
+      router.push(`/login?redirect=${encodeURIComponent(back)}`);
+    }
+  }, [session, isPending, router, linked]);
 
   async function submit(action: "approve" | "deny") {
     setError(null);
@@ -66,7 +79,9 @@ export default function DevicePage() {
                 Authorize a device
               </h1>
               <p className="mt-3 text-[16px] leading-[1.6] text-fg-3">
-                Enter the code shown in your terminal.
+                {linked
+                  ? "Check that this matches the code in your terminal."
+                  : "Enter the code shown in your terminal."}
               </p>
             </div>
 

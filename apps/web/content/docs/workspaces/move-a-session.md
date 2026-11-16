@@ -18,8 +18,8 @@ While the session is in the cloud, nothing syncs: later local edits are not uplo
 
   See the [Cloud plugin reference](/docs/reference/cloud-plugin).
 
-- You are signed in with `gitterm login`, or `GITTERM_API_TOKEN` is set before OpenCode starts.
-- Gitterm has a model credential under **Models**, and for a private repository, a GitHub connection under **Integrations**.
+- You have a Gitterm account. If you aren't signed in, `/cloud` asks you to sign in or create one first.
+- Gitterm has a model credential under **Models**, and for a private repository, a GitHub connection under **Integrations**. `/cloud` asks before moving if you have no model.
 - The repository's `origin` remote is a credential-free HTTPS URL or a GitHub SSH URL.
 - OpenCode on your computer is up to date.
 

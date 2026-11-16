@@ -6,7 +6,7 @@ import { getServerSession } from "@/lib/server-session";
 
 export default async function ModelsPage() {
   const session = await getServerSession();
-  if (!session.data?.user) redirect("/login");
+  if (!session.data?.user) redirect("/login?redirect=/dashboard/models");
 
   return (
     <SettingsShell>

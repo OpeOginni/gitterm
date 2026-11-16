@@ -16,8 +16,10 @@ export async function runLogin(args: { serverUrl: string }) {
     const { token } = await loginWithDeviceCode(args.serverUrl, {
       onCode: (code) => {
         spin?.stop();
-        console.log(`\nTo sign in, visit ${chalk.cyan(code.verificationUri)}`);
-        console.log(`and enter code: ${chalk.bold(code.userCode)}\n`);
+        const url = new URL(code.verificationUri);
+        url.searchParams.set("code", code.userCode);
+        console.log(`\nTo sign in, visit ${chalk.cyan(url.href)}`);
+        console.log(`and approve code: ${chalk.bold(code.userCode)}\n`);
         spin = startSpinner("Waiting for approval...");
       },
     });

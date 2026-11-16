@@ -467,6 +467,13 @@ export function importPayload(
   };
 }
 
+/** GitTerm's refusals when it can't read the repository; see createWorkspace on the server. */
+const unreachableRepository = (error: GittermError) =>
+  error.code === "BAD_REQUEST" &&
+  /^(Can't access repository|Can't clone repository|The admin's shared GitHub token)/.test(
+    error.message,
+  );
+
 /** Continues the moved session in the cloud: with the user's message, or where it was stopped. */
 export const CONTINUE_TEXT =
   "You were moved to a cloud workspace while working. Continue where you left off.";
@@ -487,7 +494,7 @@ export async function handoffSession(
     (await local.session.get({ sessionID }, { signal })).location.directory,
   );
   const root = await checkoutRoot(sourceDirectory);
-  const repo = await repositoryUrl(root);
+  let repo = await repositoryUrl(root);
   const environmentVariables = await readEnvFiles(root, options.envFiles);
   const envNames = Object.keys(environmentVariables);
 
@@ -546,7 +553,7 @@ export async function handoffSession(
     }
     step = "capturing your checkout";
     const session = await local.session.get({ sessionID }, { signal });
-    const snapshot = await captureSnapshot(root, includeChanges, !repo);
+    let snapshot = await captureSnapshot(root, includeChanges, !repo);
     const exported = await local.session.export({ sessionID }, { signal });
     if (exported.info.time.updated !== session.time.updated)
       throw new HandoffRefused("The session changed while it was being copied. Try again.");
@@ -559,29 +566,43 @@ export async function handoffSession(
     step = "creating the cloud workspace";
     await deps.save(record);
     await deps.progress("Creating the cloud workspace");
-    // GitTerm rejects a GitHub connection on a workspace without a repository.
-    const nonGithub = repo ? undefined : await withoutGithub(gitterm, options.connections);
     // Restore unpublished branches from the bundle, not the remote clone.
-    const create = (useProjectSnapshot: boolean) =>
+    let bundled = false;
+    const create = async (useProjectSnapshot: boolean) =>
       gitterm.workspaces.create({
         // A failed snapshot start must not be reused for the fresh attempt.
-        idempotencyKey: `opencode-handoff:${record.attemptID}${useProjectSnapshot ? "" : ":fresh"}`,
+        idempotencyKey: `opencode-handoff:${record.attemptID}${useProjectSnapshot ? "" : ":fresh"}${bundled ? ":bundled" : ""}`,
         name: options.name ?? session.title ?? "OpenCode cloud handoff",
         repo,
         agent: "opencode",
         provider: options.provider,
         persistent: options.persistent,
-        connections: repo ? options.connections : nonGithub,
+        // GitTerm rejects a GitHub connection on a workspace without a repository.
+        connections: repo ? options.connections : await withoutGithub(gitterm, options.connections),
         metadata: { "opencode.handoff": record.attemptID, "opencode.session": sessionID },
         environmentVariables: envNames.length ? environmentVariables : undefined,
         useProjectSnapshot,
       });
-    let created = await create(true).catch((error: unknown) => {
-      if (error instanceof Error && error.message.includes("PROJECT_SNAPSHOT_FAILED"))
-        return undefined;
-      throw error;
+    const createWorkspace = async () => {
+      const created = await create(true).catch((error: unknown) => {
+        if (error instanceof Error && error.message.includes("PROJECT_SNAPSHOT_FAILED"))
+          return undefined;
+        throw error;
+      });
+      return !created || created.workspace.status === "terminated" ? create(false) : created;
+    };
+    const created = await createWorkspace().catch(async (error: unknown) => {
+      if (!repo || !(error instanceof GittermError) || !unreachableRepository(error)) throw error;
+      // GitTerm can't clone the repository, such as a private one without a GitHub connection:
+      // send the whole history instead, like a checkout without a remote.
+      const full = await captureSnapshot(root, includeChanges, true);
+      if (full.digest !== snapshot.digest)
+        throw new HandoffRefused("The checkout changed while it was being copied. Try again.");
+      snapshot = full;
+      repo = undefined;
+      bundled = true;
+      return createWorkspace();
     });
-    if (!created || created.workspace.status === "terminated") created = await create(false);
     record.workspaceID = created.workspace.id;
     await deps.save(record);
     step = "connecting to the cloud workspace";
@@ -653,6 +674,11 @@ export async function handoffSession(
         includeChanges
           ? "The checkout includes uncommitted local changes, potentially from other sessions."
           : "Uncommitted local changes were left behind; do not assume edits described in history exist here.",
+        ...(bundled
+          ? [
+              "GitTerm could not reach the repository's remote, so this checkout was copied without one: git push and pull won't work here.",
+            ]
+          : []),
         "Absolute paths in earlier history refer to the old machine. Local processes, ignored files, credential stores, and global plugins/configuration did not come along; repository-owned configuration did. Select an available cloud model/agent if needed.",
       ],
       true,

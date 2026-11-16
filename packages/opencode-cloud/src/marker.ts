@@ -65,3 +65,6 @@ export const CLOUD_RPC = {
 } as const;
 
 export const CONNECT_KEY = "gittermConnect";
+
+/** The form field that links to GitTerm's sign-in page. The terminal shows it as a dialog. */
+export const SIGN_IN_KEY = "gittermSignIn";

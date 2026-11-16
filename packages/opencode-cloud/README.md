@@ -16,22 +16,19 @@ Requires OpenCode 2.2.6 or newer.
 opencode plugin add @gitterm/opencode-cloud
 ```
 
-## 2. Sign in to GitTerm
-
-```sh
-npm install -g @gitterm/cli
-gitterm login
-```
-
-In GitTerm, add your model credentials and repository access first.
-
-## 3. Use it
+## 2. Use it
 
 In a Git repository, type `/cloud` in OpenCode. The workspace is billed while it runs.
 
-1. If you have uncommitted changes, choose whether to bring them.
-2. A dialog shows each step. Esc cancels and deletes the workspace that was just created.
-3. Scan the QR code with your phone, or open the link on your computer, to continue in the
+1. The first time, `/cloud` asks you to sign in to GitTerm. Open the link (or scan the QR
+   code), sign in or create an account, and approve the code. The dialog closes by itself.
+   The login is shared with the [GitTerm CLI](https://www.npmjs.com/package/@gitterm/cli),
+   so if you already ran `gitterm login`, nothing is asked.
+2. The cloud agent uses the models you add in GitTerm, not your local keys. With none, `/cloud`
+   asks first. For a private repository, connect GitHub in GitTerm too.
+3. If you have uncommitted changes, choose whether to bring them.
+4. A dialog shows each step. Esc cancels and deletes the workspace that was just created.
+5. Scan the QR code with your phone, or open the link on your computer, to continue in the
    cloud. Pairing links sign you in once and expire after five minutes; `/cloud` makes a new one.
 
 The agent doesn't have to be idle. If it is working, `/cloud` stops it here and it picks up
@@ -105,7 +102,8 @@ All optional:
 | `persistent`  | Keep storage between restarts, where the provider allows                                                                                                                                                         |
 | `envFiles`    | Env files whose variables the workspace gets, for example `[".env", ".gitterm.env"]`. Paths are relative to the checkout root, and a later file wins.                                                            |
 
-Self-hosting GitTerm? Sign in with `gitterm login --server https://gitterm.example.com`.
+Self-hosting GitTerm? Set `serverUrl` to your GitTerm API URL, or sign in with
+`gitterm login --server https://gitterm.example.com`.
 `/cloud` talks to the OpenCode server that holds your session. It finds OpenCode's background
 service by itself. `opencode --standalone` uses a private server on a random port that `/cloud`
 can't reach; instead run `opencode serve --port 4096`, open it with
