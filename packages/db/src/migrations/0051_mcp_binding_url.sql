@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_mcp_connection" ADD COLUMN "url" text;

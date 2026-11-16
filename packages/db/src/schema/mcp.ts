@@ -49,6 +49,8 @@ export const workspaceMcpConnection = pgTable(
     connectionId: uuid("connection_id")
       .notNull()
       .references(() => mcpConnection.id, { onDelete: "cascade" }),
+    /** Endpoint configured at provisioning, used to bind OAuth token issuance. */
+    url: text("url"),
   },
   (table) => [primaryKey({ columns: [table.workspaceId, table.connectionId] })],
 );

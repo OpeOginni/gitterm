@@ -19,9 +19,15 @@ import {
   removeConnection,
   resolveWorkspaceConnections,
 } from "./connections";
-import { readMcpAuth, testMcpConnection, updateMcpConnection } from "./mcp";
+import { getEncryptionService } from "../encryption";
+import { mcpAuthContext, readMcpAuth, testMcpConnection, updateMcpConnection } from "./mcp";
 import { withMcpConnections } from "./mcp-config";
-import { completeMcpOAuth, issueWorkspaceMcpToken } from "./mcp-oauth";
+import {
+  completeMcpOAuth,
+  getMcpAccessToken,
+  issueWorkspaceMcpToken,
+  startMcpOAuth,
+} from "./mcp-oauth";
 import { workspaceJWT } from "../auth/workspace-jwt";
 import * as network from "./mcp-network";
 
@@ -289,9 +295,10 @@ describe.skipIf(!testDatabase)("direct MCP integration (isolated PostgreSQL)", (
   });
 
   test("OAuth sign-in keeps the refresh token in GitTerm and serves attached workspaces only", async () => {
-    // A fixture authorization server that rotates refresh tokens, like Executor.
     const origin = "https://oauth.mcp-test.example";
     let refresh = "";
+    let refreshClient = "";
+    let registered = 0;
     let issued = 0;
     let revoked = false;
     const oauthServer: FetchLike = async (input, init) => {
@@ -332,7 +339,7 @@ describe.skipIf(!testDatabase)("direct MCP integration (isolated PostgreSQL)", (
         });
       if (pathname === "/auth/register")
         return Response.json(
-          { ...((await request.json()) as object), client_id: "fixture-client" },
+          { ...((await request.json()) as object), client_id: `fixture-client-${++registered}` },
           { status: 201 },
         );
       if (pathname === "/auth/token") {
@@ -340,8 +347,12 @@ describe.skipIf(!testDatabase)("direct MCP integration (isolated PostgreSQL)", (
         const valid =
           body.get("grant_type") === "authorization_code"
             ? body.get("code") === "code-1" && !!body.get("code_verifier")
-            : body.get("refresh_token") === refresh && !revoked;
+            : body.get("refresh_token") === refresh &&
+              // A refresh token works only for the client it was issued to.
+              body.get("client_id") === refreshClient &&
+              !revoked;
         if (!valid) return Response.json({ error: "invalid_grant" }, { status: 400 });
+        refreshClient = body.get("client_id")!;
         issued++;
         refresh = `refresh-${issued}`;
         return Response.json({
@@ -370,14 +381,13 @@ describe.skipIf(!testDatabase)("direct MCP integration (isolated PostgreSQL)", (
     if (started.status !== "pending") throw new Error("Expected a browser sign-in");
     const authorizeUrl = new URL(started.authorizeUrl);
     expect(authorizeUrl.origin + authorizeUrl.pathname).toBe(`${origin}/auth/authorize`);
-    expect(authorizeUrl.searchParams.get("client_id")).toBe("fixture-client");
+    expect(authorizeUrl.searchParams.get("client_id")).toBe("fixture-client-1");
     expect(authorizeUrl.searchParams.get("scope")).toBe("mcp offline_access");
     expect(authorizeUrl.searchParams.get("resource")).toBe(`${origin}/mcp`);
     const state = authorizeUrl.searchParams.get("state")!;
     const id = state.split(".")[0]!;
     expect((await getConnection(owner, id))?.status).toBe("needs_auth");
 
-    // Only the user who started the sign-in, with its exact state, completes it.
     await expect(completeMcpOAuth(other, { state, code: "code-1" })).rejects.toThrow();
     await expect(completeMcpOAuth(owner, { state: `${state}x`, code: "code-1" })).rejects.toThrow();
     await completeMcpOAuth(owner, { state, code: "code-1" });
@@ -414,9 +424,10 @@ describe.skipIf(!testDatabase)("direct MCP integration (isolated PostgreSQL)", (
         }),
       );
 
-    // Not attached to this workspace yet.
     expect((await request()).body).toMatchObject({ error: "invalid_grant" });
-    await db.insert(workspaceMcpConnection).values({ workspaceId, connectionId: id });
+    await db
+      .insert(workspaceMcpConnection)
+      .values({ workspaceId, connectionId: id, url: `${origin}/mcp` });
     expect((await request({ client_secret: "forged" })).status).toBe(401);
     const otherSecret = workspaceJWT.generateToken(
       workspaceId,
@@ -428,14 +439,56 @@ describe.skipIf(!testDatabase)("direct MCP integration (isolated PostgreSQL)", (
       error: "invalid_grant",
     });
 
-    // Concurrent workspace refreshes share one rotation instead of reusing a superseded token.
+    // Concurrent requests must use each rotated token only once.
     const before = issued;
     const tokens = await Promise.all([request(), request(), request()]);
     expect(tokens.map((token) => token.status)).toEqual([200, 200, 200]);
-    expect(issued).toBe(before + 3); // Each was due (60s left), but each rotation used the latest token.
+    expect(issued).toBe(before + 3);
     for (const token of tokens) expect(token.body).toMatchObject({ token_type: "Bearer" });
 
-    // A revoked grant asks for a new sign-in without making OpenCode drop its credential.
+    // Starting sign-in from a stale row must preserve the latest refresh token.
+    const [stale] = await db.select().from(mcpConnection).where(eq(mcpConnection.id, id));
+    expect((await request()).status).toBe(200);
+    await startMcpOAuth(stale!);
+    expect((await request()).status).toBe(200);
+
+    // Endpoint edits must not expose new tokens to old workspaces.
+    const [beforeEdit] = await db.select().from(mcpConnection).where(eq(mcpConnection.id, id));
+    await db
+      .update(mcpConnection)
+      .set({ url: `${origin}/elsewhere/mcp`, revision: beforeEdit!.revision + 1 })
+      .where(eq(mcpConnection.id, id));
+    expect((await request()).body).toMatchObject({ error: "invalid_grant" });
+    // Every token request names the endpoint it is for, including connection tests.
+    await expect(getMcpAccessToken(id, `${origin}/mcp`)).rejects.toThrow();
+    // A sign-in whose discovery began before the edit cannot save its state afterwards.
+    await expect(startMcpOAuth(beforeEdit!)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const [afterEdit] = await db.select().from(mcpConnection).where(eq(mcpConnection.id, id));
+    expect(afterEdit!.encryptedAuth).toBe(beforeEdit!.encryptedAuth);
+    await db
+      .update(mcpConnection)
+      .set({ url: `${origin}/mcp` })
+      .where(eq(mcpConnection.id, id));
+    expect((await request()).status).toBe(200);
+
+    // A sign-in that started before the first one saved anything registers its own client.
+    // Until it completes, the active grant keeps the client its tokens were issued to.
+    const [currentRow] = await db.select().from(mcpConnection).where(eq(mcpConnection.id, id));
+    const beforeSignIn = {
+      ...currentRow!,
+      encryptedAuth: getEncryptionService().encrypt(
+        JSON.stringify({ type: "oauth" }),
+        mcpAuthContext(id),
+      ),
+    };
+    const delayed = new URL(await startMcpOAuth(beforeSignIn));
+    expect(delayed.searchParams.get("client_id")).toBe("fixture-client-2");
+    expect((await request()).status).toBe(200);
+    // Completing it replaces the client and tokens together.
+    await completeMcpOAuth(owner, { state: delayed.searchParams.get("state")!, code: "code-1" });
+    expect((await request()).status).toBe(200);
+
+    // Re-sign-in must remain possible without losing the workspace credential.
     revoked = true;
     const rejected = await request();
     expect(rejected.body).toMatchObject({ error: "sign_in_required" });

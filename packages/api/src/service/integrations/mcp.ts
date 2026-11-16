@@ -142,7 +142,7 @@ export async function testMcpConnection(userId: string, id: string) {
       auth.type === "headers"
         ? auth.headers
         : auth.type === "oauth"
-          ? { Authorization: `Bearer ${(await getMcpAccessToken(row.id)).access}` }
+          ? { Authorization: `Bearer ${(await getMcpAccessToken(row.id, row.url)).access}` }
           : {};
     transport = new StreamableHTTPClientTransport(new URL(row.url), {
       fetch: mcpFetchWithin(AbortSignal.timeout(60_000)),
@@ -252,7 +252,6 @@ export async function createMcpConnection(
     });
   });
   if (input.authentication.type === "oauth") {
-    // Saved either way; a sign-in that cannot start can be retried from the connection.
     const authorizeUrl = await startMcpOAuth(await requireMcpRow(userId, id));
     return { status: "pending", integration: input.integration, authorizeUrl };
   }
@@ -310,7 +309,6 @@ export async function updateMcpConnection(
           : {}),
         ...(changed
           ? {
-              // An OAuth connection needs a new sign-in for its new settings.
               status:
                 (input.authentication?.type ?? row.authType) === "oauth"
                   ? ("needs_auth" as const)

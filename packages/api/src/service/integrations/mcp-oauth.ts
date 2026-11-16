@@ -1,11 +1,6 @@
 /**
- * OAuth sign-in for MCP connections, such as Executor.
- *
- * GitTerm runs the browser sign-in and keeps the only refresh token: providers like Executor
- * rotate refresh tokens and revoke the whole grant when a superseded one is reused, so
- * workspaces must never hold their own copy. Each workspace's OpenCode instead refreshes
- * against GitTerm's token endpoint, using its workspace identity as the client secret, and
- * one locked refresh per connection serves every workspace.
+ * GitTerm holds MCP refresh tokens and serializes refreshes to prevent token reuse.
+ * Workspaces authenticate with their agent identity and receive only access tokens.
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
@@ -32,7 +27,7 @@ import { integrationPolicy } from "./catalog";
 import { MCP_OAUTH_WORKSPACE_CLIENT } from "./mcp-config";
 import { McpNetworkError, mcpFetchWithin } from "./mcp-network";
 
-/** Longer than OpenCode's refresh margin, so a returned token is not refreshed again at once. */
+// Must exceed OpenCode's refresh margin.
 const MIN_REMAINING_MS = 10 * 60 * 1000;
 
 const authContext = (id: string) => `gitterm:mcp:${id}:auth`;
@@ -42,23 +37,30 @@ export const mcpOAuthCallbackUrl = () => oauthUrl("callback");
 export const mcpOAuthIssuer = () => oauthUrl("issuer");
 export const mcpOAuthMetadataUrl = () => oauthUrl("authorization-server");
 
-/** What GitTerm stores, encrypted, for an OAuth connection. Workspaces never receive it. */
+/** The authorization server, and the client registered with it, that a sign-in uses. */
+const oauthSession = z.object({
+  authorizationServer: z.string(),
+  metadata: z.looseObject({}).optional(),
+  client: z.looseObject({ client_id: z.string() }),
+  redirectUri: z.string(),
+  resource: z.string(),
+});
 export const storedMcpOAuth = z.object({
   type: z.literal("oauth"),
-  authorizationServer: z.string().optional(),
-  metadata: z.looseObject({}).optional(),
-  client: z.looseObject({ client_id: z.string() }).optional(),
-  redirectUri: z.string().optional(),
-  resource: z.string().optional(),
-  pending: z.object({ state: z.string(), verifier: z.string() }).optional(),
-  tokens: z
-    .object({ access: z.string(), refresh: z.string().optional(), expires: z.number() })
+  /** The active grant: its tokens only work with the client and server that issued them. */
+  grant: oauthSession
+    .extend({
+      tokens: z.object({ access: z.string(), refresh: z.string().optional(), expires: z.number() }),
+    })
     .optional(),
+  /** A sign-in in progress. It replaces the grant, as a whole, only when its callback completes. */
+  pending: oauthSession.extend({ state: z.string(), verifier: z.string() }).optional(),
 });
 export type StoredMcpOAuth = z.infer<typeof storedMcpOAuth>;
 
 /** Safe to show the user or the workspace; anything else is reported generically. */
 export class McpOAuthError extends Error {}
+class McpEndpointChangedError extends Error {}
 
 function encrypt(id: string, value: StoredMcpOAuth) {
   return getEncryptionService().encrypt(JSON.stringify(value), authContext(id));
@@ -71,7 +73,37 @@ function decrypt(id: string, encryptedAuth: string): StoredMcpOAuth | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** Tokens are bound to the URL the user saved, as OpenCode binds them, unless the server names another. */
+// Share the refresh lock so stale reads cannot restore superseded tokens.
+async function updateStoredAuth(
+  id: string,
+  change: (
+    current: StoredMcpOAuth | null,
+    row: { revision: number; authType: string },
+  ) => StoredMcpOAuth,
+  fields: Partial<typeof mcpConnection.$inferInsert> = {},
+) {
+  await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        encryptedAuth: mcpConnection.encryptedAuth,
+        revision: mcpConnection.revision,
+        authType: mcpConnection.authType,
+      })
+      .from(mcpConnection)
+      .where(eq(mcpConnection.id, id))
+      .for("update");
+    if (!row) throw new McpOAuthError("This connection was removed");
+    await tx
+      .update(mcpConnection)
+      .set({
+        ...fields,
+        encryptedAuth: encrypt(id, change(decrypt(id, row.encryptedAuth), row)),
+        updatedAt: new Date(),
+      })
+      .where(eq(mcpConnection.id, id));
+  });
+}
+
 function selectResource(url: string, advertised: string | undefined): string {
   const identity = new URL(url);
   identity.hash = "";
@@ -89,18 +121,15 @@ const toTokens = (tokens: {
 }) => ({
   access: tokens.access_token,
   refresh: tokens.refresh_token,
-  // Without a lifetime, refresh well before a typical hour so workspaces rarely see a 401.
+  // Refresh conservatively when the server omits a lifetime.
   expires: Date.now() + (tokens.expires_in ?? 30 * 60) * 1000,
 });
 
-/**
- * Starts a browser sign-in for a saved connection and returns the URL to open. The client
- * registered on an earlier sign-in is reused while the authorization server is unchanged.
- */
+/** Starts sign-in and returns the authorization URL. */
 export async function startMcpOAuth(row: typeof mcpConnection.$inferSelect): Promise<string> {
   const fetchFn = mcpFetchWithin(AbortSignal.timeout(60_000));
   try {
-    // The 401 names the resource metadata and scopes; without it discovery can only guess.
+    // Read discovery hints from the server's 401 challenge.
     const challenge = await fetchFn(row.url, {
       method: "POST",
       headers: {
@@ -132,29 +161,31 @@ export async function startMcpOAuth(row: typeof mcpConnection.$inferSelect): Pro
     if (!metadata) throw new McpOAuthError("This server does not publish OAuth sign-in metadata");
     const redirectUri = mcpOAuthCallbackUrl();
     const previous = decrypt(row.id, row.encryptedAuth);
+    const reusable = [previous?.grant, previous?.pending].find(
+      (session) =>
+        session?.authorizationServer === info.authorizationServerUrl &&
+        session.redirectUri === redirectUri,
+    );
     const client =
-      previous?.client &&
-      previous.authorizationServer === info.authorizationServerUrl &&
-      previous.redirectUri === redirectUri
-        ? previous.client
-        : await registerClient(info.authorizationServerUrl, {
-            metadata,
-            clientMetadata: {
-              client_name: "GitTerm",
-              client_uri: env.BASE_URL || undefined,
-              redirect_uris: [redirectUri],
-              grant_types: ["authorization_code", "refresh_token"],
-              response_types: ["code"],
-              token_endpoint_auth_method: "none",
-            },
-            fetchFn,
-          });
+      reusable?.client ??
+      (await registerClient(info.authorizationServerUrl, {
+        metadata,
+        clientMetadata: {
+          client_name: "GitTerm",
+          client_uri: env.BASE_URL || undefined,
+          redirect_uris: [redirectUri],
+          grant_types: ["authorization_code", "refresh_token"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none",
+        },
+        fetchFn,
+      }));
     const scopes = new Set(
       (challenge.scope ?? info.resourceMetadata?.scopes_supported?.join(" ") ?? "")
         .split(" ")
         .filter(Boolean),
     );
-    // Without offline access some servers issue no refresh token, and workspaces stop after an hour.
+    // Some servers require offline_access to issue a refresh token.
     if (metadata.scopes_supported?.includes("offline_access")) scopes.add("offline_access");
     const resource = selectResource(row.url, info.resourceMetadata?.resource);
     const state = `${row.id}.${randomBytes(32).toString("base64url")}`;
@@ -171,23 +202,29 @@ export async function startMcpOAuth(row: typeof mcpConnection.$inferSelect): Pro
     );
     if (authorizationUrl.protocol !== "https:")
       throw new McpOAuthError("The server's sign-in page is not served over HTTPS");
-    await db
-      .update(mcpConnection)
-      .set({
-        encryptedAuth: encrypt(row.id, {
-          type: "oauth",
+    await updateStoredAuth(row.id, (current, locked) => {
+      // Discovery ran against the endpoint as it was read. If the connection was edited since,
+      // this sign-in would grant the old endpoint's access under the new settings.
+      if (locked.revision !== row.revision || locked.authType !== "oauth")
+        throw new McpOAuthError(
+          "This connection changed while the sign-in was starting. Start it again.",
+        );
+      return {
+        type: "oauth",
+        // Running workspaces keep using the active grant, as last refreshed, until this
+        // sign-in completes. Its client and server stay with it.
+        grant: current?.grant,
+        pending: {
           authorizationServer: info.authorizationServerUrl,
           metadata,
           client,
           redirectUri,
           resource,
-          pending: { state, verifier: codeVerifier },
-          // Running workspaces keep using the current grant until the new one replaces it.
-          tokens: previous?.tokens,
-        }),
-        updatedAt: new Date(),
-      })
-      .where(eq(mcpConnection.id, row.id));
+          state,
+          verifier: codeVerifier,
+        },
+      };
+    });
     return authorizationUrl.toString();
   } catch (error) {
     if (error instanceof McpOAuthError || error instanceof McpNetworkError)
@@ -200,7 +237,7 @@ export async function startMcpOAuth(row: typeof mcpConnection.$inferSelect): Pro
   }
 }
 
-/** Completes the browser sign-in for the user who started it. Returns the connection id. */
+/** Completes sign-in for its owner and returns the connection ID. */
 export async function completeMcpOAuth(
   userId: string,
   input: { state: string; code: string; iss?: string },
@@ -211,73 +248,71 @@ export async function completeMcpOAuth(
     .select()
     .from(mcpConnection)
     .where(and(eq(mcpConnection.id, id), eq(mcpConnection.userId, userId)));
-  const auth = row && decrypt(row.id, row.encryptedAuth);
-  const pending = auth?.pending;
+  const pending = row && decrypt(row.id, row.encryptedAuth)?.pending;
   if (
     !row ||
-    !auth?.authorizationServer ||
-    !auth.client ||
-    !auth.redirectUri ||
     !pending ||
     pending.state.length !== input.state.length ||
     !timingSafeEqual(Buffer.from(pending.state), Buffer.from(input.state))
   )
     throw new McpOAuthError("This sign-in expired or was already used. Start it again.");
-  const metadata = auth.metadata as AuthorizationServerMetadata | undefined;
+  const metadata = pending.metadata as AuthorizationServerMetadata | undefined;
   if (input.iss !== undefined && metadata?.issuer && input.iss !== metadata.issuer)
     throw new McpOAuthError("The sign-in came back from an unexpected issuer");
   let tokens;
   try {
-    tokens = await exchangeAuthorization(auth.authorizationServer, {
+    tokens = await exchangeAuthorization(pending.authorizationServer, {
       metadata,
-      clientInformation: auth.client,
+      clientInformation: pending.client,
       authorizationCode: input.code,
       codeVerifier: pending.verifier,
-      redirectUri: auth.redirectUri,
-      resource: auth.resource,
+      redirectUri: pending.redirectUri,
+      resource: pending.resource,
       fetchFn: mcpFetchWithin(AbortSignal.timeout(30_000)),
     });
   } catch (error) {
     console.warn(`[mcp] OAuth code exchange failed for ${row.id}:`, error);
     throw new McpOAuthError("The server refused the sign-in. Try again.");
   }
-  await db
-    .update(mcpConnection)
-    .set({
-      encryptedAuth: encrypt(row.id, { ...auth, pending: undefined, tokens: toTokens(tokens) }),
-      status: "untested",
-      updatedAt: new Date(),
-    })
-    .where(eq(mcpConnection.id, row.id));
+  await updateStoredAuth(
+    row.id,
+    (current) => {
+      if (current?.pending?.state !== input.state)
+        throw new McpOAuthError("A newer sign-in replaced this one. Finish that one instead.");
+      const { state: _state, verifier: _verifier, ...session } = current.pending;
+      return { type: "oauth", grant: { ...session, tokens: toTokens(tokens) } };
+    },
+    { status: "untested" },
+  );
   return row.id;
 }
 
-/**
- * The connection's access token, refreshed first when it expires within `MIN_REMAINING_MS`.
- * The row lock makes concurrent callers wait and reuse one refresh.
- */
+/** Returns an access token, serializing refreshes under the connection's row lock. */
 export async function getMcpAccessToken(
   connectionId: string,
+  /** Refuse tokens for a different endpoint. */
+  url: string,
 ): Promise<{ access: string; expires: number }> {
   const token = await db.transaction(async (tx) => {
     const [row] = await tx
-      .select({ encryptedAuth: mcpConnection.encryptedAuth })
+      .select({ encryptedAuth: mcpConnection.encryptedAuth, url: mcpConnection.url })
       .from(mcpConnection)
       .where(eq(mcpConnection.id, connectionId))
       .for("update");
+    if (row && row.url !== url) throw new McpEndpointChangedError();
     const auth = row && decrypt(connectionId, row.encryptedAuth);
-    const current = auth?.tokens;
-    if (!auth || !current) throw new McpOAuthError("Sign in to this connection again in GitTerm");
+    const grant = auth?.grant;
+    if (!auth || !grant) throw new McpOAuthError("Sign in to this connection again in GitTerm");
+    const current = grant.tokens;
     if (current.expires > Date.now() + MIN_REMAINING_MS) return current;
-    if (!current.refresh || !auth.authorizationServer || !auth.client)
-      throw new McpOAuthError("Sign in to this connection again in GitTerm");
+    if (!current.refresh) throw new McpOAuthError("Sign in to this connection again in GitTerm");
     let next;
     try {
-      next = await refreshAuthorization(auth.authorizationServer, {
-        metadata: auth.metadata as AuthorizationServerMetadata | undefined,
-        clientInformation: auth.client,
+      next = await refreshAuthorization(grant.authorizationServer, {
+        metadata: grant.metadata as AuthorizationServerMetadata | undefined,
+        clientInformation: grant.client,
         refreshToken: current.refresh,
-        resource: auth.resource,
+        resource: grant.resource,
         fetchFn: mcpFetchWithin(AbortSignal.timeout(30_000)),
       });
     } catch (error) {
@@ -285,18 +320,18 @@ export async function getMcpAccessToken(
         error instanceof OAuthError &&
         ["invalid_grant", "invalid_client", "unauthorized_client"].includes(error.errorCode)
       ) {
-        // Only a new sign-in helps; keep the client so it is reused.
         await tx
           .update(mcpConnection)
           .set({
-            encryptedAuth: encrypt(connectionId, { ...auth, tokens: undefined }),
+            // A sign-in in progress stays; it is the way back.
+            encryptedAuth: encrypt(connectionId, { ...auth, grant: undefined }),
             status: "needs_auth",
             toolCount: null,
             serverInfo: null,
             updatedAt: new Date(),
           })
           .where(eq(mcpConnection.id, connectionId));
-        // Thrown after the transaction, which would otherwise roll this update back.
+        // Throw after commit so the needs_auth update survives.
         return null;
       }
       throw error;
@@ -304,7 +339,10 @@ export async function getMcpAccessToken(
     const tokens = { ...toTokens(next), refresh: next.refresh_token ?? current.refresh };
     await tx
       .update(mcpConnection)
-      .set({ encryptedAuth: encrypt(connectionId, { ...auth, tokens }), updatedAt: new Date() })
+      .set({
+        encryptedAuth: encrypt(connectionId, { ...auth, grant: { ...grant, tokens } }),
+        updatedAt: new Date(),
+      })
       .where(eq(mcpConnection.id, connectionId));
     return tokens;
   });
@@ -313,11 +351,10 @@ export async function getMcpAccessToken(
   return token;
 }
 
-/** The authorization server document OpenCode reads instead of the MCP server's own. */
 export function mcpOAuthServerMetadata() {
   return {
     issuer: mcpOAuthIssuer(),
-    // Unused: workspaces only refresh. Present because the metadata format requires it.
+    // Required by the metadata schema, but workspaces only refresh.
     authorization_endpoint: oauthUrl("authorize"),
     token_endpoint: oauthUrl("token"),
     response_types_supported: ["code"],
@@ -333,13 +370,8 @@ const tokenError = (status: TokenResponse["status"], error: string, description:
 });
 
 /**
- * GitTerm's token endpoint for workspaces. The refresh token is the connection ID and the client
- * secret is the workspace's agent identity, so a workspace receives access tokens only for the
- * connections attached to it, while it runs.
- *
- * OpenCode deletes its credential on `invalid_grant`/`invalid_client`, so those are returned only
- * when the workspace can never use this connection again. A connection that needs a new sign-in
- * returns another error, and the workspace recovers once the user signs in again.
+ * The connection ID is the refresh token; the workspace identity is the client secret.
+ * Reserve invalid_grant/invalid_client for permanent failures: OpenCode deletes the credential.
  */
 export async function issueWorkspaceMcpToken(form: URLSearchParams): Promise<TokenResponse> {
   if (form.get("grant_type") !== "refresh_token")
@@ -364,6 +396,8 @@ export async function issueWorkspaceMcpToken(form: URLSearchParams): Promise<Tok
       authVersion: workspace.authVersion,
       integration: mcpConnection.integration,
       authType: mcpConnection.authType,
+      url: mcpConnection.url,
+      provisionedUrl: workspaceMcpConnection.url,
     })
     .from(workspaceMcpConnection)
     .innerJoin(workspace, eq(workspace.id, workspaceMcpConnection.workspaceId))
@@ -378,6 +412,9 @@ export async function issueWorkspaceMcpToken(form: URLSearchParams): Promise<Tok
     );
   if (!record || record.authType !== "oauth" || record.authVersion !== identity.authVersion)
     return tokenError(400, "invalid_grant", "This connection is not attached to this workspace");
+  // Never send a new endpoint's token to a workspace configured for the old one.
+  if (record.provisionedUrl !== record.url)
+    return tokenError(400, "invalid_grant", "This connection now points to another endpoint");
   // OpenCode connects while the workspace is still starting.
   if (record.status !== "running" && record.status !== "pending")
     return tokenError(401, "invalid_client", "Workspace is not running");
@@ -386,7 +423,7 @@ export async function issueWorkspaceMcpToken(form: URLSearchParams): Promise<Tok
     return tokenError(400, "access_denied", "This integration is disabled by your admin");
 
   try {
-    const token = await getMcpAccessToken(connectionId);
+    const token = await getMcpAccessToken(connectionId, record.url);
     await recordCredentialAudit({
       workspaceId: identity.workspaceId,
       userId: identity.userId,
@@ -404,6 +441,8 @@ export async function issueWorkspaceMcpToken(form: URLSearchParams): Promise<Tok
       },
     };
   } catch (error) {
+    if (error instanceof McpEndpointChangedError)
+      return tokenError(400, "invalid_grant", "This connection now points to another endpoint");
     if (error instanceof McpOAuthError) return tokenError(400, "sign_in_required", error.message);
     console.warn(`[mcp] workspace token refresh failed for ${connectionId}:`, error);
     return tokenError(503, "temporarily_unavailable", "Could not refresh the token. Try again.");

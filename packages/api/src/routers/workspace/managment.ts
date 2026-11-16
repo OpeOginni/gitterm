@@ -3037,6 +3037,7 @@ export const workspaceRouter = router({
             attached.mcp.map((connection) => ({
               workspaceId,
               connectionId: connection.connectionId,
+              url: connection.url,
             })),
           );
           for (const connection of attached.mcp) {
