@@ -1,5 +1,5 @@
 import type { OpenCodeClient } from "@opencode/client";
-import type { GittermClient } from "@gitterm/sdk";
+import { GittermError, type GittermClient } from "@gitterm/sdk";
 import { markCloudSession, runtimeClient, type HandoffRecord } from "./handoff";
 import type { CloudStatus } from "./marker";
 
@@ -10,6 +10,43 @@ import type { CloudStatus } from "./marker";
 const WORKING_POLL_MS = 5_000;
 const RESTING_POLL_MS = 20_000;
 const FIRST_POLL_MS = 2_000;
+
+/** Whether a workspace was deleted, so there is nothing left to reconnect to. */
+export async function workspaceGone(gitterm: GittermClient, workspaceID: string) {
+  try {
+    return (await gitterm.workspaces.get(workspaceID)).status === "terminated";
+  } catch (error) {
+    if (error instanceof GittermError && error.code === "NOT_FOUND") return true;
+    throw error;
+  }
+}
+
+/**
+ * Deletes the workspace a /cloud that never finished left behind (OpenCode was closed
+ * meanwhile). One that failed before GitTerm answered has no workspace ID; its workspace, if
+ * any, carries the attempt in its metadata.
+ */
+export async function deleteLeftover(
+  gitterm: GittermClient,
+  record: Pick<HandoffRecord, "attemptID" | "workspaceID">,
+) {
+  const ids = record.workspaceID
+    ? [record.workspaceID]
+    : (
+        await gitterm.workspaces.list({
+          status: "active",
+          metadata: { "opencode.handoff": record.attemptID },
+          limit: 5,
+        })
+      ).workspaces.map((workspace) => workspace.id);
+  for (const id of ids)
+    await gitterm.workspaces.terminate(id).catch((error: unknown) => {
+      if (error instanceof GittermError && error.code === "NOT_FOUND") return;
+      throw new Error(
+        `An earlier /cloud left workspace ${id}, and it could not be deleted. Delete it in GitTerm, then run /cloud again.`,
+      );
+    });
+}
 
 /**
  * What the cloud side of a session is doing right now. Every request to the workspace is

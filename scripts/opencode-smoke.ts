@@ -14,7 +14,7 @@ import { createDirectGittermClient } from "../packages/sdk/src/direct/client";
 import type { DirectProviderAdapter } from "../packages/sdk/src/direct/types";
 import runtimePackage from "../packages/agent-runtime/package.json";
 import { validateOpenCodeConfig } from "../packages/schema/src/agent-config";
-import { handoffSession } from "../packages/opencode-cloud/src/handoff";
+import { handoffSession, HandoffRefused } from "../packages/opencode-cloud/src/handoff";
 
 const binary = process.env.OPENCODE_SMOKE_BINARY;
 if (!binary) throw new Error("Set OPENCODE_SMOKE_BINARY to an OpenCode 2 executable");
@@ -546,10 +546,11 @@ try {
         options: {},
         signal,
         save: async () => {},
+        discard: async () => {},
         progress: async () => {},
       });
     } catch (error) {
-      rejected = error instanceof Error && error.message.includes("background jobs");
+      rejected = error instanceof HandoffRefused && error.message.includes("background commands");
     }
     check(rejected, "Cloud handoff accepted an idle session with a running background job");
   } finally {

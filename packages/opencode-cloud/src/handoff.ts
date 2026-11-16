@@ -14,6 +14,7 @@ import {
 import {
   captureSnapshot,
   checkoutRoot,
+  git,
   repositoryUrl,
   sharedCheckoutSessions,
   type CheckoutSnapshot,
@@ -42,8 +43,13 @@ export type HandoffOptions = {
 export type HandoffRecord = {
   attemptID: string;
   sessionID: string;
-  /** `ready`: the session lives in the cloud. `returned`: it was brought back with /cloud-return. */
-  phase: "creating" | "restoring" | "importing" | "ready" | "returned" | "failed";
+  /**
+   * `moving`: /cloud is under way, or stopped without cleaning up (OpenCode was closed), and
+   * the next /cloud deletes what it left. `ready`: the session lives in the cloud.
+   * `returned`: it was brought back with /cloud-return. Older versions stored other phases;
+   * they count as `moving`.
+   */
+  phase: "moving" | "ready" | "returned";
   workspaceID?: string;
   sourceDirectory: string;
   head: string;
@@ -52,7 +58,6 @@ export type HandoffRecord = {
   /** Digest of the local conversation as handed off. */
   history?: string;
   includeChanges: boolean;
-  sharedSessions: number;
   createdAt: string;
 };
 
@@ -63,16 +68,9 @@ export type HandoffDependencies = {
   options: HandoffOptions;
   signal: AbortSignal;
   save(record: HandoffRecord): Promise<void>;
+  /** Forgets the record of a /cloud that did not finish. */
+  discard(record: HandoffRecord): Promise<void>;
   progress(text: string): Promise<void>;
-};
-
-const STEPS: Record<HandoffRecord["phase"], string> = {
-  creating: "creating the cloud workspace",
-  restoring: "restoring your checkout in the cloud",
-  importing: "importing this session into the cloud",
-  ready: "finishing",
-  returned: "finishing",
-  failed: "finishing",
 };
 
 /** A failure whose message is safe and useful to show the user as is. */
@@ -89,10 +87,46 @@ async function readEnvFiles(root: string, files: string[] = []) {
   return variables;
 }
 
-/** Session metadata key holding the digest of the history a handoff imported. */
-export const HISTORY_KEY = "gittermHandoffHistory";
-/** Metadata key on the note a handoff or a return leaves in a session's pending input. */
-export const NOTE_KEY = "gittermHandoff";
+/**
+ * Session instruction entry telling the agent which machine it is on after a move. Unlike a
+ * message, it stays in the agent's instructions through compaction. Session export leaves
+ * entries out, so each side only ever has the one it was given.
+ */
+export const MOVED_ENTRY = "gitterm-moved";
+
+/**
+ * Tells the agent it changed machines, with an instruction entry: it lasts through compaction.
+ * On a session that was just imported, the entry only reaches the system prompt, with no place
+ * in the conversation, and the agent took its earlier answers about the other machine for
+ * mistakes. `imported` adds the same words as a note at this point in the conversation. On a
+ * session that was not replaced, OpenCode already shows a changed entry there.
+ * The whole story, and how to check it: docs/internals.md, "How the agent learns it moved".
+ */
+export async function tellMoved(
+  client: OpenCodeClient,
+  sessionID: string,
+  lines: string[],
+  imported: boolean,
+  signal: AbortSignal,
+) {
+  const text = lines.join("\n");
+  await client.session.instructions.entry.put(
+    { sessionID, key: MOVED_ENTRY, value: text },
+    { signal },
+  );
+  // The model gets notes in the user's role, so say where it comes from, the way OpenCode
+  // wraps its own notices such as subagent reports. The terminal does not show it.
+  if (imported)
+    await client.session.synthetic(
+      {
+        sessionID,
+        text: `<session-moved source="gitterm">\nA notice from GitTerm, not a message from the user.\n${text}\n</session-moved>`,
+        resume: false,
+        metadata: { source: "gitterm" },
+      },
+      { signal },
+    );
+}
 const canonical = (value: unknown): unknown =>
   Array.isArray(value)
     ? value.map(canonical)
@@ -103,8 +137,7 @@ const canonical = (value: unknown): unknown =>
             .map(([key, item]) => [key, canonical(item)]),
         )
       : value;
-// OpenCode returns imported messages unchanged apart from key order.
-export const historyDigest = (messages: unknown) =>
+const historyDigest = (messages: unknown) =>
   createHash("sha256")
     .update(JSON.stringify(canonical(messages)))
     .digest("hex");
@@ -154,49 +187,94 @@ export async function askForm(
   }
 }
 
-export async function assertIdle(client: OpenCodeClient, sessionID: string, signal: AbortSignal) {
-  if ((await client.session.active({ signal }))[sessionID]) {
-    throw new Error(
-      "Stop this session's running agent before continuing in the cloud. Other sessions will not be interrupted.",
-    );
-  }
-  const jobs = await client.experimental.job.list(
-    { sessionID, status: "running", descendants: true },
-    { signal },
-  );
-  if (jobs.length > 0)
-    throw new Error(
-      "This session has running background jobs. Let them finish or stop them before continuing in the cloud; running processes cannot be transferred.",
-    );
-  if (!(await client.session.inbox.list({ sessionID }, { signal })).every(ownNote)) {
-    throw new Error(
-      "This session has pending input. Finish or cancel it before continuing in the cloud.",
-    );
-  }
-}
-
-/** A note a handoff or a return left in a session's pending input; it is not the user's. */
-const ownNote = (item: Awaited<ReturnType<OpenCodeClient["session"]["inbox"]["list"]>>[number]) =>
-  item.type === "synthetic" && item.payload.metadata?.[NOTE_KEY] !== undefined;
-
+type InboxItem = Awaited<ReturnType<OpenCodeClient["session"]["inbox"]["list"]>>[number];
 /**
- * Whether a session is doing or waiting to do something: a running agent, running
- * background jobs, or queued input. Notes a handoff or return left there do not count.
+ * Input that starts the agent: a message, a compaction, or a subagent reporting back. Notices
+ * such as a `!shell` result only ride along with the next prompt, so they don't count.
  */
+const wakes = (item: InboxItem) =>
+  item.type !== "synthetic" || item.payload.metadata?.source === "subagent";
+
+/** Whether a session's agent or a subagent of it is running, or input is waiting that starts it. */
 export async function sessionBusy(
   client: OpenCodeClient,
   sessionID: string,
   signal: AbortSignal,
 ): Promise<boolean> {
+  const [active, jobs, inbox] = await Promise.all([
+    client.session.active({ signal }),
+    client.experimental.job.list({ sessionID, status: "running", descendants: true }, { signal }),
+    client.session.inbox.list({ sessionID }, { signal }),
+  ]);
+  return Boolean(active[sessionID]) || jobs.length > 0 || inbox.some(wakes);
+}
+
+/** Refuses what cannot move to the cloud: running processes, and messages waiting to be sent. */
+async function assertMovable(client: OpenCodeClient, sessionID: string, signal: AbortSignal) {
   const jobs = await client.experimental.job.list(
     { sessionID, status: "running", descendants: true },
     { signal },
   );
-  return (
-    Boolean((await client.session.active({ signal }))[sessionID]) ||
-    jobs.length > 0 ||
-    !(await client.session.inbox.list({ sessionID }, { signal })).every(ownNote)
-  );
+  if (jobs.some((job) => job.kind !== "subagent"))
+    throw new HandoffRefused(
+      "This session has background commands running. Let them finish or stop them first; running processes cannot move to the cloud.",
+    );
+  if (
+    (await client.session.inbox.list({ sessionID }, { signal })).some(
+      (item) => item.type === "user",
+    )
+  )
+    throw new HandoffRefused(
+      "This session has a message waiting to be sent. Let it run or remove it, then run /cloud again.",
+    );
+}
+
+/**
+ * Stops the session's agent and its subagents, and waits until they stay stopped: a stopped
+ * subagent reports back, which wakes its parent once more. Returns whether anything ran.
+ */
+export async function stopSession(
+  client: OpenCodeClient,
+  sessionID: string,
+  signal: AbortSignal,
+  pollMs = 200,
+): Promise<boolean> {
+  const deadline = Date.now() + 15_000;
+  let stopped = false;
+  for (let quiet = 0; quiet < 3; ) {
+    if (Date.now() > deadline)
+      throw new HandoffRefused("The agent did not stop. Stop it, then run /cloud again.");
+    const [active, jobs, inbox] = await Promise.all([
+      client.session.active({ signal }),
+      client.experimental.job.list({ sessionID, status: "running", descendants: true }, { signal }),
+      client.session.inbox.list({ sessionID }, { signal }),
+    ]);
+    // A subagent runs in a child session; interrupting the parent does not stop it.
+    const running = [
+      ...(active[sessionID] ? [sessionID] : []),
+      ...jobs.flatMap((job) =>
+        job.kind === "subagent" && job.childSessionID ? [job.childSessionID] : [],
+      ),
+    ];
+    if (running.length === 0 && !inbox.some(wakes)) {
+      quiet++;
+    } else {
+      quiet = 0;
+      stopped = true;
+      await Promise.all(
+        running.map((id) =>
+          client.session.interrupt({ sessionID: id }, { signal }).catch(() => {}),
+        ),
+      );
+    }
+    await delay(pollMs, undefined, { signal });
+  }
+  return stopped;
+}
+
+/** Whether the checkout has uncommitted changes, untracked files included. */
+async function hasChanges(root: string) {
+  return (await git(root, ["status", "--porcelain", "--untracked-files=normal"])).length > 0;
 }
 
 /** Marks or unmarks the local session as living in a cloud workspace, for the UI to show. */
@@ -383,110 +461,103 @@ export function importPayload(
   } = data.info;
   const info = options.keepModel === false || !model ? rest : { ...rest, model };
   return {
-    info: {
-      ...info,
-      // Lets a retry tell whether the cloud session has moved on since it was imported.
-      metadata: { ...info.metadata, [HISTORY_KEY]: historyDigest(data.messages) },
-      location: { directory },
-    },
+    info: { ...info, location: { directory } },
     messages: data.messages,
     location: { directory },
   };
 }
 
+/** Continues the moved session in the cloud: with the user's message, or where it was stopped. */
+export const CONTINUE_TEXT =
+  "You were moved to a cloud workspace while working. Continue where you left off.";
+
 /**
- * `attemptID` repeats an earlier attempt that did not finish. The workspace is created
- * under a key derived from it, so GitTerm returns that attempt's workspace instead of
- * starting a second one, and each later step picks up what the earlier attempt left.
+ * Moves the session to a new cloud workspace. A running agent is stopped first and continues
+ * in the cloud; so does `message` when given. If anything fails or the user cancels, the
+ * workspace is deleted and a stopped agent continues here, as if /cloud never ran.
  */
 export async function handoffSession(
   sessionID: string,
   deps: HandoffDependencies,
-  attemptID: string = randomUUID(),
-): Promise<HandoffRecord> {
+  message = "",
+): Promise<{ record: HandoffRecord; continuing: boolean }> {
   const { local, gitterm, options, signal } = deps;
-  await assertIdle(local, sessionID, signal);
-  const session = await local.session.get({ sessionID }, { signal });
-  const sourceDirectory = await realpath(session.location.directory);
+  await assertMovable(local, sessionID, signal);
+  const sourceDirectory = await realpath(
+    (await local.session.get({ sessionID }, { signal })).location.directory,
+  );
   const root = await checkoutRoot(sourceDirectory);
   const repo = await repositoryUrl(root);
   const environmentVariables = await readEnvFiles(root, options.envFiles);
   const envNames = Object.keys(environmentVariables);
-  const active = await local.session.active({ signal });
-  const activeSessions = await Promise.all(
-    Object.keys(active)
-      .filter((id) => id !== sessionID)
-      .map((id) => local.session.get({ sessionID: id }, { signal }).catch(() => undefined)),
-  );
-  const shared = await sharedCheckoutSessions(
-    root,
-    sessionID,
-    activeSessions.filter((item) => item !== undefined),
-  );
-  const choice = await askForm(
-    local,
-    sessionID,
-    "Move to the cloud",
-    [
-      {
-        key: "changes",
-        type: "string",
-        title: "Bring your uncommitted changes to the cloud?",
-        description: changePrompt(shared.length),
-        options: [
-          { value: "yes", label: "Yes (copies your edited and new files)" },
-          { value: "no", label: "No (starts from your last commit)" },
-        ],
-        required: true,
-      },
-    ],
-    signal,
-  );
-  const includeChanges = choice.changes === "yes";
-  await assertIdle(local, sessionID, signal);
-  const snapshot = await captureSnapshot(root, includeChanges, !repo);
-  const confirmation = await askForm(
-    local,
-    sessionID,
-    "Start a cloud workspace for this session?",
-    [
-      {
-        key: "create",
-        type: "boolean",
-        title: "Start a cloud workspace for this session?",
-        required: true,
-        description: "It's billed until you pause or delete it in GitTerm.",
-      },
-    ],
-    signal,
-  );
-  if (confirmation.create !== true) throw new HandoffCancelled();
-  await assertIdle(local, sessionID, signal);
-  const exported = await local.session.export({ sessionID }, { signal });
-  await assertIdle(local, sessionID, signal);
-  if (
-    exported.info.location.directory !== session.location.directory ||
-    exported.info.time.updated !== session.time.updated
-  ) {
-    throw new Error("The session changed during handoff preparation. Retry after it is idle.");
-  }
-  if (Buffer.byteLength(JSON.stringify(exported)) > 25 * 1024 * 1024)
-    throw new Error("Session history exceeds the 25 MiB handoff limit.");
 
+  let includeChanges = false;
+  if (await hasChanges(root)) {
+    const active = await local.session.active({ signal });
+    const activeSessions = await Promise.all(
+      Object.keys(active)
+        .filter((id) => id !== sessionID)
+        .map((id) => local.session.get({ sessionID: id }, { signal }).catch(() => undefined)),
+    );
+    const shared = await sharedCheckoutSessions(
+      root,
+      sessionID,
+      activeSessions.filter((item) => item !== undefined),
+    );
+    const choice = await askForm(
+      local,
+      sessionID,
+      "Move to the cloud",
+      [
+        {
+          key: "changes",
+          type: "string",
+          title: "Bring your uncommitted changes to the cloud?",
+          description: changePrompt(shared.length),
+          options: [
+            { value: "yes", label: "Yes (copies your edited and new files)" },
+            { value: "no", label: "No (starts from your last commit)" },
+          ],
+          required: true,
+        },
+      ],
+      signal,
+    );
+    includeChanges = choice.changes === "yes";
+  }
+
+  let stopped = false;
+  let step = "stopping the agent";
   const record: HandoffRecord = {
-    attemptID,
+    attemptID: randomUUID(),
     sessionID,
-    phase: "creating",
+    phase: "moving",
     sourceDirectory: root,
-    head: snapshot.head,
-    state: snapshot.state,
-    history: conversationDigest(exported.messages),
+    head: "",
     includeChanges,
-    sharedSessions: shared.length,
     createdAt: new Date().toISOString(),
   };
-  await deps.save(record);
   try {
+    if (await sessionBusy(local, sessionID, signal)) {
+      await deps.progress("Stopping the agent here");
+      // Set first: a cancel while stopping must still let the agent carry on here.
+      stopped = true;
+      stopped = await stopSession(local, sessionID, signal);
+    }
+    step = "capturing your checkout";
+    const session = await local.session.get({ sessionID }, { signal });
+    const snapshot = await captureSnapshot(root, includeChanges, !repo);
+    const exported = await local.session.export({ sessionID }, { signal });
+    if (exported.info.time.updated !== session.time.updated)
+      throw new HandoffRefused("The session changed while it was being copied. Try again.");
+    if (Buffer.byteLength(JSON.stringify(exported)) > 25 * 1024 * 1024)
+      throw new HandoffRefused("Session history exceeds the 25 MiB handoff limit.");
+    record.head = snapshot.head;
+    record.state = snapshot.state;
+    record.history = conversationDigest(exported.messages);
+
+    step = "creating the cloud workspace";
+    await deps.save(record);
     await deps.progress("Creating the cloud workspace");
     // GitTerm rejects a GitHub connection on a workspace without a repository.
     const nonGithub = repo ? undefined : await withoutGithub(gitterm, options.connections);
@@ -512,8 +583,8 @@ export async function handoffSession(
     });
     if (!created || created.workspace.status === "terminated") created = await create(false);
     record.workspaceID = created.workspace.id;
-    record.phase = "restoring";
     await deps.save(record);
+    step = "connecting to the cloud workspace";
     await gitterm.workspaces.ensureRunning(record.workspaceID, { signal });
     const runtime = await gitterm.workspaces.getRuntimeAccess(record.workspaceID);
     const remote = runtimeClient(runtime);
@@ -523,157 +594,138 @@ export async function handoffSession(
       throw new Error("The session moved outside its source checkout.");
     const directory = path.posix.join(runtime.directory, subpath);
     const stage = `.gitterm-handoff-${record.attemptID}`;
+
+    step = "restoring your checkout in the cloud";
     await deps.progress("Copying your code");
     const restore = async (upload: CheckoutSnapshot) => {
-      let finished = false;
-      try {
-        await runRemoteShell(
-          remote,
-          runtime.directory,
-          `node -e ${shellQuote(PREPARE_STAGE_SCRIPT)} ${shellQuote(stage)}`,
-          signal,
-        );
-        await remote.file.write(
-          {
-            location: { directory: runtime.directory },
-            path: `${stage}/snapshot.bin`,
-            payload: upload.encoded,
-          },
-          { signal },
-        );
-        const exit = await runRemoteShell(
-          remote,
-          runtime.directory,
-          `node -e ${shellQuote(RESTORE_SCRIPT)} ${shellQuote(stage)} ${shellQuote(subpath)}`,
-          signal,
-          [RESTORE_NEEDS_FULL_HISTORY],
-        );
-        finished = true;
-        return exit;
-      } finally {
-        // The restore script cleans up on completion; interruptions leave the upload behind.
-        if (!finished)
-          await runRemoteShell(
-            remote,
-            runtime.directory,
-            `node -e ${shellQuote('require("node:fs").rmSync(process.argv[1], { recursive: true, force: true })')} ${shellQuote(stage)}`,
-            AbortSignal.timeout(10_000),
-          ).catch(() => {});
-      }
-    };
-    // Refuse retries before touching the checkout if the imported session has new activity.
-    const untouchedSession = async () => {
-      let earlier;
-      try {
-        earlier = await remote.session.export({ sessionID }, { signal });
-      } catch (error) {
-        // Only a missing session is safe to replace; other errors could hide cloud work.
-        const missing =
-          error instanceof Error &&
-          error.name === "SessionNotFoundError" &&
-          (error as { sessionID?: unknown }).sessionID === sessionID;
-        if (missing) return undefined;
-        throw error;
-      }
-      if (
-        earlier.info.metadata?.[HISTORY_KEY] !== historyDigest(earlier.messages) ||
-        (await sessionBusy(remote, sessionID, signal))
-      )
-        throw new HandoffRefused(
-          "The cloud session has new activity since the earlier attempt, so the cloud was left as it is. Continue it in the cloud, or start a new handoff.",
-        );
-      return earlier;
-    };
-    const found = await untouchedSession();
-    if ((await restore(snapshot)) === RESTORE_NEEDS_FULL_HISTORY) {
-      // A full-history retry must still match the checkout the user approved.
-      const full = await captureSnapshot(root, includeChanges, true);
-      if (full.digest !== snapshot.digest)
-        throw new Error("The checkout changed during handoff. Retry after it is idle.");
-      if ((await restore(full)) !== 0) throw new Error("Cloud checkout restoration failed.");
-    }
-    record.phase = "importing";
-    await deps.save(record);
-    await deps.progress("Copying the conversation");
-    // Look again: the cloud session must still be untouched at the moment it is replaced.
-    const earlier = found && (await untouchedSession());
-    if (earlier) await remote.session.remove({ sessionID }, { signal });
-    let imported;
-    try {
-      const keepModel = await cloudHasModel(
-        gitterm,
-        record.workspaceID!,
+      await runRemoteShell(
         remote,
-        directory,
-        exported.info.model,
+        runtime.directory,
+        `node -e ${shellQuote(PREPARE_STAGE_SCRIPT)} ${shellQuote(stage)}`,
         signal,
       );
-      imported = await remote.session.import(importPayload(exported, directory, { keepModel }), {
+      await remote.file.write(
+        {
+          location: { directory: runtime.directory },
+          path: `${stage}/snapshot.bin`,
+          payload: upload.encoded,
+        },
+        { signal },
+      );
+      return runRemoteShell(
+        remote,
+        runtime.directory,
+        `node -e ${shellQuote(RESTORE_SCRIPT)} ${shellQuote(stage)} ${shellQuote(subpath)}`,
         signal,
-      });
-    } catch (error) {
-      if (earlier)
-        await remote.session
-          .import(
-            { ...earlier, location: earlier.info.location } as Parameters<
-              OpenCodeClient["session"]["import"]
-            >[0],
-            { signal: AbortSignal.timeout(30_000) },
-          )
-          .catch(() => {});
-      throw error;
+        [RESTORE_NEEDS_FULL_HISTORY],
+      );
+    };
+    if ((await restore(snapshot)) === RESTORE_NEEDS_FULL_HISTORY) {
+      // A full-history capture must still match the checkout the user approved.
+      const full = await captureSnapshot(root, includeChanges, true);
+      if (full.digest !== snapshot.digest)
+        throw new HandoffRefused("The checkout changed while it was being copied. Try again.");
+      if ((await restore(full)) !== 0) throw new Error("Cloud checkout restoration failed.");
     }
-    if (imported.id !== sessionID || imported.location.directory !== directory)
-      throw new Error("Cloud session verification failed.");
-    await remote.session.synthetic(
-      {
-        sessionID,
-        resume: false,
-        // Marks the note as this attempt's own, so a retry does not take it for cloud input.
-        metadata: { [NOTE_KEY]: record.attemptID },
-        text: [
-          `Continued from local checkout ${root}. The current cloud working directory is ${directory}.`,
-          includeChanges
-            ? "The captured checkout includes uncommitted changes, potentially from other sessions."
-            : "Uncommitted local changes were excluded; do not assume edits described in history exist here.",
-          "Historical absolute paths refer to the old machine. Use the cloud checkout. Local processes, separately ignored files, credential stores, and global plugins/configuration were not migrated. Repository-owned configuration travels with the checkout. Select an available cloud model/agent if needed.",
-        ].join("\n"),
-      },
+
+    step = "copying the conversation";
+    await deps.progress("Copying the conversation");
+    const keepModel = await cloudHasModel(
+      gitterm,
+      record.workspaceID,
+      remote,
+      directory,
+      exported.info.model,
+      signal,
+    );
+    const imported = await remote.session.import(
+      importPayload(exported, directory, { keepModel }),
       { signal },
     );
+    if (imported.id !== sessionID || imported.location.directory !== directory)
+      throw new Error("Cloud session verification failed.");
+    await tellMoved(
+      remote,
+      sessionID,
+      [
+        `This session moved from the user's machine (local checkout ${root}) to a GitTerm cloud workspace. The working directory is now ${directory}.`,
+        "Messages from before this move ran on the user's machine. What you said in them about the machine, paths or environment was true then; it is not a mistake.",
+        includeChanges
+          ? "The checkout includes uncommitted local changes, potentially from other sessions."
+          : "Uncommitted local changes were left behind; do not assume edits described in history exist here.",
+        "Absolute paths in earlier history refer to the old machine. Local processes, ignored files, credential stores, and global plugins/configuration did not come along; repository-owned configuration did. Select an available cloud model/agent if needed.",
+      ],
+      true,
+      signal,
+    );
+
+    step = "starting the agent in the cloud";
+    if (message) await remote.session.prompt({ sessionID, text: message }, { signal });
+    else if (stopped)
+      await remote.session.synthetic({ sessionID, text: CONTINUE_TEXT, resume: true }, { signal });
     record.phase = "ready";
     await deps.save(record);
     await markCloudSession(local, sessionID, { workspaceID: record.workspaceID }, signal).catch(
       () => {},
     );
-    return record;
+    return { record, continuing: Boolean(message) || stopped };
   } catch (error) {
-    const step = STEPS[record.phase];
-    record.phase = "failed";
-    await deps.save(record);
+    // Undo what this attempt did, so nothing is left running or half moved.
+    const cleanup = AbortSignal.timeout(30_000);
+    const deleted = record.workspaceID
+      ? await gitterm.workspaces.terminate(record.workspaceID).then(
+          () => true,
+          () => false,
+        )
+      : true;
+    if (deleted) await deps.discard(record).catch(() => {});
+    if (stopped)
+      await local.session
+        .synthetic(
+          {
+            sessionID,
+            text: "Moving to the cloud was stopped. Continue where you left off.",
+            resume: true,
+          },
+          { signal: cleanup },
+        )
+        .catch(() => {});
+    if (signal.aborted || error instanceof HandoffCancelled) throw new HandoffCancelled();
     // Responses may echo credentials or snapshots; show only GitTerm's redacted reason.
-    if (!signal.aborted) console.error("GitTerm cloud handoff failed while", step, error);
+    console.error("GitTerm cloud handoff failed while", step, error);
     const reason =
       error instanceof GittermError || error instanceof HandoffRefused ? ` ${error.message}` : "";
+    const workspace = !record.workspaceID
+      ? ""
+      : deleted
+        ? " The cloud workspace was deleted."
+        : ` Workspace ${record.workspaceID} could not be deleted: delete it in GitTerm.`;
     throw new Error(
-      `Cloud handoff failed while ${step}${record.workspaceID ? ` for workspace ${record.workspaceID}` : ` (attempt ${record.attemptID})`}.${reason} Check GitTerm before retrying; a workspace may still be running and incurring charges. Local files and sessions are unchanged.`,
+      `Moving to the cloud failed while ${step}.${reason}${workspace} Local files and sessions are unchanged; run /cloud to try again.`,
     );
   }
 }
 
+/** Sends a message to the session in its cloud workspace, as if typed there. */
+export async function sendToCloud(
+  gitterm: GittermClient,
+  record: HandoffRecord,
+  text: string,
+  signal: AbortSignal,
+) {
+  const remote = runtimeClient(await gitterm.workspaces.getRuntimeAccess(record.workspaceID!));
+  await remote.session.prompt({ sessionID: record.sessionID, text }, { signal });
+}
+
+/** `working`: the cloud agent was just given something to do. */
 export async function showConnection(
   local: OpenCodeClient,
   gitterm: GittermClient,
   record: HandoffRecord,
   signal: AbortSignal,
+  working = false,
 ) {
-  if (record.phase !== "ready" || !record.workspaceID) {
-    throw new Error(
-      `The last cloud handoff is ${record.phase}. ${record.workspaceID ? `Inspect workspace ${record.workspaceID} in GitTerm.` : `Look for attempt ${record.attemptID} in GitTerm.`} Local work is unchanged.`,
-    );
-  }
-  await gitterm.workspaces.ensureRunning(record.workspaceID, { signal });
-  const runtime = await gitterm.workspaces.getRuntimeAccess(record.workspaceID);
+  const runtime = await gitterm.workspaces.getRuntimeAccess(record.workspaceID!);
   const remote = runtimeClient(runtime);
   let connection = runtime.url!;
   let paired = false;
@@ -690,7 +742,7 @@ export async function showConnection(
   await askForm(
     local,
     record.sessionID,
-    "Your cloud session is ready",
+    working ? "The agent is working in the cloud" : "Your cloud session is ready",
     [
       {
         key: CONNECT_KEY,

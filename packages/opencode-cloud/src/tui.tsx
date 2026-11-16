@@ -6,10 +6,9 @@ import type { RGBA } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
 import { createSignal, onCleanup, Show } from "solid-js";
 import {
-  CANCEL_KEY,
   CLOUD_KEY,
+  CLOUD_RPC,
   CONNECT_KEY,
-  PROGRESS_KEY,
   type CloudMarker,
   type CloudProgress,
   type CloudStatus,
@@ -30,28 +29,25 @@ const STATES: Record<CloudStatus | "unknown", { label: string; next: string }> =
 
 const markerOf = (metadata: Record<string, unknown> | undefined) =>
   metadata?.[CLOUD_KEY] as CloudMarker | undefined;
-const progressOf = (metadata: Record<string, unknown> | undefined) =>
-  metadata?.[PROGRESS_KEY] as CloudProgress | undefined;
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-function CloudProgressDialog(props: { sessionID: string; step: string }) {
+function CloudProgressDialog(props: { progress: () => CloudProgress }) {
   const context = usePlugin();
   const theme = () => context.theme as unknown as Theme;
   const [frame, setFrame] = createSignal(0);
   const timer = setInterval(() => setFrame((value) => (value + 1) % SPINNER.length), 80);
   onCleanup(() => clearInterval(timer));
-  const step = () =>
-    progressOf(context.data.session.get(props.sessionID)?.metadata)?.step ?? props.step;
+  const progress = props.progress;
   return (
     <box flexDirection="column" gap={1} paddingLeft={2} paddingRight={2} paddingBottom={1}>
       <text fg={theme().text.base}>
-        <b>Moving to the cloud</b>
+        <b>{progress().title}</b>
       </text>
       <text fg={theme().text.base}>
-        {SPINNER[frame()]} {step()}…
+        {SPINNER[frame()]} {progress().step}…
       </text>
-      <text fg={theme().text.muted}>Esc cancels</text>
+      <text fg={theme().text.muted}>{progress().cancellable ? "Esc cancels" : "Esc hides"}</text>
     </box>
   );
 }
@@ -66,7 +62,7 @@ function useCloud(sessionID: () => string) {
   };
 }
 
-function CloudConnectDialog(props: { url: string }) {
+function CloudConnectDialog(props: { url: string; title: string }) {
   const context = usePlugin();
   const theme = () => context.theme as unknown as Theme;
   const paired = props.url.includes("/auth/connect/");
@@ -82,7 +78,7 @@ function CloudConnectDialog(props: { url: string }) {
   return (
     <box flexDirection="column" gap={1} paddingLeft={2} paddingRight={2} paddingBottom={1}>
       <text fg={theme().text.base}>
-        <b>Your cloud session is ready</b>
+        <b>{props.title}</b>
       </text>
       <box alignItems="center">
         <text fg={theme().text.base}>{renderUnicodeCompact(props.url, { border: 1 })}</text>
@@ -99,6 +95,7 @@ function CloudConnectDialog(props: { url: string }) {
         <Show when={paired}>
           <text fg={theme().text.muted}>Works once, for 5 minutes. /cloud makes a new one.</text>
         </Show>
+        <text fg={theme().text.muted}>Billed while it runs. /cloud-return brings it back.</text>
       </box>
       <text fg={theme().text.muted}>
         <span style={{ fg: theme().text.base }}>enter</span>
@@ -157,44 +154,58 @@ export default Plugin.define({
     });
 
     // /cloud-return replaces the conversation by deleting the session and importing the cloud's
-    // under the same ID. The host leaves a deleted session for the home screen, so return
-    // to the session when it reappears.
+    // under the same ID. The host leaves a deleted session, for the home screen or another
+    // open tab, so load the imported conversation and go back to it when it reappears.
+    // The host may switch away before this hears of the deletion: the session seen just
+    // before the switch counts as the one being viewed.
     let viewing: string | undefined;
-    let replaced: { sessionID: string; at: number } | undefined;
+    let previous: string | undefined;
+    let switched = 0;
     const remember = () => {
       const route = context.ui.router.current();
-      if (route.type === "session") viewing = route.sessionID;
+      if (route.type !== "session" || route.sessionID === viewing) return;
+      previous = viewing;
+      viewing = route.sessionID;
+      switched = Date.now();
     };
     const timer = setInterval(remember, 500);
+    const replaced = new Map<string, { at: number; viewed: boolean }>();
     const deleted = context.data.on("session.deleted", (event) => {
-      remember();
-      if (event.data.sessionID === viewing) replaced = { sessionID: viewing, at: Date.now() };
+      const { sessionID } = event.data;
+      const viewed =
+        sessionID === viewing || (sessionID === previous && Date.now() - switched < 2_000);
+      replaced.set(sessionID, { at: Date.now(), viewed });
     });
     const created = context.data.on("session.created", (event) => {
-      if (event.data.sessionID !== replaced?.sessionID || Date.now() - replaced.at > 60_000) return;
-      replaced = undefined;
       const { sessionID } = event.data;
+      const entry = replaced.get(sessionID);
+      replaced.delete(sessionID);
+      if (!entry || Date.now() - entry.at > 60_000) return;
       // What the host held for the deleted session is gone; load the imported conversation.
       context.data.session.invalidate(sessionID);
       context.data.session.message.invalidate(sessionID);
       void Promise.all([
         context.data.session.sync(sessionID),
         context.data.session.message.sync(sessionID),
-      ]).finally(() => context.ui.router.navigate({ type: "session", sessionID }));
+      ]).finally(() => {
+        if (!entry.viewed) return;
+        context.ui.router.navigate({ type: "session", sessionID });
+        showProgress(sessionID);
+      });
     });
 
+    // Each run's steps arrive from the server plugin; Esc asks it to cancel the run.
+    const cloud = context.client.rpc(CLOUD_RPC);
+    const [runs, setRuns] = createSignal(new Map<string, CloudProgress>());
     let open: { sessionID: string; attemptID: string } | undefined;
     const cancelled = new Set<string>();
     const cancel = async (run: { sessionID: string; attemptID: string }) => {
-      const session = await context.client.session.get({ sessionID: run.sessionID });
-      await context.client.session.update({
-        sessionID: run.sessionID,
-        metadata: { ...session.metadata, [CANCEL_KEY]: run.attemptID },
-      } as Parameters<typeof context.client.session.update>[0]);
-      context.ui.toast.show({ message: "Cancelling /cloud…", variant: "info" });
+      const directory = context.data.session.get(run.sessionID)?.location.directory;
+      await cloud.cancel(run, { location: directory ? { directory } : undefined });
+      context.ui.toast.show({ message: "Cancelling…", variant: "info" });
     };
-    const showProgress = (sessionID: string, metadata: Record<string, unknown> | undefined) => {
-      const progress = progressOf(metadata);
+    const showProgress = (sessionID: string) => {
+      const progress = runs().get(sessionID);
       if (!progress) {
         if (open?.sessionID !== sessionID) return;
         open = undefined;
@@ -207,32 +218,48 @@ export default Plugin.define({
       const run = { sessionID, attemptID: progress.attemptID };
       open = run;
       context.ui.dialog.show(
-        () => <CloudProgressDialog sessionID={sessionID} step={progress.step} />,
+        () => <CloudProgressDialog progress={() => runs().get(sessionID) ?? progress} />,
         () => {
           if (open !== run) return;
           open = undefined;
+          // Dismissed: it stays hidden for the rest of the run.
           cancelled.add(run.attemptID);
+          if (!progress.cancellable) return;
           void cancel(run).catch(() =>
-            context.ui.toast.show({ message: "Could not cancel /cloud.", variant: "error" }),
+            context.ui.toast.show({ message: "Could not cancel.", variant: "error" }),
           );
         },
       );
+    };
+    const stopProgress = cloud.events.on("progress", (event) => {
+      const progress = event.data as CloudProgress;
+      const next = new Map(runs());
+      if (progress.step === undefined) next.delete(progress.sessionID);
+      else next.set(progress.sessionID, progress);
+      setRuns(next);
+      showProgress(progress.sessionID);
+    });
+    // A question asked during a run would sit behind the dialog: step aside until it is answered.
+    const hideProgress = (sessionID: string) => {
+      if (open?.sessionID !== sessionID) return;
+      open = undefined;
+      context.ui.dialog.clear();
     };
 
     let connect: { sessionID: string; formID: string } | undefined;
     const formCreated = context.data.on("form.created", (event) => {
       const form = event.data.form;
+      hideProgress(form.sessionID);
       const field = form.fields.find(
         (item) => item.key === CONNECT_KEY && item.type === "external",
       );
       if (!field || !("url" in field)) return;
       const route = context.ui.router.current();
       if (route.type !== "session" || route.sessionID !== form.sessionID) return;
-      open = undefined;
       const shown = { sessionID: form.sessionID, formID: form.id };
       connect = shown;
       context.ui.dialog.show(
-        () => <CloudConnectDialog url={field.url} />,
+        () => <CloudConnectDialog url={field.url} title={form.title} />,
         () => {
           if (connect !== shown) return;
           connect = undefined;
@@ -247,7 +274,8 @@ export default Plugin.define({
       );
       context.ui.dialog.set({ size: "large" });
     });
-    const formEnded = (event: { data: { id: string } }) => {
+    const formEnded = (event: { data: { id: string; sessionID: string } }) => {
+      showProgress(event.data.sessionID);
       if (!connect || connect.formID !== event.data.id) return;
       connect = undefined;
       context.ui.dialog.clear();
@@ -255,11 +283,17 @@ export default Plugin.define({
     const formReplied = context.data.on("form.replied", formEnded);
     const formCancelled = context.data.on("form.cancelled", formEnded);
 
+    // /cloud and /cloud-return add or remove /cloud-return with a command reload. OpenCode
+    // sends that change without a project, so the terminal keeps its old list: fetch it again.
+    const commands = context.data.on("command.updated", () => {
+      context.data.location.command.invalidate();
+      void context.data.location.command.sync().catch(() => {});
+    });
+
     // Say so when the cloud agent stops working: it finished, or it is waiting for the user.
     const last = new Map<string, CloudStatus | undefined>();
     const changed = context.data.on("session.metadata.updated", (event) => {
       const { sessionID } = event.data;
-      showProgress(sessionID, event.data.metadata);
       const status = markerOf(event.data.metadata)?.status;
       const before = last.get(sessionID);
       last.set(sessionID, status);
@@ -281,12 +315,14 @@ export default Plugin.define({
         context.ui.dialog.clear();
       }
       clearInterval(timer);
+      stopProgress();
       deleted();
       created();
       changed();
       formCreated();
       formReplied();
       formCancelled();
+      commands();
       sidebar();
       banner();
     };

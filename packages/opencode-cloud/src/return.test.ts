@@ -5,7 +5,7 @@ import path from "node:path";
 import type { OpenCodeClient } from "@opencode/client";
 import { GittermError, type GittermClient } from "@gitterm/sdk";
 import type { HandoffRecord } from "./handoff";
-import { confirmLocalPrompt, finishReturn, returnSession } from "./return";
+import { askWorkspaceEnd, confirmLocalPrompt, endWorkspace, returnSession } from "./return";
 import { checkoutRoot, git } from "./snapshot";
 
 let root: string;
@@ -34,12 +34,11 @@ const record = (): HandoffRecord => ({
   sourceDirectory: root,
   head: "0".repeat(40),
   includeChanges: true,
-  sharedSessions: 0,
   createdAt: "2026-01-01T00:00:00.000Z",
 });
 
 /** A local OpenCode whose forms are answered with `answer`, or dismissed when it is undefined. */
-function localWith(answer: Record<string, boolean> | undefined) {
+function localWith(answer: Record<string, boolean | string> | undefined) {
   const forms: string[] = [];
   const client = {
     experimental: { job: { list: async () => [] } },
@@ -112,9 +111,10 @@ test("a cloud session that is still working is left alone, and nothing is captur
   });
   const saved: HandoffRecord[] = [];
   const failure = returnSession(record(), {
-    local: localWith(undefined).client,
+    local: localWith({ end: "yes" }).client,
     gitterm: {
       workspaces: {
+        projectSnapshot: async () => ({ available: false, existing: null }),
         ensureRunning: async () => {},
         getRuntimeAccess: async () => ({
           url: `http://127.0.0.1:${server!.port}`,
@@ -167,61 +167,56 @@ function gittermWith(snapshot: { available: boolean; existing?: boolean } | "unk
     },
   };
 }
-const kept = { stash: false, branch: null, sessionID: null };
-const finish = (
+const signal = () => AbortSignal.timeout(5_000);
+/** Asks what happens to the workspace, then does it, as /cloud-return does. */
+const finish = async (
   gitterm: GittermClient,
-  answer: Record<string, boolean> | undefined,
+  answer: Record<string, string> | undefined,
   forms: string[] = [],
 ) => {
   const local = localWith(answer);
-  return finishReturn(
-    local.client,
-    gitterm,
-    { ...record(), phase: "returned" },
-    kept,
-    signal(),
-  ).then(() => forms.push(...local.forms));
+  try {
+    const end = await askWorkspaceEnd(local.client, gitterm, record(), signal());
+    await endWorkspace(gitterm, "workspace-test", end);
+  } finally {
+    forms.push(...local.forms);
+  }
 };
-const signal = () => AbortSignal.timeout(5_000);
 
 test("a workspace that cannot be kept as a snapshot is deleted, or paused on request", async () => {
   for (const snapshot of [{ available: false }, "unknown"] as const) {
-    const forms: string[] = [];
     const yes = gittermWith(snapshot);
-    await finish(yes.client, { remove: true }, forms);
-    expect(forms).toEqual(["Back on this machine. Delete the cloud workspace?"]);
+    await finish(yes.client, { end: "yes" });
     expect(yes.calls).toEqual(["delete"]);
 
     const no = gittermWith(snapshot);
-    await finish(no.client, { remove: false });
+    await finish(no.client, { end: "no" });
     expect(no.calls).toEqual(["pause"]);
   }
 });
 
 test("where a snapshot can be kept, the one question decides it and the workspace is deleted", async () => {
-  const forms: string[] = [];
   const first = gittermWith({ available: true });
-  await finish(first.client, { keep: true }, forms);
+  await finish(first.client, { end: "yes" });
   expect(first.calls).toEqual(["delete, keeping a snapshot"]);
 
   const again = gittermWith({ available: true, existing: true });
-  await finish(again.client, { keep: false }, forms);
+  await finish(again.client, { end: "no" });
   expect(again.calls).toEqual(["delete"]);
-  expect(forms).toEqual([
-    "Back on this machine. Keep a snapshot for this project's next cloud session?",
-    "Back on this machine. Update this project's cloud snapshot?",
-  ]);
+});
 
-  // Dismissing the question deletes nothing.
+test("dismissing the question cancels the return and leaves the workspace alone", async () => {
+  const forms: string[] = [];
   const dismissed = gittermWith({ available: true });
-  await finish(dismissed.client, undefined);
-  expect(dismissed.calls).toEqual(["pause"]);
+  await expect(finish(dismissed.client, undefined, forms)).rejects.toThrow();
+  expect(forms).toEqual(["Bring this session back"]);
+  expect(dismissed.calls).toEqual([]);
 });
 
 test("a snapshot that cannot be saved still ends the workspace, and says so", async () => {
   const gitterm = gittermWith({ available: true });
   gitterm.failSaves();
-  await expect(finish(gitterm.client, { keep: true })).rejects.toThrow(
+  await expect(finish(gitterm.client, { end: "yes" })).rejects.toThrow(
     "its snapshot could not be saved. The provider refused the snapshot.",
   );
   expect(gitterm.calls).toEqual(["delete"]);
