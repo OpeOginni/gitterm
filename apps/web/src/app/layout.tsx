@@ -69,7 +69,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/og-card/og-card-v6.png"],
+    images: ["/og-card/og-card-v7.png"],
   },
   manifest: "/favicon_io/site.webmanifest",
   icons: {
