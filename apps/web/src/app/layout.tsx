@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     siteName: "Gitterm",
     images: [
       {
-        url: "/og-card/og-card-v7.png",
+        url: "/og-card/og-card-v6.png",
         width: 2400,
         height: 1260,
         alt: TITLE,
