@@ -321,14 +321,16 @@ export default Plugin.define({
         () => {
           if (connect !== shown) return;
           connect = undefined;
+          const target = { sessionID: shown.sessionID, formID: shown.formID };
           // Closing the sign-in dialog cancels /cloud.
-          void context.data.session.form
-            .reply({
-              sessionID: shown.sessionID,
-              formID: shown.formID,
-              answer: signIn ? { [SIGN_IN_KEY]: true } : { [CONNECT_KEY]: true, done: true },
-            } as Parameters<typeof context.data.session.form.reply>[0])
-            .catch(() => {});
+          void (
+            signIn
+              ? context.data.session.form.cancel(target)
+              : context.data.session.form.reply({
+                  ...target,
+                  answer: { [CONNECT_KEY]: true, done: true },
+                } as Parameters<typeof context.data.session.form.reply>[0])
+          ).catch(() => {});
         },
       );
       context.ui.dialog.set({ size: "large" });

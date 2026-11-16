@@ -787,13 +787,15 @@ describe("checkout identity and origin", () => {
     ).toEqual(["shared"]);
   });
 
-  test("normalizes GitHub SSH origins but rejects embedded credentials and local paths", async () => {
+  test("normalizes GitHub SSH origins, rejects embedded credentials, and sends nothing else", async () => {
     await git(source, ["remote", "add", "origin", "git@github.com:example/repo.git"]);
     expect(await repositoryUrl(source)).toBe("https://github.com/example/repo.git");
     await git(source, ["remote", "set-url", "origin", "https://token@github.com/example/repo.git"]);
     await expect(repositoryUrl(source)).rejects.toThrow("credential-free");
     await git(source, ["remote", "set-url", "origin", cloud]);
-    await expect(repositoryUrl(source)).rejects.toThrow("HTTPS origin");
+    expect(await repositoryUrl(source)).toBeUndefined();
+    await git(source, ["remote", "set-url", "origin", "git@gitlab.com:example/repo.git"]);
+    expect(await repositoryUrl(source)).toBeUndefined();
   });
 
   test("treats environment files as secrets but allows their templates", () => {

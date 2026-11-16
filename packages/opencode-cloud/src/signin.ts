@@ -27,7 +27,7 @@ export async function signedIn(
       error instanceof GittermError &&
       (error.code === "NOT_LOGGED_IN" || error.code === "UNAUTHORIZED");
     // A token from the settings or the environment would still win over a new login.
-    if (!signedOut || options.token || process.env.GITTERM_API_TOKEN) throw error;
+    if (!signedOut || options.token || process.env.GITTERM_API_TOKEN?.trim()) throw error;
   }
 
   const serverUrl =
@@ -39,6 +39,7 @@ export async function signedIn(
   const closed = new AbortController();
   const done = new AbortController();
   let dialog: Promise<void> | undefined;
+  let failure: unknown;
   try {
     const { token } = await loginWithDeviceCode(serverUrl, {
       clientName: "OpenCode",
@@ -60,16 +61,20 @@ export async function signedIn(
             },
           ],
           AbortSignal.any([signal, done.signal]),
-        )
-          .then(
-            () => {},
-            () => {},
-          )
-          .finally(() => closed.abort());
+        ).then(
+          // Submitting the native form doesn't end device approval; cancelling does.
+          () => {},
+          (error: unknown) => {
+            if (done.signal.aborted) return;
+            if (!(error instanceof HandoffCancelled)) failure = error;
+            closed.abort();
+          },
+        );
       },
     });
     await saveConfig({ serverUrl, token, createdAt: Date.now() });
   } catch (error) {
+    if (failure) throw failure;
     if (closed.signal.aborted && !signal.aborted) throw new HandoffCancelled();
     throw error;
   } finally {

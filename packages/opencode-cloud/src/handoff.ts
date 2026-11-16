@@ -470,7 +470,7 @@ export function importPayload(
 /** GitTerm's refusals when it can't read the repository; see createWorkspace on the server. */
 const unreachableRepository = (error: GittermError) =>
   error.code === "BAD_REQUEST" &&
-  /^(Can't access repository|Can't clone repository|The admin's shared GitHub token)/.test(
+  /^(Can't access repository|Can't clone repository|The admin's shared GitHub token|Invalid repository URL)/.test(
     error.message,
   );
 

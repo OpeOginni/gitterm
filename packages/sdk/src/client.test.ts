@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { GittermError, WorkspaceLifecycleError } from "./errors";
 import { createGittermClient } from "./client";
 import { apiEndpoint, trpcEndpoint } from "./transport";
@@ -11,6 +14,28 @@ describe("createGittermClient", () => {
       configPath: "/path/that/does/not/exist",
     });
     expect(client.serverUrl).toBe("https://api.gitterm.dev");
+  });
+
+  test("sends a saved login only to the server it was made for", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "gitterm-config-"));
+    const configPath = path.join(dir, "cli.json");
+    await writeFile(
+      configPath,
+      JSON.stringify({ serverUrl: "https://api.gitterm.dev/", token: "gt_saved", createdAt: 1 }),
+    );
+    const previous = { url: process.env.GITTERM_SERVER_URL, token: process.env.GITTERM_API_TOKEN };
+    delete process.env.GITTERM_SERVER_URL;
+    delete process.env.GITTERM_API_TOKEN;
+    try {
+      expect(() => createGittermClient({ configPath }).serverUrl).not.toThrow();
+      expect(() =>
+        createGittermClient({ serverUrl: "https://gitterm.example.com", configPath }),
+      ).toThrow("Not logged in");
+    } finally {
+      if (previous.url !== undefined) process.env.GITTERM_SERVER_URL = previous.url;
+      if (previous.token !== undefined) process.env.GITTERM_API_TOKEN = previous.token;
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("keeps a proxy /api base path when calling tRPC", async () => {
