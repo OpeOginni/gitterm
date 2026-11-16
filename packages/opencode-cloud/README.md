@@ -25,10 +25,12 @@ In a Git repository, type `/cloud` in OpenCode. The workspace is billed while it
    The login is shared with the [GitTerm CLI](https://www.npmjs.com/package/@gitterm/cli),
    so if you already ran `gitterm login`, nothing is asked.
 2. The cloud agent uses the models you add in GitTerm, not your local keys. With none, `/cloud`
-   asks first. For a private repository, connect GitHub in GitTerm too.
-3. If you have uncommitted changes, choose whether to bring them.
-4. A dialog shows each step. Esc cancels and deletes the workspace that was just created.
-5. Scan the QR code with your phone, or open the link on your computer, to continue in the
+   asks first.
+3. For a private repository, connect GitHub in GitTerm. Without it, `/cloud` uploads the
+   history instead (up to 25 MiB), and the cloud checkout can't push or pull.
+4. If you have uncommitted changes, choose whether to bring them.
+5. A dialog shows each step. Esc cancels and deletes the workspace that was just created.
+6. Scan the QR code with your phone, or open the link on your computer, to continue in the
    cloud. Pairing links sign you in once and expire after five minutes; `/cloud` makes a new one.
 
 The agent doesn't have to be idle. If it is working, `/cloud` stops it here and it picks up

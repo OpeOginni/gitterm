@@ -11,11 +11,6 @@ import {
 import { askForm, HandoffCancelled, type HandoffOptions } from "./handoff";
 import { SIGN_IN_KEY } from "./marker";
 
-/**
- * A GitTerm client for the user. Without a login, or with one that expired, it signs the user
- * in from OpenCode: a dialog links to GitTerm, where they sign in or sign up and approve the
- * code. The token is saved where `gitterm login` keeps it, so the CLI is signed in too.
- */
 export async function signedIn(
   local: OpenCodeClient,
   sessionID: string,
@@ -91,10 +86,6 @@ export function dashboardUrl(serverUrl: string, path: string): string {
   return new URL(path, url.origin).href;
 }
 
-/**
- * The model keys on this machine don't go to the cloud: the agent there uses the models saved
- * in GitTerm. With none saved, ask before creating a workspace. A failed check asks nothing.
- */
 export async function confirmNoModels(
   local: OpenCodeClient,
   gitterm: GittermClient,

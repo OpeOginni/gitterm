@@ -1,6 +1,7 @@
 import { polar, checkout, portal, webhooks } from "@polar-sh/better-auth";
 import type { BetterAuthPlugin } from "better-auth";
 import type { models } from "@polar-sh/sdk/2026-10";
+import { createCustomers } from "@polar-sh/sdk/2026-10/services/customers";
 import env from "@gitterm/env/auth";
 import { recordCancellation, setPlan, type SubscriptionEvent } from "./accounts";
 import { recordOrder, recordRefund, type PolarOrder, type PolarRefund } from "./analytics/payments";
@@ -105,24 +106,37 @@ const saveOrder = (order: PolarOrder) =>
 // Refunds carry no customer external id; reports link them through their order.
 const saveRefund = (refund: PolarRefund) => recordRefund(refund, "webhook", null);
 
-/**
- * Better Auth plugins for Polar checkout, the customer portal, and
- * subscription and payment webhooks. Empty when Polar is not configured.
- *
- * Handlers throw on storage failures so Polar retries; every write is
- * idempotent, so retries and replays are safe. The plugin verifies both
- * Polar's legacy and Standard Webhooks signatures. Polar's `usage()`
- * extension is intentionally not installed: it would let signed-in users
- * ingest their own usage events, and only the server reports usage.
- *
- * Typed as plain plugins so Polar's types never leak into the auth instance.
- */
+// Omit Polar's usage plugin: only the server may report usage.
 export function createBillingAuthPlugins(): BetterAuthPlugin[] {
   if (!polarClient) return [];
+  const client = polarClient;
   return [
+    // A Polar outage must not prevent sign-up; checkout can create the customer later.
+    {
+      id: "gitterm-polar-customer",
+      init: () => ({
+        options: {
+          databaseHooks: {
+            user: {
+              create: {
+                after: async (user) => {
+                  await createCustomers(client)({
+                    email: user.email,
+                    name: user.name,
+                    external_id: user.id,
+                  }).catch((error) =>
+                    console.error(`[polar] No customer created for user ${user.id}`, error),
+                  );
+                },
+              },
+            },
+          },
+        },
+      }),
+    } satisfies BetterAuthPlugin,
     polar({
       client: polarClient,
-      createCustomerOnSignUp: true,
+      createCustomerOnSignUp: false,
       use: [
         checkout({
           authenticatedUsersOnly: true,

@@ -593,9 +593,10 @@ export async function handoffSession(
     };
     const created = await createWorkspace().catch(async (error: unknown) => {
       if (!repo || !(error instanceof GittermError) || !unreachableRepository(error)) throw error;
-      // GitTerm can't clone the repository, such as a private one without a GitHub connection:
-      // send the whole history instead, like a checkout without a remote.
-      const full = await captureSnapshot(root, includeChanges, true);
+      // Preserve the actionable repository error if a full upload is not possible.
+      const full = await captureSnapshot(root, includeChanges, true).catch(() => {
+        throw error;
+      });
       if (full.digest !== snapshot.digest)
         throw new HandoffRefused("The checkout changed while it was being copied. Try again.");
       snapshot = full;
