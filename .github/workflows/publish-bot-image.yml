@@ -2,13 +2,9 @@ name: Publish Bot Image
 
 # One image runs either chat bot: ghcr.io/<owner>/gitterm-bot. It picks Slack or Discord from
 # whichever token is set, so `docker run --env-file .env ghcr.io/<owner>/gitterm-bot` is enough.
+# Tagged latest, the bot engine's version (packages/bot/package.json) and the commit.
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version tag to publish besides latest, e.g. 0.1.0 (optional)"
-        required: false
-        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -41,8 +37,8 @@ jobs:
         id: image
         run: |
           IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm-bot"
-          TAGS="$IMAGE:latest,$IMAGE:$(echo ${{ github.sha }} | cut -c1-7)"
-          if [ -n "${{ inputs.version }}" ]; then TAGS="$TAGS,$IMAGE:v${{ inputs.version }}"; fi
+          VERSION=$(jq -r .version packages/bot/package.json)
+          TAGS="$IMAGE:latest,$IMAGE:v$VERSION,$IMAGE:$(echo ${{ github.sha }} | cut -c1-7)"
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
       - name: Build and push
