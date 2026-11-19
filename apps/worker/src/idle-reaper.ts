@@ -142,14 +142,22 @@ async function runOnce() {
     }
 
     // ========================================================================
-    // 2b. Keep always-on workspaces' provider leases fresh, then run billing:
-    //     report usage and email usage alerts (no-ops without billing).
+    // 2b. Keep always-on workspaces' provider leases fresh, mark workspaces a
+    //     provider stopped on its own as paused, then run billing: report usage
+    //     and email usage alerts (no-ops without billing).
     // ========================================================================
     try {
       const { renewed } = await internalClient.internal.keepAlwaysOnWorkspacesAlive.mutate();
       if (renewed > 0) console.log(`[idle-reaper] Renewed ${renewed} always-on workspace lease(s)`);
     } catch (error) {
       console.error("[idle-reaper] Failed to renew always-on workspace leases:", error);
+    }
+    try {
+      const { paused } = await internalClient.internal.settleProviderPausedWorkspaces.mutate();
+      if (paused > 0)
+        console.log(`[idle-reaper] Marked ${paused} provider-stopped workspace(s) paused`);
+    } catch (error) {
+      console.error("[idle-reaper] Failed to check provider-stopped workspaces:", error);
     }
     try {
       const { notices, sent } = await internalClient.internal.runBillingTasks.mutate();

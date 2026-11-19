@@ -64,6 +64,33 @@ async function providerStateAfterFailure(
   throw error;
 }
 
+/** Record that the provider stopped a running workspace, and tell open dashboards. */
+async function markPausedByProvider(ws: { id: string; userId: string; domain: string }) {
+  const now = new Date();
+  const [paused] = await updateWorkspaceStatusAndInvalidate(
+    and(eq(workspace.id, ws.id), eq(workspace.status, "running")),
+    { status: "paused", pausedAt: now, updatedAt: now },
+  );
+  if (paused)
+    WORKSPACE_EVENTS.emitStatus({
+      workspaceId: ws.id,
+      status: "paused",
+      updatedAt: now,
+      userId: ws.userId,
+      workspaceDomain: ws.domain,
+    });
+  return Boolean(paused);
+}
+
+const runningCloudWorkspaceColumns = {
+  id: workspace.id,
+  userId: workspace.userId,
+  externalInstanceId: workspace.externalInstanceId,
+  cloudProviderId: workspace.cloudProviderId,
+  providerKey: cloudProvider.providerKey,
+  domain: workspace.domain,
+};
+
 /**
  * Internal router for service-to-service communication
  * All procedures require X-Internal-Key header with valid INTERNAL_API_KEY
@@ -114,14 +141,7 @@ export const internalRouter = router({
   /** Renew provider leases of running always-on workspaces (for worker). */
   keepAlwaysOnWorkspacesAlive: internalProcedure.mutation(async () => {
     const workspaces = await db
-      .select({
-        id: workspace.id,
-        userId: workspace.userId,
-        externalInstanceId: workspace.externalInstanceId,
-        cloudProviderId: workspace.cloudProviderId,
-        providerKey: cloudProvider.providerKey,
-        domain: workspace.domain,
-      })
+      .select(runningCloudWorkspaceColumns)
       .from(workspace)
       .innerJoin(cloudProvider, eq(workspace.cloudProviderId, cloudProvider.id))
       .where(
@@ -149,26 +169,45 @@ export const internalRouter = router({
           );
         if (live === "running") renewed++;
         else if (live === "terminated") await deleteWorkspaceForUser(ws.userId, ws.id);
-        else {
-          const now = new Date();
-          const [paused] = await updateWorkspaceStatusAndInvalidate(
-            and(eq(workspace.id, ws.id), eq(workspace.status, "running")),
-            { status: "paused", pausedAt: now, updatedAt: now },
-          );
-          if (paused)
-            WORKSPACE_EVENTS.emitStatus({
-              workspaceId: ws.id,
-              status: "paused",
-              updatedAt: now,
-              userId: ws.userId,
-              workspaceDomain: ws.domain,
-            });
-        }
+        else await markPausedByProvider(ws);
       } catch (error) {
         console.error(`[always-on] Failed to renew lease for workspace ${ws.id}`, error);
       }
     }
     return { renewed };
+  }),
+
+  /**
+   * Providers with their own sandbox timeout (the ones with keep-alive) can stop a workspace
+   * without telling us, for example at a plan's session limit. Without this it stays running
+   * here, its link fails, and the dashboard offers no restart (for worker).
+   */
+  settleProviderPausedWorkspaces: internalProcedure.mutation(async () => {
+    const workspaces = await db
+      .select(runningCloudWorkspaceColumns)
+      .from(workspace)
+      .innerJoin(cloudProvider, eq(workspace.cloudProviderId, cloudProvider.id))
+      .where(
+        and(
+          eq(workspace.status, "running"),
+          eq(workspace.hostingType, "cloud"),
+          eq(workspace.alwaysOn, false),
+        ),
+      );
+
+    let paused = 0;
+    for (const ws of workspaces) {
+      try {
+        const provider = await getProviderByCloudProviderId(ws.providerKey, ws.cloudProviderId);
+        if (!provider.keepAliveWorkspace) continue;
+        // Only a confirmed pause is settled: some providers report a failed lookup as gone.
+        const live = await provider.getStatus(ws.externalInstanceId);
+        if (live.status === "paused" && (await markPausedByProvider(ws))) paused++;
+      } catch (error) {
+        console.error(`[provider-status] Failed to check workspace ${ws.id}`, error);
+      }
+    }
+    return { paused };
   }),
 
   /** Report usage to the payment provider and email usage alerts (for worker). */

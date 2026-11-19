@@ -4,6 +4,7 @@ import { isOpencodeServeCommand } from "@gitterm/agent-runtime/opencode-service"
 import env from "@gitterm/env/server";
 import type { VercelImageProviderMetadata } from "@gitterm/db/schema/cloud";
 import { getProviderConfigService } from "../../service/config/provider-config";
+import { getWorkspaceIdleTimeoutMs } from "../../service/workspace-timeouts";
 import { BeforeAgentSetupError } from "../compute";
 import type {
   ComputeProvider,
@@ -259,10 +260,14 @@ export class VercelProvider implements ComputeProvider {
     const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
     const repoDir = this.getRepoDir(spec);
     let accessCredential: string | undefined;
+    // Becomes the sandbox's default, so resumed sessions get it too. Without it Vercel
+    // stops the sandbox after 5 minutes unless proxy traffic has extended it.
+    const timeout = await getWorkspaceIdleTimeoutMs(config.userId);
     const sandbox = await logger.step("create-sandbox", () =>
       Sandbox.create({
         ...credentials,
         name: this.getSandboxName(config.workspaceId),
+        timeout,
         // Vercel only restores the filesystem across stop/resume when the
         // sandbox is persistent; without it a restarted workspace comes back
         // with a fresh FS (no repo, no installed agent) and never gets healthy.
