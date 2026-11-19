@@ -57,6 +57,7 @@ async function main() {
         });
       } else {
         const alias = `${OWNER}/${entry.name}:${buildTag}`;
+        console.log(`[e2b-template] starting ${alias} for verification`);
         const sandbox = await Sandbox.create(alias, { apiKey, timeoutMs: 60_000 });
         try {
           const command =
