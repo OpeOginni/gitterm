@@ -5,5 +5,6 @@ export default defineConfig({
   format: "esm",
   outDir: "./dist",
   clean: true,
-  noExternal: [/@gitterm\/.*/],
+  // Bundle every dependency: the image ships only dist/, with no node_modules.
+  noExternal: [/.*/],
 });

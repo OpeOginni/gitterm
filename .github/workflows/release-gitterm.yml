@@ -1,0 +1,71 @@
+name: Release GitTerm
+run-name: Release GitTerm (${{ inputs.target }}) from ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: What to release
+        type: choice
+        default: both
+        options: [both, runtimes, platform]
+      version_type:
+        description: Platform version bump (ignored for runtimes only)
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+      opencode_version:
+        description: OpenCode version (latest or an exact 2.x version)
+        type: string
+        default: latest
+      t3_version:
+        description: T3 Code version (latest or an exact version)
+        type: string
+        default: latest
+
+concurrency:
+  group: gitterm-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check-ref:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check release source
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [[ "$GITHUB_RUN_ATTEMPT" != 1 ]]; then
+            echo "::error::Start a new release instead of re-running an old release."
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            echo "::error::Run releases from $DEFAULT_BRANCH."
+            exit 1
+          fi
+
+  runtimes:
+    needs: check-ref
+    uses: ./.github/workflows/publish-workspace-runtime-images.yml
+    with:
+      publish: ${{ inputs.target != 'platform' }}
+      opencode_version: ${{ inputs.opencode_version }}
+      t3_version: ${{ inputs.t3_version }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+      E2B_SMOKE_API_KEY: ${{ secrets.E2B_SMOKE_API_KEY }}
+
+  platform:
+    if: ${{ inputs.target != 'runtimes' }}
+    needs: runtimes
+    uses: ./.github/workflows/release-gitterm-platform.yml
+    with:
+      version_type: ${{ inputs.version_type }}
+    permissions:
+      contents: write
+      packages: write

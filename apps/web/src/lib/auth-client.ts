@@ -17,7 +17,10 @@ const additionalFields = () =>
   });
 
 const isBillingEnabled = env.NEXT_PUBLIC_ENABLE_BILLING;
+// Server components read the session too. Inside a container the public URL can point back at
+// the container itself (`http://localhost:8888`), so they use INTERNAL_AUTH_URL when it's set.
 const authBaseUrl =
+  (typeof window === "undefined" ? process.env.INTERNAL_AUTH_URL : undefined) ??
   env.NEXT_PUBLIC_AUTH_URL ??
   (env.NEXT_PUBLIC_SERVER_URL ? apiPath(env.NEXT_PUBLIC_SERVER_URL, "auth") : undefined);
 

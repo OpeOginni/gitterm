@@ -9,13 +9,10 @@ COPY package.json bun.lock turbo.json ./
 COPY packages ./packages
 COPY apps ./apps
 
-# Only the bots and what they depend on, not the whole monorepo.
-RUN bun install --frozen-lockfile --filter @gitterm/slack-bot --filter @gitterm/discord-bot
-# The bots import the SDK's and the bot engine's build output.
-RUN cd packages/sdk && bun build src/index.ts src/direct/index.ts --outdir dist --target node \
-  --format esm --packages external
-RUN cd packages/bot && bun build src/index.ts --outdir dist --target node --format esm \
-  --packages external
+RUN bun install --frozen-lockfile
+# The bots import the build output of the packages they depend on (bot engine, SDK, agent
+# runtime); this is the build CI and `publish:bots` run, dependencies first.
+RUN bun run build:bots
 
 # Each bot bundles into one file with its dependencies, so the image needs no node_modules.
 RUN bun build packages/slack-bot/src/cli.ts --target bun --outfile /out/slack.js \

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build & push a single agent image to Docker Hub (local fallback for CI).
 # Usage: ./scripts/build-agent-image.sh <name>
-# Names: opencode | opencode-server | opencode-aws-server | t3code-server | cf-sandbox
+# Names: opencode | opencode-server | opencode-aws-server | t3code-server
 
 set -euo pipefail
 
@@ -9,14 +9,13 @@ NS="${DOCKERHUB_NAMESPACE:-opeoginni}"
 OPENCODE_VERSION="${OPENCODE_VERSION:-2}"
 T3_VERSION="${T3_VERSION:-latest}"
 CACHE_BUST="${OPENCODE_INSTALL_CACHE_BUST:-$(date +%s)}"
-CF_TAG="${CF_SANDBOX_TAG:-0.12.1}"
 PLATFORM="${DOCKER_PLATFORM:-linux/amd64}"
 PUSH="${PUSH:-1}"
 AGENT_IMAGE_TAG="${AGENT_IMAGE_TAG:-latest}"
 
 name="${1:-}"
 if [[ -z "$name" ]]; then
-  echo "Usage: $0 <opencode|opencode-server|opencode-aws-server|t3code-server|cf-sandbox>" >&2
+  echo "Usage: $0 <opencode|opencode-server|opencode-aws-server|t3code-server>" >&2
   exit 1
 fi
 
@@ -55,12 +54,6 @@ case "$name" in
       --build-arg "OPENCODE_VERSION=${OPENCODE_VERSION}" \
       --build-arg "T3_VERSION=${T3_VERSION}" \
       --build-arg "T3_INSTALL_CACHE_BUST=${CACHE_BUST}"
-    ;;
-  cf-sandbox)
-    build_push \
-      packages/api/src/providers/cloudflare/sandbox-worker/Dockerfile \
-      packages/api/src/providers/cloudflare/sandbox-worker \
-      gitterm-cf-sandbox "$CF_TAG"
     ;;
   *)
     echo "Unknown image: $name" >&2

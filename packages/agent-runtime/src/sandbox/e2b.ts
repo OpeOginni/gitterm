@@ -108,9 +108,12 @@ export function createE2BSandboxTransport(config: {
       try {
         // E2B fixes resources per template; each size is its own `<template><suffix>`.
         // A snapshot is a template too, with the size it was saved at.
-        const template = input.template ?? config.template ?? DEFAULT_E2B_TEMPLATE;
+        // The suffix belongs to the template name, before any `:tag`.
+        const [name, tag] = (input.template ?? config.template ?? DEFAULT_E2B_TEMPLATE).split(":");
         const source =
-          input.snapshot ?? config.snapshot ?? `${template}${input.machine?.templateSuffix ?? ""}`;
+          input.snapshot ??
+          config.snapshot ??
+          `${name}${input.machine?.templateSuffix ?? ""}${tag ? `:${tag}` : ""}`;
         sandbox = await Sandbox.create(source, {
           ...opts,
           timeoutMs: input.timeoutMs,

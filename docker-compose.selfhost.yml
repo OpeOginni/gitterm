@@ -168,6 +168,9 @@ services:
       NEXT_PUBLIC_BASE_DOMAIN: ${PUBLIC_HOST}
       NEXT_PUBLIC_SERVER_URL: ${PUBLIC_URL}/api
       NEXT_PUBLIC_AUTH_URL: ${PUBLIC_URL}
+      # Server-side session checks go straight to the API service: PUBLIC_URL may be
+      # localhost, which inside this container is the container itself.
+      INTERNAL_AUTH_URL: http://server:8080
       NEXT_PUBLIC_LISTENER_URL: ${PUBLIC_URL}/listener
       NEXT_PUBLIC_DEPLOYMENT_MODE: self-hosted
       NEXT_PUBLIC_ROUTING_MODE: ${ROUTING_MODE:-path}

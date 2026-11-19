@@ -1,15 +1,14 @@
 import { Template, waitForTimeout, defaultBuildLogger } from "e2b";
 import "dotenv/config";
-import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
+import { GITTERM_CLI_PACKAGE } from "./cli-package";
 
 async function main() {
   const template = Template()
-    .fromNodeImage("20-bookworm-slim")
+    .fromNodeImage("22-bookworm-slim")
     .aptInstall(["git", "bash", "curl", "ca-certificates"], {
       noInstallRecommends: true,
     })
-    .runCmd(GITTERM_CLI_CACHE_BUST)
-    .npmInstall(["@gitterm/opencode-workspace@1.18.0-workspaces.1", "@gitterm/cli@latest"], {
+    .npmInstall(["@gitterm/opencode-workspace@1.18.0-workspaces.1", GITTERM_CLI_PACKAGE], {
       g: true,
     })
     .runCmd('ln -sf "$(command -v opencode-workspace)" /usr/local/bin/opencode', { user: "root" })

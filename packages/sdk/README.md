@@ -382,7 +382,7 @@ agent files, runs setup phases, and starts the agent. Layer on the published bas
 entrypoint:
 
 ```dockerfile
-FROM opeoginni/gitterm-opencode-server:latest
+FROM opeoginni/gitterm-opencode-server:1
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip poppler-utils \
   && rm -rf /var/lib/apt/lists/*
 ```

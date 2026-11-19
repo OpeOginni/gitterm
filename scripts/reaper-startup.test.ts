@@ -16,21 +16,23 @@ const api = Bun.serve({
           ? { terminated: 0, failed: 0 }
           : procedure === "internal.keepAlwaysOnWorkspacesAlive"
             ? { renewed: 0 }
-            : procedure === "internal.runBillingTasks"
-              ? { notices: 0, sent: 0 }
-              : procedure === "internal.sweepAwsResourcesInternal"
-                ? {
-                    retriedWorkspaces: 0,
-                    runtimeSecretsDeleted: 0,
-                    servicesDeleted: 0,
-                    taskDefinitionsDeregistered: 0,
-                    rulesDeleted: 0,
-                    targetGroupsDeleted: 0,
-                    accessPointsDeleted: 0,
-                    cleanupFailures: [],
-                    unresolvedCleanupCount: 0,
-                  }
-                : [];
+            : procedure === "internal.settleProviderPausedWorkspaces"
+              ? { paused: 0 }
+              : procedure === "internal.runBillingTasks"
+                ? { notices: 0, sent: 0 }
+                : procedure === "internal.sweepAwsResourcesInternal"
+                  ? {
+                      retriedWorkspaces: 0,
+                      runtimeSecretsDeleted: 0,
+                      servicesDeleted: 0,
+                      taskDefinitionsDeregistered: 0,
+                      rulesDeleted: 0,
+                      targetGroupsDeleted: 0,
+                      accessPointsDeleted: 0,
+                      cleanupFailures: [],
+                      unresolvedCleanupCount: 0,
+                    }
+                  : [];
       return { result: { data } };
     });
     return Response.json(results);
@@ -71,6 +73,7 @@ test("managed idle reaper starts without API server or Polar credentials", async
   expect(stdout).toContain("Pass completed. Lifecycle transitions: 0");
   expect(requests).toContain("internal.getIdleWorkspaces");
   expect(requests).toContain("internal.runBillingTasks");
+  expect(requests).toContain("internal.settleProviderPausedWorkspaces");
   expect(requests).toContain("internal.retryWorkspaceTerminations");
 });
 

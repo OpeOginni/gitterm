@@ -8,7 +8,7 @@ COPY ./custom/src ./src
 RUN npm run check-types && npm run build
 
 # Build the pinned, unmodified ttyd backend.
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && \
@@ -52,7 +52,7 @@ RUN chmod +x /usr/local/bin/gitterm-terminal-session
 CMD ["ttyd", "--writable", "--port", "7681", "--index", "/usr/local/share/gitterm-terminal/index.html", "tmux", "-u", "-L", "gitterm", "-f", "/etc/gitterm-tmux.conf", "new-session", "-A", "-s", "transport-test", "bash"]
 
 # Create runtime image
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 
 # Install system dependencies
 RUN apt-get update && \
@@ -62,8 +62,6 @@ RUN apt-get update && \
     tmux \
     curl \
     unzip \
-    nodejs \
-    npm \
     netcat-traditional \
     libjson-c5 \
     libssl3 \
@@ -97,11 +95,12 @@ RUN ldconfig
 # /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.
 # OpenCode 2 ships as @opencode/cli; the opencode-ai package stays on 1.x.
 ARG OPENCODE_VERSION=2
+ARG GITTERM_CLI_VERSION=latest
 ARG OPENCODE_INSTALL_CACHE_BUST=manual
 RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
     && npm cache clean --force \
     && echo "npm @opencode/cli: $(npm view @opencode/cli@${OPENCODE_VERSION} version)" \
-    && npm install -g "@opencode/cli@${OPENCODE_VERSION}" "@gitterm/cli@latest" --prefer-online --no-audit --fund=false \
+    && npm install -g "@opencode/cli@${OPENCODE_VERSION}" "@gitterm/cli@${GITTERM_CLI_VERSION}" --prefer-online --no-audit --fund=false \
     && version=$(/usr/local/bin/opencode --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1) \
     && echo "installed opencode: ${version:-unknown}" \
     && case "$version" in 2.*) ;; *) echo "OpenCode 2.x is required (found ${version:-unknown})" >&2; exit 1 ;; esac

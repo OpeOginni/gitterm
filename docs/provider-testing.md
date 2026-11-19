@@ -23,7 +23,7 @@ Railway: https://<tunnel-domain>/listener/trpc/railway.handleWebhook
 E2B:     https://<tunnel-domain>/listener/trpc/e2b.handleWebhook
 ```
 
-Before testing scoped CLI commands, publish the current `@gitterm/cli`, rebuild the Docker and E2B workspace images with the `Publish Workspace Runtime Images` workflow, and reseed the server database so provider metadata references the current images and setup commands.
+Before testing scoped CLI commands, publish the current `@gitterm/cli`, run **Release GitTerm** with `runtimes`, and reseed the server database so provider metadata references the current images and setup commands.
 
 The go-to local smoke test for the hosted providers is:
 
@@ -122,7 +122,7 @@ export E2B_SIZE=standard
 # Daytona
 export DAYTONA_API_KEY=...
 export DAYTONA_TARGET=us
-# Optional. Defaults to opeoginni/gitterm-opencode-server:latest, pinned to a digest.
+# Optional. Defaults to opeoginni/gitterm-opencode-server:1, pinned to a digest.
 
 # Vercel Sandbox
 export VERCEL_API_TOKEN=...

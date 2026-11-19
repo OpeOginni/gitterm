@@ -1,5 +1,5 @@
 import { Template, waitForTimeout, type TemplateClass } from "e2b";
-import { GITTERM_CLI_CACHE_BUST } from "./cli-package";
+import { GITTERM_CLI_PACKAGE } from "./cli-package";
 
 /**
  * T3 Code server template. Mirrors .docker/T3Code.Server.Dockerfile:
@@ -18,14 +18,13 @@ export function createT3CodeServerTemplate(
         noInstallRecommends: true,
       })
       // Build tools preserve compatibility with older, explicitly pinned t3 releases.
-      .runCmd(GITTERM_CLI_CACHE_BUST)
       .npmInstall(
         [
           `t3@${t3Version}`,
           "@anthropic-ai/claude-code@latest",
           "@openai/codex@latest",
           `@opencode/cli@${opencodeVersion}`,
-          "@gitterm/cli@latest",
+          GITTERM_CLI_PACKAGE,
         ],
         { g: true },
       )
