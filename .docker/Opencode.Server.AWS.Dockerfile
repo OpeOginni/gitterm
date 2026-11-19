@@ -2,7 +2,7 @@
 # workspaces that use AWS access profiles. Register it in Admin -> Images with
 # AWS-only provider metadata so it is selected instead of the general image.
 # Installing these tools at workspace start would consume the startup budget.
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -10,8 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     ca-certificates \
-    nodejs \
-    npm \
     openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
@@ -36,11 +34,12 @@ RUN case "$(uname -m)" in aarch64|arm64) sam_arch=arm64 ;; *) sam_arch=x86_64 ;;
 # /workspace is a persisted volume in GitTerm, so anything installed under it can disappear on mount.
 # OpenCode 2 ships as @opencode/cli; the opencode-ai package stays on 1.x.
 ARG OPENCODE_VERSION=2
+ARG GITTERM_CLI_VERSION=latest
 ARG OPENCODE_INSTALL_CACHE_BUST=manual
 RUN echo "opencode install cache bust: ${OPENCODE_INSTALL_CACHE_BUST}" \
     && npm cache clean --force \
     && echo "npm @opencode/cli: $(npm view @opencode/cli@${OPENCODE_VERSION} version)" \
-    && npm install -g "@opencode/cli@${OPENCODE_VERSION}" "@gitterm/cli@latest" --prefer-online --no-audit --fund=false \
+    && npm install -g "@opencode/cli@${OPENCODE_VERSION}" "@gitterm/cli@${GITTERM_CLI_VERSION}" --prefer-online --no-audit --fund=false \
     && echo "installed opencode: $(opencode --version)"
 
 WORKDIR /workspace

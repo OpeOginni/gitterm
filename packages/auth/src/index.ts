@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@gitterm/db";
@@ -15,7 +16,11 @@ import env, {
 // Environment Configuration
 // ============================================================================
 
-const SUBDOMAIN_DOMAIN = `.${env.BASE_DOMAIN}`;
+// A cookie Domain can't carry a port, and browsers reject one for localhost or an IP
+// address, so those deployments keep host-only cookies.
+const COOKIE_HOST = env.BASE_DOMAIN.replace(/:\d+$/, "");
+const SUBDOMAIN_DOMAIN =
+  COOKIE_HOST === "localhost" || isIP(COOKIE_HOST) ? undefined : `.${COOKIE_HOST}`;
 const AUTH_BASE_PATH = "/api/auth";
 const githubAuthCredentials = getGitHubAuthCredentials();
 
@@ -119,11 +124,13 @@ export const auth = betterAuth({
   advanced: {
     defaultCookieAttributes: isProduction()
       ? {
-          secure: true,
+          // Browsers drop Secure cookies sent over plain http (other than localhost),
+          // and SameSite=None requires Secure.
+          ...(new URL(inferBaseUrlOrigin()).protocol === "https:"
+            ? { secure: true, sameSite: "none" as const, partitioned: true }
+            : { secure: false, sameSite: "lax" as const }),
           httpOnly: true,
-          sameSite: "none",
-          partitioned: true,
-          domain: SUBDOMAIN_DOMAIN,
+          ...(SUBDOMAIN_DOMAIN ? { domain: SUBDOMAIN_DOMAIN } : {}),
         }
       : {
           sameSite: "lax",

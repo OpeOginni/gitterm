@@ -1,203 +1,233 @@
-name: Publish Workspace Runtime Images
-
-# Secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, E2B_API_KEY
+name: Workspace runtime images
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      opencode:
-        description: "Publish OpenCode Docker images and E2B templates"
+      publish:
         type: boolean
-        default: true
-      t3code:
-        description: "Publish T3Code Docker image and E2B templates"
-        type: boolean
-        default: true
-      sandbox:
-        description: "Publish the E2B templates managed sandboxes start from"
-        type: boolean
-        default: false
+        required: true
       opencode_version:
-        description: "OpenCode version (latest or exact 2.x version)"
         type: string
-        default: "latest"
+        required: true
       t3_version:
-        description: "T3 version pin (latest or semver)"
         type: string
-        default: "latest"
+        required: true
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: false
+      DOCKERHUB_TOKEN:
+        required: false
+      E2B_API_KEY:
+        required: false
+      E2B_SMOKE_API_KEY:
+        required: true
 
 env:
   DOCKERHUB_NAMESPACE: opeoginni
 
 jobs:
-  build-docker:
-    if: ${{ inputs.opencode || inputs.t3code }}
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      major: ${{ steps.plan.outputs.major }}
+      build_tag: ${{ steps.plan.outputs.build_tag }}
+      images: ${{ steps.plan.outputs.images }}
+      opencode: ${{ steps.versions.outputs.opencode }}
+      t3: ${{ steps.versions.outputs.t3 }}
+      cli: ${{ steps.versions.outputs.cli }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        if: inputs.publish
+        with:
+          bun-version-file: package.json
+      - name: Set runtime line and build tag
+        id: plan
+        run: |
+          set -euo pipefail
+          major=$(sed -nE 's/^export const RUNTIME_IMAGE_MAJOR = "([0-9]+)";$/\1/p' packages/db/src/runtime-image.ts)
+          [[ "$major" =~ ^[0-9]+$ ]]
+          {
+            echo "major=$major"
+            echo "build_tag=$major.$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
+            echo 'images=[{"image":"gitterm-opencode","file":"Opencode.Dockerfile"},{"image":"gitterm-opencode-server","file":"Opencode.Server.Dockerfile"},{"image":"gitterm-opencode-server-aws","file":"Opencode.Server.AWS.Dockerfile"},{"image":"gitterm-t3code-server","file":"T3Code.Server.Dockerfile"}]'
+          } >> "$GITHUB_OUTPUT"
+      - name: Resolve package versions once
+        if: inputs.publish
+        id: versions
+        env:
+          OPENCODE_VERSION: ${{ inputs.opencode_version }}
+          T3_VERSION: ${{ inputs.t3_version }}
+        run: |
+          set -euo pipefail
+          bun -e '
+            import { getLatestOpencodeVersion } from "./packages/api/src/providers/opencode-version";
+            import { getLatestT3Version } from "./packages/api/src/providers/t3-version";
+            import cli from "./packages/cli/package.json";
+            const [opencode, t3] = await Promise.all([getLatestOpencodeVersion(), getLatestT3Version()]);
+            console.log(`opencode=${opencode}\nt3=${t3}\ncli=${cli.version}`);
+          ' >> "$GITHUB_OUTPUT"
+          cli=$(bun -p 'require("./packages/cli/package.json").version')
+          test "$(npm view "@gitterm/cli@$cli" version)" = "$cli"
+      - name: Check release credentials
+        env:
+          PUBLISH: ${{ inputs.publish }}
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          E2B_SMOKE_API_KEY: ${{ secrets.E2B_SMOKE_API_KEY }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -n "$E2B_SMOKE_API_KEY" || { echo "::error::Set E2B_SMOKE_API_KEY from a separate E2B team."; exit 1; }
+          if [[ "$PUBLISH" == true ]]; then
+            if [[ -z "$E2B_API_KEY" || "$E2B_API_KEY" == "$E2B_SMOKE_API_KEY" || -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then
+              echo "::error::Set Docker Hub publishing credentials and a distinct E2B publishing key."
+              exit 1
+            fi
+          fi
+      - name: Summarize runtime selection
+        env:
+          BUILD_TAG: ${{ steps.plan.outputs.build_tag }}
+          MAJOR: ${{ steps.plan.outputs.major }}
+          OPENCODE: ${{ steps.versions.outputs.opencode }}
+          T3: ${{ steps.versions.outputs.t3 }}
+          CLI: ${{ steps.versions.outputs.cli }}
+        run: |
+          if [[ -n "$CLI" ]]; then
+            echo "Runtime candidate \`$BUILD_TAG\` from \`$GITHUB_SHA\`: OpenCode $OPENCODE, T3 Code $T3, GitTerm CLI $CLI." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Checking published runtime line \`$MAJOR\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  docker:
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - id: opencode
-            file: .docker/Opencode.Dockerfile
-            context: .docker
-            image: gitterm-opencode
-            tag: latest
-            agent: opencode
-          - id: opencode-server
-            file: .docker/Opencode.Server.Dockerfile
-            context: .docker
-            image: gitterm-opencode-server
-            tag: latest
-            agent: opencode
-          - id: opencode-server-aws
-            file: .docker/Opencode.Server.AWS.Dockerfile
-            context: .docker
-            image: gitterm-opencode-server-aws
-            tag: latest
-            agent: opencode
-          - id: t3code-server
-            file: .docker/T3Code.Server.Dockerfile
-            context: .docker
-            image: gitterm-t3code-server
-            tag: latest
-            agent: t3
-          - id: cf-sandbox
-            file: packages/api/src/providers/cloudflare/sandbox-worker/Dockerfile
-            context: packages/api/src/providers/cloudflare/sandbox-worker
-            image: gitterm-cf-sandbox
-            tag: "0.12.1"
-            agent: cf
-
+        include: ${{ fromJSON(needs.plan.outputs.images) }}
+    env:
+      IMAGE: opeoginni/${{ matrix.image }}
+      TAG: ${{ inputs.publish && needs.plan.outputs.build_tag || needs.plan.outputs.major }}
     steps:
-      - name: Skip unselected agent
-        if: ${{ (matrix.agent == 't3' && !inputs.t3code) || (matrix.agent == 'opencode' && !inputs.opencode) }}
-        run: |
-          echo "Skipping unselected agent image"
-          echo "skip=true" >> "$GITHUB_ENV"
-
-      - name: Checkout
-        if: ${{ env.skip != 'true' }}
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        if: ${{ env.skip != 'true' }}
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to Docker Hub
-        if: ${{ env.skip != 'true' }}
-        uses: docker/login-action@v4
+      - name: Protect candidate tags from partial reruns
+        if: inputs.publish
+        run: test "$GITHUB_RUN_ATTEMPT" = 1
+      - uses: actions/checkout@v7
+        if: inputs.publish
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        if: inputs.publish
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Resolve and validate OpenCode 2
-        if: ${{ env.skip != 'true' }}
-        shell: bash
-        env:
-          REQUESTED_OPENCODE_VERSION: ${{ inputs.opencode_version }}
-        run: |
-          set -euo pipefail
-          REQUESTED="${REQUESTED_OPENCODE_VERSION:-2}"
-          if [ "$REQUESTED" = "2" ] || [ "$REQUESTED" = "latest" ]; then
-            RESOLVED=$(npm view @opencode/cli dist-tags.latest)
-          else
-            RESOLVED=$(npm view "@opencode/cli@$REQUESTED" version)
-          fi
-          case "$RESOLVED" in
-            2.*) ;;
-            *) echo "Refusing to build non-OpenCode-2 version: $RESOLVED" >&2; exit 1 ;;
-          esac
-          echo "Building OpenCode $RESOLVED"
-          echo "OPENCODE_V2_VERSION=$RESOLVED" >> "$GITHUB_ENV"
-
-      - name: Resolve and validate T3
-        if: ${{ env.skip != 'true' && matrix.agent == 't3' }}
-        shell: bash
-        env:
-          REQUESTED_T3_VERSION: ${{ inputs.t3_version }}
-        run: |
-          set -euo pipefail
-          REQUESTED="${REQUESTED_T3_VERSION:-latest}"
-          REQUESTED="${REQUESTED#v}"
-          if [ "$REQUESTED" != "latest" ] && ! [[ "$REQUESTED" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "T3 version must be latest or an exact stable semver" >&2; exit 1
-          fi
-          RESOLVED=$(npm view "t3@$REQUESTED" version)
-          [[ "$RESOLVED" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
-          echo "T3_RESOLVED_VERSION=$RESOLVED" >> "$GITHUB_ENV"
-
-      - name: Build and push
-        if: ${{ env.skip != 'true' }}
+      - name: Push candidate
+        if: inputs.publish
         uses: docker/build-push-action@v7
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.file }}
+          context: .docker
+          file: .docker/${{ matrix.file }}
           platforms: linux/amd64
           push: true
           pull: true
           no-cache: true
-          tags: ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.image }}:${{ matrix.tag }}
+          tags: ${{ env.IMAGE }}:${{ env.TAG }}
           build-args: |
-            OPENCODE_VERSION=${{ env.OPENCODE_V2_VERSION || '2' }}
-            OPENCODE_INSTALL_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
-            T3_VERSION=${{ env.T3_RESOLVED_VERSION || inputs.t3_version }}
-            T3_INSTALL_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
+            OPENCODE_VERSION=${{ needs.plan.outputs.opencode }}
+            T3_VERSION=${{ needs.plan.outputs.t3 }}
+            GITTERM_CLI_VERSION=${{ needs.plan.outputs.cli }}
+      - name: Check published image
+        run: docker buildx imagetools inspect "$IMAGE:$TAG"
+      - name: Smoke-test installed runtime
+        if: inputs.publish
+        env:
+          OPENCODE_VERSION: ${{ needs.plan.outputs.opencode }}
+          T3_VERSION: ${{ needs.plan.outputs.t3 }}
+          CLI_VERSION: ${{ needs.plan.outputs.cli }}
+          IMAGE_NAME: ${{ matrix.image }}
+        run: |
+          docker run --rm --entrypoint sh "$IMAGE:$TAG" -ec '
+            version=$(opencode --version)
+            test "${version#opencode v}" = "$1"
+            test "$(gitterm --version)" = "$2"
+            if [ "$3" = gitterm-t3code-server ]; then
+              test "$(node -p "require(process.argv[1]).version" "$(npm root -g)/t3/package.json")" = "$4"
+              t3 --version
+            fi
+            if [ "$3" = gitterm-opencode-server ]; then
+              export OPENCODE_SERVER_PASSWORD=release-smoke
+              opencode serve --hostname 127.0.0.1 --port 4096 > /tmp/opencode-release.log 2>&1 &
+              if ! info=$(curl -fsS --retry 15 --retry-connrefused --retry-delay 1 \
+                -u "opencode:$OPENCODE_SERVER_PASSWORD" http://127.0.0.1:4096/api/info); then
+                cat /tmp/opencode-release.log >&2
+                exit 1
+              fi
+              test "$(node -p "JSON.parse(process.argv[1]).version" "$info")" = "$1"
+            fi
+          ' sh "$OPENCODE_VERSION" "$CLI_VERSION" "$IMAGE_NAME" "$T3_VERSION"
 
-  build-e2b:
-    if: ${{ (inputs.opencode || inputs.t3code) && needs.build-docker.result == 'success' }}
+  e2b:
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    needs: [build-docker]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Protect candidate tags from partial reruns
+        if: inputs.publish
+        run: test "$GITHUB_RUN_ATTEMPT" = 1
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.14
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build E2B templates
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: Build candidate templates
+        if: inputs.publish
         working-directory: packages/api
         env:
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          T3_VERSION: ${{ inputs.t3_version }}
-          OPENCODE_VERSION: ${{ inputs.opencode_version }}
-          BUILD_OPENCODE: ${{ inputs.opencode }}
-          BUILD_T3CODE: ${{ inputs.t3code }}
-        shell: bash
+          OPENCODE_VERSION: ${{ needs.plan.outputs.opencode }}
+          T3_VERSION: ${{ needs.plan.outputs.t3 }}
+          RUNTIME_BUILD_TAG: ${{ needs.plan.outputs.build_tag }}
+        run: bun run e2b:build
+      - name: Start templates from a separate E2B team
+        working-directory: packages/api
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_SMOKE_API_KEY }}
+          RUNTIME_BUILD_TAG: ${{ inputs.publish && needs.plan.outputs.build_tag || needs.plan.outputs.major }}
+          OPENCODE_VERSION: ${{ needs.plan.outputs.opencode }}
+        run: bun run e2b:build --verify
+
+  promote:
+    if: inputs.publish
+    needs: [plan, docker, e2b]
+    runs-on: ubuntu-latest
+    env:
+      MAJOR: ${{ needs.plan.outputs.major }}
+      RUNTIME_BUILD_TAG: ${{ needs.plan.outputs.build_tag }}
+    steps:
+      - name: Prevent an older run from moving runtime aliases
+        run: test "$GITHUB_RUN_ATTEMPT" = 1
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Move E2B runtime aliases
+        working-directory: packages/api
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+        run: bun run e2b:build --promote
+      - name: Move Docker runtime aliases
+        env:
+          IMAGES: ${{ needs.plan.outputs.images }}
         run: |
           set -euo pipefail
-          if [ "$BUILD_OPENCODE" = "true" ]; then
-            bun run e2b:build --agent opencode
-          fi
-          if [ "$BUILD_T3CODE" = "true" ]; then
-            bun run e2b:build --agent t3code
-          fi
-
-  # No agent and no Docker image: built straight from E2B's base image.
-  build-e2b-sandbox:
-    if: ${{ inputs.sandbox }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build E2B sandbox templates
-        working-directory: packages/api
-        env:
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-        run: bun run e2b:build --agent sandbox
+          for name in $(jq -r '.[].image' <<< "$IMAGES"); do
+            image="$DOCKERHUB_NAMESPACE/$name"
+            docker buildx imagetools create -t "$image:$MAJOR" -t "$image:latest" "$image:$RUNTIME_BUILD_TAG"
+          done
+          echo "Promoted runtime \`$RUNTIME_BUILD_TAG\` to line \`$MAJOR\`." >> "$GITHUB_STEP_SUMMARY"

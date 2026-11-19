@@ -5,27 +5,27 @@ import { join } from "node:path";
 import type { AgentFile } from "../compute";
 import { applyMachineProfile } from "../machine-profile";
 
-test("E2B selects owner-qualified templates for every agent, size and SSH mode", async () => {
+test("E2B selects owner-qualified, tagged templates for every agent, size and SSH mode", async () => {
   const { E2BProvider } = await import(".");
   const provider = new E2BProvider() as any;
   const opencode = {
     e2b: {
-      templateId: "brightoginni123/gitterm-opencode-server",
-      sshTemplateId: "brightoginni123/gitterm-opencode-server-with-ssh",
+      templateId: "brightoginni123/gitterm-opencode-server:1",
+      sshTemplateId: "brightoginni123/gitterm-opencode-server-with-ssh:1",
     },
   };
-  const t3code = { e2b: { templateId: "brightoginni123/gitterm-t3code-server" } };
+  const t3code = { e2b: { templateId: "brightoginni123/gitterm-t3code-server:1" } };
   for (const suffix of ["-sm", "", "-lg"]) {
     const opencodeMetadata = applyMachineProfile(opencode, "e2b", { templateSuffix: suffix });
     const t3codeMetadata = applyMachineProfile(t3code, "e2b", { templateSuffix: suffix });
     expect(provider.getTemplateId({ imageProviderMetadata: opencodeMetadata }, false)).toBe(
-      `brightoginni123/gitterm-opencode-server${suffix}`,
+      `brightoginni123/gitterm-opencode-server${suffix}:1`,
     );
     expect(provider.getTemplateId({ imageProviderMetadata: opencodeMetadata }, true)).toBe(
-      `brightoginni123/gitterm-opencode-server-with-ssh${suffix}`,
+      `brightoginni123/gitterm-opencode-server-with-ssh${suffix}:1`,
     );
     expect(provider.getTemplateId({ imageProviderMetadata: t3codeMetadata }, false)).toBe(
-      `brightoginni123/gitterm-t3code-server${suffix}`,
+      `brightoginni123/gitterm-t3code-server${suffix}:1`,
     );
   }
 });

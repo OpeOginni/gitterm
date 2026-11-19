@@ -126,7 +126,9 @@ export class E2BProvider implements ComputeProvider {
       throw new Error(`No E2B template ID configured for image ${config.imageId}`);
     }
 
-    return `${templateId}${e2bMetadata?.templateSuffix ?? ""}`;
+    // The size suffix belongs to the template name, before any `:tag`.
+    const [name, tag] = templateId.split(":");
+    return `${name}${e2bMetadata?.templateSuffix ?? ""}${tag ? `:${tag}` : ""}`;
   }
 
   private getRepositoryUrl(repositoryUrl: string): string {

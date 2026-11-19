@@ -189,15 +189,16 @@ The worker calls the server's internal API and reads no credentials, so it doesn
 
 The published `web` image replaces these when the container starts. If you build `web` yourself, for example with Railway's builder, they are fixed at build time: rebuild after you change one.
 
-| Variable                      | Required | Default           | What it does                                                                                     |
-| ----------------------------- | -------- | ----------------- | ------------------------------------------------------------------------------------------------ |
-| `NEXT_PUBLIC_SERVER_URL`      | Yes      | None              | API URL. Compose: `<PUBLIC_URL>/api`                                                             |
-| `NEXT_PUBLIC_AUTH_URL`        | Yes      | None              | Auth URL without `/api`. Compose: `PUBLIC_URL`                                                   |
-| `NEXT_PUBLIC_LISTENER_URL`    | Yes      | None              | Listener URL. Also shown as the webhook base on provider pages. Compose: `<PUBLIC_URL>/listener` |
-| `NEXT_PUBLIC_BASE_DOMAIN`     | Yes      | `gitterm.dev`     | Public host, for workspace URLs. Compose: `PUBLIC_HOST`                                          |
-| `NEXT_PUBLIC_ROUTING_MODE`    | No       | `path`            | Must match the server's `ROUTING_MODE`                                                           |
-| `NEXT_PUBLIC_DEPLOYMENT_MODE` | No       | `self-hosted`     | Leave as `self-hosted`                                                                           |
-| `PORT`, `HOSTNAME`            | No       | `8080`, `0.0.0.0` | Listen address, set in the image                                                                 |
+| Variable                      | Required | Default           | What it does                                                                                               |
+| ----------------------------- | -------- | ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SERVER_URL`      | Yes      | None              | API URL. Compose: `<PUBLIC_URL>/api`                                                                       |
+| `NEXT_PUBLIC_AUTH_URL`        | Yes      | None              | Auth URL without `/api`. Compose: `PUBLIC_URL`                                                             |
+| `INTERNAL_AUTH_URL`           | No       | None              | Server URL the web container uses for its own session checks, read at start. Compose: `http://server:8080` |
+| `NEXT_PUBLIC_LISTENER_URL`    | Yes      | None              | Listener URL. Also shown as the webhook base on provider pages. Compose: `<PUBLIC_URL>/listener`           |
+| `NEXT_PUBLIC_BASE_DOMAIN`     | Yes      | `gitterm.dev`     | Public host, for workspace URLs. Compose: `PUBLIC_HOST`                                                    |
+| `NEXT_PUBLIC_ROUTING_MODE`    | No       | `path`            | Must match the server's `ROUTING_MODE`                                                                     |
+| `NEXT_PUBLIC_DEPLOYMENT_MODE` | No       | `self-hosted`     | Leave as `self-hosted`                                                                                     |
+| `PORT`, `HOSTNAME`            | No       | `8080`, `0.0.0.0` | Listen address, set in the image                                                                           |
 
 ### proxy
 

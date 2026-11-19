@@ -133,9 +133,17 @@ Continue with [First sign-in](#first-sign-in).
 
 ### Upgrade
 
-Back up the database first. Then pull the new images and recreate the services:
+Back up the database first:
 
 ```sh
+docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > gitterm-$(date +%Y%m%d).dump
+```
+
+Then update the checkout, so `docker-compose.selfhost.yml` matches the release (service settings and image names change between releases), pull the new images and recreate the services:
+
+```sh
+git pull
 docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml pull
 docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d
 ```

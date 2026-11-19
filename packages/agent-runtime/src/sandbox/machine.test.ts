@@ -73,6 +73,20 @@ test("E2B uses the template built for the size", async () => {
   expect(calls[0]).toBe("gitterm-sandbox-sm");
 });
 
+test("E2B puts the size before a template tag", async () => {
+  const transport = createSandboxTransport({ provider: "e2b", apiKey: "k" });
+  calls.length = 0;
+  await expect(
+    transport.create({
+      labels: {},
+      timeoutMs: 600_000,
+      template: "owner/gitterm-sandbox:1",
+      machine: { templateSuffix: "-sm" },
+    }),
+  ).rejects.toThrow();
+  expect(calls[0]).toBe("owner/gitterm-sandbox-sm:1");
+});
+
 test("Daytona requests the profile's resources", async () => {
   const transport = createSandboxTransport({ provider: "daytona", apiKey: "k" });
   expect(await created(transport, { resources: { cpu: 1, memory: 2 } })).toMatchObject({

@@ -31,8 +31,9 @@ const nextConfig: NextConfig = {
     return config;
   },
   typescript: {
-    // We run type checking separately
-    ignoreBuildErrors: false,
+    // CI type-checks (`bun run check-types`). The Docker build skips it: Next's checker
+    // alone needs more memory than a small self-hosting machine has.
+    ignoreBuildErrors: standalone,
   },
   images: {
     remotePatterns: [

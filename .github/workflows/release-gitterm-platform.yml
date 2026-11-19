@@ -1,381 +1,154 @@
-name: Release GitTerm Platform Images
+name: GitTerm platform images
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       version_type:
-        description: "Version bump type"
+        type: string
         required: true
-        type: choice
-        options:
-          - major
-          - minor
-          - patch
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
-  # Version bump and tag creation
-  version-release:
+  plan:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     outputs:
-      version: ${{ steps.version.outputs.new_version }}
+      version: ${{ steps.plan.outputs.version }}
+      prefix: ${{ steps.plan.outputs.prefix }}
+      candidate: ${{ steps.plan.outputs.candidate }}
+      images: ${{ steps.plan.outputs.images }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Get latest version tag
-        id: get_version
+      - name: Plan platform release
+        id: plan
+        env:
+          BUMP: ${{ inputs.version_type }}
         run: |
-          # Get the latest version tag, or default to v0.0.0
-          LATEST_TAG=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || echo "v0.0.0")
-          LATEST_VERSION=${LATEST_TAG#v}  # Remove 'v' prefix
-          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "Latest version: $LATEST_VERSION"
-
-      - name: Bump version
-        id: version
-        run: |
-          OLD_VERSION="${{ steps.get_version.outputs.latest_version }}"
-          VERSION_TYPE="${{ github.event.inputs.version_type }}"
-
-          # Parse version components
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$OLD_VERSION"
-
-          # Bump based on type
-          case "$VERSION_TYPE" in
-            major)
-              MAJOR=$((MAJOR + 1))
-              MINOR=0
-              PATCH=0
-              ;;
-            minor)
-              MINOR=$((MINOR + 1))
-              PATCH=0
-              ;;
-            patch)
-              PATCH=$((PATCH + 1))
-              ;;
+          set -euo pipefail
+          tags=$(git tag --list --sort=-version:refname 'v*')
+          previous=$(grep -m1 -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' <<< "$tags" || true)
+          previous=${previous:-v0.0.0}
+          IFS=. read -r major minor patch <<< "${previous#v}"
+          case "$BUMP" in
+            major) version="v$((major + 1)).0.0" ;;
+            minor) version="v$major.$((minor + 1)).0" ;;
+            patch) version="v$major.$minor.$((patch + 1))" ;;
+            *) echo "::error::Unknown version bump."; exit 1 ;;
           esac
+          {
+            echo "version=$version"
+            echo "prefix=$REGISTRY/${GITHUB_REPOSITORY_OWNER,,}/gitterm"
+            echo "candidate=candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            echo 'images=[{"name":"server","app":"server"},{"name":"listener","app":"listener"},{"name":"idle-reaper-worker","app":"worker"},{"name":"proxy","app":"proxy"},{"name":"web","app":"web"}]'
+          } >> "$GITHUB_OUTPUT"
+          echo "Platform release: $previous → $version from $GITHUB_SHA."
 
-          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "Bumping $OLD_VERSION -> $NEW_VERSION ($VERSION_TYPE)"
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.images) }}
+    steps:
+      - name: Protect candidate tags from partial reruns
+        run: test "$GITHUB_RUN_ATTEMPT" = 1
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push candidate
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ needs.plan.outputs.prefix }}-${{ matrix.name }}:${{ needs.plan.outputs.candidate }}
+          labels: |
+            org.opencontainers.image.title=GitTerm ${{ matrix.name }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.plan.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
-      - name: Create git tag
-        run: |
-          VERSION="${{ steps.version.outputs.new_version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v$VERSION" -m "Release v$VERSION"
-          git push origin "v$VERSION"
+  smoke:
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GITTERM_IMAGE_PREFIX: ${{ needs.plan.outputs.prefix }}
+      GITTERM_IMAGE_TAG: ${{ needs.plan.outputs.candidate }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check self-hosted startup and login
+        run: bash scripts/release-platform-smoke.sh
 
-  publish-release:
-    needs:
-      - version-release
-      - build-server
-      - build-listener
-      - build-idle-reaper-worker
-      - build-proxy
-      - build-web
+  publish:
+    needs: [plan, smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
+      packages: write
+    env:
+      IMAGE_PREFIX: ${{ needs.plan.outputs.prefix }}
+      CANDIDATE: ${{ needs.plan.outputs.candidate }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      IMAGES: ${{ needs.plan.outputs.images }}
     steps:
-      - name: Create GitHub release
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish platform image tags
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          existing=$(git ls-remote origin "refs/tags/$VERSION")
+          if [[ -n "$existing" ]]; then
+            echo "::error::$VERSION already exists. Start a new release."
+            exit 1
+          fi
+          for name in $(jq -r '.[].name' <<< "$IMAGES"); do
+            image="$IMAGE_PREFIX-$name"
+            docker buildx imagetools create -t "$image:$VERSION" -t "$image:${GITHUB_SHA:0:7}" "$image:$CANDIDATE"
+          done
+          for name in $(jq -r '.[].name' <<< "$IMAGES"); do
+            image="$IMAGE_PREFIX-$name"
+            docker buildx imagetools create -t "$image:latest" "$image:$VERSION"
+          done
+      - name: Tag the source commit and create the GitHub release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ needs.version-release.outputs.version }}" \
-            --verify-tag \
-            --generate-notes \
-            --title "v${{ needs.version-release.outputs.version }}"
-
-  # Build API Server
-  build-server:
-    needs: version-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set image name (lowercase)
-        id: image
-        run: |
-          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
-          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Build and push server
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./apps/server/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ steps.image.outputs.prefix }}-server:latest
-            ${{ steps.image.outputs.prefix }}-server:v${{ needs.version-release.outputs.version }}
-            ${{ steps.image.outputs.prefix }}-server:${{ steps.image.outputs.short }}
-          labels: |
-            org.opencontainers.image.title=GitTerm Server
-            org.opencontainers.image.description=Main API service for GitTerm.
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.url=https://github.com/${{ github.repository }}
-            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
-            org.opencontainers.image.version=v${{ needs.version-release.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=server
-          cache-to: type=gha,mode=max,scope=server
-
-  # Build Listener (Webhook listener for workspace events)
-  build-listener:
-    needs: version-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set image name (lowercase)
-        id: image
-        run: |
-          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
-          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Build and push listener
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./apps/listener/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ steps.image.outputs.prefix }}-listener:latest
-            ${{ steps.image.outputs.prefix }}-listener:v${{ needs.version-release.outputs.version }}
-            ${{ steps.image.outputs.prefix }}-listener:${{ steps.image.outputs.short }}
-          labels: |
-            org.opencontainers.image.title=GitTerm Listener
-            org.opencontainers.image.description=Webhook and workspace event ingress for GitTerm.
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.url=https://github.com/${{ github.repository }}
-            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
-            org.opencontainers.image.version=v${{ needs.version-release.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=listener
-          cache-to: type=gha,mode=max,scope=listener
-
-  # Build Idle Reaper Worker
-  build-idle-reaper-worker:
-    needs: version-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set image name (lowercase)
-        id: image
-        run: |
-          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
-          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Build and push idle-reaper-worker
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./apps/worker/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ steps.image.outputs.prefix }}-idle-reaper-worker:latest
-            ${{ steps.image.outputs.prefix }}-idle-reaper-worker:v${{ needs.version-release.outputs.version }}
-            ${{ steps.image.outputs.prefix }}-idle-reaper-worker:${{ steps.image.outputs.short }}
-          labels: |
-            org.opencontainers.image.title=GitTerm Idle Reaper Worker
-            org.opencontainers.image.description=Background worker that stops idle workspaces and enforces quotas for GitTerm.
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.url=https://github.com/${{ github.repository }}
-            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
-            org.opencontainers.image.version=v${{ needs.version-release.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=idle-reaper-worker
-          cache-to: type=gha,mode=max,scope=idle-reaper-worker
-
-  # Build Proxy (Caddy reverse proxy - path-based routing for self-hosted)
-  build-proxy:
-    needs: version-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set image name (lowercase)
-        id: image
-        run: |
-          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
-          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Build and push proxy (path-based routing)
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./apps/proxy/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ steps.image.outputs.prefix }}-proxy:latest
-            ${{ steps.image.outputs.prefix }}-proxy:v${{ needs.version-release.outputs.version }}
-            ${{ steps.image.outputs.prefix }}-proxy:${{ steps.image.outputs.short }}
-          labels: |
-            org.opencontainers.image.title=GitTerm Proxy
-            org.opencontainers.image.description=Caddy reverse proxy for GitTerm path and subdomain workspace routing.
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.url=https://github.com/${{ github.repository }}
-            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
-            org.opencontainers.image.version=v${{ needs.version-release.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=proxy
-          cache-to: type=gha,mode=max,scope=proxy
-
-  # Build Web App (Next.js frontend)
-  build-web:
-    needs: version-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set image name (lowercase)
-        id: image
-        run: |
-          echo "prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gitterm" >> $GITHUB_OUTPUT
-          echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Build and push web
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./apps/web/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ steps.image.outputs.prefix }}-web:latest
-            ${{ steps.image.outputs.prefix }}-web:v${{ needs.version-release.outputs.version }}
-            ${{ steps.image.outputs.prefix }}-web:${{ steps.image.outputs.short }}
-          labels: |
-            org.opencontainers.image.title=GitTerm Web
-            org.opencontainers.image.description=Dashboard and authentication UI for GitTerm.
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.url=https://github.com/${{ github.repository }}
-            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
-            org.opencontainers.image.version=v${{ needs.version-release.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
+          set -euo pipefail
+          git -c user.name=github-actions[bot] -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
+            tag -a "$VERSION" "$GITHUB_SHA" -m "Release $VERSION"
+          git push origin "refs/tags/$VERSION"
+          gh release create "$VERSION" --verify-tag --generate-notes --title "$VERSION"
+          echo "Released \`$VERSION\` from \`$GITHUB_SHA\`." >> "$GITHUB_STEP_SUMMARY"

@@ -24,7 +24,8 @@ import {
 
 export const DIRECT_OPENCODE_PORT = 4096;
 export const DIRECT_OPENCODE_COMMAND = `opencode serve --hostname 0.0.0.0 --port ${DIRECT_OPENCODE_PORT}`;
-export const DIRECT_OPENCODE_SERVER_IMAGE = "opeoginni/gitterm-opencode-server:latest";
+// The runtime line (RUNTIME_IMAGE_MAJOR in packages/db/src/runtime-image.ts).
+export const DIRECT_OPENCODE_SERVER_IMAGE = "opeoginni/gitterm-opencode-server:1";
 export const DIRECT_E2B_TEMPLATES = {
   standard: "gitterm-opencode-server",
   large: "gitterm-opencode-server-lg",

@@ -65,13 +65,12 @@ Containers: Edit).
 ### Publishing the container image (maintainers, one-time)
 
 The public image is built from `sandbox-worker/Dockerfile` and pushed by
-maintainers (this is the only step that needs Docker, and it never runs on a
-user's host). Run it from the repo root, either on its own or as part of the
-full agent image refresh:
+maintainers. It is separate from the **Release GitTerm** action. Run this from the repo root:
 
 ```bash
-bun run docker:agent cf-sandbox   # local build + push (or use GH Actions)
-bun run opencode-upgrade          # triggers Publish Workspace Runtime Images workflow
+docker buildx build --platform linux/amd64 \
+  -t opeoginni/gitterm-cf-sandbox:0.12.1 --push \
+  packages/api/src/providers/cloudflare/sandbox-worker
 ```
 
 Keep the image tag in sync with the `@cloudflare/sandbox` npm version.

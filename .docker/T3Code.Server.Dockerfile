@@ -24,6 +24,7 @@ ARG T3_VERSION=latest
 ARG CLAUDE_CODE_VERSION=latest
 ARG CODEX_VERSION=latest
 ARG OPENCODE_VERSION=2
+ARG GITTERM_CLI_VERSION=latest
 ARG T3_INSTALL_CACHE_BUST=manual
 RUN echo "t3 install cache bust: ${T3_INSTALL_CACHE_BUST}" \
     && npm cache clean --force \
@@ -31,7 +32,7 @@ RUN echo "t3 install cache bust: ${T3_INSTALL_CACHE_BUST}" \
     && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" --no-audit --fund=false \
     && npm install -g "@openai/codex@${CODEX_VERSION}" --no-audit --fund=false \
     && npm install -g "@opencode/cli@${OPENCODE_VERSION}" --no-audit --fund=false \
-    && npm install -g "@gitterm/cli@latest" --no-audit --fund=false \
+    && npm install -g "@gitterm/cli@${GITTERM_CLI_VERSION}" --no-audit --fund=false \
     && echo "installed t3: $(t3 --version 2>/dev/null || echo unknown)"
 
 # Set up working directory
