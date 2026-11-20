@@ -104,6 +104,8 @@ type SandboxOptions = {
   limits?: Partial<SandboxLimits>;
   /** Extra glob patterns never uploaded. Secret-like files are always excluded. */
   exclude?: string[];
+  /** Largest working tree a sync uploads, in MiB before compression (default 100, at most 1024). */
+  maxSourceMiB?: number;
   /**
    * Create every sandbox with public previews: anyone with a preview URL can open it.
    * Setting this is the approval, so nobody is asked per sandbox.
@@ -173,6 +175,7 @@ function selected(settings: SandboxSettings, accountName?: string) {
     const {
       limits: _l,
       exclude: _e,
+      maxSourceMiB: _m,
       publicPreviews: _p,
       snapshots: _s,
       envFiles: _f,

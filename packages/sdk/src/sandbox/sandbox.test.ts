@@ -1,8 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 
 /** Built from parts so this file is not itself synced as a private key. */
 const KEY_HEADER = (kind: string) => `-----BEGIN ${kind}PRIVATE ` + "KEY-----";
@@ -114,7 +115,7 @@ const { SandboxAccountError } = backendModule;
 const { accountHash } = await import("@gitterm/agent-runtime/sandbox/types");
 const { SandboxProviderError } = await import("@gitterm/agent-runtime/sandbox/types");
 const { createFileSandboxStore } = await import("./store");
-const { captureSource, globToRegExp } = await import("./source");
+const { captureSource, globToRegExp, sourceLimitBytes } = await import("./source");
 const { createTarGz } = await import("./tar");
 
 const settings = {
@@ -225,8 +226,13 @@ describe("sandbox account isolation", () => {
       });
       expect(JSON.stringify(describeSandboxAccount(account))).not.toContain("key-team-1");
       // One account inline, named after its provider.
-      const inline = await resolveSandboxAccount({ provider: "e2b", apiKey: "key-team-1" });
+      const inline = await resolveSandboxAccount({
+        provider: "e2b",
+        apiKey: "key-team-1",
+        maxSourceMiB: 512,
+      });
       expect(inline).toMatchObject({ name: "e2b", provider: "e2b", ownKey: true });
+      expect(inline.config).not.toHaveProperty("maxSourceMiB");
     } finally {
       process.env.GITTERM_API_TOKEN = saved.token;
       process.env.HOME = saved.home;
@@ -678,6 +684,33 @@ describe("preview visibility", () => {
 });
 
 describe("source snapshots", () => {
+  test("sync limit defaults to 100 MiB and accepts only whole MiB from 1 to 1024", () => {
+    expect(sourceLimitBytes()).toBe(104857600);
+    expect(sourceLimitBytes(512)).toBe(536870912);
+    expect(sourceLimitBytes(1)).toBe(1024 * 1024);
+    expect(sourceLimitBytes(1024)).toBe(1024 * 1024 * 1024);
+    for (const invalid of [0, -1, 1.5, NaN, Infinity, 1025, "512", null])
+      expect(() => sourceLimitBytes(invalid as number)).toThrow(/maxSourceMiB/);
+  });
+
+  test("a checkout over the limit is refused until the user raises it", async () => {
+    const repo = await mkdtemp(path.join(tmpdir(), "gitterm-src-"));
+    try {
+      execFileSync("git", ["init", "-q"], { cwd: repo, stdio: "pipe" });
+      const file = path.join(repo, "large.dat");
+      const bytes = 101 * 1024 * 1024;
+      await writeFile(file, "");
+      await truncate(file, bytes);
+      await expect(captureSource(repo)).rejects.toThrow(
+        /100 MiB sandbox sync limit.*raise "maxSourceMiB".*up to 1024 MiB/,
+      );
+      const { snapshot } = await captureSource(repo, { maxBytes: sourceLimitBytes(512) });
+      expect(snapshot.bytes).toBe(bytes);
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
+
   test("glob exclusions", () => {
     expect(globToRegExp("*.log").test("a/b/build.log")).toBe(true);
     expect(globToRegExp("fixtures/**").test("fixtures/x/y")).toBe(true);
@@ -732,6 +765,97 @@ describe("source snapshots", () => {
         snapshot.digest,
       );
       expect(archive.byteLength).toBeGreaterThan(0);
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
+
+  test("submodules are skipped and reported, and nothing inside them is uploaded", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "gitterm-src-"));
+    try {
+      const child = path.join(directory, "child");
+      const repo = path.join(directory, "outer");
+      const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, stdio: "pipe" });
+      const childGit = (...args: string[]) =>
+        execFileSync("git", args, { cwd: child, stdio: "pipe" });
+      await mkdir(child);
+      await mkdir(repo);
+      for (const runGit of [childGit, git]) {
+        runGit("init", "-q");
+        runGit("config", "user.email", "t@example.com");
+        runGit("config", "user.name", "T");
+      }
+      await writeFile(path.join(child, "tracked.txt"), "child\n");
+      childGit("add", "tracked.txt");
+      childGit("commit", "-qm", "init");
+      const childSha = childGit("rev-parse", "HEAD").toString().trim();
+
+      await writeFile(path.join(repo, "keep.txt"), "keep\n");
+      git("add", "keep.txt");
+      git("-c", "protocol.file.allow=always", "submodule", "add", "../child", "vendor/lib");
+      const orphaned = ["orphan/dir", "orphan/file", "orphan/link", "orphan/missing"];
+      for (const file of orphaned)
+        git("update-index", "--add", "--cacheinfo", `160000,${childSha},${file}`);
+      const dirSentinel = "orphan-dir-sentinel";
+      const fileSentinel = "orphan-file-sentinel";
+      await mkdir(path.join(repo, "orphan/dir"), { recursive: true });
+      await writeFile(path.join(repo, "orphan/dir/inside.txt"), dirSentinel);
+      await writeFile(path.join(repo, "orphan/file"), fileSentinel);
+      await symlink(child, path.join(repo, "orphan/link"), "dir");
+      git("commit", "-qm", "init");
+
+      const submodule = path.join(repo, "vendor/lib");
+      const childSentinel = "submodule-content-sentinel";
+      await writeFile(path.join(submodule, "new.txt"), childSentinel);
+      await writeFile(path.join(submodule, ".env"), `TOKEN=${childSentinel}`);
+      await writeFile(path.join(submodule, "tracked.txt"), `${childSentinel}\n`);
+      execFileSync(
+        "git",
+        ["-c", "user.email=t@example.com", "-c", "user.name=T", "commit", "-qam", "move"],
+        { cwd: submodule, stdio: "pipe" },
+      );
+      expect(git("ls-files", "--modified", "-z").toString().split("\0")).toContain("vendor/lib");
+
+      const { snapshot, archive } = await captureSource(repo);
+      expect(snapshot.files.map((file) => file.path)).toEqual([".gitmodules", "keep.txt"]);
+      expect(snapshot.deleted).toEqual([]);
+      expect(snapshot.modified).toEqual([]);
+      expect(snapshot.untracked).toEqual([]);
+      expect(snapshot.excluded).toEqual(
+        [...orphaned, "vendor/lib"].map((file) => ({
+          path: file,
+          reason: "submodule (not synced)",
+        })),
+      );
+      const tar = gunzipSync(archive);
+      expect(tar.includes(childSentinel)).toBe(false);
+      expect(tar.includes(dirSentinel)).toBe(false);
+      expect(tar.includes(fileSentinel)).toBe(false);
+      expect((await captureSource(repo)).snapshot.digest).toBe(snapshot.digest);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("an orphaned gitlink without .gitmodules does not change the digest", async () => {
+    const repo = await mkdtemp(path.join(tmpdir(), "gitterm-src-"));
+    try {
+      const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, stdio: "pipe" });
+      git("init", "-q");
+      git("config", "user.email", "t@example.com");
+      git("config", "user.name", "T");
+      await writeFile(path.join(repo, "keep.txt"), "keep\n");
+      git("add", "keep.txt");
+      git("commit", "-qm", "init");
+      const before = (await captureSource(repo)).snapshot;
+
+      const sha = git("rev-parse", "HEAD").toString().trim();
+      git("update-index", "--add", "--cacheinfo", `160000,${sha},orphan`);
+      await mkdir(path.join(repo, "orphan"));
+      const after = (await captureSource(repo)).snapshot;
+      expect(after.digest).toBe(before.digest);
+      expect(after.files).toEqual(before.files);
+      expect(after.excluded).toEqual([{ path: "orphan", reason: "submodule (not synced)" }]);
     } finally {
       await rm(repo, { recursive: true, force: true });
     }

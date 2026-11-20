@@ -57,7 +57,8 @@ Uploads the session's working tree as it is on disk to `~/project` in the sandbo
 - The approval prompt lists modified, untracked, deleted, and excluded files.
 - The result shows the snapshot id and sha256 digest, and confirms the files were verified in the sandbox.
 - Ignored files already in the sandbox, such as `node_modules` from an earlier install, stay in place.
-- It refuses a checkout over 100 MiB, with submodules, or with unresolved merge conflicts. It needs a Git checkout.
+- When `origin` is on GitHub and your branch has been pushed, the sandbox fetches the pushed commit from GitHub, and only your changes since then are uploaded. If the sandbox can't fetch it, for example a private repository on a provider without GitHub access, the whole tree is uploaded instead.
+- It refuses a checkout over the default 100 MiB limit unless you raise `maxSourceMiB` in the sandbox settings (up to 1024 MiB). It needs a Git checkout with no unresolved merge conflicts. Submodules are skipped and listed as excluded.
 
 What is uploaded and what is always left out: [Security](/docs/sandboxes/security#what-a-sandbox-receives).
 

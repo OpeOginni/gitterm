@@ -9,6 +9,7 @@ import {
   describeSandboxAccount,
   projectDir,
   resolveSandboxAccount,
+  sourceLimitBytes,
   startPreviewProxy,
   type JobView,
   type PreviewProxy,
@@ -556,14 +557,16 @@ export async function registerSandboxTools(
         ["snapshotId", "projectDir", "files", "excluded"],
       ),
       description:
-        "Upload this checkout's current working tree (including uncommitted changes and non-ignored untracked files; deletions applied) to a sandbox. Secret-like files are excluded. Local files are not changed.",
+        "Upload this checkout's current working tree (including uncommitted changes and non-ignored untracked files; deletions applied) to a sandbox. Secret-like files and submodules are excluded. Local files are not changed.",
       input: object({ sandboxId }, ["sandboxId"]),
       async execute(input, context) {
+        const maxBytes = sourceLimitBytes(settings?.maxSourceMiB);
         const ref = await refFor(str((input as Record<string, unknown>).sandboxId, "sandboxId"));
         const current = await sandbox();
         await current.get(ref);
         const captured = await captureSource(await sessionDirectory(context), {
           exclude: settings?.exclude,
+          maxBytes,
         });
         const { snapshot } = captured;
         await assert(

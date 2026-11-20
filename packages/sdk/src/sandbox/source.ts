@@ -8,13 +8,23 @@ import { createTarGz, type TarEntry } from "./tar.js";
 /**
  * Source snapshots for sandbox builds: the working tree exactly as it is on disk
  * (committed, staged, unstaged, and non-ignored untracked files; deleted files absent),
- * without Git history or the conversation. Secret-looking files are excluded.
+ * without Git history or the conversation. Secret-looking files and submodules are excluded.
  */
 
 /** The synced checkout and Gitterm bookkeeping live below the sandbox user's home. */
 export const projectDir = (home: string) => `${home}/project`;
 const stateDir = (home: string) => `${home}/.gitterm/source`;
 export const MAX_SOURCE_BYTES = 100 * 1024 * 1024;
+const MAX_SOURCE_LIMIT_MIB = 1024;
+
+export function sourceLimitBytes(maxSourceMiB?: number): number {
+  if (maxSourceMiB === undefined) return MAX_SOURCE_BYTES;
+  if (!Number.isInteger(maxSourceMiB) || maxSourceMiB < 1 || maxSourceMiB > MAX_SOURCE_LIMIT_MIB)
+    throw new Error(
+      `"maxSourceMiB" in the sandbox settings must be a whole number of MiB from 1 to ${MAX_SOURCE_LIMIT_MIB}, not ${maxSourceMiB}.`,
+    );
+  return maxSourceMiB * 1024 * 1024;
+}
 
 export type SnapshotFile = {
   path: string;
@@ -41,7 +51,15 @@ export type SourceSnapshot = {
   bytes: number;
 };
 
-export type CapturedSource = { snapshot: SourceSnapshot; archive: Buffer };
+export type CapturedSource = {
+  snapshot: SourceSnapshot;
+  archive: Buffer;
+  /**
+   * Set when origin is on GitHub and a commit is pushed: the sandbox can fetch that commit
+   * itself, so `archive` holds only the files that differ from it.
+   */
+  git?: { repo: string; commit: string; archive: Buffer };
+};
 
 function git(cwd: string, args: string[]): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -63,6 +81,26 @@ function git(cwd: string, args: string[]): Promise<Buffer> {
 }
 
 const nulList = (buffer: Buffer) => buffer.toString("utf8").split("\0").filter(Boolean);
+
+/** `owner/repo` of a GitHub origin. Credentials in the URL are never kept. */
+async function githubRepo(root: string): Promise<string | undefined> {
+  const url = await git(root, ["remote", "get-url", "origin"])
+    .then((value) => value.toString().trim())
+    .catch(() => "");
+  return /^(?:https:\/\/(?:[^@/]+@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(
+    url,
+  )?.[1];
+}
+
+/** The newest commit of HEAD that is also on origin, as far as this checkout knows. */
+async function pushedBase(root: string): Promise<string | undefined> {
+  for (const ref of ["@{upstream}", "refs/remotes/origin/HEAD"]) {
+    const base = await git(root, ["merge-base", "HEAD", ref])
+      .then((value) => value.toString().trim())
+      .catch(() => "");
+    if (base) return base;
+  }
+}
 
 export function safeRelativePath(file: string): boolean {
   return (
@@ -115,19 +153,34 @@ export async function captureSource(
   }
   if ((await git(root, ["ls-files", "--unmerged", "-z"])).length)
     throw new Error("Resolve merge conflicts before syncing to a sandbox.");
-  const staged = (await git(root, ["ls-files", "--stage", "-z"])).toString().split("\0");
-  if (staged.some((line) => line.startsWith("160000 ")))
-    throw new Error("Submodules are not supported by sandbox sync yet.");
+  // Gitlinks are skipped without reading whatever is at their paths.
+  const gitlinks = new Set(
+    nulList(await git(root, ["ls-files", "--stage", "-z"]))
+      .filter((entry) => entry.startsWith("160000 "))
+      .map((entry) => entry.slice(entry.indexOf("\t") + 1)),
+  );
   const head = await git(root, ["rev-parse", "--verify", "-q", "HEAD"])
     .then((value) => value.toString().trim())
     .catch(() => null);
 
   const tracked = nulList(await git(root, ["ls-files", "-z", "--cached"]));
-  const deleted = new Set(nulList(await git(root, ["ls-files", "-z", "--deleted"])));
+  const deleted = new Set(
+    nulList(await git(root, ["ls-files", "-z", "--deleted"])).filter((file) => !gitlinks.has(file)),
+  );
   const modified = nulList(await git(root, ["ls-files", "-z", "--modified"])).filter(
     (file) => !deleted.has(file),
   );
   const untracked = nulList(await git(root, ["ls-files", "-z", "--others", "--exclude-standard"]));
+  const repo = head ? await githubRepo(root) : undefined;
+  const pushed = repo ? await pushedBase(root) : undefined;
+  // Files that differ from the pushed commit: edits, unpushed commits, and untracked files.
+  const changed = pushed
+    ? new Set([
+        ...nulList(await git(root, ["diff", "--name-only", "--no-renames", "-z", pushed])),
+        ...untracked,
+      ])
+    : undefined;
+  const changedEntries: TarEntry[] = [];
   const exclude = (options.exclude ?? []).map(globToRegExp);
   const maxBytes = options.maxBytes ?? MAX_SOURCE_BYTES;
 
@@ -139,6 +192,10 @@ export async function captureSource(
   const excluded: SourceSnapshot["excluded"] = [];
   let bytes = 0;
   for (const file of candidates) {
+    if (gitlinks.has(file)) {
+      excluded.push({ path: file, reason: "submodule (not synced)" });
+      continue;
+    }
     if (!safeRelativePath(file)) {
       excluded.push({ path: file, reason: "unsupported path" });
       continue;
@@ -163,6 +220,7 @@ export async function captureSource(
         sha256: createHash("sha256").update(target).digest("hex"),
       });
       entries.push({ path: file, type: "symlink", target });
+      if (changed?.has(file)) changedEntries.push(entries.at(-1)!);
       continue;
     }
     if (!info.isFile()) {
@@ -172,7 +230,7 @@ export async function captureSource(
     bytes += info.size;
     if (bytes > maxBytes)
       throw new Error(
-        `Source exceeds the ${Math.round(maxBytes / 1024 / 1024)} MiB sandbox sync limit. Exclude build output or large files.`,
+        `Source exceeds the ${Math.round(maxBytes / 1024 / 1024)} MiB sandbox sync limit. Exclude build output or large files, or raise "maxSourceMiB" in the sandbox settings (up to ${MAX_SOURCE_LIMIT_MIB} MiB); the agent cannot change it.`,
       );
     // Hash and archive the same bytes so the manifest describes exactly what is uploaded.
     const data = await readFile(full);
@@ -189,6 +247,7 @@ export async function captureSource(
       sha256: createHash("sha256").update(data).digest("hex"),
     });
     entries.push({ path: file, type: "file", data, executable });
+    if (changed?.has(file)) changedEntries.push(entries.at(-1)!);
   }
 
   const digest = createHash("sha256").update(manifestText(files)).digest("hex");
@@ -207,6 +266,9 @@ export async function captureSource(
       bytes,
     },
     archive: createTarGz(entries),
+    ...(repo && pushed
+      ? { git: { repo, commit: pushed, archive: createTarGz(changedEntries) } }
+      : {}),
   };
 }
 
@@ -222,12 +284,39 @@ const q = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
  * regular file is checked against its sha256 before success is reported. Ignored build
  * output (e.g. node_modules) that was never part of a snapshot is left in place.
  */
+/** Sandboxes that could not fetch a repository, so later syncs skip straight to a full upload. */
+const unfetchable = new Set<string>();
+
 export async function uploadSource(
   backend: SandboxBackend,
   sandboxId: string,
   captured: CapturedSource,
 ): Promise<{ verified: true; digest: string }> {
-  const { snapshot, archive } = captured;
+  const key = `${sandboxId}\0${captured.git?.repo}`;
+  if (captured.git && !unfetchable.has(key)) {
+    const { repo, commit, archive } = captured.git;
+    // exe.dev's GitHub integration reaches private repositories without a token on the VM.
+    const urls = [
+      ...(backend.identity.provider === "exedev" ? [`https://github.int.exe.xyz/${repo}.git`] : []),
+      `https://github.com/${repo}.git`,
+    ];
+    try {
+      return await publish(backend, sandboxId, captured.snapshot, archive, { commit, urls });
+    } catch {
+      // The sandbox could not fetch the commit (private repository, not pushed, no Git).
+      unfetchable.add(key);
+    }
+  }
+  return publish(backend, sandboxId, captured.snapshot, captured.archive);
+}
+
+async function publish(
+  backend: SandboxBackend,
+  sandboxId: string,
+  snapshot: SourceSnapshot,
+  archive: Buffer,
+  from?: { commit: string; urls: string[] },
+): Promise<{ verified: true; digest: string }> {
   const STATE_DIR = stateDir(backend.home);
   const PROJECT_DIR = projectDir(backend.home);
   // Per upload, so two clients syncing the same snapshot never share staging files.
@@ -239,9 +328,11 @@ export async function uploadSource(
     .join("");
   const prepared = await backend.run(sandboxId, `mkdir -p ${q(STATE_DIR)} ${q(PROJECT_DIR)}`);
   if (prepared.exitCode !== 0) throw new Error("Could not prepare the sandbox for upload");
-  await backend.writeFile(sandboxId, `${base}.tgz`, archive);
-  await backend.writeFile(sandboxId, `${base}.files`, Buffer.from(list));
-  await backend.writeFile(sandboxId, `${base}.sha256`, Buffer.from(sums));
+  await Promise.all([
+    backend.writeFile(sandboxId, `${base}.tgz`, archive),
+    backend.writeFile(sandboxId, `${base}.files`, Buffer.from(list)),
+    backend.writeFile(sandboxId, `${base}.sha256`, Buffer.from(sums)),
+  ]);
   const result = await backend.run(
     sandboxId,
     [
@@ -249,9 +340,29 @@ export async function uploadSource(
       "export LC_ALL=C",
       `B=${q(base)}; P=${q(PROJECT_DIR)}; S=${q(STATE_DIR)}`,
       // Staging files are removed whether the upload succeeds or fails.
-      'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files"\' EXIT',
+      'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files" "$B.git" "$B.have"\' EXIT',
+      'sort -o "$B.files" "$B.files"',
       'mkdir "$B.stage"',
+      ...(from
+        ? [
+            'G="$B.git"; export GIT_TERMINAL_PROMPT=0',
+            'git init -q --bare "$G"',
+            `for u in ${from.urls.map(q).join(" ")}; do timeout 60 git -C "$G" fetch -q --depth=1 --no-tags "$u" ${q(from.commit)} 2>/dev/null && break; done`,
+            `git -C "$G" cat-file -e ${q(`${from.commit}^{commit}`)}`,
+            `git -C "$G" archive ${q(from.commit)} | tar -x -C "$B.stage"`,
+            'rm -rf "$G"',
+          ]
+        : []),
       'tar -xzf "$B.tgz" -C "$B.stage" --no-same-owner',
+      ...(from
+        ? [
+            // Keep exactly the snapshot's files: the commit can hold files sync leaves out.
+            '(cd "$B.stage" && find . \\( -type f -o -type l \\) | sed "s|^\\./||" | sort) > "$B.have"',
+            'comm -23 "$B.have" "$B.files" | while IFS= read -r f; do rm -f -- "$B.stage/$f"; done',
+            'find "$B.stage" -mindepth 1 -type d -empty -delete',
+            `[ "$(find "$B.stage" \\( -type f -o -type l \\) | wc -l)" -eq ${snapshot.files.length} ] || { echo "unexpected files in the commit" >&2; exit 8; }`,
+          ]
+        : []),
       'for f in "$B.stage"/gitterm-pax/*; do [ -e "$f" ] || break; echo "unexpected pax placeholder" >&2; exit 4; done',
       // sha256sum rejects an empty list, which an empty checkout produces.
       'verify() { [ ! -s "$B.sha256" ] || (cd "$1" && sha256sum -c --quiet --strict "$B.sha256"); }',
@@ -264,8 +375,7 @@ export async function uploadSource(
       '  n=$((n + 1)); [ "$n" -lt 450 ] || { echo "another sync is still publishing" >&2; exit 7; }',
       "  sleep 0.2",
       "done",
-      'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files" "$L"\' EXIT',
-      'sort -o "$B.files" "$B.files"',
+      'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files" "$B.git" "$B.have" "$L"\' EXIT',
       'if [ -f "$S/current.files" ]; then comm -23 "$S/current.files" "$B.files" | while IFS= read -r f; do rm -f -- "$P/$f"; done; fi',
       // A directory that is now a file (or symlink) cannot be copied over.
       'while IFS= read -r f; do if [ -d "$P/$f" ] && [ ! -L "$P/$f" ]; then rm -rf -- "$P/$f"; fi; done < "$B.files"',

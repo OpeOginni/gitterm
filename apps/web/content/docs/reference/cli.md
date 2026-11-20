@@ -90,7 +90,7 @@ The CLI reads accounts from `~/.config/gitterm/sandbox.json`, or from the file i
 }
 ```
 
-The file takes the same `limits`, `exclude`, and `publicPreviews` settings as the [sandbox plugin](/docs/reference/sandbox-plugin#options). With `"publicPreviews": true`, `create` makes public previews without asking. Whether a provider can make a preview public: [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
+The file takes the same `limits`, `exclude`, `maxSourceMiB`, and `publicPreviews` settings as the [sandbox plugin](/docs/reference/sandbox-plugin#options). With `"publicPreviews": true`, `create` makes public previews without asking. Whether a provider can make a preview public: [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
 
 An account with `apiKeyEnv` uses your own provider key and needs no Gitterm login. One without goes through GitTerm. A single account can also sit at the top level: `{ "provider": "e2b", "apiKeyEnv": "E2B_API_KEY" }`.
 

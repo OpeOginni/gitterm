@@ -55,7 +55,9 @@ Direct sandboxes are never paused or resumed.
 
 **Boat.** The base image cannot be replaced. It includes coding agent CLIs (`claude`, `codex`, `opencode`). Gitterm never starts them and gives them no credentials. At its lifetime the sandbox is archived, not deleted, and the storage remains until you destroy it. A file read returns at most 5 MiB, which limits artifacts. Boat has no labels, so the owning account is kept as a hash in the sandbox name.
 
-**exe.dev.** The token needs the `new`, `ls`, `ssh`, `ssh-key`, `pause`, `resume`, and `rm` commands. Each request is limited to 30 seconds and 64 KB, so jobs start detached and large syncs are slow. Previews support ports 3000 to 9999. No labels; the owning account is kept as a hash in the sandbox name.
+**exe.dev.** The token needs the `new`, `ls`, `ssh`, `pause`, `resume`, and `rm` commands. Private previews also need `ssh-key generate-api-key`, listed in full: `ssh-key` alone doesn't allow it. Each request is limited to 30 seconds and 64 KB, so longer commands run detached and files upload in parts. Each request takes about 2 seconds, so a 10 MiB upload takes about 40 seconds. Previews support ports 3000 to 9999. No labels; the owning account is kept as a hash in the sandbox name.
+
+For private GitHub repositories on exe.dev, connect GitHub in exe.dev and give your VMs read access to the repository: `ssh exe.dev integrations add github --name <name> --repository <owner>/<repo> --readonly --attach auto:all`. Syncs then fetch your pushed commit through that integration and upload only your changes, which is much faster than uploading the whole tree. No GitHub token is stored on the VM.
 
 **Railway.** Railway has no command API, so the sandbox runs a small Gitterm command server. It is not an agent. It accepts requests only with a token derived from your Railway token and the sandbox name. Port 8080 is reserved for it.
 

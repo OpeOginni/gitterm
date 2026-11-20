@@ -172,14 +172,22 @@ export async function startJob(
   );
   if (prepared.exitCode !== 0) throw new Error(`Could not prepare job ${id} in the sandbox`);
   // Values are written to a 0600 file inside the sandbox, not passed on a command line.
-  await backend.writeFile(sandboxId, `${dir}/env.sh`, Buffer.from(envScript(input.env)));
-  await backend.writeFile(sandboxId, `${dir}/command.sh`, Buffer.from(input.command));
+  // The files are independent, so they upload together (each write is ~2 s on exe.dev).
   const names = Object.keys(input.env ?? {});
+  const files: Record<string, string> = {
+    "env.sh": envScript(input.env),
+    "command.sh": input.command,
+    "runner.sh": RUNNER,
+  };
   if (names.length) {
-    await backend.writeFile(sandboxId, `${dir}/secret-names`, Buffer.from(`${names.join("\n")}\n`));
-    await backend.writeFile(sandboxId, `${dir}/redact.awk`, Buffer.from(REDACT_AWK));
+    files["secret-names"] = `${names.join("\n")}\n`;
+    files["redact.awk"] = REDACT_AWK;
   }
-  await backend.writeFile(sandboxId, `${dir}/runner.sh`, Buffer.from(RUNNER));
+  await Promise.all(
+    Object.entries(files).map(([name, text]) =>
+      backend.writeFile(sandboxId, `${dir}/${name}`, Buffer.from(text)),
+    ),
+  );
   const launched = await backend.run(
     sandboxId,
     [

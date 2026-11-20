@@ -127,18 +127,21 @@ The account name is what [approval rules](#approvals) match. A single account in
 
 ## Limits and exclusions
 
-`limits` caps what the agent can start. `exclude` lists extra glob patterns that `sandbox_sync` never uploads. Secret-like files are always left out; see [Security](/docs/sandboxes/security#what-a-sandbox-never-receives).
+`limits` caps what the agent can start. `exclude` lists extra glob patterns that `sandbox_sync` never uploads. Secret-like files are always left out; see [Security](/docs/sandboxes/security#what-a-sandbox-never-receives). Set `maxSourceMiB` to change the checkout size limit before compression. It defaults to 100 MiB and accepts whole numbers from 1 to 1024.
 
 ```jsonc
 "options": {
   "provider": "e2b",
   "apiKey": "{env:E2B_API_KEY}",
   "limits": { "maxSandboxes": 2, "maxLifetimeMinutes": 60, "defaultLifetimeMinutes": 30, "maxJobMinutes": 30 },
-  "exclude": ["fixtures/large/**"]
+  "exclude": ["fixtures/large/**"],
+  "maxSourceMiB": 512
 }
 ```
 
-The values above are the defaults. What each limit does is in [Limits](/docs/reference/sandbox-plugin#limits).
+The `limits` values above are the defaults. What each limit does is in [Limits](/docs/reference/sandbox-plugin#limits).
+
+A larger limit has costs. The archive is built in memory, and the sandbox needs disk space for the archive plus two copies of the files. On Railway the compressed archive must stay under 32 MiB. Unpacking and checking the files in the sandbox must finish within 2 minutes on every provider.
 
 ## Setup snapshots
 

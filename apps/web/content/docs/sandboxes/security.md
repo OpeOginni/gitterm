@@ -14,10 +14,11 @@ This page lists what leaves your machine when your local agent uses a Gitterm sa
 ## What a sandbox never receives
 
 - The conversation.
-- Git history.
+- Git history. A sync that starts from a pushed GitHub commit fetches only that commit, removes the files sync leaves out, and deletes the fetched copy.
 - Model credentials. No coding agent runs in the sandbox.
 - Your provider key or Gitterm token.
 - Untracked files that Git ignores, such as `node_modules` or build output.
+- Submodule contents.
 - Secret-like files. `sandbox_sync` leaves these out and lists them in the approval prompt:
   - `.env` and `.env.*`, except `.env.example`, `.env.sample`, and `.env.template`
   - `.npmrc`, `.netrc`, `.pypirc`

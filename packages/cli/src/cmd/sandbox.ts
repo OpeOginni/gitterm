@@ -7,6 +7,7 @@ import {
   createSandboxClient,
   describeSandboxAccount,
   resolveSandboxAccount,
+  sourceLimitBytes,
   startPreviewProxy,
   type JobView,
   type SandboxAccount,
@@ -194,7 +195,10 @@ export async function runSandboxSync(
 ) {
   try {
     const { client, settings } = await clientFor(args);
-    const captured = await captureSource(args.dir ?? process.cwd(), { exclude: settings.exclude });
+    const captured = await captureSource(args.dir ?? process.cwd(), {
+      exclude: settings.exclude,
+      maxBytes: sourceLimitBytes(settings.maxSourceMiB),
+    });
     const { snapshot } = captured;
     if (!args.json) {
       console.error(

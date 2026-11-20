@@ -123,9 +123,12 @@ The right sidebar lists this checkout's sandboxes, with what each is running.
     "maxJobMinutes": 30
   },
   "exclude": ["fixtures/large/**"],
+  "maxSourceMiB": 100,
   "publicPreviews": true
 }
 ```
+
+`maxSourceMiB` sets the checkout size limit before compression, in whole MiB from 1 to 1024 (default 100).
 
 ### Machine size
 

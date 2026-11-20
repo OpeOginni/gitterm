@@ -62,7 +62,7 @@ Provider limits that change behaviour:
 
 - **Vercel:** five tags per sandbox, so the purpose and session labels may be dropped.
 - **Boat:** no labels, and files of at most 5 MiB returned per read.
-- **exe.dev:** no labels, 30 s and 64 KB per API request. Jobs launch detached; uploads are chunked and slow for large sources.
+- **exe.dev:** no labels, 30 s and 64 KB per API request, rate-limited per token. Commands over 30 s run detached and are polled; uploads go up as parts, 16 at a time.
 - **Boat and exe.dev:** the owning account is kept as a hash in the sandbox name, because there are no labels.
 
 ## Operations
@@ -131,8 +131,9 @@ Excluded and reported:
 - secret-like names (`.env*` except examples, `.npmrc`, `.netrc`, `.pypirc`, keys, `*.pem`, `*.p12`, `*.pfx`, `*.key`, `credentials.json`)
 - files containing private-key blocks
 - paths matching the configured `exclude` globs
+- submodules (gitlinks)
 
-Submodules, unresolved merge conflicts, and sources over 100 MiB are rejected.
+Unresolved merge conflicts are rejected. The default sync limit is 100 MiB before compression; users can raise it to 1024 MiB with `maxSourceMiB` in the sandbox settings.
 
 The snapshot id is `snap_` plus the first 16 hex characters of a sha256 over the sorted
 manifest (`kind sha256 path` per file). The upload is a tar.gz built in process. In the
@@ -141,6 +142,13 @@ sandbox it is extracted to a staging directory and every file is checked with
 build output from earlier runs (for example `node_modules`) stays in place. Syncs to
 the same sandbox publish one at a time, so the checkout always matches one snapshot:
 the one published last.
+
+When `origin` is on GitHub and HEAD shares a commit with `@{upstream}` (or `origin/HEAD`),
+the archive holds only the files that differ from that merge base. The sandbox fetches
+the base with `git fetch --depth=1` (on exe.dev first through `github.int.exe.xyz`, the
+GitHub integration), extracts it, overlays the archive, and deletes every file that is
+not in the manifest. The same sha256 checks then prove the result matches the snapshot.
+If any step fails, the full archive is uploaded instead.
 
 ### Artifacts
 

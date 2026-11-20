@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import env from "@gitterm/env/server";
 import { captureAgentAccessCredential } from "../access-credential";
 import type { ExeDevImageProviderMetadata } from "@gitterm/db/schema/cloud";
@@ -128,7 +129,8 @@ export class ExeDevProvider implements ComputeProvider {
   }
 
   private async runVmCommand(handle: ExeDevHandle, command: string): Promise<unknown> {
-    return this.execute(`ssh ${handle.vmName} -- bash -lc ${shellQuote(command)}`);
+    // The lobby lexes the request, then the VM shell parses the one argument after the VM name.
+    return this.execute(`ssh ${handle.vmName} ${shellQuote(`bash -lc ${shellQuote(command)}`)}`);
   }
 
   /**
@@ -166,7 +168,7 @@ export class ExeDevProvider implements ComputeProvider {
 
   private async getVmAccessToken(vmName: string): Promise<string> {
     const result = await this.execute(
-      `ssh-key generate-api-key --vm=${vmName} --label=gitterm --exp=never`,
+      `ssh-key generate-api-key --vm=${vmName} --label=gitterm-${randomBytes(8).toString("hex")} --exp=never`,
     );
     const token = findToken(result);
     if (!token) throw new Error("exe.dev did not return a VM access token.");
