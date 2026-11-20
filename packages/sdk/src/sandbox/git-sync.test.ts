@@ -116,7 +116,7 @@ test("a GitHub checkout uploads only what differs from its pushed commit", async
   // keep.txt was deleted locally and .env is never synced, though the commit has both.
   expect(Object.keys(files)).toEqual(["a.txt", "big.bin", "committed.txt", "new.txt"]);
   expect(files["a.txt"]).toBe("local edit\n");
-  expect(await readdir(path.join(home, ".gitterm/source"))).toEqual([
+  expect((await readdir(path.join(home, ".gitterm/source"))).toSorted()).toEqual([
     "current.digest",
     "current.files",
   ]);
