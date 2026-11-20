@@ -3,7 +3,6 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { gunzipSync } from "node:zlib";
 import type { SandboxBackend } from "./backend";
 import { captureSource, uploadSource } from "./source";
 
@@ -73,21 +72,8 @@ function localBackend(github: string) {
   return { backend, home, uploads };
 }
 
-const tarNames = (archive: Buffer) => {
-  const names: string[] = [];
-  const tar = gunzipSync(archive);
-  for (let offset = 0; offset + 512 <= tar.length; ) {
-    const name = tar
-      .subarray(offset, offset + 100)
-      .toString()
-      .split("\0")[0];
-    if (!name) break;
-    const size = parseInt(tar.subarray(offset + 124, offset + 136).toString(), 8) || 0;
-    names.push(name);
-    offset += 512 + Math.ceil(size / 512) * 512;
-  }
-  return names;
-};
+const tarNames = (archive: Buffer) =>
+  execFileSync("tar", ["-tz"], { input: archive }).toString().trim().split("\n");
 
 async function projectFiles(home: string) {
   const dir = path.join(home, "project");

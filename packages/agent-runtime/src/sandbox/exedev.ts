@@ -21,16 +21,14 @@ const NAME_PREFIX = "gitterm-sbx-";
 const MAX_BODY_BYTES = 64_000;
 /** exe.dev allows 30 s per request; `timeout -k 3` needs a few seconds of that. */
 const REQUEST_SECONDS = 25;
+/** File bytes per request: 60 KiB as base64, leaving room for the command and path. */
+const PART_BYTES = 45 * 1024;
 /**
  * Each `ssh` request takes about 2 s, mostly session setup, so parts go up in parallel.
  * 16 at a time measured about 6 requests a second, under exe.dev's per-token rate limit.
  */
 const UPLOAD_CONCURRENCY = 16;
 const READ_CHUNK_BYTES = 4 * 1024 * 1024;
-const DETACHED_OUTPUT_BYTES = 1024 * 1024;
-
-const failed = (step: string, exitCode: number) =>
-  new SandboxProviderError("provider", `Could not ${step} the file in the VM (exit ${exitCode}).`);
 
 type VmList = { vms?: Array<{ vm_name: string; status?: string }> };
 
@@ -54,7 +52,7 @@ export function createExeDevSandboxTransport(config: {
   disk?: string;
 }): SandboxTransport {
   if (!config.apiKey?.trim()) throw new SandboxProviderError("auth", "exe.dev token is empty.");
-  const accessKeys = new Map<string, { token: string; expiresAt: number }>();
+  const accessKeys = new Map<string, string>();
 
   async function exec(command: string, action: string, accept = "text/plain"): Promise<string> {
     if (Buffer.byteLength(command) > MAX_BODY_BYTES)
@@ -92,15 +90,9 @@ export function createExeDevSandboxTransport(config: {
         "auth",
         `exe.dev rejected the token while trying to ${action}. Tokens need cmds new, ls, ssh, pause, resume, and rm, and "ssh-key generate-api-key" for private previews.`,
       );
-    // The VM is checked here rather than with a separate `ls` before each command.
-    const vm = !response.ok && /"code":"(vm_not_found|vm_not_running)"/.exec(text)?.[1];
-    if (vm)
-      throw new SandboxProviderError(
-        "not_found",
-        vm === "vm_not_found"
-          ? "The exe.dev VM no longer exists."
-          : "The exe.dev VM is not running.",
-      );
+    // exe.dev reports a paused or deleted VM itself, so no `ls` is needed before a command.
+    if (!response.ok && /"code":"vm_not_(found|running)"/.test(text))
+      throw new SandboxProviderError("not_found", "The exe.dev VM is paused or no longer exists.");
     if (response.status === 504)
       throw new SandboxProviderError("timeout", `exe.dev timed out while trying to ${action}.`);
     if (!response.ok)
@@ -197,41 +189,26 @@ export function createExeDevSandboxTransport(config: {
       ].join("\n"),
     );
     if (launched.exitCode !== 0)
-      throw new SandboxProviderError(
-        "provider",
-        `Could not start the command in the VM. ${launched.stderr.trim().slice(-300)}`,
-      );
-    // Each poll waits up to 20 s. Exit 75: still running. The result is removed once read.
+      throw new SandboxProviderError("provider", "Could not start the command in the VM.");
+    // Each poll waits up to 20 s for the exit file. Exit 75: still running.
     const poll = [
       `D=${dir}; end=$((SECONDS + 20))`,
-      `while [ -d "$D" ] && [ ! -f "$D/exit" ] && [ "$SECONDS" -lt "$end" ]; do sleep 0.5; done`,
-      `[ -d "$D" ] || exit 76`,
+      `while [ ! -f "$D/exit" ] && [ "$SECONDS" -lt "$end" ]; do sleep 0.5; done`,
       `[ -f "$D/exit" ] || exit 75`,
-      `cat "$D/exit"`,
-      `tail -c ${DETACHED_OUTPUT_BYTES} "$D/out" | base64 | tr -d '\\n'; echo`,
-      `tail -c ${DETACHED_OUTPUT_BYTES} "$D/err" | base64 | tr -d '\\n'; echo`,
+      `cat "$D/exit"; base64 < "$D/out" | tr -d '\\n'; echo; base64 < "$D/err" | tr -d '\\n'; echo`,
       `rm -rf "$D"`,
     ].join("\n");
     const deadline = Date.now() + timeoutMs + 30_000;
-    let failures = 0;
     while (Date.now() < deadline) {
-      let result;
-      try {
-        result = await ssh(id, poll);
-        failures = 0;
-      } catch (error) {
-        if (++failures === 3) throw error;
-        await delay(1_000);
-        continue;
-      }
+      const result = await ssh(id, poll);
       if (result.exitCode === 75) continue;
-      const [code, out, err] = result.stdout.split("\n");
-      if (result.exitCode !== 0 || !/^\d+$/.test(code ?? ""))
+      const [code = "", out = "", err = ""] = result.stdout.split("\n");
+      if (result.exitCode !== 0 || !/^\d+$/.test(code))
         throw new SandboxProviderError("provider", "exe.dev lost track of the command.");
       return {
         exitCode: Number(code),
-        stdout: Buffer.from(out ?? "", "base64").toString(),
-        stderr: Buffer.from(err ?? "", "base64").toString(),
+        stdout: Buffer.from(out, "base64").toString(),
+        stderr: Buffer.from(err, "base64").toString(),
       };
     }
     throw new SandboxProviderError("timeout", "Timed out waiting for the exe.dev command.");
@@ -310,70 +287,41 @@ export function createExeDevSandboxTransport(config: {
 
     async writeFile(id, path, data) {
       const target = shellQuote(path);
-      const encode = (from: number, to: number) =>
-        Buffer.from(data.subarray(from, to)).toString("base64");
-      // The most file bytes a script fits in one request, as base64 in place of "".
-      const capacity = (script: (content: string) => string) =>
-        Math.floor(
-          (MAX_BODY_BYTES - Buffer.byteLength(sshBody(id, script(""), REQUEST_SECONDS))) / 4,
-        ) * 3;
-      const whole = (content: string) =>
-        `mkdir -p "$(dirname ${target})" && printf %s ${content} | base64 -d > ${target}`;
-      if (data.byteLength <= capacity(whole)) {
-        const written = await ssh(id, whole(encode(0, data.byteLength)));
-        if (written.exitCode !== 0)
+      const base64 = (index: number) =>
+        Buffer.from(data.subarray(index * PART_BYTES, (index + 1) * PART_BYTES)).toString("base64");
+      const write = async (command: string) => {
+        const result = await ssh(id, command);
+        if (result.exitCode !== 0)
           throw new SandboxProviderError("provider", "Could not upload the file to the VM.");
-        return;
-      }
+      };
+      if (data.byteLength <= PART_BYTES)
+        return write(
+          `mkdir -p "$(dirname ${target})" && printf %s ${base64(0)} | base64 -d > ${target}`,
+        );
 
       // Larger files go up as numbered parts in parallel, then are joined in order.
       const parts = shellQuote(`${path}.gitterm-${randomBytes(8).toString("hex")}`);
-      const part = (index: number) => (content: string) =>
-        `printf %s ${content} | base64 -d > ${parts}/${String(index).padStart(6, "0")}`;
-      const partBytes = capacity(part(0));
-      if (partBytes < 1024)
-        throw new SandboxProviderError("provider", "The upload path is too long for exe.dev.");
-      const count = Math.ceil(data.byteLength / partBytes);
+      const count = Math.ceil(data.byteLength / PART_BYTES);
       let next = 0;
-      let stop = false;
-      async function worker() {
-        while (!stop && next < count) {
+      const worker = async () => {
+        while (next < count) {
           const index = next++;
-          const content = encode(index * partBytes, (index + 1) * partBytes);
-          // Writing a part again replaces it, so a failed part can be resent.
-          for (let attempt = 1; ; attempt++) {
-            const result = await ssh(id, part(index)(content)).catch((error: Error) => error);
-            if (!(result instanceof Error) && result.exitCode === 0) break;
-            if (attempt === 3)
-              throw result instanceof Error ? result : failed("upload", result.exitCode);
-            await delay(1_000 * attempt);
-          }
-        }
-      }
-      try {
-        const begin = await ssh(id, `mkdir -p "$(dirname ${target})" && mkdir -m 700 ${parts}`);
-        if (begin.exitCode !== 0) throw failed("start uploading", begin.exitCode);
-        // Let every worker stop before the parts are removed.
-        const results = await Promise.allSettled(
-          Array.from({ length: Math.min(UPLOAD_CONCURRENCY, count) }, () =>
-            worker().catch((error) => {
-              stop = true;
+          const name = String(index).padStart(6, "0");
+          // On a failure, the other workers stop taking parts.
+          await write(`printf %s ${base64(index)} | base64 -d > ${parts}/${name}`).catch(
+            (error) => {
+              next = count;
               throw error;
-            }),
-          ),
+            },
+          );
+        }
+      };
+      try {
+        await write(`mkdir -p "$(dirname ${target})" && mkdir -m 700 ${parts}`);
+        await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, count) }, worker));
+        await write(
+          `cat ${parts}/* > ${target}.tmp && [ "$(wc -c < ${target}.tmp)" -eq ${data.byteLength} ] && mv -f ${target}.tmp ${target} && rm -rf ${parts}`,
         );
-        const rejected = results.find((result) => result.status === "rejected");
-        if (rejected) throw rejected.reason;
-        const joined = await ssh(
-          id,
-          [
-            `cat ${parts}/* > ${target}.tmp`,
-            `[ "$(wc -c < ${target}.tmp)" -eq ${data.byteLength} ] || exit 9`,
-            `mv -f ${target}.tmp ${target}`,
-            `rm -rf ${parts}`,
-          ].join(" && "),
-        );
-        if (joined.exitCode !== 0) throw failed("join", joined.exitCode);
       } catch (error) {
         await ssh(id, `rm -rf ${parts} ${target}.tmp`).catch(() => {});
         throw error;
@@ -402,27 +350,25 @@ export function createExeDevSandboxTransport(config: {
       validatePort(port);
       if (port < 3000 || port > 9999) throw new Error("exe.dev previews support ports 3000-9999");
       let key = accessKeys.get(id);
-      if (!key || key.expiresAt < Date.now() + 60 * 60_000) {
+      if (!key) {
         // A VM-scoped key kept only in this process's memory. Labels must be unique per
-        // account. exe.dev turns `--exp=never` into 30 days for VM keys.
+        // account. exe.dev gives VM keys 30 days, even with `--exp=never`.
         const output = await exec(
           `ssh-key generate-api-key --vm=${id} --label=gitterm-sandbox-${randomBytes(8).toString("hex")} --exp=never`,
           "create a preview key",
         );
-        let minted: { token?: string; expires_at?: string } = {};
         try {
-          minted = JSON.parse(output);
+          key = (JSON.parse(output) as { token?: string }).token;
         } catch {
           // Never put a response that may hold a credential in an error.
         }
-        if (typeof minted.token !== "string" || !minted.token)
+        if (typeof key !== "string" || !key)
           throw new SandboxProviderError("provider", "exe.dev did not return a VM access key.");
-        key = { token: minted.token, expiresAt: Date.parse(minted.expires_at ?? "") || Infinity };
         accessKeys.set(id, key);
       }
       return {
         url: `https://${id}.exe.xyz:${port}/`,
-        headers: { "X-Exedev-Authorization": `Bearer ${key.token}` },
+        headers: { "X-Exedev-Authorization": `Bearer ${key}` },
       };
     },
   };

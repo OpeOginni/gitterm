@@ -109,29 +109,22 @@ test("a command longer than one request runs detached and returns its result", a
   expect(await readdir("/tmp")).not.toContain(dir);
 });
 
-test("files upload exactly, large ones as parallel parts, with a refused part sent again", async () => {
+test("files upload exactly, large ones as parallel parts", async () => {
   const small = path.join(scratch, "dir/small.bin");
   const large = path.join(scratch, "dir/large.bin");
   const smallData = randomBytes(1000);
   const largeData = randomBytes(300 * 1024);
-  let refused = false;
-  mockExec((command) => {
-    if (!refused && command.includes("000002")) {
-      refused = true;
-      return new Response("", { status: 429 });
-    }
-  });
+  mockExec();
   await transport.writeFile(id, small, smallData);
   await transport.writeFile(id, large, largeData);
   expect(Buffer.compare(await readFile(small), smallData)).toBe(0);
   expect(Buffer.compare(await readFile(large), largeData)).toBe(0);
-  expect(refused).toBe(true);
   // Every part was a separate request, and nothing but the two files is left.
   expect(requests.filter((r) => r.includes("base64 -d >")).length).toBeGreaterThan(6);
   expect((await readdir(path.join(scratch, "dir"))).toSorted()).toEqual(["large.bin", "small.bin"]);
 });
 
-test("previews mint one non-expiring key per VM with a unique label", async () => {
+test("previews mint one key per VM with a unique label", async () => {
   const labels: string[] = [];
   mockExec((command) => {
     if (command === `rm ${id}`) return Response.json({});
@@ -173,30 +166,6 @@ test("a token without the preview permission gets an error naming it", async () 
   });
 });
 
-test("a preview key close to its expiry is replaced", async () => {
-  let minted = 0;
-  mockExec((command) =>
-    command.startsWith("ssh-key ")
-      ? Response.json({
-          token: `exe1.test-${++minted}`,
-          // exe.dev gives VM keys 30 days; the first one here has 30 minutes left.
-          expires_at: new Date(
-            Date.now() + (minted === 1 ? 30 : 30 * 24 * 60) * 60_000,
-          ).toISOString(),
-        })
-      : undefined,
-  );
-  const transport = createExeDevSandboxTransport({ apiKey: "test-token" });
-  await transport.preview(id, 3456);
-  expect((await transport.preview(id, 3456)).headers["X-Exedev-Authorization"]).toBe(
-    "Bearer exe1.test-2",
-  );
-  expect((await transport.preview(id, 3456)).headers["X-Exedev-Authorization"]).toBe(
-    "Bearer exe1.test-2",
-  );
-  expect(minted).toBe(2);
-});
-
 test("a stopped or missing VM is reported from the command itself", async () => {
   mockExec((command) =>
     command.startsWith("ssh ")
@@ -208,7 +177,7 @@ test("a stopped or missing VM is reported from the command itself", async () => 
   );
   await expect(transport.run(id, "true")).rejects.toMatchObject({
     code: "not_found",
-    message: "The exe.dev VM is not running.",
+    message: "The exe.dev VM is paused or no longer exists.",
   });
   // One request: no separate status check before the command.
   expect(requests).toHaveLength(1);

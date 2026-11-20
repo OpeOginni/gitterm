@@ -180,7 +180,6 @@ export async function captureSource(
         ...untracked,
       ])
     : undefined;
-  const changedEntries: TarEntry[] = [];
   const exclude = (options.exclude ?? []).map(globToRegExp);
   const maxBytes = options.maxBytes ?? MAX_SOURCE_BYTES;
 
@@ -220,7 +219,6 @@ export async function captureSource(
         sha256: createHash("sha256").update(target).digest("hex"),
       });
       entries.push({ path: file, type: "symlink", target });
-      if (changed?.has(file)) changedEntries.push(entries.at(-1)!);
       continue;
     }
     if (!info.isFile()) {
@@ -247,7 +245,6 @@ export async function captureSource(
       sha256: createHash("sha256").update(data).digest("hex"),
     });
     entries.push({ path: file, type: "file", data, executable });
-    if (changed?.has(file)) changedEntries.push(entries.at(-1)!);
   }
 
   const digest = createHash("sha256").update(manifestText(files)).digest("hex");
@@ -267,7 +264,13 @@ export async function captureSource(
     },
     archive: createTarGz(entries),
     ...(repo && pushed
-      ? { git: { repo, commit: pushed, archive: createTarGz(changedEntries) } }
+      ? {
+          git: {
+            repo,
+            commit: pushed,
+            archive: createTarGz(entries.filter((entry) => changed?.has(entry.path))),
+          },
+        }
       : {}),
   };
 }
@@ -278,15 +281,15 @@ function manifestText(files: SnapshotFile[]): string {
 
 const q = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
 
+/** Sandboxes that could not fetch a repository, so later syncs skip straight to a full upload. */
+const unfetchable = new Set<string>();
+
 /**
  * Makes the sandbox project directory match the snapshot: files from the previous
  * snapshot that are absent now are deleted, every snapshot file is written, and each
  * regular file is checked against its sha256 before success is reported. Ignored build
  * output (e.g. node_modules) that was never part of a snapshot is left in place.
  */
-/** Sandboxes that could not fetch a repository, so later syncs skip straight to a full upload. */
-const unfetchable = new Set<string>();
-
 export async function uploadSource(
   backend: SandboxBackend,
   sandboxId: string,
@@ -340,7 +343,7 @@ async function publish(
       "export LC_ALL=C",
       `B=${q(base)}; P=${q(PROJECT_DIR)}; S=${q(STATE_DIR)}`,
       // Staging files are removed whether the upload succeeds or fails.
-      'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files" "$B.git" "$B.have"\' EXIT',
+      'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files" "$B.git"\' EXIT',
       'sort -o "$B.files" "$B.files"',
       'mkdir "$B.stage"',
       ...(from
@@ -357,9 +360,7 @@ async function publish(
       ...(from
         ? [
             // Keep exactly the snapshot's files: the commit can hold files sync leaves out.
-            '(cd "$B.stage" && find . \\( -type f -o -type l \\) | sed "s|^\\./||" | sort) > "$B.have"',
-            'comm -23 "$B.have" "$B.files" | while IFS= read -r f; do rm -f -- "$B.stage/$f"; done',
-            'find "$B.stage" -mindepth 1 -type d -empty -delete',
+            '(cd "$B.stage" && find . \\( -type f -o -type l \\) | sed "s|^\\./||" | sort) | comm -23 - "$B.files" | while IFS= read -r f; do rm -f -- "$B.stage/$f"; done',
             `[ "$(find "$B.stage" \\( -type f -o -type l \\) | wc -l)" -eq ${snapshot.files.length} ] || { echo "unexpected files in the commit" >&2; exit 8; }`,
           ]
         : []),
@@ -375,7 +376,7 @@ async function publish(
       '  n=$((n + 1)); [ "$n" -lt 450 ] || { echo "another sync is still publishing" >&2; exit 7; }',
       "  sleep 0.2",
       "done",
-      'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files" "$B.git" "$B.have" "$L"\' EXIT',
+      'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files" "$B.git" "$L"\' EXIT',
       'if [ -f "$S/current.files" ]; then comm -23 "$S/current.files" "$B.files" | while IFS= read -r f; do rm -f -- "$P/$f"; done; fi',
       // A directory that is now a file (or symlink) cannot be copied over.
       'while IFS= read -r f; do if [ -d "$P/$f" ] && [ ! -L "$P/$f" ]; then rm -rf -- "$P/$f"; fi; done < "$B.files"',
