@@ -143,13 +143,6 @@ build output from earlier runs (for example `node_modules`) stays in place. Sync
 the same sandbox publish one at a time, so the checkout always matches one snapshot:
 the one published last.
 
-When `origin` is on GitHub and HEAD shares a commit with `@{upstream}` (or `origin/HEAD`),
-the archive holds only the files that differ from that merge base. The sandbox fetches
-the base with `git fetch --depth=1` (on exe.dev first through `github.int.exe.xyz`, the
-GitHub integration), extracts it, overlays the archive, and deletes every file that is
-not in the manifest. The same sha256 checks then prove the result matches the snapshot.
-If any step fails, the full archive is uploaded instead.
-
 ### Artifacts
 
 `fetchArtifact(ref, path, { jobId })` downloads one file a job produced into

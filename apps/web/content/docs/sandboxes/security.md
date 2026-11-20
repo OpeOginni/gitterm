@@ -14,7 +14,7 @@ This page lists what leaves your machine when your local agent uses a Gitterm sa
 ## What a sandbox never receives
 
 - The conversation.
-- Git history. A sync that starts from a pushed GitHub commit fetches only that commit, removes the files sync leaves out, and deletes the fetched copy.
+- Git history. Sync uploads a locally filtered archive and does not fetch commits in the sandbox.
 - Model credentials. No coding agent runs in the sandbox.
 - Your provider key or Gitterm token.
 - Untracked files that Git ignores, such as `node_modules` or build output.

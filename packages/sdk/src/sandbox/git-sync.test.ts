@@ -16,7 +16,7 @@ const git = (cwd: string, ...args: string[]) =>
     .toString()
     .trim();
 
-// "GitHub": a local repository with one pushed commit, holding a file sync never sends.
+// A repository with a pushed commit that includes a file sync must never send.
 const origin = path.join(work, "origin.git");
 const seed = path.join(work, "seed");
 await mkdir(seed);
@@ -28,7 +28,6 @@ await writeFile(path.join(seed, ".env"), "SECRET=committed-by-mistake\n");
 git(seed, "add", "-A");
 git(seed, "commit", "-qm", "base");
 git(work, "clone", "-q", "--bare", seed, origin);
-git(origin, "config", "uploadpack.allowAnySHA1InWant", "true");
 
 // The local checkout: one unpushed commit, an edit, a deletion, and an untracked file.
 const repo = path.join(work, "repo");
@@ -41,22 +40,20 @@ git(repo, "commit", "-qm", "local");
 await rm(path.join(repo, "keep.txt"));
 await writeFile(path.join(repo, "new.txt"), "untracked\n");
 
-/** A sandbox on this machine. `github` is where the sandbox's GitHub URLs lead. */
-function localBackend(github: string) {
+/** A sandbox on this machine. */
+function localBackend() {
   const home = path.join(work, `home-${Math.random().toString(16).slice(2)}`);
-  const gitconfig = path.join(work, `gitconfig-${path.basename(home)}`);
-  const uploads: number[] = [];
+  const uploads: string[][] = [];
+  let fetched = false;
   const backend = {
     identity: { mode: "direct", provider: "e2b", account: "test" },
     home,
     async run(_id: string, command: string) {
-      await writeFile(
-        gitconfig,
-        `[url "${github}"]\n\tinsteadOf = https://github.com/owner/repo.git\n`,
-      );
-      const result = spawnSync("bash", ["-c", command], {
-        env: { ...process.env, GIT_CONFIG_GLOBAL: gitconfig },
-      });
+      if (command.includes("git fetch") || command.includes("git -C ")) {
+        fetched = true;
+        throw new Error("Sync must not run Git in the sandbox");
+      }
+      const result = spawnSync("bash", ["-c", command]);
       return {
         exitCode: result.status ?? 1,
         stdout: `${result.stdout}`,
@@ -64,15 +61,15 @@ function localBackend(github: string) {
       };
     },
     async writeFile(_id: string, file: string, data: Uint8Array) {
-      if (file.endsWith(".tgz")) uploads.push(data.byteLength);
+      if (file.endsWith(".tgz")) uploads.push(tarNames(data));
       await mkdir(path.dirname(file), { recursive: true });
       await writeFile(file, data);
     },
   } as unknown as SandboxBackend;
-  return { backend, home, uploads };
+  return { backend, home, uploads, fetched: () => fetched };
 }
 
-const tarNames = (archive: Buffer) =>
+const tarNames = (archive: Uint8Array) =>
   execFileSync("tar", ["-tz"], { input: archive }).toString().trim().split("\n");
 
 async function projectFiles(home: string) {
@@ -86,18 +83,15 @@ async function projectFiles(home: string) {
   );
 }
 
-test("a GitHub checkout uploads only what differs from its pushed commit", async () => {
+test("sync uploads only locally filtered files without fetching the GitHub commit", async () => {
   const captured = await captureSource(repo);
-  expect(captured.git?.repo).toBe("owner/repo");
-  expect(captured.git?.commit).toBe(git(repo, "rev-parse", "origin/main"));
-  expect(tarNames(captured.git!.archive).toSorted()).toEqual(["a.txt", "committed.txt", "new.txt"]);
-
-  const { backend, home, uploads } = localBackend(origin);
+  const { backend, home, uploads, fetched } = localBackend();
   expect(await uploadSource(backend, "sbx", captured)).toEqual({
     verified: true,
     digest: captured.snapshot.digest,
   });
-  expect(uploads).toEqual([captured.git!.archive.byteLength]);
+  expect(fetched()).toBe(false);
+  expect(uploads).toEqual([["a.txt", "big.bin", "committed.txt", "new.txt"]]);
   const files = await projectFiles(home);
   // keep.txt was deleted locally and .env is never synced, though the commit has both.
   expect(Object.keys(files)).toEqual(["a.txt", "big.bin", "committed.txt", "new.txt"]);
@@ -106,25 +100,4 @@ test("a GitHub checkout uploads only what differs from its pushed commit", async
     "current.digest",
     "current.files",
   ]);
-});
-
-test("when the sandbox cannot fetch the commit, everything is uploaded, and later syncs skip the fetch", async () => {
-  const captured = await captureSource(repo);
-  const { backend, home, uploads } = localBackend(path.join(work, "missing.git"));
-  expect((await uploadSource(backend, "unfetchable", captured)).verified).toBe(true);
-  expect(uploads).toEqual([captured.git!.archive.byteLength, captured.archive.byteLength]);
-  expect(Object.keys(await projectFiles(home))).toEqual([
-    "a.txt",
-    "big.bin",
-    "committed.txt",
-    "new.txt",
-  ]);
-  await uploadSource(backend, "unfetchable", captured);
-  expect(uploads).toHaveLength(3);
-});
-
-test("a checkout whose origin is not on GitHub uploads everything", async () => {
-  const other = path.join(work, "other");
-  git(work, "clone", "-q", origin, other);
-  expect((await captureSource(other)).git).toBeUndefined();
 });

@@ -57,8 +57,6 @@ Direct sandboxes are never paused or resumed.
 
 **exe.dev.** The token needs the `new`, `ls`, `ssh`, `pause`, `resume`, and `rm` commands. Private previews also need `ssh-key generate-api-key`, listed in full: `ssh-key` alone doesn't allow it. Each request is limited to 30 seconds and 64 KB, so longer commands run detached and files upload in parts. Each request takes about 2 seconds, so a 10 MiB upload takes about 40 seconds. Previews support ports 3000 to 9999. No labels; the owning account is kept as a hash in the sandbox name.
 
-For private GitHub repositories on exe.dev, connect GitHub in exe.dev and give your VMs read access to the repository: `ssh exe.dev integrations add github --name <name> --repository <owner>/<repo> --readonly --attach auto:all`. Syncs then fetch your pushed commit through that integration and upload only your changes, which is much faster than uploading the whole tree. No GitHub token is stored on the VM.
-
 **Railway.** Railway has no command API, so the sandbox runs a small Gitterm command server. It is not an agent. It accepts requests only with a token derived from your Railway token and the sandbox name. Port 8080 is reserved for it.
 
 **AWS.** Managed only, because it runs on the Gitterm deployment's ECS cluster and load balancer. It uses the same command server as Railway, with a token derived from the deployment's encryption key.
