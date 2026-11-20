@@ -5,6 +5,7 @@ import {
   captureSource,
   createSandboxBackend,
   createSandboxClient,
+  CREDENTIAL_REFERENCE,
   describeSandboxAccount,
   resolveSandboxAccount,
   sourceLimitBytes,
@@ -25,7 +26,7 @@ export function sandboxConfigPath(): string {
   );
 }
 
-/** The file holds account names and env var names only; a literal key is refused. */
+/** Keys in the file are `{env:VAR}` or `{file:path}` references; a literal key is refused. */
 async function loadSettings(): Promise<SandboxSettings> {
   const file = sandboxConfigPath();
   const text = await readFile(file, "utf8").catch(() => {
@@ -34,7 +35,7 @@ async function loadSettings(): Promise<SandboxSettings> {
         {
           account: "e2b",
           accounts: {
-            e2b: { provider: "e2b", apiKeyEnv: "E2B_API_KEY" },
+            e2b: { provider: "e2b", apiKey: "{env:E2B_API_KEY}" },
             gitterm: { size: "medium" },
           },
         },
@@ -46,9 +47,10 @@ async function loadSettings(): Promise<SandboxSettings> {
   const settings = JSON.parse(text) as SandboxSettings;
   const accounts = settings.accounts ?? { [settings.provider ?? "gitterm"]: settings };
   for (const [name, account] of Object.entries(accounts)) {
-    if ("apiKey" in account || "token" in account)
+    const key = "apiKey" in account ? account.apiKey : undefined;
+    if ((key !== undefined && !CREDENTIAL_REFERENCE.test(key.trim())) || "token" in account)
       throw new Error(
-        `Sandbox account ${name} in ${file} contains a credential. Store it in an environment variable and reference it with apiKeyEnv.`,
+        `Sandbox account ${name} in ${file} contains a credential. Store it in an environment variable and use "apiKey": "{env:VAR}".`,
       );
   }
   return settings;

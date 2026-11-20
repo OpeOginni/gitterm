@@ -49,9 +49,17 @@ Restart OpenCode after changing the settings.
 Railway and exe.dev never delete a forgotten sandbox themselves, so they need
 `allowUnboundedLifetime: true`. Destroy sandboxes you no longer need.
 
+E2B, Daytona, and exe.dev accounts can leave out `apiKey` to use the provider's CLI login:
+the key from `e2b auth login` or `daytona login --api-key`, or a token signed with the SSH key
+that `ssh exe.dev` uses.
+
+```jsonc
+{ "provider": "exedev", "allowUnboundedLifetime": true }
+```
+
 ### Or use GitTerm
 
-Leave out `apiKey` and sandboxes go through GitTerm instead, billed to your plan. No provider
+Leave out `provider` and `apiKey` and sandboxes go through GitTerm instead, billed to your plan. No provider
 account needed. Sign in once:
 
 ```sh

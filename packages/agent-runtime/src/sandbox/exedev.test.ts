@@ -124,12 +124,23 @@ test("files upload exactly, large ones as parallel parts", async () => {
   expect((await readdir(path.join(scratch, "dir"))).toSorted()).toEqual(["large.bin", "small.bin"]);
 });
 
-test("previews mint one key per VM with a unique label", async () => {
+test("previews mint one key per VM, and destroy removes that VM's keys", async () => {
   const labels: string[] = [];
+  const removed: string[] = [];
   mockExec((command) => {
     if (command === `rm ${id}`) return Response.json({});
+    if (command === "ssh-key list --json")
+      return Response.json({
+        ssh_keys: [...labels, "other-key", `${id}9-ffffffff`, `${id}-other-ffffffff`].map(
+          (name) => ({ name }),
+        ),
+      });
+    if (command.startsWith("ssh-key remove ")) {
+      removed.push(command.slice("ssh-key remove ".length));
+      return Response.json({});
+    }
     if (!command.startsWith("ssh-key ")) return;
-    expect(command).toStartWith(`ssh-key generate-api-key --vm=${id} `);
+    expect(command).toStartWith(`ssh-key generate-api-key --vm=${id} --label=${id}-`);
     expect(command).toEndWith(" --exp=never");
     labels.push(/--label=(\S+)/.exec(command)![1]!);
     return Response.json({ token: `exe1.test-${labels.length}` });
@@ -146,12 +157,12 @@ test("previews mint one key per VM with a unique label", async () => {
   expect((await second.preview(id, 3456)).headers["X-Exedev-Authorization"]).toBe(
     "Bearer exe1.test-2",
   );
-  // A destroyed VM's key is never reused for a new VM with the same name.
+  // Both processes' keys go, and no one else's; a later VM with this name gets a new key.
   await first.destroy(id);
+  expect(removed).toEqual(labels);
   expect((await first.preview(id, 3456)).headers["X-Exedev-Authorization"]).toBe(
     "Bearer exe1.test-3",
   );
-  expect(new Set(labels).size).toBe(3);
 });
 
 test("a token without the preview permission gets an error naming it", async () => {

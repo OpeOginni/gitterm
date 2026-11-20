@@ -44,7 +44,7 @@ async function withSettings<T>(options: Record<string, unknown>, run: () => Prom
       process.env.GITTERM_SANDBOX_CONFIG,
       JSON.stringify({
         account: "e2b",
-        accounts: { e2b: { provider: "e2b", apiKeyEnv: "E2B_API_KEY" } },
+        accounts: { e2b: { provider: "e2b", apiKey: "{env:E2B_API_KEY}" } },
         ...options,
       }),
     );
@@ -102,6 +102,25 @@ test("sync exits with an error for an invalid source limit without capturing sou
     expect(exit).toHaveBeenCalledWith(1);
     expect(error).toHaveBeenCalledWith(expect.stringContaining("maxSourceMiB"));
     expect(captures).toHaveLength(0);
+  } finally {
+    error.mockRestore();
+    exit.mockRestore();
+  }
+});
+
+test("a literal key in the settings file is refused; {env:VAR} is the way to give one", async () => {
+  const exit = spyOn(process, "exit").mockImplementation(() => {
+    throw new Error("exit");
+  });
+  const error = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await expect(
+      withSettings({ accounts: { e2b: { provider: "e2b", apiKey: "e2b_literal" } } }, () =>
+        runSandboxSync({ sandboxId: "sbx", json: true, yes: true }),
+      ),
+    ).rejects.toThrow("exit");
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("{env:VAR}"));
+    expect(error).not.toHaveBeenCalledWith(expect.stringContaining("e2b_literal"));
   } finally {
     error.mockRestore();
     exit.mockRestore();

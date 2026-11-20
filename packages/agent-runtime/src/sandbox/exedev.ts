@@ -90,7 +90,6 @@ export function createExeDevSandboxTransport(config: {
         "auth",
         `exe.dev rejected the token while trying to ${action}. Tokens need cmds new, ls, ssh, pause, resume, and rm, and "ssh-key generate-api-key" for private previews.`,
       );
-    // exe.dev reports a paused or deleted VM itself, so no `ls` is needed before a command.
     if (!response.ok && /"code":"vm_not_(found|running)"/.test(text))
       throw new SandboxProviderError("not_found", "The exe.dev VM is paused or no longer exists.");
     if (response.status === 504)
@@ -258,8 +257,15 @@ export function createExeDevSandboxTransport(config: {
 
     async destroy(id) {
       accessKeys.delete(id);
-      if ((await info(id)).state === "terminated") return;
-      await exec(`rm ${id}`, "delete the sandbox");
+      if ((await info(id)).state !== "terminated") await exec(`rm ${id}`, "delete the sandbox");
+      // Preview keys outlive their VM. Remove them when the token allows it.
+      const keys = await exec("ssh-key list --json", "list preview keys")
+        .then((text) => (JSON.parse(text) as { ssh_keys?: Array<{ name: string }> }).ssh_keys ?? [])
+        .catch(() => []);
+      const prefix = `${id}-`;
+      for (const { name } of keys)
+        if (name.startsWith(prefix) && /^[0-9a-f]{8}$/.test(name.slice(prefix.length)))
+          await exec(`ssh-key remove ${name}`, "remove a preview key").catch(() => {});
     },
 
     async pause(id) {
@@ -351,10 +357,10 @@ export function createExeDevSandboxTransport(config: {
       if (port < 3000 || port > 9999) throw new Error("exe.dev previews support ports 3000-9999");
       let key = accessKeys.get(id);
       if (!key) {
-        // A VM-scoped key kept only in this process's memory. Labels must be unique per
-        // account. exe.dev gives VM keys 30 days, even with `--exp=never`.
+        // A VM-scoped key kept only in this process's memory, expiring with the token.
+        // Labels are unique per account; the VM name prefix lets destroy find them.
         const output = await exec(
-          `ssh-key generate-api-key --vm=${id} --label=gitterm-sandbox-${randomBytes(8).toString("hex")} --exp=never`,
+          `ssh-key generate-api-key --vm=${id} --label=${id}-${randomBytes(4).toString("hex")} --exp=never`,
           "create a preview key",
         );
         try {

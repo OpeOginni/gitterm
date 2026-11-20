@@ -35,7 +35,7 @@ Secret detection uses file names and private-key markers. It is not a full secre
 | Account         | Where the key lives                                                                                            | Who uses it                             | Sent to                  |
 | --------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------ |
 | Direct (plugin) | Plugin options, as `"apiKey": "{env:E2B_API_KEY}"` or `"{file:~/.secrets/e2b}"`. OpenCode fills it in at load. | The OpenCode process running the plugin | That provider's API only |
-| Direct (CLI)    | The environment variable named by `apiKeyEnv`. The settings file holds names only.                             | The `gitterm` process                   | That provider's API only |
+| Direct (CLI)    | The same `{env:...}` or `{file:...}` reference in the CLI settings file. A literal key there is refused.       | The `gitterm` process                   | That provider's API only |
 | Managed         | The deployment's provider config, encrypted in the Gitterm database. You hold only your Gitterm token.         | The Gitterm API server                  | That provider's API only |
 
 Gitterm never stores a direct key, and never writes any key to sandbox records, snapshots, logs, or tool results.

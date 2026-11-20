@@ -271,7 +271,6 @@ export async function uploadSource(
       `B=${q(base)}; P=${q(PROJECT_DIR)}; S=${q(STATE_DIR)}`,
       // Staging files are removed whether the upload succeeds or fails.
       'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files"\' EXIT',
-      'sort -o "$B.files" "$B.files"',
       'mkdir "$B.stage"',
       'tar -xzf "$B.tgz" -C "$B.stage" --no-same-owner',
       'for f in "$B.stage"/gitterm-pax/*; do [ -e "$f" ] || break; echo "unexpected pax placeholder" >&2; exit 4; done',
@@ -287,6 +286,7 @@ export async function uploadSource(
       "  sleep 0.2",
       "done",
       'trap \'rm -rf "$B.stage" "$B.tgz" "$B.sha256" "$B.files" "$L"\' EXIT',
+      'sort -o "$B.files" "$B.files"',
       'if [ -f "$S/current.files" ]; then comm -23 "$S/current.files" "$B.files" | while IFS= read -r f; do rm -f -- "$P/$f"; done; fi',
       // A directory that is now a file (or symlink) cannot be copied over.
       'while IFS= read -r f; do if [ -d "$P/$f" ] && [ ! -L "$P/$f" ]; then rm -rf -- "$P/$f"; fi; done < "$B.files"',

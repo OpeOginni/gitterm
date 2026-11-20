@@ -48,7 +48,7 @@ Not sure which? See [Managed and direct accounts](/docs/concepts#managed-and-dir
    Which sandbox account are you using?
    ```
 
-   You should see the selected account and provider, where the key comes from, whether it is present, who is charged, the limits, and the provider's limitations. The key itself is never shown. If the key is missing, fix the variable and restart OpenCode.
+   You should see the selected account and provider, where the key comes from, whether it is present, who is charged, the limits, and the provider's limitations. The key itself is never shown. If the key is missing, see [Environment variables](/docs/reference/sandbox-plugin#environment-variables): OpenCode's background service doesn't see variables set in your terminal.
 
 ## Direct accounts
 
@@ -65,6 +65,16 @@ Never type the key into the config. Use OpenCode's substitution, which fills in 
 ```
 
 The key stays in the OpenCode process and is sent only to that provider's API. If it is empty or the provider rejects it, the tools fail with an error. They never fall back to another account.
+
+If you already use the provider's CLI, you can leave `apiKey` out for E2B, Daytona, and exe.dev. The account then uses that CLI's login and is still billed to your own provider account:
+
+| Provider | Sign in with                          | What the account uses                                                                    |
+| -------- | ------------------------------------- | ---------------------------------------------------------------------------------------- |
+| E2B      | `e2b auth login`                      | The team API key the CLI saved in `~/.e2b/config.json`.                                  |
+| Daytona  | `daytona login --api-key`             | The API key of the CLI's active profile. A browser login saves no key, so it won't work. |
+| exe.dev  | An SSH key that `ssh exe.dev` accepts | A 30-day token signed on your machine with that key. Nothing is created in your account. |
+
+An account with `serverUrl`, `token`, or `size` is a managed account and never uses a CLI login.
 
 Some providers need more than `apiKey`:
 
@@ -197,4 +207,4 @@ The `publicPreviews` option skips the public-previews prompt, so a `deny` rule f
 
 ## Use the CLI instead
 
-The Gitterm CLI has the same sandbox commands (`gitterm sandbox ...`) and the same settings, including `publicPreviews`. The difference: it reads them from `~/.config/gitterm/sandbox.json`, and keys come from `apiKeyEnv`, the name of an environment variable. A literal `apiKey` or `token` in that file is refused. See [CLI reference](/docs/reference/cli).
+The Gitterm CLI has the same sandbox commands (`gitterm sandbox ...`) and the same settings, including `publicPreviews`. It reads them from `~/.config/gitterm/sandbox.json`, where `apiKey` must be an `{env:...}` or `{file:...}` reference; a literal key or `token` in that file is refused. See [CLI reference](/docs/reference/cli).

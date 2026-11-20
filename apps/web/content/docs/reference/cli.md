@@ -78,21 +78,21 @@ The `--lifetime` and `--timeout` defaults are the built-in sandbox limits; limit
 
 `create`, `sync` and `apply` ask for approval. Pass `--yes` to approve without a prompt; with `--json` you must.
 
-The CLI reads accounts from `~/.config/gitterm/sandbox.json`, or from the file in `GITTERM_SANDBOX_CONFIG`. The file holds account names and the names of environment variables, never keys:
+The CLI reads accounts from `~/.config/gitterm/sandbox.json`, or from the file in `GITTERM_SANDBOX_CONFIG`. It takes the same settings as the [sandbox plugin](/docs/reference/sandbox-plugin#options). Keys are references, never values:
 
 ```json
 {
   "account": "e2b",
   "accounts": {
-    "e2b": { "provider": "e2b", "apiKeyEnv": "E2B_API_KEY" },
+    "e2b": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
     "gitterm": { "size": "medium" }
   }
 }
 ```
 
-The file takes the same `limits`, `exclude`, `maxSourceMiB`, and `publicPreviews` settings as the [sandbox plugin](/docs/reference/sandbox-plugin#options). With `"publicPreviews": true`, `create` makes public previews without asking. Whether a provider can make a preview public: [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
+`apiKey` takes `{env:VAR}` or `{file:path}`, as in OpenCode config. A literal key in the file is refused. With `"publicPreviews": true`, `create` makes public previews without asking. Whether a provider can make a preview public: [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
 
-An account with `apiKeyEnv` uses your own provider key and needs no Gitterm login. One without goes through GitTerm. A single account can also sit at the top level: `{ "provider": "e2b", "apiKeyEnv": "E2B_API_KEY" }`.
+An account with `apiKey` uses your own provider key and needs no Gitterm login. E2B, Daytona, and exe.dev can also use a [provider CLI login](/docs/sandboxes/setup#direct-accounts). A single account can sit at the top level: `{ "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" }`.
 
 ## Inside a workspace
 

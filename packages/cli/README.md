@@ -37,7 +37,7 @@ variables:
 {
   "account": "e2b",
   "accounts": {
-    "e2b": { "provider": "e2b", "apiKeyEnv": "E2B_API_KEY" },
+    "e2b": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
     "gitterm": { "size": "medium" }
   }
 }

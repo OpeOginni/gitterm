@@ -205,7 +205,9 @@ describe("sandbox account isolation", () => {
     expect(error.message).not.toContain("wrong");
     // Only the selected account's key was tried.
     expect(calls.filter((call) => call.startsWith("auth:") && call !== "auth:wrong")).toEqual([]);
-    await expect(backendFor("empty")).rejects.toThrow(/no E2B credential/);
+    await expect(backendFor("empty")).rejects.toThrow(
+      /"apiKey" is empty.*opencode service set env/,
+    );
     await expect(backendFor("missing")).rejects.toThrow(/not configured/);
     await expect(resolveSandboxAccount({ accounts: {} })).rejects.toThrow(/No sandbox accounts/);
   });
@@ -221,7 +223,7 @@ describe("sandbox account isolation", () => {
       const account = await resolveSandboxAccount(settings, "personal");
       expect(describeSandboxAccount(account)).toMatchObject({
         mode: "direct",
-        credentialSource: "plugin option",
+        credentialSource: "apiKey setting",
         credentialPresent: true,
       });
       expect(JSON.stringify(describeSandboxAccount(account))).not.toContain("key-team-1");
@@ -233,6 +235,22 @@ describe("sandbox account isolation", () => {
       });
       expect(inline).toMatchObject({ name: "e2b", provider: "e2b", ownKey: true });
       expect(inline.config).not.toHaveProperty("maxSourceMiB");
+      // `{env:VAR}` and `{file:path}` work as in OpenCode config.
+      process.env.GITTERM_TEST_E2B_KEY = "key-team-1";
+      const keyFile = path.join(process.env.HOME!, "e2b-key");
+      await writeFile(keyFile, "key-team-2\n");
+      for (const [apiKey, source] of [
+        ["{env:GITTERM_TEST_E2B_KEY}", "environment variable GITTERM_TEST_E2B_KEY"],
+        [`{file:${keyFile}}`, `file ${keyFile}`],
+      ]) {
+        const referenced = await resolveSandboxAccount({ provider: "e2b", apiKey });
+        expect(describeSandboxAccount(referenced)).toMatchObject({
+          credentialSource: source,
+          credentialPresent: true,
+        });
+        expect((await createSandboxBackend(referenced).list()).length).toBeGreaterThanOrEqual(0);
+      }
+      delete process.env.GITTERM_TEST_E2B_KEY;
     } finally {
       process.env.GITTERM_API_TOKEN = saved.token;
       process.env.HOME = saved.home;

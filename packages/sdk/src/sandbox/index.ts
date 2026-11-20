@@ -33,6 +33,7 @@ export {
 } from "./client.js";
 export {
   createSandboxBackend,
+  CREDENTIAL_REFERENCE,
   describeSandboxAccount,
   resolveSandboxAccount,
   type GittermAccountConfig,

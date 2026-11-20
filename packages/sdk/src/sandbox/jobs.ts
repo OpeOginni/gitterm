@@ -172,7 +172,7 @@ export async function startJob(
   );
   if (prepared.exitCode !== 0) throw new Error(`Could not prepare job ${id} in the sandbox`);
   // Values are written to a 0600 file inside the sandbox, not passed on a command line.
-  // The files are independent, so they upload together (each write is ~2 s on exe.dev).
+  // The files are independent, so they upload in parallel; on exe.dev each write takes ~2 s.
   const names = Object.keys(input.env ?? {});
   const files: Record<string, string> = {
     "env.sh": envScript(input.env),
