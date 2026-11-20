@@ -865,9 +865,10 @@ they appear under **API tokens** in the dashboard and can be revoked there.
 ## Sandboxes
 
 `@gitterm/sdk/sandbox` runs commands in a plain remote sandbox, with no coding agent
-inside, on behalf of a local agent or script. An account with `apiKey` or `apiKeyEnv` uses
+inside, on behalf of a local agent or script. An account with `apiKey` (as `{env:VAR}` or `{file:path}`) uses
 your own provider account (E2B, Daytona, Vercel, Boat, exe.dev, or Railway; no Gitterm login
-needed). One without goes through your Gitterm plan: `{ size: "medium" }` on gitterm.dev, or
+needed). E2B, Daytona, and exe.dev can also use their provider CLI login. For your Gitterm
+plan, use `{ size: "medium" }` on gitterm.dev, or
 `{ serverUrl, provider? }` on a self-hosted server, which picks its default provider when
 `provider` is left out.
 
@@ -879,7 +880,7 @@ import {
   resolveSandboxAccount,
 } from "@gitterm/sdk/sandbox";
 
-const account = await resolveSandboxAccount({ provider: "e2b", apiKeyEnv: "E2B_API_KEY" });
+const account = await resolveSandboxAccount({ provider: "e2b", apiKey: "{env:E2B_API_KEY}" });
 const sandboxes = createSandboxClient({ backend: createSandboxBackend(account) });
 
 const sandbox = await sandboxes.create({ name: "ci", lifetimeMinutes: 30 });

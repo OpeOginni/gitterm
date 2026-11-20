@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import env from "@gitterm/env/server";
 import { captureAgentAccessCredential } from "../access-credential";
 import type { ExeDevImageProviderMetadata } from "@gitterm/db/schema/cloud";
@@ -128,7 +129,8 @@ export class ExeDevProvider implements ComputeProvider {
   }
 
   private async runVmCommand(handle: ExeDevHandle, command: string): Promise<unknown> {
-    return this.execute(`ssh ${handle.vmName} -- bash -lc ${shellQuote(command)}`);
+    // The lobby lexes the request, then the VM shell parses the one argument after the VM name.
+    return this.execute(`ssh ${handle.vmName} ${shellQuote(`bash -lc ${shellQuote(command)}`)}`);
   }
 
   /**
@@ -166,7 +168,7 @@ export class ExeDevProvider implements ComputeProvider {
 
   private async getVmAccessToken(vmName: string): Promise<string> {
     const result = await this.execute(
-      `ssh-key generate-api-key --vm=${vmName} --label=gitterm --exp=never`,
+      `ssh-key generate-api-key --vm=${vmName} --label=${vmName}-${randomBytes(4).toString("hex")} --exp=never`,
     );
     const token = findToken(result);
     if (!token) throw new Error("exe.dev did not return a VM access token.");
@@ -338,7 +340,16 @@ export class ExeDevProvider implements ComputeProvider {
   }
 
   async terminateWorkspace(externalId: string): Promise<void> {
-    await this.execute(`rm ${parseHandle(externalId).vmName}`);
+    const { vmName } = parseHandle(externalId);
+    await this.execute(`rm ${vmName}`);
+    // Access keys outlive their VM. Remove them when the token allows it.
+    const listed = (await this.execute("ssh-key list --json").catch(() => ({}))) as {
+      ssh_keys?: Array<{ name: string }>;
+    };
+    const prefix = `${vmName}-`;
+    for (const { name } of listed.ssh_keys ?? [])
+      if (name.startsWith(prefix) && /^[0-9a-f]{8}$/.test(name.slice(prefix.length)))
+        await this.execute(`ssh-key remove ${name}`).catch(() => undefined);
   }
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {

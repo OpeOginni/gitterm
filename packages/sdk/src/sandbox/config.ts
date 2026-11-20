@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { createSandboxTransport } from "@gitterm/agent-runtime/sandbox/index";
 import { SANDBOX_PROVIDER_PROFILES } from "@gitterm/agent-runtime/sandbox/types";
 import { createGittermClient, type GittermClient } from "../client.js";
@@ -10,6 +12,7 @@ import {
   type SandboxBackend,
   type SandboxMode,
 } from "./backend.js";
+import { CLI_LOGIN_PROVIDERS, cliLogin } from "./cli-login.js";
 import type { SandboxLimits } from "./client.js";
 import {
   isSandboxProviderError,
@@ -18,9 +21,12 @@ import {
 } from "./types.js";
 
 type OwnKey = {
-  /** The resolved credential (plugin options, after `{env:...}`/`{file:...}` substitution). */
+  /**
+   * The provider key, normally as `"{env:VAR}"` or `"{file:path}"`. OpenCode substitutes these
+   * before the plugin sees them; the SDK and CLI resolve them the same way.
+   */
   apiKey?: string;
-  /** Name of an environment variable holding the credential (CLI settings file). */
+  /** @deprecated Use `"apiKey": "{env:VAR}"`. */
   apiKeyEnv?: string;
   /**
    * Required for providers that never delete an abandoned sandbox themselves
@@ -29,11 +35,7 @@ type OwnKey = {
   allowUnboundedLifetime?: boolean;
 };
 
-/**
- * Your own provider account. Having `apiKey` (or `apiKeyEnv`) is what makes it one. In OpenCode
- * `"apiKey": "{env:E2B_API_KEY}"` is substituted by OpenCode before the plugin sees it; the CLI
- * reads the same shape from a file but takes credentials only from `apiKeyEnv`.
- */
+/** Your own provider account, e.g. `{ provider: "e2b", apiKey: "{env:E2B_API_KEY}" }`. */
 export type OwnKeyAccountConfig =
   | ({
       provider: "e2b";
@@ -97,13 +99,15 @@ export type GittermAccountConfig = {
   token?: string;
 };
 
-/** An account with `apiKey`/`apiKeyEnv` uses your own provider key; one without goes through GitTerm. */
+/** A direct provider account (key or CLI login), or a managed GitTerm account. */
 export type SandboxAccountConfig = OwnKeyAccountConfig | GittermAccountConfig;
 
 type SandboxOptions = {
   limits?: Partial<SandboxLimits>;
   /** Extra glob patterns never uploaded. Secret-like files are always excluded. */
   exclude?: string[];
+  /** Largest working tree a sync uploads, in MiB before compression (default 100, at most 1024). */
+  maxSourceMiB?: number;
   /**
    * Create every sandbox with public previews: anyone with a preview URL can open it.
    * Setting this is the approval, so nobody is asked per sandbox.
@@ -132,7 +136,12 @@ export type SandboxSettings = SandboxOptions &
 
 /** A selected account with its provider known. From `resolveSandboxAccount`. */
 export type SandboxAccount = { name: string; provider: SandboxProviderKey } & (
-  | { ownKey: true; config: OwnKeyAccountConfig }
+  | {
+      ownKey: true;
+      config: OwnKeyAccountConfig;
+      /** Where the key came from, when it is a provider CLI login rather than `apiKey`. */
+      cliLogin?: string;
+    }
   | { ownKey: false; config: GittermAccountConfig; client: GittermClient }
 );
 
@@ -165,14 +174,26 @@ const PROVIDER_NAMES: Record<SandboxProviderKey, string> = {
   gitterm: "Gitterm",
 };
 
+const CLI_LOGIN_HINTS: Partial<Record<SandboxProviderKey, string>> = {
+  e2b: ', or run "e2b auth login"',
+  daytona: ', or run "daytona login --api-key"',
+  exedev: ', or add an SSH key to exe.dev so "ssh exe.dev" works',
+};
+
+/** With no GitTerm setting, E2B, Daytona, and exe.dev accounts fall back to that CLI's login. */
+const usesCliLogin = (config: SandboxAccountConfig) =>
+  (CLI_LOGIN_PROVIDERS as readonly unknown[]).includes(config.provider) &&
+  !["serverUrl", "token", "size"].some((key) => key in config);
+
 const isOwnKey = (config: SandboxAccountConfig): config is OwnKeyAccountConfig =>
-  "apiKey" in config || "apiKeyEnv" in config;
+  "apiKey" in config || "apiKeyEnv" in config || usesCliLogin(config);
 
 function selected(settings: SandboxSettings, accountName?: string) {
   if (!settings.accounts) {
     const {
       limits: _l,
       exclude: _e,
+      maxSourceMiB: _m,
       publicPreviews: _p,
       snapshots: _s,
       envFiles: _f,
@@ -212,6 +233,17 @@ export async function resolveSandboxAccount(
       throw new Error(
         `Sandbox account ${name}: "provider" must be one of ${OWN_KEY_PROVIDERS.join(", ")} with your own key.`,
       );
+    if (config.apiKey === undefined && !config.apiKeyEnv) {
+      const login = await cliLogin(config.provider);
+      if (login)
+        return {
+          name,
+          provider: config.provider,
+          ownKey: true,
+          config: { ...config, apiKey: login.value },
+          cliLogin: login.source,
+        };
+    }
     return { name, provider: config.provider, ownKey: true, config };
   }
   // `machine` is the old name of `size`.
@@ -248,14 +280,29 @@ export async function resolveSandboxAccount(
   }
 }
 
+/** `{env:VAR}` or `{file:path}`, the reference syntax of OpenCode config. */
+export const CREDENTIAL_REFERENCE = /^\{(env|file):([^}]+)\}$/;
+
 function directCredential(config: OwnKey) {
-  if (config.apiKey !== undefined) return { source: "plugin option", value: config.apiKey.trim() };
+  const [, kind, name = ""] = CREDENTIAL_REFERENCE.exec(config.apiKey?.trim() ?? "") ?? [];
+  if (kind === "env")
+    return { source: `environment variable ${name}`, value: process.env[name]?.trim() ?? "" };
+  if (kind === "file") {
+    let value = "";
+    try {
+      value = readFileSync(name.replace(/^~(?=\/)/, homedir()), "utf8").trim();
+    } catch {
+      // A missing file is reported like an empty key.
+    }
+    return { source: `file ${name}`, value };
+  }
+  if (config.apiKey !== undefined) return { source: "apiKey setting", value: config.apiKey.trim() };
   if (config.apiKeyEnv)
     return {
       source: `environment variable ${config.apiKeyEnv}`,
       value: process.env[config.apiKeyEnv]?.trim() ?? "",
     };
-  return { source: "not configured", value: "" };
+  return { source: "no apiKey and no CLI login", value: "" };
 }
 
 export function describeLimitations(provider: SandboxProviderKey, mode: SandboxMode): string[] {
@@ -340,7 +387,7 @@ export function describeSandboxAccount(account: SandboxAccount): SandboxAccountS
     const credential = directCredential(account.config);
     return {
       ...base,
-      credentialSource: credential.source,
+      credentialSource: account.cliLogin ?? credential.source,
       credentialPresent: Boolean(credential.value),
       chargedTo: `your ${PROVIDER_NAMES[provider]} account (no Gitterm account or credits used)`,
     };
@@ -367,9 +414,14 @@ export function createSandboxBackend(account: SandboxAccount): SandboxBackend {
     });
   const { config } = account;
   const credential = directCredential(config);
+  // OpenCode substitutes an unset `{env:VAR}` with "".
+  if (config.apiKey === "")
+    throw new Error(
+      `Sandbox account ${name}: "apiKey" is empty. If it is "{env:VAR}", VAR isn't set for OpenCode's background service, which doesn't see your terminal's variables. Run "opencode service set env VAR value" and "opencode service restart", or use "{file:path}".`,
+    );
   if (!credential.value)
     throw new Error(
-      `Sandbox account ${name} has no ${PROVIDER_NAMES[provider]} credential (${credential.source}). In OpenCode use "apiKey": "{env:YOUR_VARIABLE}" and make sure the variable is set.`,
+      `Sandbox account ${name} has no ${PROVIDER_NAMES[provider]} credential (${credential.source}). Use "apiKey": "{env:YOUR_VARIABLE}" and make sure the variable is set${CLI_LOGIN_HINTS[provider] ?? ""}.`,
     );
   if (config.provider === "daytona" && config.snapshot && config.resources)
     throw new Error(

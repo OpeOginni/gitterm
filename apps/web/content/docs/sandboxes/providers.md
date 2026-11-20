@@ -55,7 +55,9 @@ Direct sandboxes are never paused or resumed.
 
 **Boat.** The base image cannot be replaced. It includes coding agent CLIs (`claude`, `codex`, `opencode`). Gitterm never starts them and gives them no credentials. At its lifetime the sandbox is archived, not deleted, and the storage remains until you destroy it. A file read returns at most 5 MiB, which limits artifacts. Boat has no labels, so the owning account is kept as a hash in the sandbox name.
 
-**exe.dev.** The token needs the `new`, `ls`, `ssh`, `ssh-key`, `pause`, `resume`, and `rm` commands. Each request is limited to 30 seconds and 64 KB, so jobs start detached and large syncs are slow. Previews support ports 3000 to 9999. No labels; the owning account is kept as a hash in the sandbox name.
+**exe.dev.** Without `apiKey`, the account signs its own token with the SSH key that `ssh exe.dev` uses. A token you create yourself needs the commands `new`, `ls`, `ssh`, `pause`, `resume`, and `rm`, plus `ssh-key generate-api-key` for private previews. List subcommands in full: `ssh-key` alone allows none of them. Each private preview adds a key for its VM to your exe.dev account. If the token also has `ssh-key list` and `ssh-key remove`, destroying the sandbox removes that key; otherwise it stays until it expires with your token. Self-signed tokens include all of these commands.
+
+Each exe.dev request is limited to 30 seconds and 64 KB and takes about 2 seconds, so longer commands run detached and files upload in parts: a 10 MiB upload takes about 40 seconds. Previews support ports 3000 to 9999. exe.dev has no labels, so the owning account is kept as a hash in the sandbox name.
 
 **Railway.** Railway has no command API, so the sandbox runs a small Gitterm command server. It is not an agent. It accepts requests only with a token derived from your Railway token and the sandbox name. Port 8080 is reserved for it.
 

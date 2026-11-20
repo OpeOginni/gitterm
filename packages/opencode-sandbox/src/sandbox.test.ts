@@ -37,8 +37,27 @@ let resolveFailures = 0;
 const actual = await import("@gitterm/sdk/sandbox");
 // Kept before mocking: mock.module also replaces it on `actual`.
 const realResolve = actual.resolveSandboxAccount;
+const captures: Parameters<typeof actual.captureSource>[1][] = [];
+const sandboxGet = mock(async () => ({}));
 mock.module("@gitterm/sdk/sandbox", () => ({
   ...actual,
+  captureSource: async (directory: string, options: Parameters<typeof actual.captureSource>[1]) => {
+    captures.push(options);
+    return {
+      snapshot: {
+        id: "snap_1",
+        digest: "digest",
+        root: directory,
+        files: [],
+        bytes: 0,
+        modified: [],
+        untracked: [],
+        deleted: [],
+        excluded: [],
+      },
+      archive: Buffer.alloc(0),
+    };
+  },
   resolveSandboxAccount: async (...args: Parameters<typeof realResolve>) => {
     if (resolveFailures > 0) {
       resolveFailures--;
@@ -49,6 +68,9 @@ mock.module("@gitterm/sdk/sandbox", () => ({
   createSandboxBackend: () => ({}),
   createSandboxClient: () => ({
     identity: { mode: "direct", account: "e2b", provider: "e2b" },
+    home: "/home/sandbox",
+    get: sandboxGet,
+    sync: async () => ({ verified: true }),
     limits: { defaultLifetimeMinutes: 30, maxSandboxes: 2 },
     get capabilities() {
       return { previews };
@@ -198,6 +220,7 @@ test("where previews are always private, nothing is asked and nothing is made pu
 async function tools(reconcileMs?: number, options: Record<string, unknown> = {}) {
   const added = new Map<string, (input: unknown, context: unknown) => Promise<any>>();
   const posted: Record<string, any>[] = [];
+  const asked: string[] = [];
   const ctx = {
     tool: {
       transform: async (transform: (editor: unknown) => void) =>
@@ -213,7 +236,7 @@ async function tools(reconcileMs?: number, options: Record<string, unknown> = {}
       get: async () => ({ location: { directory: process.cwd() } }),
       synthetic: async (input: Record<string, any>) => posted.push(input),
     },
-    permission: { assert: async () => {} },
+    permission: { assert: async (request: { action: string }) => asked.push(request.action) },
   };
   const settings = {
     account: "e2b",
@@ -223,8 +246,34 @@ async function tools(reconcileMs?: number, options: Record<string, unknown> = {}
   const unload = await registerSandboxTools(ctx as never, settings as never, 10, reconcileMs);
   const call = (name: string, input: unknown) =>
     added.get(name)!(input, { sessionID: "ses", agent: "a", messageID: "m", id: "t" });
-  return { call, posted, unload, names: [...added.keys()] };
+  return { call, posted, unload, names: [...added.keys()], asked };
 }
+
+test("sandbox_sync takes the source limit from settings", async () => {
+  const exclude = ["fixtures/large/**"];
+  captures.length = 0;
+  const { call, unload } = await tools(undefined, { exclude, maxSourceMiB: 512 });
+  try {
+    await call("sandbox_sync", { sandboxId: "sbx" });
+    expect(captures).toEqual([{ exclude, maxBytes: 536870912 }]);
+  } finally {
+    await unload();
+  }
+});
+
+test("sandbox_sync rejects an invalid source limit before contacting the sandbox, capture, or approval", async () => {
+  captures.length = 0;
+  const { call, asked, unload } = await tools(undefined, { maxSourceMiB: 0 });
+  sandboxGet.mockClear();
+  try {
+    await expect(call("sandbox_sync", { sandboxId: "sbx" })).rejects.toThrow(/maxSourceMiB/);
+    expect(sandboxGet).not.toHaveBeenCalled();
+    expect(captures).toHaveLength(0);
+    expect(asked).toHaveLength(0);
+  } finally {
+    await unload();
+  }
+});
 
 test("live sandboxes are reconciled, so a pause made in the dashboard reaches the sidebar", async () => {
   saved = [];

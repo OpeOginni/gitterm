@@ -8,13 +8,23 @@ import { createTarGz, type TarEntry } from "./tar.js";
 /**
  * Source snapshots for sandbox builds: the working tree exactly as it is on disk
  * (committed, staged, unstaged, and non-ignored untracked files; deleted files absent),
- * without Git history or the conversation. Secret-looking files are excluded.
+ * without Git history or the conversation. Secret-looking files and submodules are excluded.
  */
 
 /** The synced checkout and Gitterm bookkeeping live below the sandbox user's home. */
 export const projectDir = (home: string) => `${home}/project`;
 const stateDir = (home: string) => `${home}/.gitterm/source`;
 export const MAX_SOURCE_BYTES = 100 * 1024 * 1024;
+const MAX_SOURCE_LIMIT_MIB = 1024;
+
+export function sourceLimitBytes(maxSourceMiB?: number): number {
+  if (maxSourceMiB === undefined) return MAX_SOURCE_BYTES;
+  if (!Number.isInteger(maxSourceMiB) || maxSourceMiB < 1 || maxSourceMiB > MAX_SOURCE_LIMIT_MIB)
+    throw new Error(
+      `"maxSourceMiB" in the sandbox settings must be a whole number of MiB from 1 to ${MAX_SOURCE_LIMIT_MIB}, not ${maxSourceMiB}.`,
+    );
+  return maxSourceMiB * 1024 * 1024;
+}
 
 export type SnapshotFile = {
   path: string;
@@ -115,15 +125,20 @@ export async function captureSource(
   }
   if ((await git(root, ["ls-files", "--unmerged", "-z"])).length)
     throw new Error("Resolve merge conflicts before syncing to a sandbox.");
-  const staged = (await git(root, ["ls-files", "--stage", "-z"])).toString().split("\0");
-  if (staged.some((line) => line.startsWith("160000 ")))
-    throw new Error("Submodules are not supported by sandbox sync yet.");
+  // Gitlinks are skipped without reading whatever is at their paths.
+  const gitlinks = new Set(
+    nulList(await git(root, ["ls-files", "--stage", "-z"]))
+      .filter((entry) => entry.startsWith("160000 "))
+      .map((entry) => entry.slice(entry.indexOf("\t") + 1)),
+  );
   const head = await git(root, ["rev-parse", "--verify", "-q", "HEAD"])
     .then((value) => value.toString().trim())
     .catch(() => null);
 
   const tracked = nulList(await git(root, ["ls-files", "-z", "--cached"]));
-  const deleted = new Set(nulList(await git(root, ["ls-files", "-z", "--deleted"])));
+  const deleted = new Set(
+    nulList(await git(root, ["ls-files", "-z", "--deleted"])).filter((file) => !gitlinks.has(file)),
+  );
   const modified = nulList(await git(root, ["ls-files", "-z", "--modified"])).filter(
     (file) => !deleted.has(file),
   );
@@ -139,6 +154,10 @@ export async function captureSource(
   const excluded: SourceSnapshot["excluded"] = [];
   let bytes = 0;
   for (const file of candidates) {
+    if (gitlinks.has(file)) {
+      excluded.push({ path: file, reason: "submodule (not synced)" });
+      continue;
+    }
     if (!safeRelativePath(file)) {
       excluded.push({ path: file, reason: "unsupported path" });
       continue;
@@ -172,7 +191,7 @@ export async function captureSource(
     bytes += info.size;
     if (bytes > maxBytes)
       throw new Error(
-        `Source exceeds the ${Math.round(maxBytes / 1024 / 1024)} MiB sandbox sync limit. Exclude build output or large files.`,
+        `Source exceeds the ${Math.round(maxBytes / 1024 / 1024)} MiB sandbox sync limit. Exclude build output or large files, or raise "maxSourceMiB" in the sandbox settings (up to ${MAX_SOURCE_LIMIT_MIB} MiB); the agent cannot change it.`,
       );
     // Hash and archive the same bytes so the manifest describes exactly what is uploaded.
     const data = await readFile(full);
@@ -239,9 +258,11 @@ export async function uploadSource(
     .join("");
   const prepared = await backend.run(sandboxId, `mkdir -p ${q(STATE_DIR)} ${q(PROJECT_DIR)}`);
   if (prepared.exitCode !== 0) throw new Error("Could not prepare the sandbox for upload");
-  await backend.writeFile(sandboxId, `${base}.tgz`, archive);
-  await backend.writeFile(sandboxId, `${base}.files`, Buffer.from(list));
-  await backend.writeFile(sandboxId, `${base}.sha256`, Buffer.from(sums));
+  await Promise.all([
+    backend.writeFile(sandboxId, `${base}.tgz`, archive),
+    backend.writeFile(sandboxId, `${base}.files`, Buffer.from(list)),
+    backend.writeFile(sandboxId, `${base}.sha256`, Buffer.from(sums)),
+  ]);
   const result = await backend.run(
     sandboxId,
     [

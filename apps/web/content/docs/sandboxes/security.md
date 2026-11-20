@@ -14,10 +14,11 @@ This page lists what leaves your machine when your local agent uses a Gitterm sa
 ## What a sandbox never receives
 
 - The conversation.
-- Git history.
+- Git history. Sync uploads a locally filtered archive and does not fetch commits in the sandbox.
 - Model credentials. No coding agent runs in the sandbox.
 - Your provider key or Gitterm token.
 - Untracked files that Git ignores, such as `node_modules` or build output.
+- Submodule contents.
 - Secret-like files. `sandbox_sync` leaves these out and lists them in the approval prompt:
   - `.env` and `.env.*`, except `.env.example`, `.env.sample`, and `.env.template`
   - `.npmrc`, `.netrc`, `.pypirc`
@@ -34,7 +35,7 @@ Secret detection uses file names and private-key markers. It is not a full secre
 | Account         | Where the key lives                                                                                            | Who uses it                             | Sent to                  |
 | --------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------ |
 | Direct (plugin) | Plugin options, as `"apiKey": "{env:E2B_API_KEY}"` or `"{file:~/.secrets/e2b}"`. OpenCode fills it in at load. | The OpenCode process running the plugin | That provider's API only |
-| Direct (CLI)    | The environment variable named by `apiKeyEnv`. The settings file holds names only.                             | The `gitterm` process                   | That provider's API only |
+| Direct (CLI)    | The same `{env:...}` or `{file:...}` reference in the CLI settings file. A literal key there is refused.       | The `gitterm` process                   | That provider's API only |
 | Managed         | The deployment's provider config, encrypted in the Gitterm database. You hold only your Gitterm token.         | The Gitterm API server                  | That provider's API only |
 
 Gitterm never stores a direct key, and never writes any key to sandbox records, snapshots, logs, or tool results.

@@ -4,7 +4,7 @@
  *
  *   GITTERM_SANDBOX_CONFIG=./sandbox.json bun run scripts/sandbox-smoke.ts --account <name> [--crash]
  *
- * The settings file uses the CLI shape (keys only via `apiKeyEnv`). Each run uses an
+ * The settings file uses the CLI shape (keys only as `"apiKey": "{env:VAR}"`). Each run uses an
  * isolated fixture repository and a unique label; every sandbox carrying that label is
  * destroyed in `finally`, and the provider is queried to confirm. Readiness waits are
  * bounded; assertions are not retried.
@@ -38,9 +38,11 @@ const settingsPath = process.env.GITTERM_SANDBOX_CONFIG;
 if (!settingsPath) throw new Error("Set GITTERM_SANDBOX_CONFIG to a sandbox settings file");
 const settings = JSON.parse(await readFile(settingsPath, "utf8")) as SandboxSettings;
 const accounts = Object.values(settings.accounts ?? { only: settings });
+const envKey = (account: (typeof accounts)[number]) =>
+  "apiKey" in account ? /^\{env:([^}]+)\}$/.exec(account.apiKey ?? "")?.[1] : undefined;
 for (const account of accounts)
-  if ("apiKey" in account || "token" in account)
-    throw new Error("Use apiKeyEnv; the settings file must not hold credentials");
+  if (("apiKey" in account && !envKey(account)) || "token" in account)
+    throw new Error('Use "apiKey": "{env:VAR}"; the settings file must not hold credentials');
 const account = await resolveSandboxAccount(settings, option("account"));
 
 if (flag("child-create")) {
@@ -62,10 +64,9 @@ const runId = `smoke-${randomBytes(4).toString("hex")}`;
 const SENTINEL = `gitterm-sentinel-${randomBytes(12).toString("hex")}`;
 const secretsToFind = [
   SENTINEL,
-  ...accounts.flatMap((account) =>
-    "apiKeyEnv" in account && account.apiKeyEnv && process.env[account.apiKeyEnv]
-      ? [process.env[account.apiKeyEnv]!]
-      : [],
+  ...accounts.flatMap(
+    (entry) =>
+      process.env[envKey(entry) ?? ("apiKeyEnv" in entry ? (entry.apiKeyEnv ?? "") : "")] ?? [],
   ),
   ...(process.env.GITTERM_API_TOKEN ? [process.env.GITTERM_API_TOKEN] : []),
 ];

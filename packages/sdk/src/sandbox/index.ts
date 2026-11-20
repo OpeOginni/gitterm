@@ -33,6 +33,7 @@ export {
 } from "./client.js";
 export {
   createSandboxBackend,
+  CREDENTIAL_REFERENCE,
   describeSandboxAccount,
   resolveSandboxAccount,
   type GittermAccountConfig,
@@ -54,6 +55,7 @@ export {
   MAX_SOURCE_BYTES,
   projectDir,
   sensitivePath,
+  sourceLimitBytes,
   type CapturedSource,
   type SnapshotFile,
   type SourceSnapshot,

@@ -236,7 +236,7 @@ See [Previews](/docs/workspaces/previews).
 
 ## Sandboxes
 
-`@gitterm/sdk/sandbox` runs commands in a plain remote sandbox, with no agent inside, for a local agent or script. An account with `apiKey` or `apiKeyEnv` uses your own provider key; one without goes through your Gitterm plan (`{ size: "medium" }`, or `serverUrl` and `provider` for a self-hosted server). For the model, limits and accounts, see [Sandboxes](/docs/sandboxes/overview).
+`@gitterm/sdk/sandbox` runs commands in a plain remote sandbox, with no agent inside, for a local agent or script. An account with `apiKey` uses your own provider key, given as `{env:VAR}` or `{file:path}` as in OpenCode config (E2B, Daytona, and exe.dev accounts can leave it out and use the provider's CLI login); one without goes through your Gitterm plan (`{ size: "medium" }`, or `serverUrl` and `provider` for a self-hosted server). For the model, limits and accounts, see [Sandboxes](/docs/sandboxes/overview).
 
 ```ts
 import {
@@ -246,7 +246,7 @@ import {
   resolveSandboxAccount,
 } from "@gitterm/sdk/sandbox";
 
-const account = await resolveSandboxAccount({ provider: "e2b", apiKeyEnv: "E2B_API_KEY" });
+const account = await resolveSandboxAccount({ provider: "e2b", apiKey: "{env:E2B_API_KEY}" });
 const sandboxes = createSandboxClient({ backend: createSandboxBackend(account) });
 
 const sandbox = await sandboxes.create({ name: "ci", lifetimeMinutes: 30 });

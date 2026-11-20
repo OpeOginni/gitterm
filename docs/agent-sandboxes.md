@@ -11,8 +11,10 @@ includes an `opencode` binary, which is never started.
 
 ## Modes
 
-An account's mode follows from its settings: with `apiKey` (or `apiKeyEnv`) it is `direct`,
-without it `managed`.
+An account's mode follows from its settings: with `apiKey` it is `direct`,
+without it `managed`. An `e2b`, `daytona`, or `exedev` account without `apiKey`, `serverUrl`,
+`token`, or `size` is also `direct`: it uses the key the E2B or Daytona CLI saved, or a
+30-day exe.dev token signed locally with the SSH key `ssh exe.dev` uses (`cli-login.ts`).
 
 | Mode                      | Who runs the provider account | Who pays                                        | Needs a Gitterm account |
 | ------------------------- | ----------------------------- | ----------------------------------------------- | ----------------------- |
@@ -62,7 +64,7 @@ Provider limits that change behaviour:
 
 - **Vercel:** five tags per sandbox, so the purpose and session labels may be dropped.
 - **Boat:** no labels, and files of at most 5 MiB returned per read.
-- **exe.dev:** no labels, 30 s and 64 KB per API request. Jobs launch detached; uploads are chunked and slow for large sources.
+- **exe.dev:** no labels, 30 s and 64 KB per API request, rate-limited per token. Commands over 30 s run detached and are polled; uploads go up as parts, 16 at a time.
 - **Boat and exe.dev:** the owning account is kept as a hash in the sandbox name, because there are no labels.
 
 ## Operations
@@ -131,8 +133,9 @@ Excluded and reported:
 - secret-like names (`.env*` except examples, `.npmrc`, `.netrc`, `.pypirc`, keys, `*.pem`, `*.p12`, `*.pfx`, `*.key`, `credentials.json`)
 - files containing private-key blocks
 - paths matching the configured `exclude` globs
+- submodules (gitlinks)
 
-Submodules, unresolved merge conflicts, and sources over 100 MiB are rejected.
+Unresolved merge conflicts are rejected. The default sync limit is 100 MiB before compression; users can raise it to 1024 MiB with `maxSourceMiB` in the sandbox settings.
 
 The snapshot id is `snap_` plus the first 16 hex characters of a sha256 over the sorted
 manifest (`kind sha256 path` per file). The upload is a tar.gz built in process. In the
@@ -191,7 +194,7 @@ lifetime, a preview server stops after `maxJobMinutes`.
 | Mode            | Where the credential lives                                                                                                                                         | Which process uses it                          | Who receives it          |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- | ------------------------ |
 | direct (plugin) | Plugin options in `opencode.json(c)`. Write `"apiKey": "{env:E2B_API_KEY}"` or `"{file:~/.secrets/e2b}"`; OpenCode substitutes the value when it loads the config. | The OpenCode server process running the plugin | that provider's API only |
-| direct (CLI)    | The environment variable named by `apiKeyEnv` in `~/.config/gitterm/sandbox.json`. The file holds names only; a literal `apiKey` or `token` in it is refused.      | The `gitterm` process                          | that provider's API only |
+| direct (CLI)    | `~/.config/gitterm/sandbox.json`, with `apiKey` as an `{env:...}` or `{file:...}` reference that the SDK resolves. A literal key or `token` in it is refused.      | The `gitterm` process                          | that provider's API only |
 | managed         | The deployment's provider config, encrypted in the Gitterm database. You hold only your Gitterm API token (CLI login or `GITTERM_API_TOKEN`).                      | The Gitterm API server                         | that provider's API only |
 
 The following never contain credentials:
@@ -275,7 +278,8 @@ An account with `apiKey` is direct; one without is managed. A managed account wi
 else its preferred provider, else its only one (`sandbox.providers` on the API).
 
 The CLI reads the same shape from `~/.config/gitterm/sandbox.json` (or
-`GITTERM_SANDBOX_CONFIG`), with `apiKeyEnv` instead of `apiKey`.
+`GITTERM_SANDBOX_CONFIG`). `apiKey` must be an `{env:...}` or `{file:...}` reference there;
+the SDK resolves it the same way OpenCode does. `apiKeyEnv` still works but is deprecated.
 
 ### Machine size
 
@@ -370,7 +374,7 @@ URL=postgresql://postgres:password@localhost:5432/gitterm
 ENABLE_USAGE_METERING=true DATABASE_URL=$URL SANDBOX_DATABASE_TEST_URL=$URL \
   bun test packages/api/src/routers/sandbox.integration.test.ts
 
-# Live smoke test (billable). The settings file uses apiKeyEnv / GITTERM_API_TOKEN, never literal keys.
+# Live smoke test (billable). The settings file uses "apiKey": "{env:VAR}" / GITTERM_API_TOKEN, never literal keys.
 GITTERM_SANDBOX_CONFIG=./sandbox.json bun run scripts/sandbox-smoke.ts --account <name> [--crash]
 ```
 

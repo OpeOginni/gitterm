@@ -20,11 +20,11 @@ This page defines the terms the rest of the docs use. Read it once before settin
 
 ## Managed and direct accounts
 
-A sandbox account says whose provider account runs the sandbox and who pays. An account with an `apiKey` is direct; one without is managed. You can configure several accounts and pick one by name.
+A sandbox account says whose provider account runs the sandbox and who pays. An account with an `apiKey` is direct; one without is managed. The exception: an E2B, Daytona, or exe.dev account without `apiKey` and without Gitterm settings (`serverUrl`, `token`, `size`) uses that provider's CLI login and stays direct. You can configure several accounts and pick one by name.
 
 | Account | Set up with                                             | Who holds the provider account | Who pays              | Needs a Gitterm account |
 | ------- | ------------------------------------------------------- | ------------------------------ | --------------------- | ----------------------- |
-| Direct  | `provider` and `apiKey`                                 | You (bring your own key)       | Your provider account | No                      |
+| Direct  | `provider` and `apiKey` (or a provider CLI login)       | You (bring your own key)       | Your provider account | No                      |
 | Managed | No `apiKey`; optionally `size`, `serverUrl`, `provider` | The Gitterm deployment         | Your Gitterm plan     | Yes                     |
 
 Every sandbox belongs to the account that created it. Gitterm never falls back to another account: using a sandbox from another account, or a missing or rejected key, is an error. See [Setup](/docs/sandboxes/setup).
