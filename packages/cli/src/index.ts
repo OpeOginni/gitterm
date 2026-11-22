@@ -13,6 +13,14 @@ import {
 } from "./cmd/workspace.js";
 import { handleError } from "./ui.js";
 import {
+  runT3Create,
+  runT3Delete,
+  runT3List,
+  runT3Move,
+  runT3Return,
+  runT3Setup,
+} from "./cmd/t3.js";
+import {
   runSandboxAccount,
   runSandboxApply,
   runSandboxArtifact,
@@ -157,6 +165,120 @@ if (workspaceEnvironment) {
           },
         )
         .demandCommand(1, "Please specify an auth command")
+        .strict(),
+    )
+    .command("t3", "Move T3 Code threads to GitTerm workspaces and back", (t3) =>
+      t3
+        .command(
+          "setup",
+          "Turn on Linked environments in T3 Code and install the gitterm-cloud skill",
+          (b) => b.options(jsonOption),
+          (argv) => runT3Setup(argv),
+        )
+        .command(
+          "move [message]",
+          "Move a T3 Code thread (this one, from inside it) and its checkout to a new workspace",
+          (b) =>
+            b
+              .positional("message", {
+                type: "string",
+                describe: "What the cloud agent should do next",
+              })
+              .options({
+                ...jsonOption,
+                thread: {
+                  type: "string",
+                  description: "Thread id (default: the thread running this)",
+                },
+                changes: {
+                  type: "boolean",
+                  default: true,
+                  description: "Bring uncommitted changes (--no-changes leaves them here)",
+                },
+                provider: {
+                  type: "string",
+                  description: "Provider (e2b, daytona, vercel, boat, exedev, gitterm)",
+                },
+                connection: {
+                  type: "array",
+                  string: true,
+                  description: "Connections to attach, e.g. github",
+                },
+              }),
+          (argv) => runT3Move(argv),
+        )
+        .command(
+          "return [workspaceId]",
+          "Bring a moved thread back: the cloud's commits, changes and conversation",
+          (b) =>
+            b.positional("workspaceId", { type: "string" }).options({
+              ...jsonOption,
+              force: {
+                type: "boolean",
+                default: false,
+                description: "Replace local work made since the move (it is kept)",
+              },
+              end: {
+                choices: ["pause", "delete", "keep"] as const,
+                default: "pause" as const,
+                description: "What happens to the workspace afterwards",
+              },
+              message: { type: "string", description: "What the local agent should do next" },
+              detached: { type: "boolean", hidden: true, default: false },
+            }),
+          (argv) => runT3Return(argv),
+        )
+        .command(
+          "create",
+          "Create a workspace for this repository and link it to T3 Code for delegate_task",
+          (b) =>
+            b.options({
+              ...jsonOption,
+              repo: {
+                type: "string",
+                description: "Repository URL (default: this checkout's origin)",
+              },
+              ref: { type: "string", description: "Branch to check out" },
+              access: {
+                choices: [
+                  "read-only",
+                  "approval-required",
+                  "auto-accept-edits",
+                  "auto",
+                  "full-access",
+                ] as const,
+                default: "full-access",
+                description: "The most agents here may do there",
+              },
+              provider: {
+                type: "string",
+                description: "Provider (e2b, daytona, vercel, boat, exedev, gitterm)",
+              },
+              connection: {
+                type: "array",
+                string: true,
+                description: "Connections to attach, e.g. github",
+              },
+            }),
+          (argv) => runT3Create(argv),
+        )
+        .command(
+          "delete <workspaceId>",
+          "Unlink a workspace from T3 Code and delete it",
+          (b) =>
+            b.positional("workspaceId", { type: "string", demandOption: true }).options({
+              ...jsonOption,
+              pause: { type: "boolean", description: "Pause instead of deleting" },
+            }),
+          (argv) => runT3Delete(argv),
+        )
+        .command(
+          "list",
+          "List threads from this machine that are in the cloud",
+          (b) => b.options(jsonOption),
+          (argv) => runT3List(argv),
+        )
+        .demandCommand(1, "Please specify a t3 command")
         .strict(),
     )
     .command(["sandbox", "sb"], "Run commands in remote sandboxes (no remote agent)", (sandbox) =>

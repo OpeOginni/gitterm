@@ -162,6 +162,8 @@ export type GittermClient = {
     /** Credential-source metadata; never wakes the runtime. */
     models(workspace: WorkspaceRef): Promise<WorkspaceModelAccess>;
     waitForSetup(workspace: WorkspaceRef, options?: WaitOptions): Promise<WorkspaceSetupStatus>;
+    /** Run a shell command in a running workspace as the agent's user. Needs `workspace:access`. */
+    exec(workspace: WorkspaceRef, command: string): Promise<{ exitCode: number; stdout: string }>;
   };
   runs: {
     create(input: AgentRunCreateInput): Promise<AgentRun>;
@@ -795,6 +797,8 @@ export function createGittermClient(options: GittermClientOptions = {}): Gitterm
         run(async () => trpc.workspace.getSetupStatus.query({ workspaceId: workspaceIdOf(ref) })),
       waitForSetup: (ref: WorkspaceRef, waitOptions?: WaitOptions) =>
         run(() => waitForWorkspaceSetup(workspaceIdOf(ref), waitOptions)),
+      exec: (ref: WorkspaceRef, command: string) =>
+        run(() => trpc.workspace.execCommand.mutate({ workspaceId: workspaceIdOf(ref), command })),
     },
     sandboxes: {
       providers: () => run(() => trpc.sandbox.providers.query()),
