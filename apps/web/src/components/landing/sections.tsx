@@ -294,11 +294,18 @@ export function HowItWorks() {
 
 // ---------- Runs on: every provider Gitterm supports ----------
 
-/** Gitterm's own machines (gitterm.dev), then each provider. */
+/** Every provider, with the coloured logos (Gitterm, exe.dev, AWS) between the white ones. */
+const GITTERM = { name: "Gitterm", logo: "/gitterm.svg" };
+const byId = Object.fromEntries(SANDBOX_PROVIDERS.map((p) => [p.id, p]));
 const RUNS_ON = [
-  { name: "Gitterm", logo: "/gitterm.svg" },
-  ...SANDBOX_PROVIDERS.map((p) => ({ name: p.name, logo: p.logo })),
-];
+  byId.e2b,
+  GITTERM,
+  byId.daytona,
+  byId.exe,
+  byId.vercel,
+  byId.aws,
+  byId.boat,
+].flatMap((p) => (p ? [{ name: p.name, logo: p.logo }] : []));
 export function RunsOn() {
   return (
     <Band id="runs-on">
