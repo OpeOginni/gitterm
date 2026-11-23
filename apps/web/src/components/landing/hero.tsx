@@ -57,14 +57,18 @@ export function AgentRoll() {
         className="mx-auto text-[clamp(2rem,6.6vw,5.4rem)] leading-[1.02] font-display font-semibold tracking-[-0.035em] text-fg"
         aria-label="More computers for your agents."
       >
-        <span className="block" aria-hidden>
-          More computers
+        <span aria-hidden>
+          <span className="block">More computers</span>
+          for{" "}
         </span>
-        {/* "for" rolls with each agent, so the line stays centred whatever the name's length. */}
-        <span className="inline-block h-[1.15em] overflow-hidden align-bottom" aria-hidden>
+        {/* Only the agent rolls, left-aligned after "for"; the slot is as wide as the longest name. */}
+        <span
+          className="inline-block h-[1.15em] overflow-hidden text-left align-bottom"
+          aria-hidden
+        >
           <span
             className={cn(
-              "flex flex-col items-center",
+              "flex flex-col items-start",
               !snap && "transition-transform duration-[650ms] ease-[cubic-bezier(0.7,0,0.3,1)]",
             )}
             style={{ transform: `translateY(-${step * 1.15}em)` }}
@@ -80,7 +84,6 @@ export function AgentRoll() {
                 key={i}
                 className="flex h-[1.15em] items-center gap-[0.22em] whitespace-nowrap text-primary"
               >
-                <span className="text-fg">for</span>
                 {agent && (
                   <Logo
                     src={agent.logo}
