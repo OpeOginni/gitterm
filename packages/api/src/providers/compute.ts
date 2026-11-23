@@ -40,8 +40,6 @@ export interface SystemWorkspaceEnv {
   CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE?: string;
   GOOGLE_CLOUD_PROJECT?: string;
   CLOUDSDK_CORE_PROJECT?: string;
-  /** Fetch encrypted runtime material from GitTerm before the entrypoint continues. */
-  GITTERM_REMOTE_BOOTSTRAP?: string;
   /** Inline repository credential consumed by container entrypoints. */
   GITTERM_REPOSITORY_USERNAME?: string;
   GITTERM_REPOSITORY_TOKEN?: string;
@@ -90,7 +88,6 @@ export const SYSTEM_WORKSPACE_ENV_KEYS = [
   "GITHUB_APP_TOKEN",
   "GITHUB_APP_TOKEN_EXPIRY",
   ...GOOGLE_CONNECTION_ENV_KEYS,
-  "GITTERM_REMOTE_BOOTSTRAP",
   "GITTERM_REPOSITORY_USERNAME",
   "GITTERM_REPOSITORY_TOKEN",
   "WORKSPACE_TOOLING_MANIFEST_BASE64",

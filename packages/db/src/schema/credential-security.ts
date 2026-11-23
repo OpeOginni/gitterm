@@ -2,16 +2,6 @@ import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-cor
 import { user } from "./auth";
 import { workspace } from "./workspace";
 
-/** Encrypted runtime material fetched at boot instead of persisted in provider variables. */
-export const workspaceRuntimeBundle = pgTable("workspace_runtime_bundle", {
-  workspaceId: uuid("workspace_id")
-    .primaryKey()
-    .references(() => workspace.id, { onDelete: "cascade" }),
-  encryptedPayload: text("encrypted_payload").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
 /** Metadata-only credential audit. Never store tokens, payloads, or authorization headers here. */
 export const workspaceCredentialAudit = pgTable(
   "workspace_credential_audit",

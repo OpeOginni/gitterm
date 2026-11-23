@@ -3,7 +3,6 @@ import { userModelCredential } from "@gitterm/db/schema/model-credentials";
 import { providerConfig } from "@gitterm/db/schema/provider-config";
 import { workspace, workspaceEnvironmentVariables } from "@gitterm/db/schema/workspace";
 import { workspaceRouteAccess } from "@gitterm/db/schema/workspace-route-access";
-import { workspaceRuntimeBundle } from "@gitterm/db/schema/credential-security";
 import { githubRepositoryConfig, googleIssuerConfig } from "@gitterm/db/schema/integrations";
 import { mcpConnection } from "@gitterm/db/schema/mcp";
 import { mcpAuthContext } from "../service/integrations/mcp";
@@ -146,24 +145,6 @@ try {
             .where(and(eq(workspace.id, row.id), eq(workspace.sshConnection, connection)))
             .returning({ id: workspace.id }),
       });
-  }
-
-  for (const row of await db.select().from(workspaceRuntimeBundle)) {
-    await rewrapText({
-      value: row.encryptedPayload,
-      context: `gitterm:workspace-runtime:${row.workspaceId}`,
-      update: (encryptedPayload) =>
-        db
-          .update(workspaceRuntimeBundle)
-          .set({ encryptedPayload })
-          .where(
-            and(
-              eq(workspaceRuntimeBundle.workspaceId, row.workspaceId),
-              eq(workspaceRuntimeBundle.encryptedPayload, row.encryptedPayload),
-            ),
-          )
-          .returning({ id: workspaceRuntimeBundle.workspaceId }),
-    });
   }
 
   for (const row of await db.select().from(workspaceEnvironmentVariables)) {
