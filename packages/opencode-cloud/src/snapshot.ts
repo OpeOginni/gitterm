@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { CAPTURE_SCRIPT, MAX_SNAPSHOT_BYTES, runLocalScript } from "./restore";
+import { CAPTURE_SCRIPT, MAX_SNAPSHOT_BYTES, runLocalScript } from "./restore.js";
 
 export async function git(
   directory: string,

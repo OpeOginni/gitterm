@@ -26,6 +26,7 @@ import {
   runSandboxResume,
   runSandboxSync,
 } from "./cmd/sandbox.js";
+import { runMove, runMoves, runReturn, runSetup, runT3Link, runT3Unlink } from "./cmd/move.js";
 import {
   runCurrentWorkspaceInfo,
   runPortClose,
@@ -157,6 +158,124 @@ if (workspaceEnvironment) {
           },
         )
         .demandCommand(1, "Please specify an auth command")
+        .strict(),
+    )
+    .command(
+      "setup",
+      "Install the gitterm-cloud skill for your agents and set them up to move sessions",
+      (b) => b.options(jsonOption),
+      (argv) => runSetup(argv),
+    )
+    .command(
+      "move [message]",
+      "Move an agent's session (this one, from inside it) and its checkout to a new workspace",
+      (b) =>
+        b
+          .positional("message", {
+            type: "string",
+            describe: "What the cloud agent should do next",
+          })
+          .options({
+            ...jsonOption,
+            agent: {
+              type: "string",
+              description: "The session's agent (default: the one running this)",
+            },
+            session: {
+              type: "string",
+              description: "Session to move (default: the one running this)",
+            },
+            changes: {
+              type: "boolean",
+              default: true,
+              description: "Bring uncommitted changes (--no-changes leaves them here)",
+            },
+            provider: {
+              type: "string",
+              description: "Provider (e2b, daytona, vercel, boat, exedev, gitterm)",
+            },
+            connection: {
+              type: "array",
+              string: true,
+              description: "Connections to attach, e.g. github",
+            },
+          }),
+      (argv) => runMove(argv),
+    )
+    .command(
+      "return [workspaceId]",
+      "Bring a moved session back: the cloud's commits, changes and conversation",
+      (b) =>
+        b.positional("workspaceId", { type: "string" }).options({
+          ...jsonOption,
+          force: {
+            type: "boolean",
+            default: false,
+            description: "Replace local work made since the move (it is kept)",
+          },
+          end: {
+            choices: ["pause", "delete", "keep"] as const,
+            default: "pause" as const,
+            description: "What happens to the workspace afterwards",
+          },
+          message: { type: "string", description: "What the local agent should do next" },
+          detached: { type: "boolean", hidden: true, default: false },
+        }),
+      (argv) => runReturn(argv),
+    )
+    .command(
+      "moves",
+      "List sessions from this machine that are in the cloud",
+      (b) => b.options(jsonOption),
+      (argv) => runMoves(argv),
+    )
+    .command("t3", "T3 Code extras", (t3) =>
+      t3
+        .command(
+          "link",
+          "Create a workspace for this repository and link it to T3 Code for delegate_task",
+          (b) =>
+            b.options({
+              ...jsonOption,
+              repo: {
+                type: "string",
+                description: "Repository URL (default: this checkout's origin)",
+              },
+              ref: { type: "string", description: "Branch to check out" },
+              access: {
+                choices: [
+                  "read-only",
+                  "approval-required",
+                  "auto-accept-edits",
+                  "auto",
+                  "full-access",
+                ] as const,
+                default: "full-access",
+                description: "The most agents here may do there",
+              },
+              provider: {
+                type: "string",
+                description: "Provider (e2b, daytona, vercel, boat, exedev, gitterm)",
+              },
+              connection: {
+                type: "array",
+                string: true,
+                description: "Connections to attach, e.g. github",
+              },
+            }),
+          (argv) => runT3Link(argv),
+        )
+        .command(
+          "unlink <workspaceId>",
+          "Unlink a workspace from T3 Code and delete it",
+          (b) =>
+            b.positional("workspaceId", { type: "string", demandOption: true }).options({
+              ...jsonOption,
+              pause: { type: "boolean", description: "Pause instead of deleting" },
+            }),
+          (argv) => runT3Unlink(argv),
+        )
+        .demandCommand(1, "Please specify a t3 command")
         .strict(),
     )
     .command(["sandbox", "sb"], "Run commands in remote sandboxes (no remote agent)", (sandbox) =>
