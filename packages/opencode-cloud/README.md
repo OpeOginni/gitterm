@@ -81,6 +81,14 @@ place, so there is nothing to set up again.
 - If a snapshot cannot be started any more, `/cloud` starts a fresh workspace instead.
 - Snapshots are listed in the GitTerm dashboard, where you can delete them.
 
+### In the OpenCode desktop app
+
+The same plugin works in the desktop app. A pill above the composer shows where a moved
+session is (working, needs you, idle, paused) and opens it or brings it back. Each step of a
+move shows in a dialog with Cancel, the cloud link comes with a QR code for your phone, and you
+get a notification when the cloud agent finishes or needs you. The desktop part uses OpenCode's
+experimental desktop plugin API (`./gui-experimental`).
+
 ## Settings
 
 All optional:
