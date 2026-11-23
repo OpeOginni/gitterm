@@ -63,6 +63,8 @@ export async function getSmokeMcp(client: GittermClient, id: string): Promise<Co
         "The runner will not change your saved connection settings.",
     );
   }
+  if (details.authType !== "none" && details.authType !== "headers")
+    throw new Error("The selected Context7 connection must use no auth or a header key");
   return testSmokeMcp(client, id, details.authType);
 }
 
