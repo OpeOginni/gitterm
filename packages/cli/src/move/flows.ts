@@ -18,7 +18,7 @@ import {
   CAPTURE_SCRIPT,
   runLocalScript,
 } from "../../../opencode-cloud/src/restore.js";
-import type { AgentAdapter, ExportedSession } from "./agents/types.js";
+import type { AgentAdapter, WorkspaceRuntime } from "./agents/types.js";
 import type { Machine } from "./machine.js";
 import { saveRecord, type MoveRecord } from "./records.js";
 
@@ -36,8 +36,12 @@ export interface Cloud {
     metadata: Record<string, string>;
     idempotencyKey: string;
   }): Promise<string>;
-  /** Waits until it runs (resuming it if paused): its public URL and checkout directory. */
-  ready(workspaceId: string): Promise<{ url: string; directory: string }>;
+  /**
+   * Waits until it runs (resuming it if paused): how to reach its agent, and whether GitTerm
+   * can run commands there.
+   */
+  ready(workspaceId: string): Promise<WorkspaceRuntime & { canExec: boolean }>;
+  /** The workspace through GitTerm's command endpoint. */
   machine(workspaceId: string): Machine;
   end(workspaceId: string, how: "pause" | "delete"): Promise<void>;
 }
@@ -79,6 +83,21 @@ async function createWorkspace(
   }
 }
 
+/** The workspace, through the agent's own server where it has one, else GitTerm's commands. */
+function workspaceMachine(
+  cloud: Cloud,
+  agent: AgentAdapter,
+  workspaceId: string,
+  runtime: WorkspaceRuntime & { canExec: boolean },
+): Machine {
+  if (agent.remote) return agent.remote(runtime);
+  if (!runtime.canExec)
+    throw new Error(
+      `GitTerm can't run commands in this workspace's provider, which moving a ${agent.label} session needs. Pick another provider.`,
+    );
+  return cloud.machine(workspaceId);
+}
+
 /** Puts a checkout snapshot into a directory on a machine, all or nothing. */
 async function restore(
   machine: Machine,
@@ -109,7 +128,7 @@ export async function moveToCloud(
 ) {
   const { cloud, local, agent, progress } = deps;
   progress("Reading the session");
-  const exported = await local.agent<ExportedSession>(agent.script, "export", {
+  const exported = await agent.session(local).export({
     ref: options.ref,
     allowBusy: options.fromSession,
   });
@@ -132,8 +151,9 @@ export async function moveToCloud(
   const workspaceId = created.id;
   try {
     progress("Waiting for the workspace to start");
-    const { url, directory } = await cloud.ready(workspaceId);
-    const remote = cloud.machine(workspaceId);
+    const runtime = await cloud.ready(workspaceId);
+    const { url, directory } = runtime;
+    const remote = workspaceMachine(cloud, agent, workspaceId, runtime);
 
     progress("Copying your code");
     const stage = `.gitterm-handoff-${attempt}`;
@@ -151,14 +171,14 @@ export async function moveToCloud(
 
     progress("Copying the conversation");
     const cloudCwd = subpath ? path.posix.join(directory, subpath) : directory;
-    const imported = await remote.agent<{ ref: string }>(agent.script, "import", {
+    const imported = await agent.session(remote).import({
       payload: exported.payload,
       cwd: cloudCwd,
     });
     const warnings: string[] = [];
     const [here, there] = await Promise.all([
-      local.agent<{ version: string }>(agent.script, "info"),
-      remote.agent<{ version: string }>(agent.script, "info"),
+      agent.session(local).info(),
+      agent.session(remote).info(),
     ]);
     if (here.version !== there.version)
       warnings.push(
@@ -166,7 +186,7 @@ export async function moveToCloud(
       );
 
     progress("Starting the agent in the cloud");
-    await remote.agent(agent.script, "notify", {
+    await agent.session(remote).notify({
       ref: imported.ref,
       where: "cloud",
       message: [
@@ -240,20 +260,17 @@ export async function returnFromCloud(
 ) {
   const { cloud, local, agent, progress } = deps;
   progress("Checking the local session");
-  const here = await local.agent<ExportedSession>(agent.script, "export", {
-    ref: record.localRef,
-  });
+  const here = await agent.session(local).export({ ref: record.localRef });
   if (!options.force && agent.sentSince(here, record.localMark))
     throw new Error(
       "The local session has messages from after the move, which bringing the cloud session back would replace. Run again with --force to replace it anyway (a copy of it is kept).",
     );
 
   progress("Connecting to the cloud workspace");
-  const { directory } = await cloud.ready(record.workspaceId);
-  const remote = cloud.machine(record.workspaceId);
-  const cloudSession = await remote.agent<ExportedSession>(agent.script, "export", {
-    ref: record.cloudRef,
-  });
+  const runtime = await cloud.ready(record.workspaceId);
+  const { directory } = runtime;
+  const remote = workspaceMachine(cloud, agent, record.workspaceId, runtime);
+  const cloudSession = await agent.session(remote).export({ ref: record.cloudRef });
 
   progress("Copying the cloud checkout");
   const stage = `.gitterm-handoff-${randomUUID()}`;
@@ -310,12 +327,12 @@ export async function returnFromCloud(
     );
 
   progress("Bringing the conversation back");
-  await local.agent(agent.script, "import", {
+  await agent.session(local).import({
     ref: record.localRef,
     payload: cloudSession.payload,
     cwd: record.localCwd,
   });
-  await local.agent(agent.script, "notify", {
+  await agent.session(local).notify({
     ref: record.localRef,
     where: "local",
     message: [

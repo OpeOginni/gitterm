@@ -75,7 +75,9 @@ test("a Pi session moves to another directory and comes back into the same sessi
   const there = homes("there");
   const original = writeSession(here.agentDir, here.repo);
 
-  const exported = await here.machine.agent<ExportedSession>(piAgent.script, "export", { ref: ID });
+  const exported = await here.machine.agent<ExportedSession>(piAgent.script!, "export", {
+    ref: ID,
+  });
   expect(exported).toMatchObject({
     ref: ID,
     cwd: here.repo,
@@ -84,7 +86,7 @@ test("a Pi session moves to another directory and comes back into the same sessi
 
   // A new session there, for its own directory, under Pi's folder for that directory.
   const imported = await there.machine.agent<{ ref: string; file: string }>(
-    piAgent.script,
+    piAgent.script!,
     "import",
     {
       payload: exported.payload,
@@ -104,10 +106,10 @@ test("a Pi session moves to another directory and comes back into the same sessi
     imported.file,
     `${readFileSync(imported.file, "utf8")}${user("c3d4e5f6", "b2c3d4e5", "Create cloud.txt.")}\n${assistant("d4e5f6a7", "c3d4e5f6", "Created cloud.txt.")}\n`,
   );
-  const back = await there.machine.agent<ExportedSession>(piAgent.script, "export", {
+  const back = await there.machine.agent<ExportedSession>(piAgent.script!, "export", {
     ref: imported.ref,
   });
-  await here.machine.agent(piAgent.script, "import", {
+  await here.machine.agent(piAgent.script!, "import", {
     ref: ID,
     payload: back.payload,
     cwd: here.repo,
@@ -118,7 +120,7 @@ test("a Pi session moves to another directory and comes back into the same sessi
   expect(readdirSync(path.dirname(original)).some((name) => name.includes(".gitterm-"))).toBe(true);
 
   // A notice waits in Pi's inbox for the extension; locally, nothing else starts.
-  const notified = await here.machine.agent<{ started: boolean }>(piAgent.script, "notify", {
+  const notified = await here.machine.agent<{ started: boolean }>(piAgent.script!, "notify", {
     ref: ID,
     message: "Back from the cloud.",
     where: "local",
@@ -152,11 +154,11 @@ test.skipIf(!withPi)(
     const here = homes("pi-here");
     const there = homes("pi-there");
     writeSession(here.agentDir, here.repo);
-    const exported = await here.machine.agent<ExportedSession>(piAgent.script, "export", {
+    const exported = await here.machine.agent<ExportedSession>(piAgent.script!, "export", {
       ref: ID,
     });
     const imported = await there.machine.agent<{ ref: string; file: string }>(
-      piAgent.script,
+      piAgent.script!,
       "import",
       {
         payload: exported.payload,
@@ -165,7 +167,7 @@ test.skipIf(!withPi)(
     );
     mkdirSync(path.dirname(path.join(there.agentDir, PI_EXTENSION_PATH)), { recursive: true });
     writeFileSync(path.join(there.agentDir, PI_EXTENSION_PATH), PI_EXTENSION);
-    await there.machine.agent(piAgent.script, "notify", {
+    await there.machine.agent(piAgent.script!, "notify", {
       ref: imported.ref,
       message: "GITTERM-NOTICE",
       where: "local",

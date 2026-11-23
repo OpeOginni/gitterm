@@ -130,7 +130,7 @@ Every option is listed in the [Cloud plugin reference](/docs/reference/cloud-plu
 
 ## Other agents
 
-T3 Code threads that run Claude Code, and Pi sessions, move with the `gitterm` CLI and the `gitterm-cloud` skill. Codex threads don't move yet.
+T3 Code threads that run Claude Code, and Pi sessions, move with the `gitterm` CLI and the `gitterm-cloud` skill. Codex threads don't move yet. An OpenCode session can also move with `gitterm move`, from its own shell or with `--agent opencode --session <id>`.
 
 1. Install the skill for your agents, once:
 

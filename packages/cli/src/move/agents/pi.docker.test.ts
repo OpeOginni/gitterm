@@ -91,7 +91,7 @@ test.skipIf(!enabled)(
         .join("\n") + "\n",
     );
     const exported = await localMachine({ PI_CODING_AGENT_DIR: agentDir }).agent<ExportedSession>(
-      piAgent.script,
+      piAgent.script!,
       "export",
       { ref: ID },
     );
@@ -99,13 +99,13 @@ test.skipIf(!enabled)(
       const result = await transport.run(workspace.id, command, { timeoutMs: 300_000 });
       return { exitCode: result.exitCode, stdout: result.stdout };
     });
-    const info = await remote.agent<{ version: string }>(piAgent.script, "info");
+    const info = await remote.agent<{ version: string }>(piAgent.script!, "info");
     expect(info.version).toMatch(/\d+\.\d+\.\d+/);
-    const imported = await remote.agent<{ ref: string }>(piAgent.script, "import", {
+    const imported = await remote.agent<{ ref: string }>(piAgent.script!, "import", {
       payload: exported.payload,
       cwd: workspace.directory,
     });
-    const notified = await remote.agent<{ started: boolean }>(piAgent.script, "notify", {
+    const notified = await remote.agent<{ started: boolean }>(piAgent.script!, "notify", {
       ref: imported.ref,
       message: "GITTERM-NOTICE",
       where: "cloud",

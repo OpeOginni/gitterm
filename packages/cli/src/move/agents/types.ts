@@ -13,6 +13,30 @@ export type ExportedSession = {
   payload: Record<string, unknown>;
 };
 
+/** The operations every agent provides for its sessions, on one machine. */
+export interface SessionOps {
+  /** The agent's version there. */
+  info(): Promise<{ version: string }>;
+  export(input: { ref: string; allowBusy?: boolean }): Promise<ExportedSession>;
+  /** Writes a session for `cwd`: a new one, or with `ref` that session replaced in place. */
+  import(input: {
+    payload: Record<string, unknown>;
+    cwd: string;
+    ref?: string;
+  }): Promise<{ ref: string }>;
+  /** Starts the agent on the message, without waiting. */
+  notify(input: { ref: string; message: string; where: "cloud" | "local" }): Promise<void>;
+  status(input: { ref: string }): Promise<{ busy: boolean }>;
+}
+
+/** How to reach a workspace's agent: its public URL and credentials, and its checkout. */
+export type WorkspaceRuntime = {
+  url: string;
+  directory: string;
+  headers?: Record<string, string>;
+  password?: string;
+};
+
 /** What the agent's workspace adds once a session moved, kept to undo on the way back. */
 export type Connection = {
   /** Where to open the moved session, as text the agent can print. */
@@ -30,8 +54,15 @@ export interface AgentAdapter {
   /** The GitTerm agent a workspace runs for it (`AgentProvisionerKey`). */
   key: string;
   label: string;
-  /** Operations run on both machines; see `agentScript`. */
-  script: string;
+  /** The script behind `session`, for agents whose operations run as one (`agentScript`). */
+  script?: string;
+  /** The agent's session operations on a machine (see `scriptSession` for script agents). */
+  session(machine: Machine): SessionOps;
+  /**
+   * Reaches the workspace through the agent's own server instead of GitTerm's command endpoint,
+   * which some providers lack.
+   */
+  remote?(runtime: WorkspaceRuntime): Machine;
   /** The session the calling process belongs to, when an agent runs the CLI itself. */
   currentSession(env: NodeJS.ProcessEnv): string | undefined;
   /** Whether a real user message was added to a session after `mark`. */

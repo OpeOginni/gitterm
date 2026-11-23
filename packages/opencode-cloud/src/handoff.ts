@@ -18,14 +18,14 @@ import {
   repositoryUrl,
   sharedCheckoutSessions,
   type CheckoutSnapshot,
-} from "./snapshot";
-import { CLOUD_KEY, CONNECT_KEY, type CloudMarker } from "./marker";
+} from "./snapshot.js";
+import { CLOUD_KEY, CONNECT_KEY, type CloudMarker } from "./marker.js";
 import {
   PREPARE_STAGE_SCRIPT,
   RESTORE_NEEDS_FULL_HISTORY,
   RESTORE_SCRIPT,
   shellQuote,
-} from "./restore";
+} from "./restore.js";
 
 export type HandoffOptions = {
   serverUrl?: string;

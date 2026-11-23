@@ -16,7 +16,7 @@ description: Move this coding session to a GitTerm cloud workspace and back. Use
 
 Run these with your shell tool. If \`gitterm\` is not installed, use \`npx -y @gitterm/cli\`
 instead. If a command says the user is not signed in, ask them to run \`gitterm login\` and stop.
-In OpenCode, use its \`/cloud\` and \`/cloud-return\` commands instead.
+In OpenCode, its \`/cloud\` and \`/cloud-return\` commands do the same.
 
 ## Move this session to the cloud
 
