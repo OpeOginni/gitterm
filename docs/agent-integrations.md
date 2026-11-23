@@ -117,9 +117,10 @@ An adapter also says which session the calling process belongs to (`T3CODE_THREA
 `PI_SESSION_ID`, `OPENCODE_SESSION_ID`), and whether a user message was added after the move
 (so a return doesn't replace local work). It can add steps after a move: T3 links the
 workspace to the local T3 Code. Agents run the CLI through one `gitterm-cloud` skill, which
-`gitterm setup` installs in every agent's skills folder. Native plugins are a layer over the
-same flows: Pi's extension calls the CLI, and OpenCode's `/cloud` plugin still has its own
-implementation, to be moved onto these flows.
+`gitterm setup` installs in every agent's skills folder, with each agent's own extras: the
+OpenCode plugin, the Pi extension, T3 Code's linked environments. Native plugins are a layer
+over the same flows. OpenCode's `/cloud` plugin calls them in-process (`@gitterm/move`); Pi's
+extension runs the CLI. Both only ask questions, show status, and report the outcome.
 
 ## Gaps addressed
 

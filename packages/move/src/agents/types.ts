@@ -1,4 +1,11 @@
+import { execFile } from "node:child_process";
 import type { Machine } from "../machine.js";
+
+/** Whether `command args` runs on this machine and exits 0. */
+export const runs = (command: string, args: string[]) =>
+  new Promise<boolean>((resolve) =>
+    execFile(command, args, { timeout: 15_000 }, (error) => resolve(!error)),
+  );
 
 /** A session as an agent's `export` returns it. */
 export type ExportedSession = {
@@ -74,6 +81,10 @@ export interface AgentAdapter {
    * returned session): the message saying what to do instead.
    */
   insideReturn?: string;
+  /** Whether the agent is installed on this machine; `gitterm setup` offers only those. */
+  installed(): Promise<boolean>;
+  /** How the user moves a session once `gitterm setup` ran, for its closing summary. */
+  howToMove: string;
   /** Optional setup on this machine, run by `gitterm setup`. Returns what changed. */
   setup?(local: Machine): Promise<string[]>;
   /** Optional link between the workspace and this machine's agent, after a move. */

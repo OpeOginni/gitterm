@@ -162,8 +162,16 @@ if (workspaceEnvironment) {
     )
     .command(
       "setup",
-      "Install the gitterm-cloud skill for your agents and set them up to move sessions",
-      (b) => b.options(jsonOption),
+      "Set up your agents to move sessions to GitTerm, and sign in",
+      (b) =>
+        b.options({
+          ...jsonOption,
+          yes: {
+            type: "boolean",
+            default: false,
+            description: "Set up every agent found without asking, and skip sign-in",
+          },
+        }),
       (argv) => runSetup(argv),
     )
     .command(
