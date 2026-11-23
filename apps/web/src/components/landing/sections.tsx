@@ -292,30 +292,23 @@ export function HowItWorks() {
   );
 }
 
-// ---------- Runs on: every provider, and the ones coming ----------
+// ---------- Runs on: every provider Gitterm supports ----------
 
-/** Gitterm's own machines (gitterm.dev), then each provider, then what is coming. */
+/** Gitterm's own machines (gitterm.dev), then each provider. */
 const RUNS_ON = [
   {
     name: "Gitterm",
     logo: "/gitterm.svg",
     text: "Our machines, on your plan.",
-    ownKey: false,
     snapshots: true,
   },
   ...SANDBOX_PROVIDERS.map((p) => ({
     name: p.name,
     logo: p.logo,
     text: p.byoKey ? "Your own key, or your plan." : "On your Gitterm plan.",
-    ownKey: p.byoKey,
     snapshots: p.snapshots,
   })),
 ];
-const COMING = [
-  { name: "GPU machines", text: "For training and heavy builds." },
-  { name: "macOS", text: "For iOS and Mac builds." },
-];
-
 export function RunsOn() {
   return (
     <Band id="runs-on">
@@ -324,42 +317,20 @@ export function RunsOn() {
           Sandboxes and cloud workspaces on any of these. Switching is one setting, and more are on
           the way.
         </SectionHead>
-        {/* Filters are radios that landing.css reads: no script. */}
-        <div className="runs-on">
-          <input type="radio" name="runs-on" id="ro-all" className="sr-only" defaultChecked />
-          <input type="radio" name="runs-on" id="ro-key" className="sr-only" />
-          <input type="radio" name="runs-on" id="ro-snap" className="sr-only" />
-          <input type="radio" name="runs-on" id="ro-soon" className="sr-only" />
-          <div className="ro-chips" role="group" aria-label="Show">
-            <label htmlFor="ro-all">All</label>
-            <label htmlFor="ro-key">Your own key</label>
-            <label htmlFor="ro-snap">Setup snapshots</label>
-            <label htmlFor="ro-soon">Coming</label>
-          </div>
-          <ul className="ro-grid">
-            {RUNS_ON.map((p) => (
-              <li key={p.name} className={cn("ro-tile", p.ownKey && "key", p.snapshots && "snap")}>
-                <span className="ro-name">
-                  <Logo src={p.logo} className="size-5 object-contain" />
-                  {p.name}
-                </span>
-                <span className="ro-text">
-                  {p.text}
-                  {p.snapshots ? " Setup snapshots." : ""}
-                </span>
-              </li>
-            ))}
-            {COMING.map((p) => (
-              <li key={p.name} className="ro-tile soon">
-                <span className="ro-name">
-                  {p.name}
-                  <span className="ro-soon">Soon</span>
-                </span>
-                <span className="ro-text">{p.text}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="ro-grid">
+          {RUNS_ON.map((p) => (
+            <li key={p.name} className="ro-tile">
+              <span className="ro-name">
+                <Logo src={p.logo} className="size-5 object-contain" />
+                {p.name}
+              </span>
+              <span className="ro-text">
+                {p.text}
+                {p.snapshots ? " Setup snapshots." : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
       </Wrap>
     </Band>
   );

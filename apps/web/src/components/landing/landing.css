@@ -3453,34 +3453,7 @@
     border-block: 1px solid #50545e;
   }
 
-  /* Runs on: a grid of providers that grows, filtered by radios. */
-  .lp .ro-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 18px;
-  }
-  .lp .ro-chips label {
-    padding: 6px 13px;
-    border-radius: 999px;
-    background: var(--fill);
-    color: var(--fg-3);
-    font-size: 13.5px;
-    cursor: pointer;
-    transition:
-      background-color 0.2s,
-      color 0.2s;
-  }
-  .lp .ro-chips label:hover {
-    color: var(--fg);
-  }
-  .lp #ro-all:checked ~ .ro-chips label[for="ro-all"],
-  .lp #ro-key:checked ~ .ro-chips label[for="ro-key"],
-  .lp #ro-snap:checked ~ .ro-chips label[for="ro-snap"],
-  .lp #ro-soon:checked ~ .ro-chips label[for="ro-soon"] {
-    background: var(--fg);
-    color: var(--background);
-  }
+  /* Runs on: every provider, in a grid that grows. */
   .lp .ro-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -3498,13 +3471,6 @@
     background: var(--bg-2);
     box-shadow: inset 0 0 0 1px var(--line);
   }
-  .lp .ro-tile img {
-    filter: grayscale(1) brightness(1.3);
-    transition: filter 0.3s;
-  }
-  .lp .ro-tile:hover img {
-    filter: none;
-  }
   .lp .ro-name {
     display: flex;
     align-items: center;
@@ -3517,25 +3483,5 @@
     color: var(--fg-4);
     font-size: 13.5px;
     line-height: 1.5;
-  }
-  .lp .ro-tile.soon {
-    background: transparent;
-    box-shadow: none;
-    border: 1px dashed var(--line-2);
-  }
-  .lp .ro-tile.soon .ro-name {
-    color: var(--fg-3);
-  }
-  .lp .ro-soon {
-    margin-left: auto;
-    color: var(--gold);
-    font-size: 12px;
-  }
-  .lp #ro-key:checked ~ .ro-grid .ro-tile:not(.key),
-  .lp #ro-snap:checked ~ .ro-grid .ro-tile:not(.snap),
-  .lp #ro-soon:checked ~ .ro-grid .ro-tile:not(.soon),
-  .lp #ro-key:checked ~ .ro-grid .soon,
-  .lp #ro-snap:checked ~ .ro-grid .soon {
-    display: none;
   }
 }
