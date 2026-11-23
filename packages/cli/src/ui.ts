@@ -17,6 +17,10 @@ export function success(message: string) {
   console.log(`${chalk.green("✔")} ${message}`);
 }
 
+export function warn(message: string) {
+  console.log(`${chalk.yellow("!")} ${message}`);
+}
+
 export function printJson(value: unknown) {
   console.log(JSON.stringify(value, null, 2));
 }
@@ -98,19 +102,23 @@ export function printWorkspaceDetails(workspace: Workspace) {
   detailLine("Paused", workspace.pausedAt);
 }
 
-export async function confirm(question: string): Promise<boolean> {
+/** Asks a yes/no question; Enter takes the default (no, unless `yes`). */
+export async function confirm(question: string, yes = false): Promise<boolean> {
   if (!process.stdin.isTTY) return false;
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
-    const answer = (await rl.question(`${question} ${chalk.dim("[y/N]")} `)).trim().toLowerCase();
-    return answer === "y" || answer === "yes";
+    const answer = (await rl.question(`${question} ${chalk.dim(yes ? "[Y/n]" : "[y/N]")} `))
+      .trim()
+      .toLowerCase();
+    return answer ? answer === "y" || answer === "yes" : yes;
   } finally {
     rl.close();
   }
 }
 
 export function handleError(err: unknown, json?: boolean): never {
-  const code = err instanceof GittermError ? err.code : "ERROR";
+  const own = (err as { code?: unknown } | null)?.code;
+  const code = err instanceof GittermError ? err.code : typeof own === "string" ? own : "ERROR";
   const message = err instanceof Error ? err.message : String(err);
 
   if (json) {
