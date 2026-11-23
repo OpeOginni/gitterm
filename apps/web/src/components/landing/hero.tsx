@@ -28,6 +28,15 @@ export function AgentRoll() {
   const [step, setStep] = useState(0);
   // Set for one frame after the roll reaches the repeated first line, to jump back without a roll.
   const [snap, setSnap] = useState(false);
+  // Each line's width, so the roll narrows or widens to the current agent and "for" sits beside it.
+  const items = useRef<HTMLSpanElement[]>([]);
+  const [widths, setWidths] = useState<number[]>([]);
+
+  useEffect(() => {
+    const ro = new ResizeObserver(() => setWidths(items.current.map((el) => el.offsetWidth)));
+    for (const el of items.current) ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const el = ref.current;
@@ -55,15 +64,23 @@ export function AgentRoll() {
     <div ref={ref}>
       <h1
         className="mx-auto text-[clamp(2rem,6.6vw,5.4rem)] leading-[1.02] font-display font-semibold tracking-[-0.035em] text-fg"
-        aria-label="More computers for your agents."
+        aria-label="More computers in the cloud for your agents."
       >
-        <span className="block" aria-hidden>
-          More computers for
+        <span aria-hidden>
+          <span className="block text-balance">More computers in the cloud</span>
+          for{" "}
         </span>
-        <span className="inline-block h-[1.15em] overflow-hidden align-bottom" aria-hidden>
+        <span
+          className={cn(
+            "inline-block h-[1.15em] overflow-hidden text-left align-bottom",
+            !snap && "transition-[width] duration-[650ms] ease-[cubic-bezier(0.7,0,0.3,1)]",
+          )}
+          style={{ width: widths[step] }}
+          aria-hidden
+        >
           <span
             className={cn(
-              "flex flex-col items-center",
+              "flex flex-col items-start",
               !snap && "transition-transform duration-[650ms] ease-[cubic-bezier(0.7,0,0.3,1)]",
             )}
             style={{ transform: `translateY(-${step * 1.15}em)` }}
@@ -77,7 +94,10 @@ export function AgentRoll() {
             {LINES.map((agent, i) => (
               <span
                 key={i}
-                className="flex h-[1.15em] items-center gap-[0.22em] whitespace-nowrap text-primary"
+                ref={(el) => {
+                  if (el) items.current[i] = el;
+                }}
+                className="flex h-[1.15em] w-max items-center gap-[0.22em] whitespace-nowrap text-primary"
               >
                 {agent && (
                   <Logo
