@@ -85,32 +85,3 @@ export function CodeBlock({
     </div>
   );
 }
-
-/** One-line shell command with a "$" prompt and a copy button. */
-export function InstallCommand({
-  command,
-  className,
-  location,
-}: {
-  command: string;
-  className?: string;
-  /** Where on the site this sits, for the copy event. */
-  location: "hero" | "cta";
-}) {
-  // One line always, with Copy in the box. Where the command doesn't fit it scrolls and fades
-  // out; the padding under the fade keeps the end readable once scrolled to it.
-  return (
-    <div
-      className={cn(
-        "inline-flex max-w-full items-center gap-2 rounded-lg border border-line bg-background/70 py-2 pr-2 pl-3.5 font-mono text-[13.5px] text-fg-2",
-        className,
-      )}
-    >
-      <span className="min-w-0 overflow-x-auto pr-4 whitespace-nowrap [mask-image:linear-gradient(to_right,black_calc(100%-16px),transparent)] [scrollbar-width:none]">
-        <span className="text-fg-4">$ </span>
-        {command}
-      </span>
-      <CopyButton value={command} installLocation={location} />
-    </div>
-  );
-}

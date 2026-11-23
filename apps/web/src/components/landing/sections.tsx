@@ -1,22 +1,16 @@
 import Link from "next/link";
-import type { Route } from "next";
 import type { CSSProperties, ReactNode } from "react";
 import { Band, PartHeading, SectionHead, Wrap } from "@/components/site/section";
-import { CodeBlock, InstallCommand } from "@/components/site/code-block";
+import { CodeBlock } from "@/components/site/code-block";
 import { CopyButton } from "@/components/site/copy-button";
 import { Mark } from "@/components/site/mark";
-import {
-  GITHUB_URL,
-  INSTALL_SANDBOX,
-  INSTALL_SETUP,
-  SANDBOX_PROVIDERS,
-  T3_LOGO,
-} from "@/lib/site/providers";
+import { GITHUB_URL, INSTALL_SETUP, SANDBOX_PROVIDERS, T3_LOGO } from "@/lib/site/providers";
 import { SITE_URL } from "@/lib/docs/content";
 import { cn } from "@/lib/utils";
 import { ClickToCopy } from "./click-to-copy";
 import { OwnKeyCode } from "./own-key-code";
 import { ReplayButton } from "./demo";
+import { AgentRoll, SetupCommand } from "./hero";
 import { SoundToggle } from "./sound-toggle";
 import { WorkspacesCard } from "./workspaces-card";
 import { Logo } from "./logo";
@@ -29,35 +23,6 @@ const cells = "grid gap-px border border-line bg-line [&>*]:bg-background";
 // ---------- Hero ----------
 
 /**
- * A copyable shell command, always on one line: where it doesn't fit it scrolls, fading out. The
- * padding under the fade keeps the end readable once scrolled to it.
- */
-function Command({ value }: { value: string }) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg bg-fill py-2 pr-1.5 pl-3.5 font-mono text-[12.5px] leading-[1.6] text-fg-2">
-      <span className="min-w-0 flex-1 overflow-x-auto pr-4 whitespace-nowrap [mask-image:linear-gradient(to_right,black_calc(100%-16px),transparent)] [scrollbar-width:none]">
-        {/* A touch of the accent at rest; full gold while the card is hovered */}
-        <span className="text-primary/60 transition-colors duration-300 select-none group-hover/lane:text-primary">
-          ${" "}
-        </span>
-        {value}
-      </span>
-      {/* Icon only; the label stays for screen readers */}
-      <CopyButton
-        value={value}
-        icon
-        installLocation="hero"
-        className="prompt-copy size-8 justify-center bg-transparent px-0 group-focus-within/lane:bg-primary group-focus-within/lane:text-primary-foreground group-hover/lane:bg-primary group-hover/lane:text-primary-foreground hover:bg-[#c09a45] hover:text-primary-foreground [&_[data-label]]:sr-only"
-      />
-    </div>
-  );
-}
-
-/**
- * One of the two hero cards. The four parts sit on a shared subgrid, so titles, text, logos and
- * commands line up across both cards whatever their length.
- */
-/**
  * Hover (or keyboard focus inside) draws a gold line along a cell's top, then down its right
  * edge, as one stroke; leaving undraws it in reverse. The cell must be `relative`, and its own
  * `::before` and `::after` stay free for this.
@@ -65,61 +30,10 @@ function Command({ value }: { value: string }) {
 const DRAW_EDGE =
   "transition-colors before:absolute before:-inset-x-px before:-top-px before:h-0.5 before:origin-left before:scale-x-0 before:bg-primary before:transition-transform before:delay-[220ms] before:duration-[400ms] before:ease-[cubic-bezier(0.22,1,0.36,1)] after:pointer-events-none after:absolute after:-top-px after:-right-px after:-bottom-px after:w-0.5 after:origin-top after:scale-y-0 after:bg-primary after:transition-transform after:delay-0 after:duration-[360ms] after:ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:before:scale-x-100 focus-within:before:delay-0 focus-within:after:scale-y-100 focus-within:after:delay-[300ms] hover:bg-[#131317] hover:before:scale-x-100 hover:before:delay-0 hover:after:scale-y-100 hover:after:delay-[300ms]";
 
-function Lane({
-  href,
-  title,
-  children,
-  logos,
-  command,
-  note,
-}: {
-  href: string;
-  title: string;
-  children: ReactNode;
-  logos: string[];
-  command: string;
-  note: ReactNode;
-}) {
-  return (
-    // On hover a line draws along the top, then down the right edge, as one stroke. Leaving
-    // undraws it in reverse: the edge first, then the top. Hovering anywhere on the card also
-    // lights its copy button, the way the setup prompt's does; only the button itself copies.
-    <div
-      className={cn(
-        "lane group/lane relative row-span-4 grid grid-cols-1 grid-rows-subgrid gap-y-0 bg-background px-7 pt-6 pb-7",
-        DRAW_EDGE,
-      )}
-    >
-      {/* The title link covers the card; the command and links sit above it. */}
-      <Link
-        href={href as Route}
-        className="mb-2 text-[18px] font-medium tracking-[-0.01em] text-fg after:absolute after:inset-0 focus-visible:outline-none"
-      >
-        {title}
-      </Link>
-      <p className="m-0 text-[15px] leading-[1.6] text-fg-3">{children}</p>
-      <span className="mt-4 flex items-center gap-2">
-        {logos.map((l) => (
-          <Logo key={l} src={l} className="size-[18px] object-contain" />
-        ))}
-      </span>
-      <div className="relative z-10 mt-7 flex flex-col gap-3">
-        <Command value={command} />
-        <p className="m-0 text-[13.5px] leading-[1.55] text-fg-4 [&_a]:text-fg-2 [&_a]:underline [&_a]:decoration-line-2 [&_a]:underline-offset-[3px] hover:[&_a]:text-fg [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-fg-2">
-          {note}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 /**
  * A prompt to paste into a coding agent. It sends the agent to llms.txt instead of spelling out
  * setup steps here, so it stays right as the docs change, and it asks the user before acting.
  */
-/** Every agent Gitterm supports, in the order the page names them. */
-const AGENT_LOGOS = ["/opencode.svg", "/pi.svg", T3_LOGO, "/openai-codex.svg", "/claude.svg"];
-
 const SETUP_PROMPT = `Set up Gitterm for me. Read ${SITE_URL}/llms.txt first and follow the docs it links to. Don't guess at commands or config.
 
 Before you change anything, ask me which of these I want:
@@ -131,79 +45,55 @@ Keep keys out of config files: use {env:VAR} references. When you're done, show 
 
 export function Hero() {
   return (
-    <section className="pt-[clamp(40px,6.5vw,80px)] pb-6 text-center">
+    <section className="pt-[clamp(48px,8vw,104px)] pb-6 text-center">
       <Wrap>
-        <h1 className="mx-auto max-w-[17ch] text-[clamp(2.6rem,6.6vw,5.4rem)] leading-[0.98] font-display font-semibold tracking-[-0.035em] text-balance text-fg">
-          Give your agents more room to work.
-        </h1>
-        <p className="mx-auto mt-6 max-w-[40rem] text-[clamp(16px,1.5vw,18px)] leading-[1.65] text-pretty text-fg-3">
-          Cloud sandboxes for the agent on your laptop, or a cloud workspace for the whole agent.
-          From the provider you choose, and you can switch any time.
-        </p>
-        <div className="mx-auto mt-10 grid max-w-[1080px] grid-cols-2 gap-px border border-line-2 bg-line-2 text-left max-[760px]:grid-cols-1">
-          <Lane
-            href="/#providers"
-            title="Extend your laptop"
-            logos={["/opencode.svg"]}
-            command={INSTALL_SANDBOX}
-            note={
-              <>
-                Then <Link href={"/docs/sandboxes/setup" as Route}>fill in your config</Link>. No
-                Gitterm account needed.
-              </>
-            }
-          >
-            OpenCode on your laptop runs tests, builds and previews in cloud sandboxes.
-          </Lane>
-          <Lane
-            href="/#agents"
-            title="Run agents in the cloud"
-            logos={AGENT_LOGOS}
-            command={INSTALL_SETUP}
-            note={
-              <>
-                It sets up the agents you have and signs you in. Then type <code>/cloud</code>, or{" "}
-                <Link href="/dashboard">start one in the browser</Link>.
-              </>
-            }
-          >
-            Move a session from OpenCode, Pi, Codex or Claude Code to a cloud workspace, and back.
-            Reach it from your phone or Slack.
-          </Lane>
+        <AgentRoll />
+        <div className="mx-auto mt-9 max-w-[640px]">
+          <SetupCommand location="hero" />
+          {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow.
+              Clicking anywhere on the strip copies it, and sweeps a glow across the copy button. */}
+          <ClickToCopy className="prompt-strip group/strip flex items-center gap-4 border-t border-line py-2.5 pr-3.5 pl-5 text-left transition-colors hover:bg-fill">
+            <span className="shrink-0 text-[14px] text-fg-2">Or let your agent set it up</span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-fg-4 max-[640px]:hidden">
+              {SETUP_PROMPT.split("\n")[0]}
+            </span>
+            <CopyButton
+              value={SETUP_PROMPT}
+              label="Copy prompt"
+              icon
+              // Clicking anywhere on the strip presses this button.
+              target
+              // Gold while the strip is hovered. Set here: landing.css sits in a lower layer than
+              // the button's own Tailwind colours, so it can't override them.
+              className="prompt-copy ml-auto group-focus-within/strip:bg-primary group-focus-within/strip:text-primary-foreground group-hover/strip:bg-primary group-hover/strip:text-primary-foreground hover:bg-[#c09a45] hover:text-primary-foreground"
+            />
+          </ClickToCopy>
         </div>
-        {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow.
-            Clicking anywhere on the strip copies it. */}
-        <ClickToCopy className="prompt-strip group/strip mx-auto mt-3 flex max-w-[1080px] items-center gap-4 border border-line-2 bg-background px-7 py-3 text-left transition-colors hover:bg-[#131317] max-[760px]:px-5">
-          <span className="shrink-0 text-[14px] text-fg-2">Or let your agent set it up</span>
-          {/* Paste it into any of these. Grey and stacked; hovering the strip spreads them out in
-              colour, and sweeps a glow across the copy button */}
-          <span
-            className="stack fan shrink-0 max-[480px]:hidden"
-            role="img"
-            aria-label="OpenCode, Pi, T3 Code, Codex or Claude Code"
-          >
-            {AGENT_LOGOS.map((l) => (
-              <span key={l}>
-                <Logo src={l} />
-              </span>
-            ))}
-          </span>
-          <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-fg-4 max-[640px]:hidden">
-            {SETUP_PROMPT.split("\n")[0]}
-          </span>
-          <CopyButton
-            value={SETUP_PROMPT}
-            label="Copy prompt"
-            icon
-            // Clicking anywhere on the strip presses this button.
-            target
-            // Gold while the strip is hovered. Set here: landing.css sits in a lower layer than
-            // the button's own Tailwind colours, so it can't override them.
-            className="prompt-copy ml-auto group-focus-within/strip:bg-primary group-focus-within/strip:text-primary-foreground group-hover/strip:bg-primary group-hover/strip:text-primary-foreground hover:bg-[#c09a45] hover:text-primary-foreground"
-          />
-        </ClickToCopy>
+        <CtaButtons />
       </Wrap>
     </section>
+  );
+}
+
+/** Start in the browser, or read the code. Under the hero and at the end of the page. */
+function CtaButtons() {
+  return (
+    <div className="mt-9 flex flex-wrap justify-center gap-3">
+      <Link
+        href="/dashboard"
+        className="inline-flex h-11 items-center rounded-lg bg-primary px-5 text-[14.5px] font-medium text-primary-foreground transition-colors hover:bg-[#c09a45]"
+      >
+        Start a cloud workspace
+      </Link>
+      <a
+        href={GITHUB_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex h-11 items-center rounded-lg bg-white/[0.04] px-5 text-[14.5px] font-medium text-fg-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-colors hover:bg-white/[0.07] hover:text-fg"
+      >
+        View on GitHub
+      </a>
+    </div>
   );
 }
 
@@ -1020,27 +910,8 @@ export function Cta() {
         <h2 className="mx-auto max-w-[16ch] text-[clamp(2.2rem,5vw,3.8rem)] leading-[1.02] font-display font-medium tracking-[-0.03em] text-balance text-fg">
           Give your agents more computers.
         </h2>
-        <p className="mx-auto mt-[18px] max-w-[34rem] text-fg-3">
-          Set up your agents with one command, or start a cloud workspace. Open source and
-          self-hostable.
-        </p>
-        <InstallCommand command={INSTALL_SETUP} className="mt-[18px]" location="cta" />
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link
-            href="/dashboard"
-            className="inline-flex h-11 items-center rounded-lg bg-primary px-5 text-[14.5px] font-medium text-primary-foreground transition-colors hover:bg-[#c09a45]"
-          >
-            Start a cloud workspace
-          </Link>
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-11 items-center rounded-lg bg-white/[0.04] px-5 text-[14.5px] font-medium text-fg-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-colors hover:bg-white/[0.07] hover:text-fg"
-          >
-            View on GitHub
-          </a>
-        </div>
+        <SetupCommand location="cta" className="mx-auto mt-8 max-w-[560px]" />
+        <CtaButtons />
       </Wrap>
     </Band>
   );
