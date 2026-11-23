@@ -195,3 +195,36 @@ test("exec refuses to pass a secret without approval", async () => {
     exit.mockRestore();
   }
 });
+
+test("sync asks once per project: NEEDS_APPROVAL, then --always, then no more asking", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "gitterm-home-"));
+  const checkout = await mkdtemp(path.join(tmpdir(), "gitterm-checkout-"));
+  const previousHome = process.env.HOME;
+  process.env.HOME = home;
+  const exit = spyOn(process, "exit").mockImplementation(() => {
+    throw new Error("exit");
+  });
+  const error = spyOn(console, "error").mockImplementation(() => {});
+  const log = spyOn(console, "log").mockImplementation(() => {});
+  try {
+    await withSettings({}, async () => {
+      captures.length = 0;
+      // No terminal, no --yes: the agent is told to ask.
+      await expect(runSandboxSync({ sandboxId: "sbx", dir: checkout, json: true })).rejects.toThrow(
+        "exit",
+      );
+      expect(error).toHaveBeenCalledWith(expect.stringContaining("NEEDS_APPROVAL"));
+      // "Always in this project", then a later sync there runs without --yes.
+      await runSandboxSync({ sandboxId: "sbx", dir: checkout, json: true, always: true });
+      await runSandboxSync({ sandboxId: "sbx", dir: checkout, json: true });
+      expect(captures).toHaveLength(3);
+    });
+  } finally {
+    process.env.HOME = previousHome;
+    log.mockRestore();
+    error.mockRestore();
+    exit.mockRestore();
+    await rm(home, { recursive: true, force: true });
+    await rm(checkout, { recursive: true, force: true });
+  }
+});

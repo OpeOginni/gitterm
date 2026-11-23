@@ -68,14 +68,17 @@ the user and stop: don't work around it.
 
 ## Before you start
 
-A sandbox is billed while it exists. Unless the user asked for one, ask them first, then pass
-\`--yes\`. \`gitterm sandbox account\` shows who is charged.
+A sandbox is billed while it exists. Run \`create\`, \`sync\` and \`apply\` without \`--yes\`
+first: in a project the user already approved, they just run. If one fails with
+\`NEEDS_APPROVAL\`, ask the user: yes once, always in this project, or no. Then run it again
+with \`--yes\` (once) or \`--always\` (no more asking here). \`gitterm sandbox account\` shows
+who is charged.
 
 ## Run something
 
 \`\`\`sh
-gitterm sandbox create --yes --purpose "run the test suite"   # prints the sandbox id
-gitterm sandbox sync <id> --yes                                # uploads this checkout, uncommitted changes included
+gitterm sandbox create --purpose "run the test suite"   # prints the sandbox id
+gitterm sandbox sync <id>                                # uploads this checkout, uncommitted changes included
 gitterm sandbox exec <id> "bun install && bun test"            # waits up to 60 s, prints the output
 \`\`\`
 
@@ -102,7 +105,7 @@ Make it public with \`--public --yes\` only when the user agrees.
 
 \`\`\`sh
 gitterm sandbox artifact <id> <jobId> dist/report.html            # downloads into a staging folder
-gitterm sandbox apply <id> <downloaded path> dist/report.html --yes   # copies it into the checkout
+gitterm sandbox apply <id> <downloaded path> dist/report.html   # copies it into the checkout
 \`\`\`
 
 \`apply\` refuses when the file changed here since the job's sync.

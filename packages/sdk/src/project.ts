@@ -7,8 +7,10 @@ import path from "node:path";
  * `~/.config/gitterm/projects.json`, keyed by the checkout's root:
  *
  * ```json
- * { "/Users/me/code/shop": { "sandbox": false, "cloud": false } }
+ * { "/Users/me/code/shop": { "sandbox": false, "cloud": false, "approved": true } }
  * ```
+ *
+ * `approved` is "Always in this project": creating, syncing and applying no longer ask there.
  *
  * Every GitTerm integration honours it: the CLI, the OpenCode plugin, Pi's extension and the
  * skills. `gitterm project disable|enable` changes it.
@@ -20,11 +22,13 @@ export type ProjectSettings = {
   sandbox: boolean;
   /** Moving sessions to cloud workspaces. On unless turned off. */
   cloud: boolean;
+  /** The user chose "Always in this project": routine sandbox steps don't ask there. */
+  approved: boolean;
   /** The project root the switches are saved for, or null when none are. */
   root: string | null;
 };
 
-type Saved = Record<string, Partial<Record<ProjectFeature, boolean>>>;
+type Saved = Record<string, Partial<Record<ProjectFeature | "approved", boolean>>>;
 
 export function projectsFilePath(): string {
   return path.join(process.env.HOME || homedir(), ".config", "gitterm", "projects.json");
@@ -61,26 +65,51 @@ export function projectSettings(directory: string): ProjectSettings {
   const saved = load();
   for (let dir = real(directory); ; dir = path.dirname(dir)) {
     const entry = saved[dir];
-    if (entry) return { sandbox: entry.sandbox !== false, cloud: entry.cloud !== false, root: dir };
-    if (path.dirname(dir) === dir) return { sandbox: true, cloud: true, root: null };
+    if (entry)
+      return {
+        sandbox: entry.sandbox !== false,
+        cloud: entry.cloud !== false,
+        approved: entry.approved === true,
+        root: dir,
+      };
+    if (path.dirname(dir) === dir)
+      return { sandbox: true, cloud: true, approved: false, root: null };
   }
 }
 
-/** Turns features on or off for the project at `root`. */
-export function setProjectFeatures(root: string, features: ProjectFeature[], on: boolean) {
+/** Changes what is saved for the project at `root`; an empty entry is removed. */
+function update(root: string, change: (entry: Saved[string]) => void) {
   const saved = load();
   const key = real(root);
   const entry = { ...saved[key] };
-  for (const feature of features) {
-    if (on) delete entry[feature];
-    else entry[feature] = false;
-  }
+  change(entry);
   if (Object.keys(entry).length) saved[key] = entry;
   else delete saved[key];
   mkdirSync(path.dirname(projectsFilePath()), { recursive: true });
   writeFileSync(projectsFilePath(), `${JSON.stringify(saved, null, 2)}\n`);
   return projectSettings(key);
 }
+
+/** Turns features on or off for the project at `root`. */
+export const setProjectFeatures = (root: string, features: ProjectFeature[], on: boolean) =>
+  update(root, (entry) => {
+    for (const feature of features) {
+      if (on) delete entry[feature];
+      else entry[feature] = false;
+    }
+  });
+
+/** "Always in this project": routine sandbox steps stop asking at `root`. */
+export const approveProject = (root: string) =>
+  update(root, (entry) => {
+    entry.approved = true;
+  });
+
+/** Forgets everything saved for the project at `root`: all on, and asking again. */
+export const resetProject = (root: string) =>
+  update(root, (entry) => {
+    for (const key of Object.keys(entry)) delete entry[key as keyof typeof entry];
+  });
 
 const FEATURE_NAMES: Record<ProjectFeature, string> = {
   sandbox: "Sandboxes are",

@@ -32,7 +32,7 @@ import {
   runSandboxSync,
 } from "./cmd/sandbox.js";
 import { runMove, runMoves, runReturn, runSetup, runT3Link, runT3Unlink } from "./cmd/move.js";
-import { runProjectSet, runProjectStatus } from "./cmd/project.js";
+import { runProjectReset, runProjectSet, runProjectStatus } from "./cmd/project.js";
 import {
   runCurrentWorkspaceInfo,
   runPortClose,
@@ -65,6 +65,13 @@ const sessionOption = {
 };
 const yesOption = {
   yes: { alias: "y", type: "boolean" as const, description: "Approve without prompting" },
+};
+/** Approve, and stop asking for creating, syncing and applying in this project. */
+const alwaysOption = {
+  always: {
+    type: "boolean" as const,
+    description: "Approve, and stop asking for this in this project (on this machine)",
+  },
 };
 
 const cli = yargs(hideBin(process.argv)).scriptName("gitterm").usage("$0 <command> [options]");
@@ -341,6 +348,12 @@ if (workspaceEnvironment) {
               .options(jsonOption),
           (argv) => runProjectSet({ ...argv, on: true }),
         )
+        .command(
+          "reset",
+          "Forget this project's settings: everything on, and sandbox steps ask again",
+          (b) => b.options(jsonOption),
+          (argv) => runProjectReset(argv),
+        )
         .strict(),
     )
     .command(["sandbox", "sb"], "Run commands in remote sandboxes (no remote agent)", (sandbox) =>
@@ -382,6 +395,7 @@ if (workspaceEnvironment) {
               ...checkoutOption,
               ...sessionOption,
               ...yesOption,
+              ...alwaysOption,
             }),
           (argv) => runSandboxCreate(argv),
         )
@@ -397,7 +411,7 @@ if (workspaceEnvironment) {
           (b) =>
             b
               .positional("sandboxId", { type: "string", demandOption: true })
-              .options({ ...checkoutOption, ...yesOption }),
+              .options({ ...checkoutOption, ...yesOption, ...alwaysOption }),
           (argv) => runSandboxSync(argv),
         )
         .command(
@@ -497,7 +511,7 @@ if (workspaceEnvironment) {
               .positional("sandboxId", { type: "string", demandOption: true })
               .positional("artifact", { type: "string", demandOption: true })
               .positional("target", { type: "string", demandOption: true })
-              .options({ yes: { alias: "y", type: "boolean" } }),
+              .options({ ...yesOption, ...alwaysOption }),
           (argv) => runSandboxApply(argv),
         )
         .command(

@@ -81,7 +81,7 @@ The `--lifetime` and `--timeout` defaults are the built-in sandbox limits; limit
 
 `exec` and `job` exit with the job's exit code when it fails, or 1 when it timed out or was cancelled, so scripts and CI see the failure.
 
-`create`, `sync` and `apply` ask for approval, and so do `exec --secret-env` and `preview --public`. Pass `--yes` to approve without a prompt; with `--json` you must.
+`create`, `sync` and `apply` ask for approval once per project: **Yes**, **Always in this project**, or **No**. `--yes` approves once, and `--always` approves and stops asking in this checkout, on this machine. `exec --secret-env` and `preview --public` ask every time. Without a terminal, or with `--json`, a step that needs approval fails with the code `NEEDS_APPROVAL` instead of prompting.
 
 `--session` saves the agent session a sandbox or job is for, and `--dir` is the checkout (default: the current directory). Pi's tools pass both.
 
@@ -108,6 +108,7 @@ An account with `apiKey` uses your own provider key and needs no Gitterm login. 
 | `gitterm project`                               | `--json` | Show whether this project allows sandboxes and moving sessions to the cloud |
 | `gitterm project disable <sandbox\|cloud\|all>` | `--json` | Turn them off for this project (the Git checkout's root), on this machine   |
 | `gitterm project enable <sandbox\|cloud\|all>`  | `--json` | Turn them back on                                                           |
+| `gitterm project reset`                         | `--json` | Forget this project's settings: everything on, and sandbox steps ask again  |
 
 The switches are saved in `~/.config/gitterm/projects.json`, never in the repository, and cover every folder inside the checkout. With sandboxes off, `sandbox create`, `sync`, `exec`, `preview` and `snapshot save` refuse there; with cloud off, `move` does. The OpenCode plugin and Pi's extension follow the same switches. See [Turn Gitterm off for a project](/docs/sandboxes/setup#turn-gitterm-off-for-a-project).
 

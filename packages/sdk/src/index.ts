@@ -10,8 +10,10 @@ export {
 export type { CliConfig } from "./config.js";
 export { loginWithDeviceCode } from "./device-login.js";
 export {
+  approveProject,
   assertProjectAllows,
   projectSettings,
+  resetProject,
   projectsFilePath,
   setProjectFeatures,
   type ProjectFeature,

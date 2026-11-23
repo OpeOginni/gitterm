@@ -245,11 +245,13 @@ The `publicPreviews` option skips the public-previews prompt, so a `deny` rule f
 
 ### Pi
 
-Pi asks before creating a sandbox, passing a secret with `secretEnv`, and making a preview public. Everything else runs as Pi's own tools do, without asking. A Pi run without a terminal (print or RPC mode) asks nothing.
+Pi asks before creating a sandbox: **Yes**, **Always in this project**, or **No**. After **Always**, it stops asking in that checkout. Passing a secret with `secretEnv` and making a preview public ask every time. Everything else runs as Pi's own tools do, without asking. A Pi run without a terminal (print or RPC mode) asks nothing.
 
 ### Codex, Claude Code and other agents
 
-The `gitterm-sandbox` skill tells the agent to ask you before creating a sandbox, passing a secret, or making a preview public, and only then to pass `--yes`. The agent's own shell approvals apply to every `gitterm sandbox` command as well.
+The `gitterm` CLI decides when to ask. Creating, syncing and applying need your approval once per project: the command fails with `NEEDS_APPROVAL`, the `gitterm-sandbox` skill has the agent ask you (yes once, always in this project, or no), and it runs again with `--yes` or `--always`. After **Always**, those steps just run in that checkout. Passing a secret and making a preview public ask every time. The agent's own shell approvals apply to every `gitterm sandbox` command as well.
+
+"Always in this project" is saved on this machine only, for the whole checkout. `gitterm project` shows it, and `gitterm project reset` makes the project ask again.
 
 ## The CLI
 

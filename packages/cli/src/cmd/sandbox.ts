@@ -2,10 +2,12 @@ import { chmod, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseEnv } from "node:util";
 import {
+  approveProject,
   assertProjectAllows,
   createGittermClient,
   DEFAULT_GITTERM_SERVER_URL,
   loadConfig,
+  projectSettings,
 } from "@gitterm/sdk";
 import {
   captureSource,
@@ -38,6 +40,7 @@ import {
   warn,
 } from "../ui.js";
 import { signIn } from "./auth.js";
+import { projectRoot } from "./project.js";
 
 type Common = { json?: boolean; account?: string };
 
@@ -111,11 +114,34 @@ async function guarded<T>(
   }
 }
 
-async function approve(args: Common & { yes?: boolean }, question: string) {
-  if (args.yes) return;
-  if (args.json || !(await confirm(question))) {
-    throw new Error("Not approved. Pass --yes to approve non-interactively.");
-  }
+/**
+ * Asks before a step that costs money or shares the checkout. Routine steps (create, sync,
+ * apply) don't ask in a project the user approved with "Always in this project"; secrets and
+ * public previews ask every time. `--yes` approves once; `--always` also approves the project.
+ * Without a terminal, a step that needs asking fails with NEEDS_APPROVAL, so an agent asks.
+ */
+async function approve(
+  args: Common & { yes?: boolean; always?: boolean; dir?: string },
+  question: string,
+  routine = true,
+) {
+  const root = await projectRoot(args.dir);
+  if (routine && args.always) return void approveProject(root);
+  if (args.yes || (routine && projectSettings(root).approved)) return;
+  if (args.json || !process.stdin.isTTY)
+    throw Object.assign(
+      new Error(
+        `Needs the user's approval: ${question} Ask them, then run again with --yes${routine ? ", or with --always to stop asking in this project" : ""}.`,
+      ),
+      { code: "NEEDS_APPROVAL" },
+    );
+  const answer = routine
+    ? await choose(question, ["Yes", "Always in this project", "No"])
+    : (await confirm(question))
+      ? 0
+      : 2;
+  if (answer === 1) approveProject(root);
+  if (answer === 2) throw new Error("Not approved.");
 }
 
 /** A job that ended without succeeding fails the CLI too, so scripts and CI see it. */
@@ -167,6 +193,7 @@ export async function runSandboxCreate(
     session?: string;
     dir?: string;
     yes?: boolean;
+    always?: boolean;
   },
 ) {
   try {
@@ -180,7 +207,11 @@ export async function runSandboxCreate(
       client.capabilities.previews !== "private" &&
       client.capabilities.previews !== "none";
     if (args.public && publicPreviews && !settings.publicPreviews)
-      await approve(args, "Make every preview of this sandbox public to anyone with its URL?");
+      await approve(
+        args,
+        "Make every preview of this sandbox public to anyone with its URL?",
+        false,
+      );
     const project = await checkout(args.dir);
     // A sandbox starts from the newest setup snapshot saved for this checkout, unless told
     // which one, or `none`.
@@ -254,7 +285,7 @@ export async function runSandboxList(args: Common) {
 }
 
 export async function runSandboxSync(
-  args: Common & { sandboxId: string; dir?: string; yes?: boolean },
+  args: Common & { sandboxId: string; dir?: string; yes?: boolean; always?: boolean },
 ) {
   try {
     allowed(args.dir);
@@ -312,6 +343,7 @@ export async function runSandboxExec(
       await approve(
         args,
         `Pass ${names.join(", ")} from this machine to sandbox ${args.sandboxId}?`,
+        false,
       );
       for (const name of names) {
         const value = process.env[name];
@@ -393,7 +425,11 @@ export async function runSandboxPreview(
     allowed(args.dir);
     const { client, settings } = await clientFor(args);
     if (args.public === true && !settings.publicPreviews)
-      await approve(args, `Make port ${args.port} of this sandbox public to anyone with its URL?`);
+      await approve(
+        args,
+        `Make port ${args.port} of this sandbox public to anyone with its URL?`,
+        false,
+      );
     const spin = startSpinner("Waiting for the preview...", args.json);
     const preview = await client
       .preview(refOf(client, args.sandboxId), {
@@ -440,7 +476,13 @@ export async function runSandboxArtifact(
 }
 
 export async function runSandboxApply(
-  args: Common & { sandboxId: string; artifact: string; target: string; yes?: boolean },
+  args: Common & {
+    sandboxId: string;
+    artifact: string;
+    target: string;
+    yes?: boolean;
+    always?: boolean;
+  },
 ) {
   try {
     const { client } = await clientFor(args);

@@ -102,7 +102,7 @@ function projectAllows(dir) {
   }
   for (; ; at = path.dirname(at)) {
     const entry = saved[at];
-    if (entry) return { sandbox: entry.sandbox !== false, cloud: entry.cloud !== false };
+    if (entry) return { sandbox: entry.sandbox !== false, cloud: entry.cloud !== false, approved: entry.approved === true };
     if (path.dirname(at) === at) return { sandbox: true, cloud: true };
   }
 }
@@ -341,6 +341,16 @@ export default function (pi) {
     if (!ctx.hasUI) return;
     if (!(await ctx.ui.confirm(title, message))) throw new Error("The user did not approve this.");
   }
+  /**
+   * Creating a sandbox asks once per project: "Always in this project" is saved on this
+   * machine (by the CLI, with --always), and later sandboxes there don't ask. Returns the flag.
+   */
+  async function approveCreate(ctx, message) {
+    if (!ctx.hasUI || projectAllows(ctx.cwd).approved) return "--yes";
+    const choice = await ctx.ui.select("Create a sandbox? " + message, ["Yes", "Always in this project", "No"]);
+    if (!choice || choice === "No") throw new Error("The user did not approve this.");
+    return choice === "Yes" ? "--yes" : "--always";
+  }
   const unwatch = (prefix) => {
     for (const key of watched) if (key === prefix || key.startsWith(prefix + ":")) watched.delete(key);
   };
@@ -423,12 +433,12 @@ export default function (pi) {
     }),
     async execute(_id, params, signal, _onUpdate, ctx) {
       const account = await sandbox(["account"], signal);
-      await approve(ctx, "Create a sandbox?", "A remote sandbox billed to " + account.chargedTo + ". This checkout is uploaded to it when the agent syncs.");
+      const approval = await approveCreate(ctx, "A remote sandbox billed to " + account.chargedTo + ". This checkout is uploaded to it when the agent syncs.");
       if (params.publicPreviews)
         await approve(ctx, "Public previews?", "Every port of this sandbox will be reachable by anyone with its URL.");
       const record = await sandbox(
         [
-          "create", "--yes", "--dir", ctx.cwd, "--session", ctx.sessionManager.getSessionId(),
+          "create", approval, "--dir", ctx.cwd, "--session", ctx.sessionManager.getSessionId(),
           "--name", params.name || "Pi sandbox",
           ...(params.purpose ? ["--purpose", params.purpose] : []),
           ...(params.lifetimeMinutes ? ["--lifetime", String(params.lifetimeMinutes)] : []),
