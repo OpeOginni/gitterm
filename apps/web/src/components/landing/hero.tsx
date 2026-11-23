@@ -132,8 +132,7 @@ export function SetupCommand({
   return (
     <ClickToCopy
       className={cn(
-        "setup-cmd group/cmd relative flex items-center gap-4 border-t border-line-2 bg-fill py-3.5 pr-3.5 pl-5 text-left",
-        "before:absolute before:inset-x-0 before:-top-px before:h-0.5 before:origin-left before:scale-x-0 before:bg-primary before:transition-transform before:duration-[450ms] before:ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:before:scale-x-100 hover:before:scale-x-100",
+        "setup-cmd group/cmd relative flex items-center gap-4 border-t-2 border-primary bg-fill py-3.5 pr-3.5 pl-5 text-left",
         className,
       )}
     >
