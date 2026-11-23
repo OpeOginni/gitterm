@@ -4,10 +4,12 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { OpenCode, type OpenCodeClient } from "@opencode/client";
 import {
+  conversationDigest,
   importPayload,
   offersModel,
   runtimeClient,
   sessionBusy,
+  stopSession,
   tellMoved,
 } from "./opencode-session.js";
 import { localMachine, remoteMachine, type Exec, type Machine } from "../machine.js";
@@ -72,6 +74,17 @@ export function opencodeExec(client: OpenCodeClient, directory: string): Exec {
   };
 }
 
+/** Whether `next` is `previous` with messages added, ignoring agent and model switches. */
+function continues(
+  previous: ReadonlyArray<{ type: string }>,
+  next: ReadonlyArray<{ type: string }>,
+): boolean {
+  const said = (messages: ReadonlyArray<{ type: string }>) =>
+    messages.filter((item) => item.type !== "agent-switched" && item.type !== "model-switched");
+  const before = said(previous);
+  return conversationDigest(before) === conversationDigest(said(next).slice(0, before.length));
+}
+
 function sessionOps(machine: OpenCodeMachine): SessionOps {
   const client = () => (machine.opencode ? Promise.resolve(machine.opencode) : localClient());
   return {
@@ -103,7 +116,10 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
         ? await offersModel(opencode, cwd, model, signal()).catch(() => false)
         : false;
       if (ref) {
-        await opencode.session.fork({ sessionID: ref }, { signal: signal() });
+        // A copy is kept only of a session with messages the incoming one lacks.
+        const current = await opencode.session.export({ sessionID: ref }, { signal: signal() });
+        if (!continues(current.messages, exported.messages))
+          await opencode.session.fork({ sessionID: ref }, { signal: signal() });
         await opencode.session.remove({ sessionID: ref }, { signal: signal() });
       }
       const imported = await opencode.session.import(importPayload(exported, cwd, { keepModel }), {
@@ -117,7 +133,7 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
       const opencode = await client();
       const lines = message.trim().split("\n");
       const next = lines.pop() ?? "";
-      await tellMoved(opencode, ref, lines, true, signal());
+      if (lines.some((line) => line.trim())) await tellMoved(opencode, ref, lines, true, signal());
       await opencode.session.synthetic(
         { sessionID: ref, text: next, resume: true },
         { signal: signal() },
@@ -126,6 +142,10 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
 
     async status({ ref }) {
       return { busy: await sessionBusy(await client(), ref, signal()) };
+    },
+
+    async stop({ ref }) {
+      return stopSession(await client(), ref, AbortSignal.timeout(30_000));
     },
   };
 }

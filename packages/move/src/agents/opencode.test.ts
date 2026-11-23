@@ -1,9 +1,11 @@
 import { afterAll, expect, test } from "bun:test";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { OpenCode } from "@opencode/client";
+import { moveToCloud, returnFromCloud, type Cloud } from "../flows.js";
+import { loadRecords } from "../records.js";
 import type { ExportedSession } from "./types.js";
 import { opencodeAgent, opencodeMachine } from "./opencode.js";
 
@@ -105,4 +107,82 @@ test.skipIf(!withOpencode)(
     expect((await there.status({ ref: imported.ref })).busy).toBe(false);
   },
   180_000,
+);
+
+test.skipIf(!withOpencode)(
+  "a session goes to a workspace and comes back with what was done there",
+  async () => {
+    const local = await serve("from", 47943);
+    const cloud = await serve("to", 47944);
+    const home = process.env.HOME;
+    process.env.HOME = path.join(root, "home");
+    const git = (cwd: string, ...args: string[]) =>
+      spawnSync("git", ["-c", "user.name=T", "-c", "user.email=t@example.com", ...args], {
+        cwd,
+        encoding: "utf8",
+      }).stdout.trim();
+    try {
+      writeFileSync(path.join(local.repo, "a.txt"), "one\n");
+      git(local.repo, "add", ".");
+      git(local.repo, "commit", "-qm", "one");
+      writeFileSync(path.join(local.repo, "a.txt"), "uncommitted\n");
+      const session = await local.client.session.create({
+        location: { directory: local.repo },
+        title: "round trip",
+      });
+      const ends: string[] = [];
+      // GitTerm, with a workspace that is the second OpenCode server.
+      const gitterm: Cloud = {
+        create: async () => "ws-1",
+        ready: async () => ({
+          url: cloud.url,
+          directory: cloud.repo,
+          password: cloud.password,
+          canExec: false,
+        }),
+        machine: () => {
+          throw new Error("The move should go through OpenCode.");
+        },
+        end: async (_id, how) => {
+          ends.push(how);
+        },
+      };
+      const deps = {
+        cloud: gitterm,
+        local: opencodeMachine(local.client),
+        agent: opencodeAgent,
+        progress: () => {},
+      };
+      const there = opencodeAgent.session(
+        opencodeAgent.remote!({ ...cloud, directory: cloud.repo }),
+      );
+      // The notice starts a turn, which waits for a model the test has none of: stop it.
+      const atRest = () => there.stop!({ ref: session.id });
+
+      const moved = await moveToCloud(deps, {
+        ref: session.id,
+        changes: true,
+        fromSession: false,
+      });
+      expect(moved.workspaceId).toBe("ws-1");
+      expect(readFileSync(path.join(cloud.repo, "a.txt"), "utf8")).toBe("uncommitted\n");
+      expect(git(cloud.repo, "log", "--format=%s")).toBe("one");
+      await atRest();
+
+      // Work done in the cloud.
+      writeFileSync(path.join(cloud.repo, "b.txt"), "from the cloud\n");
+      git(cloud.repo, "add", ".");
+      git(cloud.repo, "commit", "-qm", "two");
+
+      const [record] = await loadRecords();
+      await returnFromCloud(deps, record!, { force: false, end: "delete" });
+      expect(readFileSync(path.join(local.repo, "b.txt"), "utf8")).toBe("from the cloud\n");
+      expect(git(local.repo, "log", "--format=%s")).toBe("two\none");
+      expect(ends).toEqual(["delete"]);
+      expect((await loadRecords())[0]?.returnedAt).toBeString();
+    } finally {
+      process.env.HOME = home;
+    }
+  },
+  240_000,
 );

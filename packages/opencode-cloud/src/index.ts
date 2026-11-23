@@ -238,7 +238,8 @@ export const GittermCloudPlugin = Plugin.define({
               ),
             );
             if (moved === CANCELLED) return;
-            await showConnection(local, client, moved.record, controller.signal, moved.continuing);
+            // The cloud agent carries on with the task (or the text after /cloud) once it is there.
+            await showConnection(local, client, moved.record, controller.signal, true);
           } catch (error) {
             if (!(error instanceof HandoffCancelled)) throw error;
           } finally {
