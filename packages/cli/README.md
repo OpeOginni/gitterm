@@ -1,7 +1,7 @@
 # @gitterm/cli
 
-Command-line interface for [GitTerm](https://gitterm.dev) to manage your cloud
-workspaces from the terminal.
+Command-line interface for [GitTerm](https://gitterm.dev): move your coding agent's session
+to a cloud workspace and back, and manage your workspaces from the terminal.
 
 ## Installation
 
@@ -12,6 +12,24 @@ npx @gitterm/cli --help
 # Or install globally
 npm install -g @gitterm/cli
 ```
+
+## Set up your agents
+
+```bash
+npx @gitterm/cli setup
+```
+
+It finds the agents on this machine and asks before setting up each one:
+
+- **OpenCode:** installs the `@gitterm/opencode-cloud` plugin, so `/cloud` and `/cloud-return`
+  work in OpenCode.
+- **Pi:** installs GitTerm's Pi extension, with the same `/cloud` and `/cloud-return`.
+- **T3 Code:** turns on linked environments, so a moved thread opens from your T3 Code.
+- **Every agent that reads skills** (Claude Code, Codex, ...): the `gitterm-cloud` skill, so you
+  can ask the agent to move its session to the cloud.
+
+Then it offers to sign you in; the same page creates an account if you don't have one.
+`--yes` sets up every agent found without asking.
 
 ## Quick Start
 
@@ -113,6 +131,10 @@ gitterm auth status
 
 | Command                                                                              | Description                       |
 | ------------------------------------------------------------------------------------ | --------------------------------- |
+| `gitterm setup [--yes]`                                                              | Set up your agents and sign in    |
+| `gitterm move [message]`                                                             | Move this session to the cloud    |
+| `gitterm return [workspaceId]`                                                       | Bring a moved session back        |
+| `gitterm moves`                                                                      | List sessions in the cloud        |
 | `gitterm login [--server <url>]`                                                     | Sign in via device-code flow      |
 | `gitterm logout`                                                                     | Clear saved credentials           |
 | `gitterm auth status [--json]`                                                       | Show the logged-in account        |

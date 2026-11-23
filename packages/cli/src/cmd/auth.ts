@@ -10,10 +10,22 @@ import chalk from "chalk";
 import { handleError, printJson, startSpinner, success } from "../ui.js";
 
 export async function runLogin(args: { serverUrl: string }) {
-  let spin = startSpinner("Requesting device code...");
-
   try {
-    const { token } = await loginWithDeviceCode(args.serverUrl, {
+    const email = await signIn(args.serverUrl);
+    success(email ? `Logged in as ${chalk.bold(email)}` : "Logged in successfully!");
+  } catch (err) {
+    handleError(err);
+  }
+}
+
+/**
+ * Signs in with a device code: the page it opens also creates an account. Returns the
+ * account's email when GitTerm says it.
+ */
+export async function signIn(serverUrl: string): Promise<string | undefined> {
+  let spin = startSpinner("Requesting device code...");
+  try {
+    const { token } = await loginWithDeviceCode(serverUrl, {
       onCode: (code) => {
         spin?.stop();
         const url = new URL(code.verificationUri);
@@ -25,25 +37,14 @@ export async function runLogin(args: { serverUrl: string }) {
     });
     spin?.stop();
 
-    await saveConfig({
-      serverUrl: args.serverUrl,
-      token,
-      createdAt: Date.now(),
-    });
-
+    await saveConfig({ serverUrl, token, createdAt: Date.now() });
     // Best-effort identity lookup so the success message names the account.
-    try {
-      const status = await createGittermClient({
-        serverUrl: args.serverUrl,
-        token,
-      }).auth.status();
-      success(`Logged in as ${chalk.bold(status.email)}`);
-    } catch {
-      success("Logged in successfully!");
-    }
-  } catch (err) {
+    return await createGittermClient({ serverUrl, token })
+      .auth.status()
+      .then((status) => status.email)
+      .catch(() => undefined);
+  } finally {
     spin?.stop();
-    handleError(err);
   }
 }
 

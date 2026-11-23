@@ -4,7 +4,7 @@ import path from "node:path";
 import { gunzipSync } from "node:zlib";
 import { PI_EXTENSION, PI_EXTENSION_PATH, PI_TMUX_SESSION } from "@gitterm/schema/pi";
 import { agentScript, scriptSession } from "../script.js";
-import type { AgentAdapter, ExportedSession } from "./types.js";
+import { runs, type AgentAdapter, type ExportedSession } from "./types.js";
 
 /**
  * Pi sessions: one JSONL file each, under
@@ -133,6 +133,8 @@ export function piSentSince(session: string, bytes: number): boolean {
 export const piAgent: AgentAdapter = {
   key: "pi",
   label: "Pi",
+  installed: () => runs("pi", ["--version"]),
+  howToMove: "Type /cloud in a session; /cloud-return brings it back.",
   script: PI_SCRIPT,
   session: scriptSession(PI_SCRIPT),
   // Pi gives its bash tool the session it runs in.

@@ -16,6 +16,9 @@ Requires OpenCode 2.3.0 or newer. On an older version, `/cloud` says to run `ope
 opencode plugin add @gitterm/opencode-cloud
 ```
 
+Or run `npx @gitterm/cli setup`, which installs it along with GitTerm's setup for your other
+agents, and signs you in.
+
 ## 2. Use it
 
 In a Git repository, type `/cloud` in OpenCode. The workspace is billed while it runs.

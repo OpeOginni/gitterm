@@ -13,7 +13,12 @@ import {
   tellMoved,
 } from "./opencode-session.js";
 import { localMachine, remoteMachine, type Exec, type Machine } from "../machine.js";
-import type { AgentAdapter, ExportedSession, SessionOps } from "./types.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { runs, type AgentAdapter, type ExportedSession, type SessionOps } from "./types.js";
+
+/** GitTerm's OpenCode plugin: `/cloud` and `/cloud-return` in OpenCode itself. */
+const PLUGIN = "@gitterm/opencode-cloud";
 
 type Exported = Awaited<ReturnType<OpenCodeClient["session"]["export"]>>;
 
@@ -153,6 +158,18 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
 export const opencodeAgent: AgentAdapter = {
   key: "opencode",
   label: "OpenCode",
+  installed: () => runs("opencode", ["--version"]),
+  howToMove: "Type /cloud in a session; /cloud-return brings it back.",
+  /** Installs GitTerm's plugin into OpenCode's global configuration; again is harmless. */
+  async setup() {
+    const added = await promisify(execFile)("opencode", ["plugin", "add", PLUGIN], {
+      timeout: 180_000,
+    }).catch((error: { stderr?: string; message: string }) => {
+      const reason = (error.stderr || error.message).trim().split("\n").at(-1);
+      throw new Error(`opencode plugin add ${PLUGIN} failed: ${reason}`);
+    });
+    return [added.stdout.trim().split("\n").at(-1) || `Installed ${PLUGIN}.`];
+  },
   // OpenCode gives its shell commands the session they run in.
   currentSession: (env) => env.OPENCODE_SESSION_ID,
   sentSince(exported: ExportedSession, mark: number) {

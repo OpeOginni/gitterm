@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, openSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { createGittermClient } from "@gitterm/sdk";
+import { createGittermClient, DEFAULT_GITTERM_SERVER_URL } from "@gitterm/sdk";
 import chalk from "chalk";
 import { checkoutRoot, repositoryUrl } from "@gitterm/move/checkout/snapshot";
 import { AGENTS, agentByKey, currentSession } from "@gitterm/move/agents/index";
@@ -12,7 +12,8 @@ import { gittermCloud } from "@gitterm/move/gitterm";
 import { localMachine } from "@gitterm/move/machine";
 import { loadRecords, type MoveRecord } from "@gitterm/move/records";
 import { installSkill } from "../move/skill.js";
-import { handleError, printJson, startSpinner, success } from "../ui.js";
+import { confirm, handleError, printJson, startSpinner, success, warn } from "../ui.js";
+import { signIn } from "./auth.js";
 
 type JsonArgs = { json?: boolean };
 
@@ -28,25 +29,62 @@ function progressReporter(json?: boolean) {
   };
 }
 
-export async function runSetup(args: JsonArgs) {
+/**
+ * Sets up GitTerm for the agents on this machine: each one's own way to move sessions (the
+ * OpenCode plugin, the Pi extension, T3 Code's linked environments), the gitterm-cloud skill,
+ * and a GitTerm account. Asks first for each, unless --yes or not in a terminal.
+ */
+export async function runSetup(args: JsonArgs & { yes?: boolean }) {
   try {
+    const ask = Boolean(process.stdin.isTTY) && !args.json && !args.yes;
     const local = localMachine();
-    const changes: string[] = [];
-    for (const agent of AGENTS)
-      if (agent.setup) changes.push(...(await agent.setup(local).catch(() => [])));
-    const skills = await installSkill();
-    let signedIn: string | null = null;
-    try {
-      signedIn = (await createGittermClient().auth.status()).email;
-    } catch {
-      /* Reported below. */
+    const agents: Array<{ key: string; label: string; setUp: boolean; changes: string[] }> = [];
+    for (const agent of AGENTS) {
+      if (!(await agent.installed())) continue;
+      const entry = { key: agent.key, label: agent.label, setUp: false, changes: [] as string[] };
+      agents.push(entry);
+      if (ask && !(await confirm(`Set up ${agent.label}?`, true))) continue;
+      try {
+        entry.changes = (await agent.setup?.(local)) ?? [];
+        entry.setUp = true;
+      } catch (error) {
+        entry.changes = [
+          `Could not set up ${agent.label}: ${error instanceof Error ? error.message : String(error)}`,
+        ];
+      }
+      if (!args.json) for (const change of entry.changes) (entry.setUp ? success : warn)(change);
     }
-    if (args.json) return printJson({ changes, skills, signedIn });
-    for (const change of changes) success(change);
-    success(`Installed the gitterm-cloud skill: ${skills.join(", ")}`);
+    const skills = await installSkill();
+    if (!args.json) success("Installed the gitterm-cloud skill for agents that read skills.");
+
+    let signedIn = await Promise.resolve()
+      .then(() => createGittermClient().auth.status())
+      .then((status) => status.email)
+      .catch(() => undefined);
+    if (
+      !signedIn &&
+      ask &&
+      (await confirm(
+        "Sign in to GitTerm now? New here? Create a free account on the same page.",
+        true,
+      ))
+    )
+      signedIn = (await signIn(DEFAULT_GITTERM_SERVER_URL)) ?? "your account";
+    if (args.json) return printJson({ agents, skills, signedIn: signedIn ?? null });
+
     if (signedIn) success(`Signed in to GitTerm as ${signedIn}.`);
-    else console.log(chalk.yellow("Not signed in to GitTerm: run `gitterm login`."));
-    console.log("\nAsk your agent to move its session to the cloud (the gitterm-cloud skill).");
+    else console.log(chalk.yellow("Not signed in to GitTerm yet: run `gitterm login`."));
+    if (!agents.length)
+      console.log(
+        `\nNo supported agent found. Install ${AGENTS.map((agent) => agent.label).join(", ")}, then run gitterm setup again.`,
+      );
+    console.log("\nMove a session to the cloud:");
+    for (const agent of AGENTS)
+      if (agents.some((entry) => entry.key === agent.key && entry.setUp))
+        console.log(`  ${chalk.bold(agent.label)}: ${agent.howToMove}`);
+    console.log(
+      `  ${chalk.bold("Other agents")}: ask it to move this session to the cloud (gitterm-cloud skill).`,
+    );
   } catch (err) {
     handleError(err, args.json);
   }
