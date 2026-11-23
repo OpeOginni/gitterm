@@ -47,14 +47,13 @@ export function Hero() {
     <section className="pt-[clamp(48px,8vw,104px)] pb-6 text-center">
       <Wrap>
         <AgentRoll />
-        <div className="mx-auto mt-9 max-w-[640px]">
+        <div className="mx-auto mt-9 max-w-[480px]">
           <SetupCommand location="hero" />
           {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow.
               Clicking anywhere on the strip copies it, and sweeps a glow across the copy button. */}
           <ClickToCopy className="prompt-strip group/strip flex items-center gap-4 border-t border-line py-2.5 pr-3.5 pl-5 text-left">
-            <span className="shrink-0 text-[14px] text-fg-2">Or let your agent set it up</span>
-            <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-fg-4 max-[640px]:hidden">
-              {SETUP_PROMPT.split("\n")[0]}
+            <span className="min-w-0 truncate text-[14px] text-fg-2">
+              Or let your agent set it up
             </span>
             <CopyButton
               value={SETUP_PROMPT}
@@ -91,7 +90,7 @@ const RUNS_ON = [
 /** A quiet row under the hero's buttons: where sandboxes and workspaces can run. */
 function RunsOn() {
   return (
-    <div className="mt-[clamp(48px,6vw,72px)]">
+    <div className="mt-12">
       <p className="m-0 mb-5 text-[13px] text-fg-4">Sandboxes and cloud workspaces run on</p>
       <ul className="m-0 flex list-none flex-wrap justify-center gap-x-7 gap-y-4 p-0 max-[640px]:gap-x-5">
         {RUNS_ON.map((p) => (
