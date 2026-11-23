@@ -369,15 +369,8 @@
     {
       "idx": 52,
       "version": "7",
-      "when": 1795428496684,
-      "tag": "0052_drop_workspace_runtime_bundle",
-      "breakpoints": true
-    },
-    {
-      "idx": 53,
-      "version": "7",
       "when": 1795429075692,
-      "tag": "0053_drop_cloudflare_provider",
+      "tag": "0052_providers_on_transports",
       "breakpoints": true
     }
   ]
