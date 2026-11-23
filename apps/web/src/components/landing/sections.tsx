@@ -296,18 +296,8 @@ export function HowItWorks() {
 
 /** Gitterm's own machines (gitterm.dev), then each provider. */
 const RUNS_ON = [
-  {
-    name: "Gitterm",
-    logo: "/gitterm.svg",
-    text: "Our machines, on your plan.",
-    snapshots: true,
-  },
-  ...SANDBOX_PROVIDERS.map((p) => ({
-    name: p.name,
-    logo: p.logo,
-    text: p.byoKey ? "Your own key, or your plan." : "On your Gitterm plan.",
-    snapshots: p.snapshots,
-  })),
+  { name: "Gitterm", logo: "/gitterm.svg" },
+  ...SANDBOX_PROVIDERS.map((p) => ({ name: p.name, logo: p.logo })),
 ];
 export function RunsOn() {
   return (
@@ -320,14 +310,8 @@ export function RunsOn() {
         <ul className="ro-grid">
           {RUNS_ON.map((p) => (
             <li key={p.name} className="ro-tile">
-              <span className="ro-name">
-                <Logo src={p.logo} className="size-5 object-contain" />
-                {p.name}
-              </span>
-              <span className="ro-text">
-                {p.text}
-                {p.snapshots ? " Setup snapshots." : ""}
-              </span>
+              <Logo src={p.logo} className="ro-logo" />
+              {p.name}
             </li>
           ))}
         </ul>
