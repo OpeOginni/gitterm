@@ -72,7 +72,7 @@ function kindAppliesTo(kind: string | null | undefined): string {
   const meta = AGENT_CONFIG_KIND_META[kind as AgentConfigKind];
   if (!meta) return "";
   return meta.appliesTo
-    .map((p) => (p === "opencode" ? "OpenCode" : p === "t3code" ? "T3Code" : p))
+    .map((p) => (p === "opencode" ? "OpenCode" : p === "t3code" ? "T3Code" : p === "pi" ? "Pi" : p))
     .join(", ");
 }
 

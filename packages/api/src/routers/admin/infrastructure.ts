@@ -158,7 +158,7 @@ const workspaceSetupDefaultSchema = z.object({
   commands: workspaceSetupCommandsSchema,
 });
 
-const SEEDED_AGENT_KEYS = new Set(["opencode-ttyd", "opencode", "t3code"]);
+const SEEDED_AGENT_KEYS = new Set(["opencode-ttyd", "opencode", "t3code", "pi"]);
 const SEEDED_IMAGE_NAMES = new Set([
   "gitterm-opencode",
   "gitterm-opencode-server",

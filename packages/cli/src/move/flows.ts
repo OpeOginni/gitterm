@@ -168,6 +168,7 @@ export async function moveToCloud(
     progress("Starting the agent in the cloud");
     await remote.agent(agent.script, "notify", {
       ref: imported.ref,
+      where: "cloud",
       message: [
         `[GitTerm] This conversation moved from the user's machine (checkout ${root}) to a GitTerm cloud workspace. The working directory is now ${cloudCwd}.`,
         "Earlier messages ran on the user's machine: paths, processes and tool output in them describe that machine, and the command that moved you ended there.",
@@ -316,6 +317,7 @@ export async function returnFromCloud(
   });
   await local.agent(agent.script, "notify", {
     ref: record.localRef,
+    where: "local",
     message: [
       `[GitTerm] This session is back on the user's machine (checkout ${record.root}) from a GitTerm cloud workspace.`,
       `Messages since it moved ran in the cloud under ${record.cloudDirectory}; what they say about that machine was true there. The cloud's commits and uncommitted changes are now in this checkout; processes it started are not running here.`,

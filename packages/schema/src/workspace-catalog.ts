@@ -15,11 +15,11 @@ export const PROVIDER_KEYS = [
 export const providerKeySchema = z.enum(PROVIDER_KEYS);
 export type ProviderKey = z.infer<typeof providerKeySchema>;
 
-export const AGENT_PROVISIONER_KEYS = ["opencode", "t3code"] as const;
+export const AGENT_PROVISIONER_KEYS = ["opencode", "t3code", "pi"] as const;
 export const agentProvisionerKeySchema = z.enum(AGENT_PROVISIONER_KEYS);
 export type AgentProvisionerKey = z.infer<typeof agentProvisionerKeySchema>;
 
-export const BUILT_IN_AGENT_KEYS = ["opencode-ttyd", "opencode", "t3code"] as const;
+export const BUILT_IN_AGENT_KEYS = ["opencode-ttyd", "opencode", "t3code", "pi"] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
 const positiveResourceSchema = z.number().positive();

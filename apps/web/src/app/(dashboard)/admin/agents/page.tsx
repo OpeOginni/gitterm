@@ -57,7 +57,7 @@ export default function AgentTypesPage() {
     key: "",
     name: "",
     description: "",
-    provisionerKey: "opencode" as "opencode" | "t3code",
+    provisionerKey: "opencode" as "opencode" | "t3code" | "pi",
     serverOnly: false,
   });
 
@@ -76,7 +76,7 @@ export default function AgentTypesPage() {
       key: string;
       name: string;
       description?: string;
-      provisionerKey: "opencode" | "t3code";
+      provisionerKey: "opencode" | "t3code" | "pi";
       serverOnly: boolean;
     }) => trpcClient.admin.infrastructure.createAgentType.mutate(params),
     onSuccess: () => {
@@ -191,7 +191,7 @@ export default function AgentTypesPage() {
                     <Label>Runtime</Label>
                     <Select
                       value={newAgent.provisionerKey}
-                      onValueChange={(provisionerKey: "opencode" | "t3code") =>
+                      onValueChange={(provisionerKey: "opencode" | "t3code" | "pi") =>
                         setNewAgent({ ...newAgent, provisionerKey })
                       }
                     >
@@ -201,6 +201,7 @@ export default function AgentTypesPage() {
                       <SelectContent>
                         <SelectItem value="opencode">OpenCode</SelectItem>
                         <SelectItem value="t3code">T3Code</SelectItem>
+                        <SelectItem value="pi">Pi</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -279,7 +280,7 @@ export default function AgentTypesPage() {
           {agentTypes?.map((agent) => {
             const runtimeImages = images?.filter((image) => image.agentTypeId === agent.id) ?? [];
             const hasEnabledRuntimeImage = runtimeImages.some((image) => image.isEnabled);
-            const isSeeded = ["opencode-ttyd", "opencode", "t3code"].includes(agent.key);
+            const isSeeded = ["opencode-ttyd", "opencode", "t3code", "pi"].includes(agent.key);
 
             return (
               <div key={agent.id} className="flex items-start gap-3.5 px-4 py-4 sm:px-5">

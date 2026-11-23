@@ -130,7 +130,7 @@ Every option is listed in the [Cloud plugin reference](/docs/reference/cloud-plu
 
 ## Other agents
 
-T3 Code threads that run Claude Code move with the `gitterm` CLI and the `gitterm-cloud` skill. Codex threads don't move yet.
+T3 Code threads that run Claude Code, and Pi sessions, move with the `gitterm` CLI and the `gitterm-cloud` skill. Codex threads don't move yet.
 
 1. Install the skill for your agents, once:
 
@@ -140,5 +140,7 @@ T3 Code threads that run Claude Code move with the `gitterm` CLI and the `gitter
 
 2. In the thread, ask the agent to move to the cloud. It runs `gitterm move "<what to do next>"`, which copies the checkout and the conversation into a new T3 Code workspace and prints a link to the cloud thread. Your T3 Code is linked to the workspace, so the link opens there.
 3. To bring it back, ask the same thread to return. It runs `gitterm return`, which waits until its reply ends, then brings the cloud's commits, changes and conversation back into that thread.
+
+In Pi, `gitterm setup` also installs GitTerm's Pi extension: type `/cloud` to move a session and `/cloud-return` to bring it back. Bring a Pi session back with `/cloud-return`, not by asking the agent: Pi keeps the open session and would write over the returned one. In the workspace, Pi runs in a tmux session the browser terminal attaches to, so it keeps working while the tab is closed.
 
 `gitterm moves` lists sessions that are in the cloud. To hand tasks to a cloud machine instead of moving a thread, `gitterm t3 link` creates a workspace linked to your T3 Code for `delegate_task`, and `gitterm t3 unlink <workspaceId>` deletes it.

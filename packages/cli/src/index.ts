@@ -208,6 +208,10 @@ if (workspaceEnvironment) {
       (b) =>
         b.positional("workspaceId", { type: "string" }).options({
           ...jsonOption,
+          session: {
+            type: "string",
+            description: "The local session to bring back (default: this one, or the only one)",
+          },
           force: {
             type: "boolean",
             default: false,

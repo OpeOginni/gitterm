@@ -1,4 +1,5 @@
 import { opencodeProvisioner } from "./opencode";
+import { piProvisioner } from "./pi";
 import { t3codeProvisioner } from "./t3code";
 import type { AgentProvisioner } from "./types";
 import type { AgentProvisionerKey } from "@gitterm/schema/workspace-catalog";
@@ -9,6 +10,7 @@ export type { AgentProvisioner, AgentProvisionerContext, UserProviderCredential 
 const provisioners: Record<AgentProvisionerKey, AgentProvisioner> = {
   opencode: opencodeProvisioner,
   t3code: t3codeProvisioner,
+  pi: piProvisioner,
 };
 
 export function getAgentProvisioner(provisionerKey: string): AgentProvisioner {

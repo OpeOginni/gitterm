@@ -10,7 +10,8 @@
  * - `info` → `{ version }`
  * - `export { ref, allowBusy }` → an `ExportedSession`
  * - `import { payload, cwd, ref? }` → `{ ref }`. With `ref`, replaces that session in place.
- * - `notify { ref, message }` → starts the agent on the message, without waiting.
+ * - `notify { ref, message, where }` → starts the agent on the message, without waiting.
+ *   `where` is `cloud` or `local`.
  * - `status { ref }` → `{ busy }`
  */
 export const RESULT_MARKER = "GITTERM_AGENT_RESULT ";
