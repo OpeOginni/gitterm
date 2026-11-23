@@ -71,7 +71,7 @@ export function createVercelSandboxTransport(config: {
   apiKey: string;
   teamId: string;
   projectId: string;
-  runtime?: "node24" | "node22" | "python3.13";
+  runtime?: "node26" | "node24" | "node22" | "python3.13";
   /** Used when no machine profile is given. */
   vcpus?: number;
   /** A snapshot every sandbox starts from, unless the create call names another. */
@@ -115,6 +115,8 @@ export function createVercelSandboxTransport(config: {
       const name = `gitterm-sbx-${randomBytes(6).toString("hex")}`;
       const snapshot = input.snapshot ?? config.snapshot;
       const vcpus = input.machine?.vcpus ? Number(input.machine.vcpus) : config.vcpus;
+      const runtime =
+        (input.machine?.runtime as typeof config.runtime) ?? config.runtime ?? "node24";
       let sandbox: VercelSandbox;
       try {
         sandbox = await Sandbox.create({
@@ -122,10 +124,15 @@ export function createVercelSandboxTransport(config: {
           name,
           ...(snapshot
             ? { source: { type: "snapshot" as const, snapshotId: snapshot } }
-            : { runtime: config.runtime ?? "node24" }),
+            : input.template
+              ? { image: input.template }
+              : { runtime }),
           timeout: input.timeoutMs,
           // Managed sandboxes pause (stop with a snapshot) when idle; direct ones are discarded.
+          // Only the latest of those snapshots is kept.
           persistent: !kill,
+          ...(kill ? {} : { keepLastSnapshots: { count: 1 } }),
+          ...(input.env ? { env: input.env } : {}),
           tags: limitTags(input.labels),
           ...(vcpus ? { resources: { vcpus } } : {}),
         });

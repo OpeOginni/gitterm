@@ -155,30 +155,69 @@ test("an image the sandbox service doesn't offer is refused before anything is c
   expect(created).toHaveLength(before);
 });
 
-test("any provider's transport hosts workspaces, and a resume starts the agent again", async () => {
+/** A transport for `provider` that records what the generic provider asks of it. */
+function recorder(
+  provider: "daytona" | "e2b" | "vercel" | "boat",
+  home: string,
+  sandboxHome = home,
+) {
   const ran: string[] = [];
   const written = new Map<string, string>();
   const inputs: SandboxCreateInput[] = [];
-  const daytona = {
+  const transport = {
     ...fake,
-    provider: "daytona" as const,
-    home: "/home/daytona",
+    provider,
+    home,
     async create(input: SandboxCreateInput) {
       inputs.push(input);
-      return { id: "d1", state: "running" as const, labels: {}, startedAt: null, expiresAt: null };
+      return { id: "s1", state: "running" as const, labels: {}, startedAt: null, expiresAt: null };
     },
     async run(_id: string, command: string) {
       ran.push(command);
-      return { exitCode: 0, stdout: command === "mint-token" ? "pairing-token\n" : "", stderr: "" };
+      const stdout =
+        command === "mint-token"
+          ? "pairing-token\n"
+          : command.includes('"$HOME"')
+            ? sandboxHome
+            : "";
+      return { exitCode: 0, stdout, stderr: "" };
     },
     async writeFile(_id: string, path: string, data: Uint8Array) {
       written.set(path, Buffer.from(data).toString());
     },
-    async resume() {},
+    async info(id: string) {
+      return {
+        id,
+        state: "running" as const,
+        labels: inputs[0]!.labels,
+        startedAt: null,
+        expiresAt: null,
+      };
+    },
+    previews: 0,
+    async preview(_id: string, port: number) {
+      transport.previews++;
+      return { url: `https://${port}-session${transport.previews}.example`, headers: {} };
+    },
   };
-  mocks[0]!.mockResolvedValue(daytona as never);
+  mocks[0]!.mockResolvedValue(transport as never);
+  return { transport, ran, written, inputs };
+}
+
+/** The resume script the workspace wrote with a command, decoded. */
+const resumeScriptOf = (ran: string[]) => {
+  const write = ran.find((command) => command.includes('> "$HOME/.gitterm/resume.sh"'));
+  const encoded = write?.match(/printf %s '([A-Za-z0-9+/=]+)'/)?.[1];
+  return encoded ? Buffer.from(encoded, "base64").toString() : undefined;
+};
+
+test("any provider's transport hosts workspaces, and a resume starts the agent again", async () => {
+  const { ran, inputs } = recorder("daytona", "/home/daytona");
   try {
-    const provider = new TransportWorkspaceProvider("daytona", { label: "Daytona" });
+    const provider = new TransportWorkspaceProvider("daytona", {
+      label: "Daytona",
+      root: "/workspace",
+    });
     const info = await provider.createWorkspace({
       ...config(),
       // The image's template and the machine profile's options, merged by the caller.
@@ -189,19 +228,101 @@ test("any provider's transport hosts workspaces, and a resume starts the agent a
     expect(inputs[0]).toMatchObject({
       template: "gitterm-opencode-server:1",
       machine: { resources: { cpu: 4 } },
+      labels: { gitterm_workspace: "ws1", gitterm_agent_port: "4096" },
     });
+    // Only env the agent uses: entrypoint-only keys stay out (Vercel caps env at 4 KiB).
+    expect(Object.keys(inputs[0]!.env!).sort()).toEqual(["AGENT_VAR", "USER_VAR"]);
     // Daytona doesn't run a resume command, so the workspace keeps one on disk instead.
     expect(inputs[0]!.resumeCommand).toBeUndefined();
-    const script = written.get("/home/daytona/.gitterm/resume.sh");
-    expect(script).toContain("cd '/home/daytona/workspace/app'");
+    const script = resumeScriptOf(ran);
+    expect(script).toContain("cd '/workspace/app'");
     expect(script).toContain("/dev/tcp/127.0.0.1/4096");
-    expect(info.externalServiceId).toBe("sandbox:daytona:d1");
+    expect(info.externalServiceId).toBe("sandbox:daytona:s1");
 
     ran.length = 0;
-    await withSandboxHandles(provider).resumeWorkspace(info.externalServiceId);
-    expect(ran).toEqual([
-      "[ ! -f '/home/daytona/.gitterm/resume.sh' ] || bash '/home/daytona/.gitterm/resume.sh'",
-    ]);
+    expect(
+      await withSandboxHandles(provider).resumeWorkspace(info.externalServiceId),
+    ).toBeUndefined();
+    expect(ran).toEqual(['[ ! -f "$HOME/.gitterm/resume.sh" ] || bash "$HOME/.gitterm/resume.sh"']);
+  } finally {
+    mocks[0]!.mockResolvedValue(fake as never);
+  }
+});
+
+test("agent files go to the image's own home, which can differ from the provider's", async () => {
+  const { written } = recorder("daytona", "/home/daytona", "/workspace");
+  try {
+    await new TransportWorkspaceProvider("daytona", {
+      label: "Daytona",
+      root: "/workspace",
+    }).createWorkspace({ ...config(), imageProviderMetadata: { daytona: { image: "img" } } });
+    expect(written.get("/workspace/.config/agent.json")).toBe("{}");
+  } finally {
+    mocks[0]!.mockResolvedValue(fake as never);
+  }
+});
+
+test("an image's setup commands install the agent, except from a project snapshot", async () => {
+  const { ran, inputs } = recorder("boat", "/home/user");
+  try {
+    const provider = new TransportWorkspaceProvider("boat", { label: "Boat", root: "/home/user" });
+    const metadata = { boat: { setupCommands: ["npm install -g @opencode/cli@2"], size: "large" } };
+    await provider.createWorkspace({ ...config(), imageProviderMetadata: metadata as never });
+    // No image: the provider's own default image, with the agent installed before the clone.
+    expect(inputs[0]!.template).toBeUndefined();
+    expect(inputs[0]!.machine).toEqual({ size: "large" });
+    const install = ran.indexOf("npm install -g @opencode/cli@2");
+    expect(install).toBeGreaterThan(-1);
+    expect(install).toBeLessThan(ran.findIndex((command) => command.includes("git clone")));
+
+    ran.length = 0;
+    await provider.createWorkspace({
+      ...config(),
+      snapshot: "snap1",
+      imageProviderMetadata: metadata as never,
+    });
+    expect(ran).not.toContain("npm install -g @opencode/cli@2");
+  } finally {
+    mocks[0]!.mockResolvedValue(fake as never);
+  }
+});
+
+test("E2B's template id is the template, and its SSH variant is not used", async () => {
+  const { inputs } = recorder("e2b", "/home/user");
+  try {
+    await new TransportWorkspaceProvider("e2b", { label: "E2B" }).createWorkspace({
+      ...config(),
+      imageProviderMetadata: {
+        e2b: {
+          templateId: "gitterm-opencode-server",
+          sshTemplateId: "with-ssh",
+          templateSuffix: "-lg",
+        },
+      },
+    });
+    expect(inputs[0]!.template).toBe("gitterm-opencode-server");
+    expect(inputs[0]!.machine).toEqual({ templateSuffix: "-lg" });
+  } finally {
+    mocks[0]!.mockResolvedValue(fake as never);
+  }
+});
+
+test("a Vercel resume returns the agent's new URL, as Vercel's change per session", async () => {
+  const { transport } = recorder("vercel", "/home/vercel-sandbox");
+  try {
+    const provider = new TransportWorkspaceProvider("vercel", {
+      label: "Vercel",
+      root: "/vercel/sandbox",
+    });
+    const info = await provider.createWorkspace({
+      ...config(),
+      imageProviderMetadata: { vercel: { runtime: "node22", vcpus: 2 } },
+    });
+    expect(info.upstreamUrl).toBe("https://4096-session1.example");
+    expect(await withSandboxHandles(provider).resumeWorkspace(info.externalServiceId)).toEqual({
+      upstreamUrl: "https://4096-session2.example",
+    });
+    expect(transport.previews).toBe(2);
   } finally {
     mocks[0]!.mockResolvedValue(fake as never);
   }

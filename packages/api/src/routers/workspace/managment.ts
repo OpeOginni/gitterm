@@ -108,7 +108,6 @@ import {
 } from "../../providers/ssh-access";
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
 import { imageSupportsProvider, pickImageForProvider } from "../../providers/image-compat";
-import { RAILWAY_RUNTIME_PORT } from "../../providers/railway";
 import {
   applyMachineProfile,
   getDefaultMachineProfile,
@@ -171,10 +170,6 @@ import { workspaceMcpConnection } from "@gitterm/db/schema/mcp";
 import { recordCredentialAudit } from "../../service/credential-audit";
 import { integrationPolicy } from "../../service/integrations/catalog";
 import { githubRepositoryMode } from "../../service/github/config";
-import {
-  railwayBootstrapEnvironment,
-  storeWorkspaceRuntimeBundle,
-} from "../../service/workspace-runtime-bundle";
 import {
   deleteWorkspaceForUser,
   processWorkspaceTermination,
@@ -261,6 +256,9 @@ async function relaunchWorkspaceSetup(
     .execCommand(record.externalInstanceId, `cd ${shellQuote(directory)} && ${setup.command}`)
     .catch((error) => console.warn("Failed to relaunch workspace setup:", error));
 }
+
+/** The port the canonical images' entrypoint serves the agent on (AWS runs the entrypoint). */
+const CONTAINER_RUNTIME_PORT = 7681;
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -2805,11 +2803,10 @@ export const workspaceRouter = router({
         const setupExecutionId = setupRequested ? randomUUID() : undefined;
         // The setup script's readiness probe must target the port the runtime
         // actually listens on. SDK providers launch serve.command themselves,
-        // so serve.port is correct; Railway and AWS run the image entrypoint,
-        // which serves on the image's fixed port instead.
-        const setupProbePort = ["railway", "aws"].includes(providerKey)
-          ? RAILWAY_RUNTIME_PORT
-          : agentProvisioning.serve?.port;
+        // so serve.port is correct; AWS runs the image entrypoint, which serves
+        // on the image's fixed port instead.
+        const setupProbePort =
+          providerKey === "aws" ? CONTAINER_RUNTIME_PORT : agentProvisioning.serve?.port;
         // Tier 1/2 Daytona sandboxes cannot reach the API: skip push reports
         // (their retry backoff would delay setup ~30s per report) and rely on
         // the server-side polling reconciler instead.
@@ -3050,13 +3047,6 @@ export const workspaceRouter = router({
             });
           }
         }
-        if (providerKey === "railway") {
-          await storeWorkspaceRuntimeBundle(workspaceId, DEFAULT_DOCKER_ENV_VARS);
-        }
-        const providerEnvironment =
-          providerKey === "railway"
-            ? railwayBootstrapEnvironment(DEFAULT_DOCKER_ENV_VARS)
-            : DEFAULT_DOCKER_ENV_VARS;
 
         // Providers that call this record their handle before setup, so a failure can clean it up.
         const onProvisioned = async (info: { externalServiceId: string }) => {
@@ -3087,7 +3077,7 @@ export const workspaceRouter = router({
                     repositoryBaseCommit: resolvedBaseCommit ?? undefined,
                     repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
                     regionIdentifier: regionRecord?.externalRegionIdentifier,
-                    environmentVariables: providerEnvironment,
+                    environmentVariables: DEFAULT_DOCKER_ENV_VARS,
                     provisioningSpec,
                     snapshot: startSnapshot?.externalSnapshotId ?? undefined,
                     persistent: effectivePersistent,
@@ -3105,7 +3095,7 @@ export const workspaceRouter = router({
                     repositoryBaseCommit: resolvedBaseCommit ?? undefined,
                     repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
                     regionIdentifier: regionRecord?.externalRegionIdentifier,
-                    environmentVariables: providerEnvironment,
+                    environmentVariables: DEFAULT_DOCKER_ENV_VARS,
                     provisioningSpec,
                     snapshot: startSnapshot?.externalSnapshotId ?? undefined,
                   }),

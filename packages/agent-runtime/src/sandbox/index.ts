@@ -17,6 +17,7 @@ export type SandboxTransportConfig =
       target?: "us" | "eu";
       snapshot?: string;
       resources?: { cpu?: number; memory?: number; disk?: number };
+      networkAccess?: boolean;
     }
   | {
       provider: "vercel";

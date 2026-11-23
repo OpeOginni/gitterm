@@ -18,6 +18,7 @@ This page compares the providers that can run a sandbox for your local agent. Us
 | Railway  | Managed, direct | `node:22-bookworm-slim` with Gitterm's command server | Never deleted by the provider                                      | Always private, port 8080 reserved |
 | AWS      | Managed only    | `node:22-bookworm-slim` with Gitterm's command server | Never deleted by the provider                                      | Always private, port 8080 reserved |
 
+- **Railway** is deprecated and will be removed in a later release. Use another provider for new accounts.
 - **Lifetime** is the time you set with `lifetimeMinutes` when creating the sandbox. The maximum is 24 hours on every provider except Vercel, where it is 5 hours.
 - **Abandoned sandbox** is what the provider does on its own if OpenCode crashes or your machine goes offline.
 - **Previews:** the column shows direct accounts. "Private or public" is chosen when the sandbox is created, with `publicPreviews`. A private preview rejects requests without an access header (a cookie on Boat). On an always-private provider, `publicPreviews` has no effect. With a managed account, Gitterm serves E2B, Daytona, Boat, and exe.dev previews, so those can be private or public too. See [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).

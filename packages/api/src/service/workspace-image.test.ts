@@ -73,11 +73,7 @@ describe("resolveCustomWorkspaceImage", () => {
   }) as unknown as typeof fetch;
 
   test("pins floating tags to the verified digest", async () => {
-    const resolved = await resolveCustomWorkspaceImage(
-      "acme/tool:latest",
-      "railway",
-      publicRegistry,
-    );
+    const resolved = await resolveCustomWorkspaceImage("acme/tool:latest", "aws", publicRegistry);
     expect(resolved).toEqual({ kind: "registry", reference: `docker.io/acme/tool@${digest}` });
   });
 
@@ -94,7 +90,7 @@ describe("resolveCustomWorkspaceImage", () => {
     const missingDigest = (async () =>
       new Response(null, { status: 200 })) as unknown as typeof fetch;
     await expect(
-      resolveCustomWorkspaceImage("ghcr.io/acme/tool:latest", "railway", missingDigest),
+      resolveCustomWorkspaceImage("ghcr.io/acme/tool:latest", "aws", missingDigest),
     ).rejects.toThrow(/did not return a valid digest/);
   });
 

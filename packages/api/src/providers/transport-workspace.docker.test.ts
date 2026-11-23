@@ -15,8 +15,10 @@ import { TransportWorkspaceProvider } from "./transport-workspace";
 /**
  * A workspace on a provider that is nothing but a `SandboxTransport`: a local Docker
  * container running the GitTerm runtime image, provisioned by the real OpenCode
- * provisioner through `TransportWorkspaceProvider`. Stopping the container kills the agent,
- * like a provider whose pause keeps only the disk, so the resume must start it again.
+ * provisioner through `TransportWorkspaceProvider`, set up as Daytona is. The image sets
+ * `HOME=/workspace` while Daytona's profile says `/home/daytona`, so the agent's files must
+ * follow the image. Stopping the container kills the agent, like Daytona's stop, so the
+ * resume must start it again.
  *
  * Opt in: GITTERM_SANDBOX_DOCKER_TESTS=1 bun test src/providers/transport-workspace.docker.test.ts
  * The image defaults to a locally built runtime image; set GITTERM_RUNTIME_IMAGE to another.
@@ -50,14 +52,14 @@ async function must(args: string[], input?: Uint8Array) {
   return result.stdout.toString();
 }
 
-/** Like Railway: home `/root`, the agent's ports published, and no resume command. */
+/** Like Daytona: the image's own HOME, the agent's ports published, and no resume command. */
 const transport: SandboxTransport = {
-  provider: "railway",
-  home: "/root",
+  provider: "daytona",
+  home: "/home/daytona",
   capabilities: {
-    expiry: "none",
+    expiry: "hard",
     previews: "private",
-    pause: "state-losing",
+    pause: "stateful",
     maxLifetimeMs: 24 * 60 * 60_000,
     snapshots: "none",
   },
@@ -69,8 +71,6 @@ const transport: SandboxTransport = {
         "--label",
         `gitterm_test_run=${RUN}`,
         ...Object.entries(input.env ?? {}).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
-        "-e",
-        "HOME=/root",
         "-p",
         "127.0.0.1::4096",
         "--entrypoint",
@@ -154,14 +154,14 @@ test.skipIf(!enabled)(
       credentials: [],
     });
     const provider = withSandboxHandles(
-      new TransportWorkspaceProvider("railway", { label: "Docker" }),
+      new TransportWorkspaceProvider("daytona", { label: "Docker", root: "/workspace" }),
     );
     const info = await provider.createWorkspace({
       workspaceId: "ws1",
       userId: "u1",
       imageId: "image",
       subdomain: "ws1",
-      imageProviderMetadata: { railway: { image: IMAGE } as never },
+      imageProviderMetadata: { daytona: { image: IMAGE } },
       provisioningSpec: {
         agent,
         repo: { url: "https://github.com/octocat/Hello-World", name: "hello" },
@@ -169,15 +169,15 @@ test.skipIf(!enabled)(
         editorAccessEnabled: false,
       },
     });
-    const id = info.externalServiceId.replace("sandbox:railway:", "");
+    const id = info.externalServiceId.replace("sandbox:daytona:", "");
 
     expect(await answers(info.upstreamUrl, password)).toBe(200);
     // The checkout and the agent's files are where the agent looks for them.
-    const checkout = await transport.run(id, "git -C /root/workspace/hello log --oneline | wc -l");
+    const checkout = await transport.run(id, "git -C /workspace/hello log --oneline | wc -l");
     expect(Number(checkout.stdout.trim())).toBeGreaterThan(0);
-    expect((await transport.run(id, "test -s /root/.config/opencode/opencode.json")).exitCode).toBe(
-      0,
-    );
+    expect(
+      (await transport.run(id, "test -s /workspace/.config/opencode/opencode.json")).exitCode,
+    ).toBe(0);
 
     // Stopping the container stops the agent; the resume starts it again.
     await provider.pauseWorkspace(info.externalServiceId);

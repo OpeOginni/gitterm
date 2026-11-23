@@ -98,7 +98,7 @@ export function getWorkspaceProjectPath(
         .split("/")
         .pop()
         ?.replace(/\.git$/i, "")
-    : ["e2b", "gitterm", "vercel", "boat", "exedev", "railway", "aws"].includes(providerKey ?? "")
+    : ["e2b", "gitterm", "daytona", "vercel", "boat", "exedev", "aws"].includes(providerKey ?? "")
       ? "workspace"
       : undefined;
   const base =

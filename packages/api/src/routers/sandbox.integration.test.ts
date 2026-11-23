@@ -1078,20 +1078,14 @@ integration(
 integration(
   "a cloud workspace is kept as its repository's snapshot when it is deleted, one per repository",
   async () => {
-    const { E2BProvider } = await import("../providers/e2b");
     const { image, agentType } = await import("@gitterm/db/schema/cloud");
     const { findProjectSnapshot } = await import("../service/project-snapshot");
-    const prepared: string[] = [];
-    const terminated: string[] = [];
-    const spies = [
-      spyOn(E2BProvider.prototype, "execCommand").mockImplementation(async (id, command) => {
-        prepared.push(`${id}: ${command.slice(0, 26)}`);
-        return { exitCode: 0, stdout: "" };
-      }),
-      spyOn(E2BProvider.prototype, "terminateWorkspace").mockImplementation(async (id) => {
-        terminated.push(id);
-      }),
-    ];
+    // Workspaces keep a sandbox handle, so their commands and deletion reach the fake transport.
+    const prepared = () =>
+      commands
+        .filter((entry) => entry.startsWith("machine-"))
+        .map((entry) => entry.replace(/^([^:]+):(.{0,26}).*$/s, "$1: $2"));
+    const terminated = () => destroyed.filter((id) => id.startsWith("machine-"));
     const [e2b] = await db.select().from(cloudProvider).where(eq(cloudProvider.providerKey, "e2b"));
     const [opencode] = await db
       .select({ id: image.id })
@@ -1107,7 +1101,7 @@ integration(
       await db.insert(workspace).values({
         id,
         userId,
-        externalInstanceId: machine,
+        externalInstanceId: `sandbox:e2b:${machine}`,
         imageId: opencode!.id,
         cloudProviderId: e2b!.id,
         repositoryUrl,
@@ -1153,8 +1147,8 @@ integration(
         existing: null,
       });
       const deleted = await workspaces.deleteWorkspace({ workspaceId: first, saveSnapshot: true });
-      expect(prepared).toEqual(["machine-1: pkill -f 'opencode serve' "]);
-      expect(terminated).toEqual(["machine-1"]);
+      expect(prepared()).toEqual(["machine-1: pkill -f 'opencode serve' "]);
+      expect(terminated()).toEqual(["machine-1"]);
       expect(await status(first)).toBe("terminated");
       const [saved] = await kept();
       expect(deleted.snapshot).toEqual({ id: saved!.id });
@@ -1202,7 +1196,6 @@ integration(
     } finally {
       failSnapshots = false;
       snapshotLimit = null;
-      for (const spy of spies) spy.mockRestore();
       await db.delete(sandboxSnapshot).where(eq(sandboxSnapshot.repositoryUrl, repositoryUrl));
     }
   },

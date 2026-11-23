@@ -6,7 +6,7 @@ import { agentType, cloudProvider, image } from "@gitterm/db/schema/cloud";
 import { workspace, workspaceTermination } from "@gitterm/db/schema/workspace";
 import type { Context } from "../../context";
 import { workspaceRouter } from "./managment";
-import { E2BProvider } from "../../providers/e2b";
+import * as transportModule from "../../service/sandbox-transport";
 import * as proxyCache from "../../service/proxy-cache";
 import { retryWorkspaceTerminations } from "../../service/workspace-termination";
 
@@ -23,6 +23,7 @@ const userId = `deletion-test-${randomUUID()}`;
 const caller = () =>
   workspaceRouter.createCaller({ session: { user: { id: userId } } } as unknown as Context);
 const terminated: string[] = [];
+const gone = new Set<string>();
 let failures = 0;
 const mocks: { mockRestore(): void }[] = [];
 
@@ -41,7 +42,7 @@ async function createRunningWorkspace() {
   await db.insert(workspace).values({
     id,
     userId,
-    externalInstanceId: `sbx-${id}`,
+    externalInstanceId: `sandbox:e2b:sbx-${id}`,
     imageId: opencodeImage!.id,
     cloudProviderId: provider!.id,
     domain: "",
@@ -58,13 +59,21 @@ const queued = (id: string) =>
 beforeAll(async () => {
   if (!testUrl) return;
   mocks.push(
-    spyOn(E2BProvider.prototype, "terminateWorkspace").mockImplementation(async (id: string) => {
-      terminated.push(id);
-      if (failures > 0) {
-        failures--;
-        throw new Error("provider deletion failed");
-      }
-    }),
+    // Workspaces keep a sandbox handle, so deletion reaches this transport.
+    spyOn(transportModule, "managedSandboxTransport").mockResolvedValue({
+      provider: "e2b",
+      async destroy(id: string) {
+        terminated.push(id);
+        if (failures > 0) {
+          failures--;
+          throw new Error("provider deletion failed");
+        }
+        gone.add(id);
+      },
+      async info(id: string) {
+        return { id, state: gone.has(id) ? "terminated" : "running", labels: {} };
+      },
+    } as never),
     spyOn(proxyCache, "invalidateProxyCacheForWorkspace").mockResolvedValue(),
     spyOn(proxyCache, "invalidateAllProxyRouteAccessCache").mockResolvedValue(),
   );

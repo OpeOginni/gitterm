@@ -33,7 +33,7 @@ Boat uses curated VM images, not user-built Docker images. Docker may be availab
 
 GitTerm creates private Boat-hosted URLs and keeps their `_token` values in server-side route access. Users see only GitTerm workspace URLs.
 
-Editor access uses each users saved SSH public key, which GitTerm authorizes on the Box when they request a connection.
+Workspaces do not offer SSH editor access.
 
 ## Reference
 

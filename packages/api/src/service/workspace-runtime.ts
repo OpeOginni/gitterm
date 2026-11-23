@@ -87,7 +87,7 @@ export function resolveProjectDirectory(
   // getWorkspaceProjectPath in apps/web/src/lib/utils.ts.
   const hint = buildProjectPathHint(
     repositoryUrl ||
-      (["e2b", "gitterm", "vercel", "boat", "exedev", "railway", "aws"].includes(key)
+      (["e2b", "gitterm", "daytona", "vercel", "boat", "exedev", "aws"].includes(key)
         ? "workspace"
         : null),
   );

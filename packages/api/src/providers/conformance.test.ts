@@ -16,11 +16,14 @@ const REQUIRED_METHODS = [
   "revokeWorkspaceSSHAccess",
 ] as const;
 
+const WORKSPACE_PROVIDER_KEYS = PROVIDER_KEYS.filter((key) => key !== "railway");
+
 describe("compute provider conformance", () => {
   test("registries contain the same provider keys", () => {
     const expected = PROVIDER_KEYS.toSorted();
 
-    expect(getAvailableProviderNames().toSorted()).toEqual(expected);
+    // Railway backs only plain sandboxes (deprecated); it hosts no workspaces.
+    expect(getAvailableProviderNames().toSorted()).toEqual(WORKSPACE_PROVIDER_KEYS.toSorted());
     // gitterm.dev's own provider is configured by env vars, so it has no admin definition.
     expect(Object.keys(PROVIDER_DEFINITIONS).toSorted()).toEqual(
       expected.filter((key) => key !== "gitterm"),
@@ -28,7 +31,7 @@ describe("compute provider conformance", () => {
     expect(Object.keys(PROVIDER_SECURITY_CAPABILITIES).toSorted()).toEqual(expected);
   });
 
-  for (const providerKey of PROVIDER_KEYS) {
+  for (const providerKey of WORKSPACE_PROVIDER_KEYS) {
     test(`${providerKey} exposes the compute provider contract`, () => {
       const provider = getProvider(providerKey);
 

@@ -80,6 +80,7 @@ export type OwnKeyAccountConfig =
       disk?: string;
     } & OwnKey)
   | ({
+      /** @deprecated Railway sandboxes will be removed in a later release; use another provider. */
       provider: "railway";
       projectId: string;
       environmentId: string;
