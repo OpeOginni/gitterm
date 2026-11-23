@@ -62,7 +62,10 @@ export type ReturnConfirmations = {
 };
 
 /** A return the user declined: nothing here changed. */
-export class ReturnDeclined extends Error {}
+export class ReturnDeclined extends Error {
+  /** How the CLI reports it (`--json`), so a caller can ask and run again with --force. */
+  readonly code = "NEEDS_CONFIRMATION";
+}
 
 const VERIFIED = "GITTERM_HANDOFF_VERIFIED";
 const CAPTURE_FAILURES: Record<number, string> = {
@@ -91,6 +94,7 @@ async function createWorkspace(
     const full = await captureSnapshot(root, changes, true).catch((tooBig: Error) => {
       throw new Error(
         `GitTerm can't access this repository (${error.message}), and sending its whole history instead failed: ${tooBig.message} Give GitTerm access to the repository in the dashboard's Integrations, or push your branch, then try again.`,
+        { cause: tooBig },
       );
     });
     if (full.digest !== snapshot.digest)
