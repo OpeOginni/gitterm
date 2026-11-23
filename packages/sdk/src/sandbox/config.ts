@@ -297,10 +297,14 @@ export function sandboxSettingsPath(): string {
 }
 
 /**
- * The settings file, or undefined when there is none. Keys in it must be `{env:VAR}` or
- * `{file:path}` references: a literal key or `token` is refused.
+ * The sandbox settings: from `GITTERM_SANDBOX_SETTINGS` (JSON, which an agent's own settings
+ * pass to the CLI, as Pi's extension does), else the settings file, else undefined. Keys must be
+ * `{env:VAR}` or `{file:path}` references: a literal key or `token` is refused.
  */
 export function loadSandboxSettingsFile(): SandboxSettings | undefined {
+  const inline = process.env.GITTERM_SANDBOX_SETTINGS?.trim();
+  if (inline)
+    return checkCredentials(JSON.parse(inline) as SandboxSettings, "GITTERM_SANDBOX_SETTINGS");
   const file = sandboxSettingsPath();
   let text: string;
   try {
@@ -309,13 +313,16 @@ export function loadSandboxSettingsFile(): SandboxSettings | undefined {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
-  const settings = JSON.parse(text) as SandboxSettings;
+  return checkCredentials(JSON.parse(text) as SandboxSettings, file);
+}
+
+function checkCredentials(settings: SandboxSettings, where: string): SandboxSettings {
   const accounts = settings.accounts ?? { [settings.provider ?? "gitterm"]: settings };
   for (const [name, account] of Object.entries(accounts)) {
     const key = "apiKey" in account ? account.apiKey : undefined;
     if ((key !== undefined && !CREDENTIAL_REFERENCE.test(key.trim())) || "token" in account)
       throw new Error(
-        `Sandbox account ${name} in ${file} contains a credential. Store it in an environment variable or a file and use "apiKey": "{env:VAR}" or "{file:path}", or run \`gitterm sandbox setup\`.`,
+        `Sandbox account ${name} in ${where} contains a credential. Store it in an environment variable or a file and use "apiKey": "{env:VAR}" or "{file:path}", or run \`gitterm sandbox setup\`.`,
       );
   }
   return settings;

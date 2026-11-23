@@ -127,12 +127,13 @@ Gitterm installs the CLI in supported workspace images and gives it the workspac
 
 ## Environment variables
 
-| Variable                                                    | Required                      | Default                                                  | What it does                                                            |
-| ----------------------------------------------------------- | ----------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `GITTERM_SERVER_URL`                                        | No                            | The saved login's server, then `https://api.gitterm.dev` | Gitterm API URL. Overrides the saved login                              |
-| `GITTERM_API_TOKEN`                                         | No                            | The saved login's token                                  | A `gt_...` token from **API tokens**. Use it instead of `gitterm login` |
-| `GITTERM_SANDBOX_CONFIG`                                    | No                            | `~/.config/gitterm/sandbox.json`                         | Path to the sandbox accounts file                                       |
-| `WORKSPACE_API_URL`, `WORKSPACE_AUTH_TOKEN`, `WORKSPACE_ID` | Set by Gitterm in a workspace | None                                                     | The workspace's identity. All three must be set together                |
+| Variable                                                    | Required                      | Default                                                  | What it does                                                                                  |
+| ----------------------------------------------------------- | ----------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `GITTERM_SERVER_URL`                                        | No                            | The saved login's server, then `https://api.gitterm.dev` | Gitterm API URL. Overrides the saved login                                                    |
+| `GITTERM_API_TOKEN`                                         | No                            | The saved login's token                                  | A `gt_...` token from **API tokens**. Use it instead of `gitterm login`                       |
+| `GITTERM_SANDBOX_CONFIG`                                    | No                            | `~/.config/gitterm/sandbox.json`                         | Path to the sandbox accounts file                                                             |
+| `GITTERM_SANDBOX_SETTINGS`                                  | No                            | None                                                     | Sandbox settings as JSON, used instead of the file. Pi's extension sets it from Pi's settings |
+| `WORKSPACE_API_URL`, `WORKSPACE_AUTH_TOKEN`, `WORKSPACE_ID` | Set by Gitterm in a workspace | None                                                     | The workspace's identity. All three must be set together                                      |
 
 Environment variables win over the saved login.
 

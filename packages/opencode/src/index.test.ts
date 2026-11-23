@@ -152,3 +152,13 @@ test("the gitterm CLI's sandbox settings count when the plugin has no sandbox op
   // A provider key and no GitTerm login: nothing to move a session with.
   expect(result.commands).toEqual([]);
 });
+
+test("the options can turn each part off, as a project's own opencode.json does", async () => {
+  const signedIn = { serverUrl: "http://127.0.0.1:9", token: "test-token" };
+  const noSandbox = await setup([], { ...signedIn, sandbox: false });
+  expect(noSandbox.tools).toEqual([]);
+  expect(noSandbox.commands).toEqual(["cloud"]);
+  const noCloud = await setup([], { ...signedIn, cloud: false });
+  expect(noCloud.tools).toEqual(expect.arrayContaining(SANDBOX_TOOLS));
+  expect(noCloud.commands).toEqual([]);
+});

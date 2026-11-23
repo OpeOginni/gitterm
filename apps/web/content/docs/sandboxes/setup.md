@@ -135,9 +135,19 @@ The provider must be enabled on the deployment and allowed by your plan. If it i
 > [!NOTE]
 > On E2B, Daytona, Boat, and exe.dev, managed previews are served through Gitterm. They can be public, or private and open in your browser when you are signed in to Gitterm. See [Previews through Gitterm](/docs/sandboxes/jobs-and-previews#previews-through-gitterm).
 
+## Pi settings
+
+Pi's extension also reads a `gitterm` key from Pi's own settings: `~/.pi/agent/settings.json` for every project, and `.pi/settings.json` in a project for that project, which wins.
+
+```json
+{ "gitterm": { "sandbox": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" } } }
+```
+
+`sandbox` takes the same settings as above, or `false` to turn the sandbox tools off. `"cloud": false` turns `/cloud` and `/cloud-return` off. A sandbox account here is used instead of `~/.config/gitterm/sandbox.json`. Restart Pi after changing it.
+
 ## Turn Gitterm off for a project
 
-To keep an agent from using sandboxes, moving sessions to the cloud, or both in one project, run this in the project:
+OpenCode and Pi can do this in their own project settings: see [Turn a part off](/docs/reference/opencode-plugin#turn-a-part-off) and [Pi settings](#pi-settings). To turn it off for every agent on your machine at once, run this in the project:
 
 ```sh
 gitterm project disable sandbox   # or: cloud, all
