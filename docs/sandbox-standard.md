@@ -101,11 +101,13 @@ a runtime image) and installs its agent with the image's `setupCommands`. The co
 lacks it, and everything goes to `~/.local`, so no root is needed. Agent commands run with
 `~/.local/bin` first on PATH.
 
+E2B is the exception: it fixes a machine's size per template, so its default is GitTerm's
+public templates, one per agent and size, built by the runtime release.
+
 An admin can start an image from a prebuilt instead, per provider, in the image's settings:
 `snapshot` (a snapshot that already has the agent) or, on E2B, `templateId`. The workspace then
-skips the install. GitTerm publishes none: on gitterm.dev the admin sets GitTerm's own, per
-agent and machine size, and self-hosted admins build theirs or use the default. The seed keeps
-whatever an admin set.
+skips the install. The seed keeps whatever an admin set, so gitterm.dev can set its own per
+agent and machine size, and self-hosted admins can use theirs.
 
 ### Providers today
 

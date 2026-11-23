@@ -255,13 +255,10 @@ export interface DirectProviderAdapter {
 export type E2BDirectProviderConfig = {
   type: "e2b";
   apiKey: string;
-  /**
-   * Optional. A template you built that already has OpenCode. Without it, workspaces use E2B's
-   * base template and install OpenCode when they start.
-   */
-  templateId?: string;
-  /** With `templateId`: `large` starts `<templateId>-lg`. Defaults to standard. */
+  /** Optional. Defaults to standard. */
   size?: "standard" | "large";
+  /** Optional. Overrides size with a specific E2B template. */
+  templateId?: string;
   timeoutMs?: number;
 };
 
