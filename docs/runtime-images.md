@@ -1,10 +1,11 @@
 # Runtime image versions
 
-Workspaces run on runtime images (`opeoginni/gitterm-opencode-server`, `gitterm-opencode`,
-`gitterm-t3code-server`, `gitterm-opencode-server-aws` on Docker Hub) and on the matching E2B
-templates, including the `gitterm-sandbox` template managed E2B sandboxes start from. These are
-versioned separately from the platform (`v1.x` server, web, proxy). The E2B templates are public,
-so self-hosted installs can start them from their own E2B account.
+Daytona and AWS workspaces run on runtime images (`opeoginni/gitterm-opencode-server`,
+`gitterm-opencode`, `gitterm-t3code-server`, `gitterm-opencode-server-aws` on Docker Hub),
+versioned separately from the platform (`v1.x` server, web, proxy). Other providers, E2B
+included, start from a plain base and install the agent when the workspace is created. GitTerm
+publishes no E2B templates or snapshots: an admin can set their own prebuilt per image (see
+[sandbox-standard.md](sandbox-standard.md#prebuilt-snapshots)).
 
 ## Run a release
 
@@ -16,12 +17,10 @@ Open **Actions → Release GitTerm → Run workflow** on the default branch.
 | `runtimes` | Publishes runtimes without bumping the platform version.                                               |
 | `platform` | Checks that the runtime line is available, then builds and releases the platform.                      |
 
-Runtime publishing needs `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, and `E2B_API_KEY` in
-GitHub Actions. All modes also need `E2B_SMOKE_API_KEY` from a separate E2B team. The
-workflow launches the public templates with that key, so private or missing templates
-block the release. The repository's GitHub token publishes the platform images and release.
+Runtime publishing needs `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` in GitHub Actions. The
+repository's GitHub token publishes the platform images and release.
 
-The runtime build resolves OpenCode and T3 Code once for Docker and E2B. Publish the
+The runtime build resolves OpenCode and T3 Code once. Publish the
 version of `@gitterm/cli` in `packages/cli/package.json` to npm before running a runtime release.
 The workflow builds release candidates and checks them before moving the runtime aliases.
 For the platform, it starts the self-hosted Compose stack and checks login and session
@@ -36,11 +35,11 @@ from the existing tag instead of bumping the version again.
 
 Each runtime release uses three tags:
 
-| Tag                      | Example  | Moves?              | Used by                                           |
-| ------------------------ | -------- | ------------------- | ------------------------------------------------- |
-| `latest` / E2B `default` | `latest` | On promotion        | Installs older than the runtime line (bare names) |
-| Runtime major            | `1`      | On promotion        | The seed, so every current install                |
-| Exact build              | `1.57.1` | Not by the workflow | Rollbacks and debugging                           |
+| Tag           | Example  | Moves?              | Used by                                           |
+| ------------- | -------- | ------------------- | ------------------------------------------------- |
+| `latest`      | `latest` | On promotion        | Installs older than the runtime line (bare names) |
+| Runtime major | `1`      | On promotion        | The seed, so every current install                |
+| Exact build   | `1.57.1` | Not by the workflow | Rollbacks and debugging                           |
 
 The workflow creates the exact tag from `<major>.<workflow run number>.<attempt>`.
 

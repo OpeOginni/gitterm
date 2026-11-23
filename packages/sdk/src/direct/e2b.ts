@@ -1,16 +1,19 @@
 import { createSandboxTransport } from "@gitterm/agent-runtime/sandbox/index";
-import { DIRECT_E2B_TEMPLATES } from "./provisioning.js";
+import { npmInstallCommand } from "@gitterm/schema/agent-install";
 import { createTransportDirectProvider } from "./transport.js";
 import type { DirectProviderAdapter, E2BDirectProviderConfig } from "./types.js";
 
-/** E2B templates already hold the agent. */
+/**
+ * E2B's base template, with OpenCode installed when the workspace starts; or your own template
+ * that already has it (`templateId`), at a size you built it in (`size: "large"` adds `-lg`).
+ */
 export function createE2BDirectProvider(config: E2BDirectProviderConfig): DirectProviderAdapter {
   if (!config.apiKey.trim()) throw new Error("E2B apiKey is required");
   const size = config.size ?? "standard";
   if (size !== "standard" && size !== "large") {
     throw new Error("E2B size must be standard or large");
   }
-  const template = config.templateId?.trim() || DIRECT_E2B_TEMPLATES[size];
+  const templateId = config.templateId?.trim();
   return createTransportDirectProvider({
     name: "e2b",
     capabilities: {
@@ -21,7 +24,9 @@ export function createE2BDirectProvider(config: E2BDirectProviderConfig): Direct
       supportsKeepAlive: true,
     },
     transport: createSandboxTransport({ provider: "e2b", apiKey: config.apiKey }),
-    template: async () => template,
+    template: async () => templateId || undefined,
+    ...(templateId && size === "large" ? { machine: { templateSuffix: "-lg" } } : {}),
     timeoutMs: config.timeoutMs ?? 10 * 60_000,
+    setupCommands: templateId ? [] : [npmInstallCommand(["@opencode/cli@2"])],
   });
 }

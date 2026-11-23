@@ -6,6 +6,7 @@ import {
   machineProfile,
   region,
   type CloudProvidersshAccessSupport,
+  type ImageProviderMetadata,
   type ProviderSettlement,
 } from "./schema/cloud";
 import { modelProvider } from "./schema/model-credentials";
@@ -15,6 +16,7 @@ import { MODEL_PROVIDERS } from "@gitterm/schema/model-providers";
 import { removeRetiredImageProviders, RETIRED_IMAGE_PROVIDERS } from "./seed-image-cleanup";
 import { RUNTIME_IMAGE_MAJOR } from "./runtime-image";
 import cliPackage from "../../cli/package.json" with { type: "json" };
+import { npmInstallCommand } from "@gitterm/schema/agent-install";
 import { PI_INSTALL_COMMAND } from "@gitterm/schema/pi";
 
 /**
@@ -228,8 +230,44 @@ const seedAgentTypes = [
 const [cliMajor = 0, cliMinor = 0] = cliPackage.version.split(".").map(Number);
 const GITTERM_CLI = `'@gitterm/cli@<${cliMajor === 0 ? `0.${cliMinor + 1}` : cliMajor + 1}.0'`;
 
-/** Built with the workspace templates; public, so any E2B account can start it. */
-const SANDBOX_E2B_TEMPLATE = `brightoginni123/gitterm-sandbox:${RUNTIME_IMAGE_MAJOR}`;
+/**
+ * How each agent installs on a provider without a prebuilt image: the default everywhere.
+ * An admin can set a prebuilt `snapshot` (or an E2B `templateId`) per image instead.
+ */
+const INSTALL_OPENCODE = npmInstallCommand(["@opencode/cli@2", GITTERM_CLI]);
+const INSTALL_T3CODE = npmInstallCommand([
+  "t3",
+  "@anthropic-ai/claude-code",
+  "@openai/codex",
+  "@opencode/cli@2",
+  GITTERM_CLI,
+]);
+
+/** E2B templates GitTerm used to seed. Images still pointing at one go back to the default. */
+const SEEDED_E2B_TEMPLATE = /^brightoginni123\/gitterm-/;
+
+/**
+ * The seed owns an image's provider settings, except the prebuilt an admin chose: a
+ * `snapshot`, or an E2B `templateId` that isn't one GitTerm seeded.
+ */
+function keepPrebuilt(
+  existing: ImageProviderMetadata | null | undefined,
+  seeded: ImageProviderMetadata,
+): ImageProviderMetadata {
+  const merged: Record<string, Record<string, unknown>> = { ...seeded } as never;
+  for (const [provider, options] of Object.entries(existing ?? {})) {
+    if (!options || typeof options !== "object") continue;
+    const { snapshot, templateId } = options as { snapshot?: unknown; templateId?: unknown };
+    const kept = {
+      ...(typeof snapshot === "string" && snapshot ? { snapshot } : {}),
+      ...(typeof templateId === "string" && templateId && !SEEDED_E2B_TEMPLATE.test(templateId)
+        ? { templateId }
+        : {}),
+    };
+    if (Object.keys(kept).length) merged[provider] = { ...merged[provider], ...kept };
+  }
+  return merged as ImageProviderMetadata;
+}
 
 /** E2B-only 4 vCPU template, superseded by the `-sm`/`-lg` size templates. */
 const RETIRED_IMAGE_NAMES = ["gitterm-opencode-server-lg"];
@@ -260,12 +298,7 @@ const seedImages = [
     agentTypeName: "OpenCode",
     providerMetadata: {
       railway: {},
-      e2b: {
-        // Use public, owner-qualified aliases so machine profiles can append -sm/-lg.
-        // Raw template IDs are not aliases and cannot have size suffixes appended.
-        templateId: `brightoginni123/gitterm-opencode-server:${RUNTIME_IMAGE_MAJOR}`,
-        sshTemplateId: `brightoginni123/gitterm-opencode-server-with-ssh:${RUNTIME_IMAGE_MAJOR}`,
-      },
+      e2b: { setupCommands: [INSTALL_OPENCODE] },
       daytona: {
         image: `opeoginni/gitterm-opencode-server:${RUNTIME_IMAGE_MAJOR}`,
         resources: { cpu: 2, memory: 4 },
@@ -279,11 +312,11 @@ const seedImages = [
       },
       vercel: {
         runtime: "node22" as const,
-        setupCommands: [`npm install -g @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`],
+        setupCommands: [INSTALL_OPENCODE],
         vcpus: 2,
       },
       boat: {
-        setupCommands: [`npm install -g @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`],
+        setupCommands: [INSTALL_OPENCODE],
       },
     },
   },
@@ -293,10 +326,7 @@ const seedImages = [
     agentTypeName: "T3Code",
     providerMetadata: {
       railway: {},
-      // Built by the E2B template job in Release GitTerm.
-      e2b: {
-        templateId: `brightoginni123/gitterm-t3code-server:${RUNTIME_IMAGE_MAJOR}`,
-      },
+      e2b: { setupCommands: [INSTALL_T3CODE] },
       daytona: {
         image: `opeoginni/gitterm-t3code-server:${RUNTIME_IMAGE_MAJOR}`,
         resources: { cpu: 2, memory: 4 },
@@ -310,20 +340,14 @@ const seedImages = [
       },
       vercel: {
         runtime: "node22" as const,
-        setupCommands: [
-          `npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`,
-        ],
+        setupCommands: [INSTALL_T3CODE],
         vcpus: 2,
       },
       boat: {
-        setupCommands: [
-          `npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`,
-        ],
+        setupCommands: [INSTALL_T3CODE],
       },
       exedev: {
-        setupCommands: [
-          `npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`,
-        ],
+        setupCommands: [INSTALL_T3CODE],
       },
     },
   },
@@ -333,6 +357,7 @@ const seedImages = [
     imageId: "node:24-bookworm",
     agentTypeName: "Pi",
     providerMetadata: {
+      e2b: { setupCommands: [PI_INSTALL_COMMAND] },
       daytona: {
         image: "node:24-bookworm",
         resources: { cpu: 2, memory: 4 },
@@ -359,33 +384,16 @@ const seedMachineProfiles: Array<{
   providerOptions: Record<string, unknown>;
   isDefault: boolean;
 }> = [
-  // E2B fixes resources per template; build.ts builds each template at every size.
-  {
-    providerName: "E2B",
-    key: "small",
-    name: "Small",
-    vcpus: 2,
-    memoryGb: 4,
-    providerOptions: { templateSuffix: "-sm" },
-    isDefault: false,
-  },
+  // E2B fixes resources per template. Without an admin's templates, workspaces start from
+  // E2B's base template; admins add profiles for their own sized templates (templateSuffix).
   {
     providerName: "E2B",
     key: "standard",
     name: "Standard",
-    vcpus: 4,
-    memoryGb: 8,
+    vcpus: 2,
+    memoryGb: 0.5,
     providerOptions: {},
     isDefault: true,
-  },
-  {
-    providerName: "E2B",
-    key: "large",
-    name: "Large",
-    vcpus: 8,
-    memoryGb: 8,
-    providerOptions: { templateSuffix: "-lg" },
-    isDefault: false,
   },
   {
     providerName: "Boat",
@@ -690,6 +698,25 @@ export async function seedDatabase(): Promise<void> {
       });
     }
   }
+  // Sizes GitTerm used to seed for E2B, which need its templates. Ones an admin didn't change
+  // are turned off; an admin who builds sized templates sets them up again.
+  const e2bProviderId = providerMap.get("E2B");
+  for (const [key, templateSuffix] of [
+    ["small", "-sm"],
+    ["large", "-lg"],
+  ] as const) {
+    if (!e2bProviderId) break;
+    const retired = await db.query.machineProfile.findFirst({
+      where: and(eq(machineProfile.cloudProviderId, e2bProviderId), eq(machineProfile.key, key)),
+    });
+    if (retired?.isEnabled && retired.providerOptions?.templateSuffix === templateSuffix) {
+      await db
+        .update(machineProfile)
+        .set({ isEnabled: false, isDefault: false, updatedAt: new Date() })
+        .where(eq(machineProfile.id, retired.id));
+      console.log(`[seed]   Turned off the E2B "${key}" size, which needs your own templates`);
+    }
+  }
 
   // =========================================================================
   // Seed Agent Types
@@ -801,7 +828,7 @@ export async function seedDatabase(): Promise<void> {
         .set({
           imageId: img.imageId,
           agentTypeId,
-          providerMetadata: img.providerMetadata ?? {},
+          providerMetadata: keepPrebuilt(existing.providerMetadata, img.providerMetadata ?? {}),
           isEnabled: true,
           updatedAt: new Date(),
         })
@@ -824,29 +851,25 @@ export async function seedDatabase(): Promise<void> {
     }
   }
 
-  // Managed E2B sandboxes (migration 0044's image row) start from the public sandbox
-  // template on the runtime line. A template an admin set by hand is kept.
+  // Managed E2B sandboxes (migration 0044's image row) start from E2B's base template
+  // unless an admin chose another. One GitTerm used to seed goes back to base.
   const sandboxImage = await db.query.image.findFirst({
     where: eq(image.name, "gitterm-sandbox-e2b-base"),
   });
   const sandboxTemplate = sandboxImage?.providerMetadata?.e2b?.templateId;
-  if (
-    sandboxImage &&
-    sandboxTemplate !== SANDBOX_E2B_TEMPLATE &&
-    /^(base|gitterm-sandbox|brightoginni123\/gitterm-sandbox(:.+)?)$/.test(sandboxTemplate ?? "")
-  ) {
+  if (sandboxImage && SEEDED_E2B_TEMPLATE.test(sandboxTemplate ?? "")) {
     await db
       .update(image)
       .set({
-        imageId: SANDBOX_E2B_TEMPLATE,
+        imageId: "base",
         providerMetadata: {
           ...sandboxImage.providerMetadata,
-          e2b: { ...sandboxImage.providerMetadata?.e2b, templateId: SANDBOX_E2B_TEMPLATE },
+          e2b: { ...sandboxImage.providerMetadata?.e2b, templateId: "base" },
         },
         updatedAt: new Date(),
       })
       .where(eq(image.id, sandboxImage.id));
-    console.log(`[seed]   Pointed managed E2B sandboxes at "${SANDBOX_E2B_TEMPLATE}"`);
+    console.log(`[seed]   Pointed managed E2B sandboxes back at E2B's base template`);
   }
 
   // =========================================================================

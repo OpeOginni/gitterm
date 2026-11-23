@@ -8,7 +8,8 @@ import { RUNTIME_IMAGE_MAJOR } from "@gitterm/db/runtime-image";
 import { GITTERM_CLI_PACKAGE } from "./cli-package";
 import "dotenv/config";
 
-const OWNER = "brightoginni123";
+/** The E2B team whose templates `--verify` and `--promote` use: yours, when building your own. */
+const OWNER = process.env.E2B_TEMPLATE_OWNER ?? "brightoginni123";
 const families = [
   { agent: "opencode", name: "gitterm-opencode-server", create: createOpencodeServerTemplate },
   {

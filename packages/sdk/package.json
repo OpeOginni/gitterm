@@ -60,6 +60,7 @@
   "devDependencies": {
     "@gitterm/agent-runtime": "workspace:*",
     "@gitterm/api": "workspace:*",
+    "@gitterm/schema": "workspace:*",
     "@opencode/client": "2.3.0",
     "@trpc/server": "catalog:",
     "@types/bun": "^1.2.6",

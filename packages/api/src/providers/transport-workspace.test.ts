@@ -22,7 +22,11 @@ const fake = {
   async run(_id: string, command: string, options: { cwd?: string } = {}) {
     commands.push({ command, cwd: options.cwd });
     if (failOn && command.includes(failOn)) return { exitCode: 1, stdout: "", stderr: "nope" };
-    return { exitCode: 0, stdout: command === "mint-token" ? "pairing-token\n" : "", stderr: "" };
+    return {
+      exitCode: 0,
+      stdout: command.endsWith("mint-token") ? "pairing-token\n" : "",
+      stderr: "",
+    };
   },
   async writeFile(_id: string, path: string, data: Uint8Array) {
     files.set(path, Buffer.from(data).toString());
@@ -174,12 +178,11 @@ function recorder(
     },
     async run(_id: string, command: string) {
       ran.push(command);
-      const stdout =
-        command === "mint-token"
-          ? "pairing-token\n"
-          : command.includes('"$HOME"')
-            ? sandboxHome
-            : "";
+      const stdout = command.endsWith("mint-token")
+        ? "pairing-token\n"
+        : command.includes('"$HOME"')
+          ? sandboxHome
+          : "";
       return { exitCode: 0, stdout, stderr: "" };
     },
     async writeFile(_id: string, path: string, data: Uint8Array) {
@@ -269,7 +272,7 @@ test("an image's setup commands install the agent, except from a project snapsho
     // No image: the provider's own default image, with the agent installed before the clone.
     expect(inputs[0]!.template).toBeUndefined();
     expect(inputs[0]!.machine).toEqual({ size: "large" });
-    const install = ran.indexOf("npm install -g @opencode/cli@2");
+    const install = ran.findIndex((command) => command.endsWith("npm install -g @opencode/cli@2"));
     expect(install).toBeGreaterThan(-1);
     expect(install).toBeLessThan(ran.findIndex((command) => command.includes("git clone")));
 
@@ -279,7 +282,7 @@ test("an image's setup commands install the agent, except from a project snapsho
       snapshot: "snap1",
       imageProviderMetadata: metadata as never,
     });
-    expect(ran).not.toContain("npm install -g @opencode/cli@2");
+    expect(ran.some((command) => command.includes("npm install -g @opencode/cli@2"))).toBe(false);
   } finally {
     mocks[0]!.mockResolvedValue(fake as never);
   }
@@ -329,4 +332,47 @@ test("a transport that runs resume commands itself is not sent the script", asyn
   commands.length = 0;
   await withSandboxHandles(gittermProvider).resumeWorkspace("sandbox:gitterm:sbx1");
   expect(commands).toEqual([]);
+});
+
+test("an admin's prebuilt snapshot starts the workspace and replaces the install", async () => {
+  const { ran, inputs } = recorder("daytona", "/home/daytona");
+  try {
+    const provider = new TransportWorkspaceProvider("daytona", { label: "Daytona" });
+    await provider.createWorkspace({
+      ...config(),
+      imageProviderMetadata: {
+        daytona: { image: "node:24", setupCommands: ["install-agent"], snapshot: "agent-snap" },
+      },
+    });
+    expect(inputs[0]).toMatchObject({ snapshot: "agent-snap" });
+    expect(ran).not.toContain("install-agent");
+    // Unlike a project snapshot, it holds no checkout: the repository is cloned.
+    expect(ran.some((command) => command.includes("git clone --branch 'main'"))).toBe(true);
+    expect(ran.some((command) => command.includes("git fetch --prune origin"))).toBe(false);
+
+    ran.length = 0;
+    await provider.createWorkspace({
+      ...config(),
+      imageProviderMetadata: { daytona: { image: "node:24", setupCommands: ["install-agent"] } },
+    });
+    expect(ran).toContain('export PATH="$HOME/.local/bin:$PATH"; install-agent');
+  } finally {
+    mocks[0]!.mockResolvedValue(fake as never);
+  }
+});
+
+test("an admin's E2B template already has the agent", async () => {
+  const { ran, inputs } = recorder("e2b", "/home/user");
+  try {
+    await new TransportWorkspaceProvider("e2b", { label: "E2B" }).createWorkspace({
+      ...config(),
+      imageProviderMetadata: {
+        e2b: { templateId: "acme/opencode", setupCommands: ["install-agent"] },
+      },
+    });
+    expect(inputs[0]!.template).toBe("acme/opencode");
+    expect(ran.some((command) => command.includes("install-agent"))).toBe(false);
+  } finally {
+    mocks[0]!.mockResolvedValue(fake as never);
+  }
 });

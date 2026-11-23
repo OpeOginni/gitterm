@@ -93,6 +93,20 @@ A provider without a command API runs the GitTerm command server
 AWS plain sandboxes do. A provider that only offers SSH needs an SSH connection (see
 [Next steps](#next-steps)).
 
+### Prebuilt snapshots
+
+By default, a workspace starts from a plain base (the provider's default, a public image, or
+a runtime image) and installs its agent with the image's `setupCommands`. The commands use
+`npmInstallCommand` (`packages/schema/src/agent-install.ts`), which installs Node when the base
+lacks it, and everything goes to `~/.local`, so no root is needed. Agent commands run with
+`~/.local/bin` first on PATH.
+
+An admin can start an image from a prebuilt instead, per provider, in the image's settings:
+`snapshot` (a snapshot that already has the agent) or, on E2B, `templateId`. The workspace then
+skips the install. GitTerm publishes none: on gitterm.dev the admin sets GitTerm's own, per
+agent and machine size, and self-hosted admins build theirs or use the default. The seed keeps
+whatever an admin set.
+
 ### Providers today
 
 | Provider                                     | Workspaces                   | Notes                                                                                                                                                            |
