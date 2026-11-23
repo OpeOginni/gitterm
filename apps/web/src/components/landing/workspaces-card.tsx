@@ -39,8 +39,8 @@ const WORKSPACES: {
   {
     id: "api",
     repo: "acme/api",
-    logo: "/opencode.svg",
-    on: "OpenCode on Railway",
+    logo: "/pi.svg",
+    on: "Pi on Boat",
     client: { icon: <Globe className={icon} />, name: "Web app" },
   },
   {

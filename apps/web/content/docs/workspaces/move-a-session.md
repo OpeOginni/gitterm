@@ -18,6 +18,8 @@ While the session is in the cloud, nothing syncs: later local edits are not uplo
 
   See the [Cloud plugin reference](/docs/reference/cloud-plugin).
 
+  Or run `npx @gitterm/cli setup`, which installs it, sets up your other agents and signs you in.
+
 - You have a Gitterm account. If you aren't signed in, `/cloud` asks you to sign in or create one first.
 - Recommended: a model under **Models** in Gitterm. Your local model keys don't move; without one, the cloud agent uses free models. `/cloud` suggests adding one if you have none.
 - For a private repository, a GitHub connection under **Integrations** is best. Without one, `/cloud` uploads the repository's history instead (up to 25 MiB), and the cloud checkout has no remote, so the agent can't push or pull there.
@@ -132,11 +134,13 @@ Every option is listed in the [Cloud plugin reference](/docs/reference/cloud-plu
 
 T3 Code threads that run Claude Code, and Pi sessions, move with the `gitterm` CLI and the `gitterm-cloud` skill. Codex threads don't move yet. An OpenCode session can also move with `gitterm move`, from its own shell or with `--agent opencode --session <id>`.
 
-1. Install the skill for your agents, once:
+1. Set up your agents and sign in, once:
 
    ```sh
-   gitterm setup
+   npx @gitterm/cli setup
    ```
+
+   It asks before setting up each agent it finds: the OpenCode plugin, the Pi extension and T3 Code's linked environments. It also installs the `gitterm-cloud` skill for agents that read skills, and offers to sign you in or create an account. `--yes` sets up every agent found without asking.
 
 2. In the thread, ask the agent to move to the cloud. It runs `gitterm move "<what to do next>"`, which copies the checkout and the conversation into a new T3 Code workspace and prints a link to the cloud thread. Your T3 Code is linked to the workspace, so the link opens there.
 3. To bring it back, ask the same thread to return. It runs `gitterm return`, which waits until its reply ends, then brings the cloud's commits, changes and conversation back into that thread.
