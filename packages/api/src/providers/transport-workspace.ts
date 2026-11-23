@@ -1,7 +1,11 @@
 import env from "@gitterm/env/server";
-import type { SandboxTransport } from "@gitterm/agent-runtime/sandbox/types";
-import { captureAgentAccessCredential } from "../access-credential";
-import { BeforeAgentSetupError, WorkspaceProvisionError } from "../compute";
+import {
+  SANDBOX_PROVIDER_PROFILES,
+  type SandboxProviderKey,
+  type SandboxTransport,
+} from "@gitterm/agent-runtime/sandbox/types";
+import { captureAgentAccessCredential } from "./access-credential";
+import { BeforeAgentSetupError, WorkspaceProvisionError } from "./compute";
 import type {
   ComputeProvider,
   PersistentWorkspaceConfig,
@@ -11,30 +15,45 @@ import type {
   WorkspaceInfo,
   WorkspaceProvisioningSpec,
   WorkspaceStatusResult,
-} from "../compute";
-import { repositoryCheckoutCommand } from "../project-snapshot";
-import { inlineGitAuthCommands } from "../git-auth";
-import { createProvisionLogger } from "../provision-logger";
+} from "./compute";
+import { repositoryCheckoutCommand } from "./project-snapshot";
+import { inlineGitAuthCommands } from "./git-auth";
+import { createProvisionLogger } from "./provision-logger";
 import type {
   WorkspaceSSHAccess,
   WorkspaceSSHAccessCleanupConfig,
   WorkspaceSSHAccessConfig,
-} from "../ssh-access";
+} from "./ssh-access";
 import {
   managedSandboxTransport,
   parseSandboxHandle,
   sandboxHandle,
-} from "../../service/sandbox-transport";
-import { getWorkspaceIdleTimeoutMs } from "../../service/workspace-timeouts";
-import { proxyRouteHeaders } from "../../service/proxy-route-headers";
+} from "../service/sandbox-transport";
+import { getWorkspaceIdleTimeoutMs } from "../service/workspace-timeouts";
+import { proxyRouteHeaders } from "../service/proxy-route-headers";
 
 const DEFAULT_AGENT_SERVE = {
   command: "opencode serve --hostname 0.0.0.0 --port 4096",
   port: 4096,
 } as const;
 
-/** Mirrors `resolveProjectDirectory` for the `gitterm` key: repos live in ~/workspace/<name>. */
-const WORKSPACE_ROOT = "/home/user/workspace";
+/** Where a workspace's checkout and the agent's resume script live, below the sandbox user's home. */
+const workspaceRoot = (home: string) => `${home}/workspace`;
+const resumeScript = (home: string) => `${home}/.gitterm/resume.sh`;
+
+/**
+ * Starts the agent again after a resume, on transports that don't run a resume command
+ * themselves. Plain sandboxes have no script, so this does nothing for them.
+ */
+export async function runResumeScript(transport: SandboxTransport, id: string) {
+  if (SANDBOX_PROVIDER_PROFILES[transport.provider].resumeCommand) return;
+  const script = quote(resumeScript(transport.home));
+  const result = await transport.run(id, `[ ! -f ${script} ] || bash ${script}`, {
+    timeoutMs: 120_000,
+  });
+  if (result.exitCode !== 0)
+    throw new Error(`The agent didn't start after the resume: ${result.stderr || result.stdout}`);
+}
 
 const quote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
 
@@ -57,19 +76,37 @@ function startAgentCommand(serve: { command: string; port: number }, repoDir: st
   return `cd ${quote(repoDir)} && { ${answers} || { ${start} }; } && { ${wait}; }`;
 }
 
+export type TransportWorkspaceOptions = {
+  /** The provider's name in messages to the user. */
+  label: string;
+  /** Machine options used when the image and machine profile set none. */
+  defaultMachine?: Record<string, unknown>;
+};
+
 /**
- * Agent workspaces on Gitterm's own sandboxes (gitterm.dev only). Built from the generic
- * sandbox calls: create with the image and size, run commands, write files, and open the
- * agent's port. The workspace keeps a `sandbox:gitterm:<id>` handle, so pause, resume,
- * terminate, status, keep-alive and exec go through the sandbox transport
- * (`withSandboxHandles`). Workspaces keep their files while paused, so they are always
- * persistent; there is no SSH access.
+ * Agent workspaces on any sandbox provider, built only from the `SandboxTransport` calls:
+ * create with the image and machine, run commands, write files, and open the agent's port.
+ * Adding a provider's transport is all a provider needs for workspaces.
+ *
+ * The image's provider metadata (`imageProviderMetadata[provider]`, with the machine
+ * profile's options merged in) gives `image` (or `template`), the transport's template, and
+ * the rest is passed on as the transport's `machine` options.
+ *
+ * A resume starts the agent again: through `resumeCommand` where the transport runs one,
+ * otherwise through `~/.gitterm/resume.sh`, which `withSandboxHandles` runs.
+ *
+ * The workspace keeps a `sandbox:<provider>:<id>` handle, so pause, resume, terminate,
+ * status, keep-alive and exec go through the transport (`withSandboxHandles`). The sandbox is
+ * its own volume, so workspaces are always persistent; there is no SSH access.
  */
-export class GittermProvider implements ComputeProvider {
-  readonly name = "gitterm";
+export class TransportWorkspaceProvider implements ComputeProvider {
+  constructor(
+    readonly name: SandboxProviderKey,
+    private readonly options: TransportWorkspaceOptions,
+  ) {}
 
   private transport(): Promise<SandboxTransport> {
-    return managedSandboxTransport("gitterm");
+    return managedSandboxTransport(this.name);
   }
 
   private getDomain(subdomain: string): string {
@@ -131,36 +168,41 @@ export class GittermProvider implements ComputeProvider {
       config.workspaceId,
       spec?.repo?.authToken ? [spec.repo.authToken] : [],
     );
-    const metadata = config.imageProviderMetadata?.gitterm as
-      | { image?: string; size?: string }
+    const { label, defaultMachine } = this.options;
+    const nativeResume = SANDBOX_PROVIDER_PROFILES[this.name].resumeCommand;
+    const metadata = config.imageProviderMetadata?.[this.name] as
+      | ({ image?: string; template?: string } & Record<string, unknown>)
       | undefined;
-    if (!metadata?.image) throw new Error("This image is not available on Gitterm.");
+    const { image, template, ...profile } = metadata ?? {};
+    if (!image && !template) throw new Error(`This image is not available on ${label}.`);
+    const machine = Object.keys(profile).length ? profile : defaultMachine;
     const serve = spec?.agent.serve ?? DEFAULT_AGENT_SERVE;
-    const repoDir = `${WORKSPACE_ROOT}/${spec?.repo?.name ?? "workspace"}`;
     const transport = await this.transport();
+    const repoDir = `${workspaceRoot(transport.home)}/${spec?.repo?.name ?? "workspace"}`;
+    const resume = startAgentCommand(serve, repoDir);
     const environment = Object.fromEntries(
       Object.entries({ ...spec?.agent.env, ...config.environmentVariables }).filter(
         ([name, value]) => name !== "AGENT_FILES_BASE64" && value !== undefined,
       ),
     ) as Record<string, string>;
 
-    const size = metadata.size ?? "medium";
     const created = await logger.step("create-sandbox", async () =>
       transport
         .create({
           labels: { gitterm_workspace: config.workspaceId },
           timeoutMs: await getWorkspaceIdleTimeoutMs(config.userId),
           onTimeout: "pause",
-          template: metadata.image,
-          machine: { size },
+          template: image ?? template,
+          ...(machine ? { machine } : {}),
           env: environment,
-          resumeCommand: startAgentCommand(serve, repoDir),
+          ...(nativeResume ? { resumeCommand: resume } : {}),
           ...(config.snapshot ? { snapshot: config.snapshot } : {}),
         })
         .catch((error: unknown) => {
+          const size = typeof machine?.size === "string" ? `a ${machine.size}` : "a";
           throw new WorkspaceProvisionError(
             "SERVICE_UNAVAILABLE",
-            `Gitterm couldn't start a ${size} machine. ${error instanceof Error ? error.message : ""}`.trim(),
+            `${label} couldn't start ${size} machine. ${error instanceof Error ? error.message : ""}`.trim(),
           );
         }),
     );
@@ -168,7 +210,7 @@ export class GittermProvider implements ComputeProvider {
 
     try {
       // Recorded first, so a sandbox whose setup fails is still deleted if the cleanup below fails.
-      await config.onProvisioned?.({ externalServiceId: sandboxHandle("gitterm", id) });
+      await config.onProvisioned?.({ externalServiceId: sandboxHandle(this.name, id) });
       await logger.step("create-workspace-directory", () =>
         this.run(transport, id, `mkdir -p ${quote(repoDir)}`),
       );
@@ -222,6 +264,17 @@ export class GittermProvider implements ComputeProvider {
       await logger.step("write-agent-files", () =>
         this.writeAgentFiles(transport, id, spec, repoDir),
       );
+      if (!nativeResume) {
+        const script = resumeScript(transport.home);
+        await logger.step("write-resume-script", async () => {
+          await this.run(
+            transport,
+            id,
+            `mkdir -p ${quote(script.slice(0, script.lastIndexOf("/")))}`,
+          );
+          await transport.writeFile(id, script, Buffer.from(`${resume}\n`));
+        });
+      }
       if (spec?.beforeAgentCommand) {
         await logger.step("before-agent-setup", () =>
           this.run(transport, id, spec.beforeAgentCommand!, repoDir, 600_000).catch(
@@ -241,7 +294,7 @@ export class GittermProvider implements ComputeProvider {
         ),
       );
       await logger.step("start-agent-server", () =>
-        this.run(transport, id, startAgentCommand(serve, repoDir)).catch(async () => {
+        this.run(transport, id, resume).catch(async () => {
           const log = await transport
             .run(id, "tail -c 1500 /tmp/agent-server.log", { timeoutMs: 10_000 })
             .then((result) => result.stdout.trim())
@@ -256,13 +309,13 @@ export class GittermProvider implements ComputeProvider {
       if (postStartCommand) {
         await logger.step("run-post-start-command", () =>
           this.run(transport, id, postStartCommand, repoDir).catch((error) =>
-            console.error("Gitterm post-start command failed:", error),
+            console.error(`${label} post-start command failed:`, error),
           ),
         );
       }
       const preview = await logger.step("open-agent-port", () => transport.preview(id, serve.port));
       return {
-        externalServiceId: sandboxHandle("gitterm", id),
+        externalServiceId: sandboxHandle(this.name, id),
         upstreamUrl: preview.url,
         upstreamAccess: { headers: proxyRouteHeaders(preview.headers) },
         domain: this.getDomain(config.subdomain),
@@ -280,7 +333,7 @@ export class GittermProvider implements ComputeProvider {
     return this.provisionWorkspace(config);
   }
 
-  /** Every Gitterm workspace keeps its files while paused; the sandbox is its volume. */
+  /** Every such workspace keeps its files while paused; the sandbox is its volume. */
   async createPersistentWorkspace(
     config: PersistentWorkspaceConfig,
   ): Promise<PersistentWorkspaceInfo> {
@@ -288,22 +341,22 @@ export class GittermProvider implements ComputeProvider {
     return { ...info, externalVolumeId: info.externalServiceId, volumeCreatedAt: new Date() };
   }
 
-  // Lifecycle calls arrive with the `sandbox:gitterm:<id>` handle and are served by
-  // `withSandboxHandles`; reaching these means the handle was not a Gitterm sandbox.
+  // Lifecycle calls arrive with the `sandbox:<provider>:<id>` handle and are served by
+  // `withSandboxHandles`; reaching these means the handle was not one of this provider's.
   async pauseWorkspace(externalId: string): Promise<void> {
-    throw new Error(`Not a Gitterm workspace: ${externalId}`);
+    throw new Error(`Not a ${this.options.label} workspace: ${externalId}`);
   }
 
   async resumeWorkspace(externalId: string): Promise<void> {
-    throw new Error(`Not a Gitterm workspace: ${externalId}`);
+    throw new Error(`Not a ${this.options.label} workspace: ${externalId}`);
   }
 
   async terminateWorkspace(externalId: string): Promise<void> {
-    throw new Error(`Not a Gitterm workspace: ${externalId}`);
+    throw new Error(`Not a ${this.options.label} workspace: ${externalId}`);
   }
 
   async getStatus(externalId: string): Promise<WorkspaceStatusResult> {
-    throw new Error(`Not a Gitterm workspace: ${externalId}`);
+    throw new Error(`Not a ${this.options.label} workspace: ${externalId}`);
   }
 
   async createOrGetExposedPortDomain(
@@ -311,7 +364,8 @@ export class GittermProvider implements ComputeProvider {
     port: number,
   ): Promise<{ domain: string; externalPortDomainId?: string; upstreamAccess?: UpstreamAccess }> {
     const handle = parseSandboxHandle(externalId);
-    if (handle?.provider !== "gitterm") throw new Error(`Not a Gitterm workspace: ${externalId}`);
+    if (handle?.provider !== this.name)
+      throw new Error(`Not a ${this.options.label} workspace: ${externalId}`);
     const preview = await (await this.transport()).preview(handle.id, port);
     return {
       domain: preview.url,
@@ -324,10 +378,14 @@ export class GittermProvider implements ComputeProvider {
   async removeExposedPortDomain(_externalServiceDomainId: string): Promise<void> {}
 
   async getWorkspaceSSHAccess(_config: WorkspaceSSHAccessConfig): Promise<WorkspaceSSHAccess> {
-    throw new Error("Gitterm workspaces do not offer SSH access.");
+    throw new Error(`${this.options.label} workspaces do not offer SSH access.`);
   }
 
   async revokeWorkspaceSSHAccess(_config: WorkspaceSSHAccessCleanupConfig): Promise<void> {}
 }
 
-export const gittermProvider = new GittermProvider();
+/** Gitterm's own sandboxes (gitterm.dev only), which restart the agent on resume themselves. */
+export const gittermProvider = new TransportWorkspaceProvider("gitterm", {
+  label: "Gitterm",
+  defaultMachine: { size: "medium" },
+});
