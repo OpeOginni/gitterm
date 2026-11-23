@@ -1,1 +1,0 @@
-DROP TABLE "workspace_runtime_bundle" CASCADE;
