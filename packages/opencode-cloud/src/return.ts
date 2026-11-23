@@ -26,8 +26,8 @@ import {
   RESTORE_SCRIPT,
   runLocalScript,
   shellQuote,
-} from "./restore";
-import { checkoutRoot, snapshotSummary } from "./snapshot";
+} from "@gitterm/move/checkout/restore";
+import { checkoutRoot, snapshotSummary } from "@gitterm/move/checkout/snapshot";
 
 export type ReturnDependencies = {
   local: OpenCodeClient;

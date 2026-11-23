@@ -47,6 +47,7 @@
     "@opencode/client": "^2.3.0"
   },
   "devDependencies": {
+    "@gitterm/move": "workspace:*",
     "@gitterm/sdk": "workspace:*",
     "@opencode/plugin": "^2.3.0",
     "@opencode/util": "2.3.0",

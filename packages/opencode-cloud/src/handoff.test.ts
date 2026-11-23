@@ -19,7 +19,7 @@ import {
   withoutGithub,
   type HandoffRecord,
 } from "./handoff";
-import { git } from "./snapshot";
+import { git } from "@gitterm/move/checkout/snapshot";
 
 let root: string;
 let server: ReturnType<typeof Bun.serve> | undefined;

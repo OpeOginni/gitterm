@@ -11,7 +11,7 @@ import {
   type HandoffRecord,
 } from "../packages/opencode-cloud/src/handoff";
 import { returnSession } from "../packages/opencode-cloud/src/return";
-import { git } from "../packages/opencode-cloud/src/snapshot";
+import { git } from "../packages/move/src/checkout/snapshot";
 
 const binary = process.env.OPENCODE_HANDOFF_SMOKE_BINARY;
 if (!binary)
