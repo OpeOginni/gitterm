@@ -1,10 +1,10 @@
 ---
 title: Sandbox tools
 nav: Tools
-description: Every sandbox_* tool the sandbox plugin gives your agent, with its arguments.
+description: Every sandbox_* tool Gitterm gives OpenCode and Pi, with its arguments, and the matching CLI commands.
 ---
 
-This is the reference for the `sandbox_*` tools that `@gitterm/opencode-sandbox` adds to your local agent. You never call these yourself: you ask in plain words, and the agent picks the tools and arguments. Use this page to read what the agent did, or to write instructions for it. The tools work only after you add a sandbox account; see [Setup](/docs/sandboxes/setup).
+This is the reference for the `sandbox_*` tools that `@gitterm/opencode` adds to OpenCode and Gitterm's extension adds to Pi. Codex, Claude Code and other agents run the matching [CLI commands](#for-agents-without-the-tools) instead. You never call these yourself: you ask in plain words, and the agent picks the tools and arguments. Use this page to read what the agent did, or to write instructions for it. The tools work only after you add a sandbox account; see [Setup](/docs/sandboxes/setup).
 
 Every tool except `sandbox_create` and `sandbox_list` takes a `sandboxId`, from `sandbox_create` or `sandbox_list`. A sandbox belongs to the account that created it. Using it while another account is selected is an error. A managed sandbox that paused while idle resumes when a tool next uses it; see [Pausing](/docs/sandboxes/providers#pausing-managed-only).
 
@@ -20,10 +20,11 @@ Sandbox output is wrapped in an `untrusted` block that tells the model to treat 
 | [`sandbox_preview`](#sandbox_preview)   | Exposes a port, optionally starting a server                      | If it starts a server or a local proxy |
 | [`sandbox_artifact`](#sandbox_artifact) | Downloads a file to a staging directory                           | No                                     |
 | [`sandbox_apply`](#sandbox_apply)       | Copies a downloaded file into the checkout                        | Yes, every time                        |
+| [`sandbox_pause`](#sandbox_pause)       | Pauses a sandbox, keeping its files                               | No                                     |
 | [`sandbox_destroy`](#sandbox_destroy)   | Deletes a sandbox                                                 | No                                     |
 | [`sandbox_snapshot`](#sandbox_snapshot) | Saves or deletes a setup snapshot (with the `snapshots` option)   | Yes                                    |
 
-The approval actions and how to pre-approve them are in [Setup](/docs/sandboxes/setup#approvals).
+The approval column is OpenCode's. Pi asks less; both are in [Approvals](/docs/sandboxes/setup#approvals). In Pi, `sandbox_preview` has no `localProxy`.
 
 ## sandbox_create
 
@@ -31,7 +32,7 @@ Creates a sandbox. Billing starts now. No coding agent runs in it.
 
 | Argument          | Type    | Required | Default                                   | What it does                                                                                                                                                                                                                                                                                          |
 | ----------------- | ------- | -------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`            | string  | No       | `OpenCode sandbox`                        | Display name.                                                                                                                                                                                                                                                                                         |
+| `name`            | string  | No       | `OpenCode sandbox` or `Pi sandbox`        | Display name.                                                                                                                                                                                                                                                                                         |
 | `purpose`         | string  | No       | None                                      | Why it exists, for example `run integration tests`.                                                                                                                                                                                                                                                   |
 | `lifetimeMinutes` | integer | No       | `defaultLifetimeMinutes` (30)             | When the sandbox ends. At most `maxLifetimeMinutes`.                                                                                                                                                                                                                                                  |
 | `publicPreviews`  | boolean | No       | The `publicPreviews` option, else `false` | Makes every preview reachable by anyone with the URL. Fixed for the sandbox's life. Needs a separate approval unless the plugin's `publicPreviews` option is on. Has no effect where previews are always private; see [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider). |
@@ -80,7 +81,7 @@ Job statuses, timeouts, and how `secretEnv` values stay out of output: [Jobs and
 
 ## sandbox_job
 
-Shows a job's status and part of its output, or cancels the job. It still works after OpenCode restarts.
+Shows a job's status and part of its output, or cancels the job. It still works after the agent restarts.
 
 | Argument      | Type    | Required | Default    | What it does                                        |
 | ------------- | ------- | -------- | ---------- | --------------------------------------------------- |
@@ -133,6 +134,14 @@ Copies a downloaded file into your checkout. It refuses if the target changed lo
 
 When apply refuses and what to do: [Artifacts](/docs/sandboxes/artifacts#when-apply-refuses).
 
+## sandbox_pause
+
+Pauses a sandbox so it stops billing, keeping its files and installs. The next tool that uses it resumes it. Running jobs and preview servers are frozen until then, and no message arrives for them. Offered where the provider can pause with files kept.
+
+| Argument    | Type   | Required | Default | What it does      |
+| ----------- | ------ | -------- | ------- | ----------------- |
+| `sandboxId` | string | Yes      | None    | Sandbox to pause. |
+
 ## sandbox_destroy
 
 Deletes the sandbox. It reports the sandbox terminated only once the provider confirms it is gone, and closes any local preview proxies for it.
@@ -154,3 +163,23 @@ Saves a sandbox as a setup snapshot that new sandboxes can start from, or delete
 | `forThisCheckout` | boolean | No        | `true`  | Ties the snapshot to this checkout, so it is offered here and flagged when dependency files change. |
 | `replace`         | string  | No        | None    | Id of a snapshot this one replaces. It is deleted once the new one is saved.                        |
 | `snapshotId`      | string  | To delete | None    | The snapshot to delete.                                                                             |
+
+## For agents without the tools
+
+Codex, Claude Code and other agents use these commands, as the `gitterm-sandbox` skill shows them. Each takes `--json`. See [CLI reference](/docs/reference/cli#sandboxes).
+
+| Tool               | Command                                                      |
+| ------------------ | ------------------------------------------------------------ |
+| `sandbox_create`   | `gitterm sandbox create`                                     |
+| `sandbox_list`     | `gitterm sandbox list`, `gitterm sandbox account`            |
+| `sandbox_sync`     | `gitterm sandbox sync <id>`                                  |
+| `sandbox_exec`     | `gitterm sandbox exec <id> "<command>"`                      |
+| `sandbox_job`      | `gitterm sandbox job <id> <jobId>`, `gitterm sandbox cancel` |
+| `sandbox_preview`  | `gitterm sandbox preview <id> <port>`                        |
+| `sandbox_artifact` | `gitterm sandbox artifact <id> <jobId> <path>`               |
+| `sandbox_apply`    | `gitterm sandbox apply <id> <artifact> <target>`             |
+| `sandbox_pause`    | `gitterm sandbox pause <id>`                                 |
+| `sandbox_destroy`  | `gitterm sandbox destroy <id>`                               |
+| `sandbox_snapshot` | `gitterm sandbox snapshot save` / `delete`                   |
+
+A job left running doesn't wake these agents when it ends: they read it with `gitterm sandbox job <id> <jobId> --wait 300`.

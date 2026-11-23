@@ -18,7 +18,23 @@ import { promisify } from "node:util";
 import { runs, type AgentAdapter, type ExportedSession, type SessionOps } from "./types.js";
 
 /** GitTerm's OpenCode plugin: `/cloud` and `/cloud-return` in OpenCode itself. */
-const PLUGIN = "@gitterm/opencode-cloud";
+const PLUGIN = "@gitterm/opencode";
+/** The two plugins @gitterm/opencode replaced: both at once would add /cloud twice. */
+const REPLACED = ["@gitterm/opencode-cloud", "@gitterm/opencode-sandbox"];
+
+/** OpenCode's global config, as text: where `opencode plugin add` puts plugins. */
+async function globalConfig(): Promise<string> {
+  const dir = path.join(
+    process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || homedir(), ".config"),
+    "opencode",
+  );
+  const texts = await Promise.all(
+    ["opencode.json", "opencode.jsonc"].map((name) =>
+      readFile(path.join(dir, name), "utf8").catch(() => ""),
+    ),
+  );
+  return texts.join("\n");
+}
 
 type Exported = Awaited<ReturnType<OpenCodeClient["session"]["export"]>>;
 
@@ -168,7 +184,16 @@ export const opencodeAgent: AgentAdapter = {
       const reason = (error.stderr || error.message).trim().split("\n").at(-1);
       throw new Error(`opencode plugin add ${PLUGIN} failed: ${reason}`);
     });
-    return [added.stdout.trim().split("\n").at(-1) || `Installed ${PLUGIN}.`];
+    // Their options (a provider key, a server) are the user's: say what to do, change nothing.
+    const config = await globalConfig();
+    const warnings = REPLACED.filter((name) => config.includes(`"${name}"`)).map(
+      (name) =>
+        `${name} is still in your OpenCode config, and ${PLUGIN} replaces it. Move its options to ${PLUGIN}${name.endsWith("sandbox") ? ' under "sandbox"' : ""}, then run: opencode plugin remove ${name}`,
+    );
+    return {
+      changes: [added.stdout.trim().split("\n").at(-1) || `Installed ${PLUGIN}.`],
+      warnings,
+    };
   },
   // OpenCode gives its shell commands the session they run in.
   currentSession: (env) => env.OPENCODE_SESSION_ID,

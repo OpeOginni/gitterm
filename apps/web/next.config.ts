@@ -51,6 +51,21 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    // @gitterm/opencode replaced the sandbox and cloud plugins, and their two reference pages.
+    return ["sandbox-plugin", "cloud-plugin"].flatMap((page) => [
+      {
+        source: `/docs/reference/${page}`,
+        destination: "/docs/reference/opencode-plugin",
+        permanent: true,
+      },
+      {
+        source: `/docs/reference/${page}.md`,
+        destination: "/docs/reference/opencode-plugin.md",
+        permanent: true,
+      },
+    ]);
+  },
   async headers() {
     return [{ source: "/docs/:path*", headers: [{ key: "Vary", value: "Accept" }] }];
   },

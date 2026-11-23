@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Measures the checkout half of `/cloud` (packages/opencode-cloud): what `captureSnapshot`
+ * Measures the checkout half of `/cloud` (packages/opencode): what `captureSnapshot`
  * uploads, how long capture and restore take, and which checkouts survive the round trip.
  * Everything runs in temporary directories with the real capture code and restore script;
  * no workspace is created and nothing is uploaded.
@@ -13,12 +13,12 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { PREPARE_STAGE_SCRIPT, RESTORE_SCRIPT } from "../../packages/opencode-cloud/src/restore";
+import { PREPARE_STAGE_SCRIPT, RESTORE_SCRIPT } from "../../packages/opencode/src/restore";
 import {
   captureSnapshot,
   encodeSnapshot,
   type CheckoutSnapshot,
-} from "../../packages/opencode-cloud/src/snapshot";
+} from "../../packages/opencode/src/snapshot";
 
 const flag = (name: string, fallback: string) => {
   const index = process.argv.indexOf(`--${name}`);

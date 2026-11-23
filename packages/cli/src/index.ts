@@ -22,8 +22,12 @@ import {
   runSandboxExec,
   runSandboxJob,
   runSandboxList,
+  runSandboxPause,
   runSandboxPreview,
   runSandboxResume,
+  runSandboxSnapshotDelete,
+  runSandboxSnapshotList,
+  runSandboxSnapshotSave,
   runSandboxSync,
 } from "./cmd/sandbox.js";
 import { runMove, runMoves, runReturn, runSetup, runT3Link, runT3Unlink } from "./cmd/move.js";
@@ -46,6 +50,19 @@ const jsonOption = {
 const sandboxOptions = {
   ...jsonOption,
   account: { type: "string" as const, description: "Sandbox account from the settings file" },
+};
+/** The checkout a sandbox command works on, and the agent session it runs for. */
+const checkoutOption = {
+  dir: { type: "string" as const, description: "Checkout directory (default: cwd)" },
+};
+const sessionOption = {
+  session: {
+    type: "string" as const,
+    description: "The agent session this is for, saved with the sandbox and its jobs",
+  },
+};
+const yesOption = {
+  yes: { alias: "y", type: "boolean" as const, description: "Approve without prompting" },
 };
 
 const cli = yargs(hideBin(process.argv)).scriptName("gitterm").usage("$0 <command> [options]");
@@ -305,13 +322,24 @@ if (workspaceEnvironment) {
           (b) =>
             b.options({
               name: { type: "string" },
+              purpose: {
+                type: "string",
+                description: "Why it exists, e.g. 'run integration tests'",
+              },
               lifetime: {
                 type: "number",
                 description:
                   "Minutes the sandbox lives (what happens then depends on the provider)",
               },
               public: { type: "boolean", description: "Public previews (fixed at creation)" },
-              yes: { alias: "y", type: "boolean", description: "Approve without prompting" },
+              snapshot: {
+                type: "string",
+                description:
+                  "Setup snapshot to start from, or 'none' (default: the newest for this checkout)",
+              },
+              ...checkoutOption,
+              ...sessionOption,
+              ...yesOption,
             }),
           (argv) => runSandboxCreate(argv),
         )
@@ -325,10 +353,9 @@ if (workspaceEnvironment) {
           "sync <sandboxId>",
           "Upload the current checkout (including uncommitted changes)",
           (b) =>
-            b.positional("sandboxId", { type: "string", demandOption: true }).options({
-              dir: { type: "string", description: "Checkout directory (default: cwd)" },
-              yes: { alias: "y", type: "boolean" },
-            }),
+            b
+              .positional("sandboxId", { type: "string", demandOption: true })
+              .options({ ...checkoutOption, ...yesOption }),
           (argv) => runSandboxSync(argv),
         )
         .command(
@@ -339,12 +366,27 @@ if (workspaceEnvironment) {
               .positional("sandboxId", { type: "string", demandOption: true })
               .positional("command", { type: "string", demandOption: true })
               .options({
-                cwd: { type: "string" },
+                cwd: {
+                  type: "string",
+                  description: "Relative to the synced project directory, or absolute",
+                },
                 timeout: { type: "number", description: "Minutes before the job is killed" },
                 wait: {
                   type: "number",
                   description: "Seconds to wait for completion (default 60)",
                 },
+                background: {
+                  type: "boolean",
+                  description: "Return at once; read the job later with `gitterm sandbox job`",
+                },
+                "secret-env": {
+                  type: "string",
+                  array: true,
+                  description: "A local environment variable to pass (needs approval)",
+                },
+                ...checkoutOption,
+                ...sessionOption,
+                ...yesOption,
               }),
           (argv) => runSandboxExec(argv),
         )
@@ -380,10 +422,18 @@ if (workspaceEnvironment) {
               .positional("port", { type: "number", demandOption: true })
               .options({
                 command: { type: "string", description: "Server command to start first" },
+                cwd: { type: "string", description: "Where the server command runs" },
+                public: {
+                  type: "boolean",
+                  description:
+                    "Make this port public (needs approval), or private again with --no-public",
+                },
                 serve: {
                   type: "boolean",
                   description: "Serve a private preview on a loopback URL",
                 },
+                ...checkoutOption,
+                ...yesOption,
               }),
           (argv) => runSandboxPreview(argv),
         )
@@ -413,6 +463,49 @@ if (workspaceEnvironment) {
           "Resume a managed sandbox paused for inactivity",
           (b) => b.positional("sandboxId", { type: "string", demandOption: true }),
           (argv) => runSandboxResume(argv),
+        )
+        .command(
+          "pause <sandboxId>",
+          "Pause a sandbox to stop billing; its files are kept and using it resumes it",
+          (b) => b.positional("sandboxId", { type: "string", demandOption: true }),
+          (argv) => runSandboxPause(argv),
+        )
+        .command("snapshot", "Setup snapshots new sandboxes can start from", (snapshot) =>
+          snapshot
+            .command(
+              "list",
+              "List the setup snapshots for this checkout",
+              (b) => b.options(checkoutOption),
+              (argv) => runSandboxSnapshotList(argv),
+            )
+            .command(
+              "save <sandboxId>",
+              "Save a sandbox's setup as a snapshot",
+              (b) =>
+                b.positional("sandboxId", { type: "string", demandOption: true }).options({
+                  label: {
+                    type: "string",
+                    demandOption: true,
+                    description: "What it holds, e.g. 'deps + postgres'",
+                  },
+                  note: { type: "string", description: "What is set up in it" },
+                  "any-project": {
+                    type: "boolean",
+                    description: "Offer it to every checkout, not only this one",
+                  },
+                  replace: { type: "string", description: "A snapshot this one replaces" },
+                  ...checkoutOption,
+                }),
+              (argv) => runSandboxSnapshotSave(argv),
+            )
+            .command(
+              "delete <snapshotId>",
+              "Delete a setup snapshot",
+              (b) => b.positional("snapshotId", { type: "string", demandOption: true }),
+              (argv) => runSandboxSnapshotDelete(argv),
+            )
+            .demandCommand(1, "Please specify a snapshot command")
+            .strict(),
         )
         .command(
           "destroy <sandboxId>",

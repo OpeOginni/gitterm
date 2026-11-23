@@ -92,6 +92,6 @@ export const T3_LOGO = "/t3-nightly.svg";
 
 /** Sets up every agent on the machine to move sessions to the cloud, and signs in. */
 export const INSTALL_SETUP = "npx @gitterm/cli setup";
-export const INSTALL_SANDBOX = "opencode plugin add @gitterm/opencode-sandbox";
-export const INSTALL_CLOUD = "opencode plugin add @gitterm/opencode-cloud";
+/** GitTerm's OpenCode plugin: sandbox tools, and /cloud. `gitterm setup` installs it too. */
+export const INSTALL_OPENCODE = "opencode plugin add @gitterm/opencode";
 export const GITHUB_URL = "https://github.com/OpeOginni/gitterm";

@@ -9,8 +9,8 @@ import {
   handoffSession,
   runtimeClient,
   type HandoffRecord,
-} from "../packages/opencode-cloud/src/handoff";
-import { returnSession } from "../packages/opencode-cloud/src/return";
+} from "../packages/opencode/src/handoff";
+import { returnSession } from "../packages/opencode/src/return";
 import { git } from "../packages/move/src/checkout/snapshot";
 
 const binary = process.env.OPENCODE_HANDOFF_SMOKE_BINARY;
@@ -84,7 +84,7 @@ try {
     await git(root, ["clone", source, cloud]);
     await git(source, ["remote", "add", "origin", "https://github.com/example/fixture.git"]);
   }
-  const plugin = fileURLToPath(new URL("../packages/opencode-cloud/dist", import.meta.url));
+  const plugin = fileURLToPath(new URL("../packages/opencode/dist", import.meta.url));
   await writeFile(join(source, ".git/info/exclude"), "opencode.json\n");
   await writeFile(
     join(source, "opencode.json"),

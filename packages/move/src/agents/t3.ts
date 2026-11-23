@@ -368,7 +368,7 @@ export const t3Agent: AgentAdapter = {
 
   async setup(local) {
     const linked = await local.agent<{ changed: boolean }>(T3_SCRIPT, "enableLinks");
-    return linked.changed ? ["Turned on Linked environments in T3 Code."] : [];
+    return { changes: linked.changed ? ["Turned on Linked environments in T3 Code."] : [] };
   },
 
   /** Links the workspace to this machine's T3 Code, so the moved thread opens from here. */

@@ -31,31 +31,52 @@ function progressReporter(json?: boolean) {
 
 /**
  * Sets up GitTerm for the agents on this machine: each one's own way to move sessions (the
- * OpenCode plugin, the Pi extension, T3 Code's linked environments), the gitterm-cloud skill,
- * and a GitTerm account. Asks first for each, unless --yes or not in a terminal.
+ * OpenCode plugin, the Pi extension, T3 Code's linked environments), the gitterm-cloud and
+ * gitterm-sandbox skills, and a GitTerm account. Asks first for each, unless --yes or not in a
+ * terminal.
  */
 export async function runSetup(args: JsonArgs & { yes?: boolean }) {
   try {
     const ask = Boolean(process.stdin.isTTY) && !args.json && !args.yes;
     const local = localMachine();
-    const agents: Array<{ key: string; label: string; setUp: boolean; changes: string[] }> = [];
+    const agents: Array<{
+      key: string;
+      label: string;
+      setUp: boolean;
+      changes: string[];
+      warnings: string[];
+    }> = [];
     for (const agent of AGENTS) {
       if (!(await agent.installed())) continue;
-      const entry = { key: agent.key, label: agent.label, setUp: false, changes: [] as string[] };
+      const entry = {
+        key: agent.key,
+        label: agent.label,
+        setUp: false,
+        changes: [] as string[],
+        warnings: [] as string[],
+      };
       agents.push(entry);
       if (ask && !(await confirm(`Set up ${agent.label}?`, true))) continue;
       try {
-        entry.changes = (await agent.setup?.(local)) ?? [];
+        const result = await agent.setup?.(local);
+        entry.changes = result?.changes ?? [];
+        entry.warnings = result?.warnings ?? [];
         entry.setUp = true;
       } catch (error) {
         entry.changes = [
           `Could not set up ${agent.label}: ${error instanceof Error ? error.message : String(error)}`,
         ];
       }
-      if (!args.json) for (const change of entry.changes) (entry.setUp ? success : warn)(change);
+      if (!args.json) {
+        for (const change of entry.changes) (entry.setUp ? success : warn)(change);
+        for (const warning of entry.warnings) warn(warning);
+      }
     }
     const skills = await installSkill();
-    if (!args.json) success("Installed the gitterm-cloud skill for agents that read skills.");
+    if (!args.json)
+      success(
+        "Installed the gitterm-cloud and gitterm-sandbox skills for agents that read skills.",
+      );
 
     let signedIn = await Promise.resolve()
       .then(() => createGittermClient().auth.status())

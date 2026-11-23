@@ -25,8 +25,11 @@ export interface AnalyticsEvents {
   /** Browser return only. Payment/revenue must be verified by a billing webhook. */
   checkout_returned: { plan: "pro" | "growth" };
   bot_created: { platform: "slack" | "discord" };
-  /** Intent only: a copied command is not an installed plugin. */
-  install_command_copied: { plugin: "sandbox" | "cloud"; location: "hero" | "cta" };
+  /**
+   * Intent only: a copied command is not an install. `setup` is `npx @gitterm/cli setup`,
+   * `opencode` the OpenCode plugin; `sandbox` and `cloud` were the two plugins it replaced.
+   */
+  install_command_copied: { plugin: "setup" | "opencode"; location: "hero" | "cta" };
 }
 
 export interface WorkspaceProperties {

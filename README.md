@@ -6,17 +6,17 @@ Give your agents more computers, from the cloud provider you choose. GitTerm giv
 
 ## Try it
 
-Give the OpenCode agent on your laptop a remote sandbox:
+Give the agents on your laptop (OpenCode, Pi, Codex, Claude Code) remote sandboxes, and a way to move a session to the cloud:
 
 ```sh
-opencode plugin add @gitterm/opencode-sandbox
+npx @gitterm/cli setup
 ```
 
-Then ask the agent to create a sandbox and run your tests there. The [quickstart](https://gitterm.dev/docs/quickstart) has the config for your provider key, and the steps to start a cloud workspace instead. To run your own GitTerm, see [Deploy on Railway](#deploy-on-railway) or [Deploy with Docker Compose](#deploy-with-docker-compose).
+Then ask your agent to create a sandbox and run your tests there. The [quickstart](https://gitterm.dev/docs/quickstart) has the config for your provider key, and the steps to start a cloud workspace instead. To run your own GitTerm, see [Deploy on Railway](#deploy-on-railway) or [Deploy with Docker Compose](#deploy-with-docker-compose).
 
 ## What GitTerm does
 
-- Gives a local OpenCode agent remote sandboxes for tests, builds and previews, on your Gitterm plan or with your own provider account (`@gitterm/opencode-sandbox`, [Agent sandboxes](docs/agent-sandboxes.md))
+- Gives a local agent remote sandboxes for tests, builds and previews, on your Gitterm plan or with your own provider account: OpenCode through `@gitterm/opencode`, Pi through GitTerm's extension, Codex and Claude Code through the `gitterm sandbox` CLI ([Agent sandboxes](docs/agent-sandboxes.md))
 - Runs OpenCode or T3 Code in cloud workspaces across multiple providers
 - Opens the agent TUI in your browser through TTYD
 - Gives you server-only agent URLs for desktop or local clients
