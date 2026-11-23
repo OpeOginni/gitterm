@@ -12,6 +12,7 @@ A cloud workspace runs one agent: OpenCode, or T3 Code (which drives Codex and C
 | OpenCode        | `opencode`      | A remote OpenCode server                                    | Local TUI, OpenCode desktop app, or the OpenCode web app in your browser |
 | OpenCode (TTYD) | `opencode-ttyd` | The OpenCode TUI in a browser terminal                      | Your browser, no local client                                            |
 | T3 Code         | `t3code`        | A T3 Code server that runs Claude Code, Codex, and OpenCode | The T3 Code web or desktop app, through a one-time pairing link          |
+| Pi              | `pi`            | The Pi coding agent in a browser terminal                   | Your browser, with the workspace password                                |
 
 In the dashboard, pick the agent under **Agent** when you create a workspace. In the SDK, pass the key as `agent` to `client.workspaces.create()`; the default is `opencode`.
 
@@ -19,13 +20,16 @@ Every workspace runs OpenCode 2 (the `@opencode/cli` package), including inside 
 
 ### What each agent supports
 
-| Feature                      | OpenCode | T3 Code                      |
-| ---------------------------- | -------- | ---------------------------- |
-| SDK runs (`client.runs.*`)   | Yes      | No                           |
-| Slack and Discord bots       | Yes      | No                           |
-| MCP connections from Gitterm | Yes      | No                           |
-| `/cloud` and `/cloud-return` | Yes      | No                           |
-| Saved agent config           | OpenCode | OpenCode, Claude Code, Codex |
+| Feature                      | OpenCode | T3 Code                      | Pi                             |
+| ---------------------------- | -------- | ---------------------------- | ------------------------------ |
+| SDK runs (`client.runs.*`)   | Yes      | No                           | No                             |
+| Slack and Discord bots       | Yes      | No                           | No                             |
+| MCP connections from Gitterm | Yes      | No                           | No                             |
+| Move a session to the cloud  | `/cloud` | `gitterm move`               | `/cloud`, with `gitterm setup` |
+| Saved agent config           | OpenCode | OpenCode, Claude Code, Codex | No                             |
+| Providers                    | All      | All                          | Daytona, Vercel, Boat, exe.dev |
+
+Pi keeps running in the workspace when you close the browser tab: the terminal attaches to the same tmux session each time.
 
 T3 Code sessions don't move to the cloud. To use Codex or Claude Code in the cloud, create a T3 Code workspace and start a new thread there. See [Move a session to the cloud](/docs/workspaces/move-a-session).
 

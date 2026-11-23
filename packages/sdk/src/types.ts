@@ -120,7 +120,7 @@ export type WorkspaceProviderSelection =
       type: "daytona" | "vercel" | "exedev" | "e2b" | "boat" | "gitterm";
     } & ProviderSelectionBase);
 
-export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code";
+export type BuiltInAgentKey = "opencode-ttyd" | "opencode" | "t3code" | "pi";
 export type AgentKey = BuiltInAgentKey | (string & {});
 
 export type WorkspaceCreateInput = {

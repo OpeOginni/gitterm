@@ -308,7 +308,9 @@
         "yargs": "^18.0.0",
       },
       "devDependencies": {
+        "@gitterm/agent-runtime": "workspace:*",
         "@gitterm/config": "workspace:*",
+        "@gitterm/schema": "workspace:*",
         "@gitterm/sdk": "workspace:*",
         "@types/bun": "^1.2.6",
         "@types/yargs": "^17.0.35",

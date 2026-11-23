@@ -24,6 +24,14 @@ export const AGENT_CAPABILITIES: Record<AgentProvisionerKey, AgentCapabilities> 
     managedCredentialRefresh: true,
     configKinds: ["opencode", "claude-code", "codex"],
   },
+  pi: {
+    access: "server-password",
+    runs: false,
+    mcpConnections: false,
+    // Pi refreshes OAuth tokens itself and writes them to its own auth.json.
+    managedCredentialRefresh: false,
+    configKinds: [],
+  },
 };
 
 export function getAgentCapabilities(key: string): AgentCapabilities | undefined {
@@ -37,5 +45,6 @@ export function agentProvisionerKeyForName(name: string): AgentProvisionerKey | 
   const normalized = name.trim().toLowerCase();
   if (normalized.startsWith("t3code")) return "t3code";
   if (normalized.startsWith("opencode")) return "opencode";
+  if (normalized === "pi") return "pi";
   return undefined;
 }
