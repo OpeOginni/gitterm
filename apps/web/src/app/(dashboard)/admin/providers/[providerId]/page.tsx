@@ -27,7 +27,6 @@ import { Seg } from "@/components/site/seg";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ChevronLeft,
-  Download,
   Loader2,
   Lock,
   MapPin,
@@ -45,7 +44,6 @@ import { toast } from "sonner";
 import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { strToU8, zipSync } from "fflate";
 import { awsRoleSelectionSchema, awsAccessProfileSchema } from "@gitterm/schema";
 import { AwsSetupGuide } from "../_components/aws-setup-guide";
 import { ProviderWebhookGuide } from "../_components/provider-webhook-guide";
@@ -57,7 +55,6 @@ import {
   type AwsRoleSelection,
 } from "../_components/aws-access-profiles";
 import { Panel, PanelRow, SectionHeading, StatusDot } from "@/components/dashboard/kit";
-import { CopyField } from "@/components/dashboard/copy-field";
 import { formPanel, providerStatus, useAdminGuard } from "../../_components/admin";
 
 interface ProviderConfigField {
@@ -472,45 +469,6 @@ export default function ProviderSettingsPage() {
   const isAwsProvider =
     providerKey.toLowerCase() === "aws" || selectedProviderType?.name?.toLowerCase() === "aws";
 
-  const isCloudflareProvider =
-    providerKey.toLowerCase() === "cloudflare" ||
-    selectedProviderType?.name?.toLowerCase() === "cloudflare";
-
-  const { data: cloudflareManualSetup } = useQuery({
-    queryKey: ["admin", "cloudflareManualSetup"],
-    queryFn: () => trpcClient.admin.cloudflare.manualSetup.query(),
-    enabled: isCloudflareProvider,
-  });
-
-  const { data: cloudflareWorkerFiles } = useQuery({
-    queryKey: ["admin", "cloudflareWorkerFiles"],
-    queryFn: () => trpcClient.admin.cloudflare.workerFiles.query(),
-    enabled: isCloudflareProvider,
-  });
-
-  const downloadWorkerZip = () => {
-    const files = cloudflareWorkerFiles ?? [];
-    if (files.length === 0) return;
-
-    const entries: Record<string, Uint8Array> = {};
-    for (const file of files) {
-      // Preserve folder structure (e.g. src/index.ts) so `wrangler deploy`
-      // resolves `main` correctly from the unzipped folder.
-      entries[file.path] = strToU8(file.contents);
-    }
-
-    const zipped = zipSync(entries, { level: 6 });
-    const blob = new Blob([zipped], { type: "application/zip" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "gitterm-cloudflare-sandbox.zip";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  };
-
   const { data: selectedProviderFields, isLoading: isLoadingFields } = useQuery({
     queryKey: ["admin", "providerConfigFields", resolvedProviderTypeId],
     queryFn: () =>
@@ -607,7 +565,7 @@ export default function ProviderSettingsPage() {
     //  2. The cloud_provider's providerKey (e.g. "aws") - maps any region-scoped
     //     AWS row like "AWS EU (Frankfurt)" to the registered AWS provider type.
     //  3. Display-name match (covers legacy providers whose name equals the type
-    //     name like "Railway", "Cloudflare", etc.).
+    //     name like "Railway", "E2B", etc.).
     const providerTypeId =
       provider.providerConfig?.providerTypeId ??
       findProviderTypeIdByKey((provider as any).providerKey) ??
@@ -1418,44 +1376,6 @@ export default function ProviderSettingsPage() {
               ) : null}
             </div>
           </section>
-
-          {isCloudflareProvider && (
-            <section className="space-y-4">
-              <SectionHeading
-                title="Sandbox worker"
-                description="Cloudflare workspaces run behind a Worker in your own account. Deploy it, then paste its URL and the same internal API key into Credentials."
-              />
-              <div className={formPanel}>
-                <ol className="space-y-2.5">
-                  {(cloudflareManualSetup?.steps ?? []).map((step, i) => (
-                    <li key={i} className="flex gap-3 text-[13.5px] leading-relaxed text-fg-2">
-                      <span className="w-4 shrink-0 text-fg-4 tabular-nums">{i + 1}.</span>
-                      <span>{step}</span>
-                    </li>
-                  ))}
-                </ol>
-                {cloudflareManualSetup?.command && (
-                  <CopyField
-                    label="Deploy command"
-                    multiline
-                    value={cloudflareManualSetup.command}
-                    className="mt-4"
-                  />
-                )}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="mt-4"
-                  onClick={downloadWorkerZip}
-                  disabled={(cloudflareWorkerFiles?.length ?? 0) === 0}
-                >
-                  <Download />
-                  Download setup ZIP
-                </Button>
-              </div>
-            </section>
-          )}
 
           <ProviderWebhookGuide
             providerKey={providerKey || selectedProviderType?.name || ""}

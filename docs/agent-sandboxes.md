@@ -34,7 +34,7 @@ falls back to another mode or account.
 
 ## Supported providers
 
-Cloudflare is not supported yet and is planned for later. AWS is managed-only, because it
+AWS is managed-only, because it
 runs on the deployment's ECS cluster and load balancer.
 
 | Provider | managed | direct                             | Image                                    | Abandoned sandbox                                             | Previews                                           |

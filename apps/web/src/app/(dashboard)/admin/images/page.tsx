@@ -39,7 +39,6 @@ const PROVIDER_LABELS: Record<string, string> = {
   aws: "AWS",
   e2b: "E2B",
   daytona: "Daytona",
-  cloudflare: "Cloudflare",
   vercel: "Vercel",
   boat: "Boat",
   exedev: "exe.dev",
@@ -68,12 +67,6 @@ const PROVIDER_DEFINITIONS = [
       resources: { cpu: 2, memory: 4 },
       editorResources: { cpu: 4, memory: 8 },
     },
-  },
-  {
-    key: "cloudflare",
-    label: "Cloudflare",
-    description: "Agent start command and listening port.",
-    initial: { startCommand: "", port: 7681, setupCommands: [] },
   },
   {
     key: "vercel",

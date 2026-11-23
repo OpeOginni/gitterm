@@ -372,8 +372,8 @@ await client.workspaces.create({
 });
 ```
 
-Supported on Railway, AWS, Daytona, exe.dev, and E2B. Vercel and Cloudflare run fixed
-runtimes and reject `image`. Floating tags such as `latest` are pinned to the digest verified
+Supported on AWS, Daytona, exe.dev, and E2B. Vercel runs fixed runtimes and rejects
+`image`. Floating tags such as `latest` are pinned to the digest verified
 at create time, so a restart months later runs the same image; `workspace.customImage` shows
 what was pinned.
 
@@ -481,10 +481,7 @@ A workspace has one of four statuses:
 | `terminated` | Gone for good.                                                                            |
 
 Whether `create()` returns `running` or `pending` depends on the provider. Sandbox providers
-(E2B, Daytona, Vercel, boat, exe.dev, Cloudflare) settle immediately and return `running`.
-Railway settles by webhook and returns `pending` until its deployment reports success, usually
-within a minute. Code that only ever ran against a sandbox provider will see `pending` for the
-first time when it moves to Railway.
+(E2B, Daytona, Vercel, boat, exe.dev) settle immediately and return `running`.
 
 Three things have to be true before a prompt can be delivered, and the SDK handles each:
 
@@ -914,8 +911,6 @@ All built-in compute providers use the same provisioning plan and workspace/run 
 | Railway  | Project/environment and public service domains                 | With a volume    | No         |
 
 AWS remains available through `createGittermClient()` and the Gitterm control plane; it is intentionally not exposed in direct mode.
-
-Cloudflare remains available through the Gitterm control plane. Direct Cloudflare support is deferred until the OpenCode v2 Workerd runtime is stable.
 
 ```ts
 import { createDirectGittermClient } from "@gitterm/sdk/direct";

@@ -1,12 +1,10 @@
 import type { ComputeProvider } from "./compute";
 import { awsProvider, AwsProvider } from "./aws";
-import { cloudflareComputeProvider } from "./cloudflare/compute-provider";
 import { gittermProvider, TransportWorkspaceProvider } from "./transport-workspace";
 import { withSandboxHandles } from "./sandbox-handles";
 
 export * from "./compute";
 export { awsProvider } from "./aws";
-export { cloudflareComputeProvider } from "./cloudflare/compute-provider";
 export { gittermProvider } from "./transport-workspace";
 
 /**
@@ -16,7 +14,7 @@ export { gittermProvider } from "./transport-workspace";
  *
  */
 const availableProviders: Record<string, ComputeProvider> = {
-  // Every provider below except AWS and Cloudflare is only a sandbox transport.
+  // Every provider below except AWS is only a sandbox transport.
   e2b: new TransportWorkspaceProvider("e2b", { label: "E2B" }),
   daytona: new TransportWorkspaceProvider("daytona", { label: "Daytona" }),
   vercel: new TransportWorkspaceProvider("vercel", { label: "Vercel" }),
@@ -25,7 +23,6 @@ const availableProviders: Record<string, ComputeProvider> = {
   // gitterm.dev only: there is no cloud provider row for it elsewhere, so nothing offers it.
   gitterm: gittermProvider,
   aws: awsProvider,
-  cloudflare: cloudflareComputeProvider,
 };
 
 /**

@@ -56,7 +56,7 @@ describe("managed clone credentials", () => {
     expect(env.GITHUB_APP_TOKEN).toBeUndefined();
   });
 
-  test.each(["e2b", "daytona", "vercel", "boat", "exedev", "cloudflare"])(
+  test.each(["e2b", "daytona", "vercel", "boat", "exedev"])(
     "does not expose inline auth in the %s runtime environment",
     (provider) => {
       const env = buildWorkspaceEnv(spec, runtime(provider));

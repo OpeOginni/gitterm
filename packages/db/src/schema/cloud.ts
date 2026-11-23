@@ -275,21 +275,6 @@ export interface AwsImageProviderMetadata {
   architecture?: "X86_64" | "ARM64";
 }
 
-/**
- * Cloudflare-specific run details for an agent image. The Cloudflare worker is
- * agent-agnostic: it runs whatever `startCommand` listens on `port`, after
- * optionally running `setupCommands` (e.g. installing the agent binary on boot
- * for agents not baked into the container image).
- */
-export interface CloudflareImageProviderMetadata {
-  /** Command that starts the agent server, e.g. "opencode serve --port 4096". */
-  startCommand?: string;
-  /** Port the agent server listens on (workspace traffic is proxied here). */
-  port?: number;
-  /** Commands to run before starting the server (e.g. install the agent). */
-  setupCommands?: string[];
-}
-
 export interface VercelImageProviderMetadata {
   /** Vercel Container Registry image that includes the selected coding agent. */
   image?: string;
@@ -326,7 +311,6 @@ export interface ImageProviderMetadata {
   };
   daytona?: DaytonaImageProviderMetadata;
   aws?: AwsImageProviderMetadata;
-  cloudflare?: CloudflareImageProviderMetadata;
   vercel?: VercelImageProviderMetadata;
   boat?: BoatImageProviderMetadata;
   exedev?: ExeDevImageProviderMetadata;
