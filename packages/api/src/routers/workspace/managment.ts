@@ -1888,7 +1888,7 @@ export const workspaceRouter = router({
               headers,
               password,
               providerKey: existingProvider?.providerKey ?? null,
-              providerCanResume: existingProvider?.providerKey !== "cloudflare",
+              providerCanResume: true,
             }),
           };
         }
@@ -2967,8 +2967,8 @@ export const workspaceRouter = router({
           });
         }
 
-        // Force ephemeral when the provider can't persist files (e.g. Cloudflare
-        // sandboxes). The UI disables the toggle, but guard server-side too.
+        // Force ephemeral when the provider can't persist files. The UI disables the
+        // toggle, but guard server-side too.
         const effectivePersistent =
           cloudProviderRecord.supportsPersistence === false ? false : input.persistent;
 
@@ -3524,8 +3524,7 @@ export const workspaceRouter = router({
         headers,
         password,
         providerKey: provider?.providerKey ?? null,
-        providerCanResume:
-          workspaceRecord.status === "paused" && provider?.providerKey !== "cloudflare",
+        providerCanResume: workspaceRecord.status === "paused",
       });
     }),
 
@@ -3673,19 +3672,6 @@ export const workspaceRouter = router({
             });
           }
 
-          if (provider.providerKey === "cloudflare") {
-            await updateWorkspaceByIdAndInvalidate(
-              input.workspaceId,
-              { status: "paused", updatedAt: new Date() },
-              existingWorkspace.subdomain,
-            );
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message:
-                "WORKSPACE_NON_RECOVERABLE: provider does not preserve paused filesystem state",
-            });
-          }
-
           let workspaceRegion: typeof region.$inferSelect | undefined;
           if (provider.supportsRegions && existingWorkspace.regionId) {
             [workspaceRegion] = await db
@@ -3812,7 +3798,7 @@ export const workspaceRouter = router({
         headers,
         password,
         providerKey: runtimeProvider?.providerKey ?? null,
-        providerCanResume: runtimeProvider?.providerKey !== "cloudflare",
+        providerCanResume: true,
       });
 
       if (!runtime.url) {

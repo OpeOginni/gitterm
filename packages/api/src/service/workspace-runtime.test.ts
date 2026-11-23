@@ -40,23 +40,6 @@ describe("workspace runtime helpers", () => {
     expect(resolveProjectDirectory(null, "daytona")).toBe("/workspace/workspace");
   });
 
-  test("never exposes control-plane headers", () => {
-    const runtime = buildWorkspaceRuntimeAccess({
-      workspace,
-      headers: {
-        "x-gitterm-cf-sandbox-id": "sandbox-1",
-        "x-gitterm-cf-internal-key": "global-secret",
-        "x-gitterm-cf-port": "4096",
-      },
-      providerKey: "cloudflare",
-    });
-
-    expect(runtime.headers).toEqual({
-      "x-gitterm-cf-sandbox-id": "sandbox-1",
-      "x-gitterm-cf-port": "4096",
-    });
-  });
-
   test("terminated runtimes never expose connection material", () => {
     const runtime = buildWorkspaceRuntimeAccess({
       workspace: { ...workspace, status: "terminated" },

@@ -99,7 +99,6 @@ AWS plain sandboxes do. A provider that only offers SSH needs an SSH connection 
 | -------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | E2B, Daytona, Vercel, Boat, exe.dev, Gitterm | `TransportWorkspaceProvider` | Direct SDK workspaces on all but Gitterm use `createTransportDirectProvider`.                                                                                    |
 | AWS                                          | Its own `ComputeProvider`    | Needs per-workspace IAM roles, EFS for files across a pause, and ALB routes, which a transport can't express yet. Pausing ECS loses the disk without EFS.        |
-| Cloudflare                                   | Its own `ComputeProvider`    | No transport: its worker has no file calls, and a pause loses the disk, so a resume must provision again.                                                        |
 | Railway                                      | None (deprecated)            | Plain sandboxes and direct SDK workspaces (its own adapter) still work and are deprecated. Railway's Sandboxes product (beta) has no pause and no custom images. |
 
 For AWS, Lambda MicroVMs (launched June 2026) is the closest AWS service to a transport:

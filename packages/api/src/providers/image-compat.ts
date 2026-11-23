@@ -1,14 +1,6 @@
 import type { ImageProviderMetadata } from "@gitterm/db/schema/cloud";
 
-export const IMAGE_PROVIDER_KEYS = [
-  "e2b",
-  "aws",
-  "daytona",
-  "cloudflare",
-  "vercel",
-  "boat",
-  "exedev",
-] as const;
+export const IMAGE_PROVIDER_KEYS = ["e2b", "aws", "daytona", "vercel", "boat", "exedev"] as const;
 
 export type ImageProviderKey = (typeof IMAGE_PROVIDER_KEYS)[number];
 
@@ -50,8 +42,6 @@ export function imageSupportsProvider(
       return Boolean(metadata?.aws);
     case "daytona":
       return Boolean(metadata?.daytona);
-    case "cloudflare":
-      return Boolean(metadata?.cloudflare?.startCommand && metadata.cloudflare.port);
     case "vercel":
       return Boolean(metadata?.vercel?.image || metadata?.vercel?.runtime);
     case "boat":

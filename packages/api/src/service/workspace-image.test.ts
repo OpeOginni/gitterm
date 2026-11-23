@@ -124,7 +124,7 @@ describe("resolveCustomWorkspaceImage", () => {
   });
 
   test("unsupported providers are rejected", async () => {
-    await expect(resolveCustomWorkspaceImage("acme/tool:1", "cloudflare")).rejects.toThrow(
+    await expect(resolveCustomWorkspaceImage("acme/tool:1", "gitterm")).rejects.toThrow(
       /does not support custom images/,
     );
   });

@@ -23,8 +23,6 @@ This page compares the providers that can run a sandbox for your local agent. Us
 - **Abandoned sandbox** is what the provider does on its own if OpenCode crashes or your machine goes offline.
 - **Previews:** the column shows direct accounts. "Private or public" is chosen when the sandbox is created, with `publicPreviews`. A private preview rejects requests without an access header (a cookie on Boat). On an always-private provider, `publicPreviews` has no effect. With a managed account, Gitterm serves E2B, Daytona, Boat, and exe.dev previews, so those can be private or public too. See [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
 
-Cloudflare is not supported for sandboxes yet. It is planned.
-
 ## Cleanup after a crash
 
 The "Abandoned sandbox" column matters most for direct accounts:

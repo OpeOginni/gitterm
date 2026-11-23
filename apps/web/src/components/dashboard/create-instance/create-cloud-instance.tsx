@@ -294,8 +294,8 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     (profile) => profile.id === selectedMachineProfileId,
   );
 
-  // Persistence capability for the selected provider. Some providers (e.g.
-  // Cloudflare sandboxes) cannot keep files between sessions at all.
+  // Persistence capability for the selected provider. Some providers cannot keep files
+  // between sessions at all.
   const persistenceSupported = selectedCloudProvider?.supportsPersistence !== false;
   const isAutoPersistent = persistenceSupported && !!selectedCloudProvider?.autoPersistent;
   // Storage persists whenever it can: always on providers that force it, and on the others

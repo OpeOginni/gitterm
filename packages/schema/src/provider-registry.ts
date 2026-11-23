@@ -255,39 +255,6 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     ],
   },
 
-  cloudflare: {
-    name: "cloudflare",
-    displayName: "Cloudflare Sandbox",
-    category: "sandbox",
-    configSchema: z.object({
-      workerUrl: z.url("Must be a valid URL").optional().or(z.literal("")),
-      internalApiKey: z.string().optional(),
-      workerName: z.string().optional(),
-      apiToken: z.string().optional(),
-      accountId: z.string().optional(),
-    }),
-    // The worker is deployed manually (see the setup instructions on the
-    // provider page). GitTerm only needs to know where it lives and the shared
-    // secret to talk to it, so those are the only fields surfaced here.
-    fields: [
-      {
-        fieldName: "workerUrl",
-        fieldLabel: "Worker URL",
-        fieldType: "url",
-        isRequired: true,
-        isEncrypted: false,
-        sortOrder: 1,
-      },
-      {
-        fieldName: "internalApiKey",
-        fieldLabel: "Internal API Key",
-        fieldType: "password",
-        isRequired: true,
-        isEncrypted: true,
-        sortOrder: 2,
-      },
-    ],
-  },
   e2b: {
     name: "e2b",
     displayName: "E2B",

@@ -9,7 +9,6 @@ export type CloudProvider =
 
 export const PROVIDER_LOGOS: Record<string, string> = {
   aws: "/aws.svg",
-  cloudflare: "/cloudflare.svg",
   daytona: "/daytona.svg",
   e2b: "/E2B.svg",
   boat: "/boat.svg",

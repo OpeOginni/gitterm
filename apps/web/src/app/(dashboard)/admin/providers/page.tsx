@@ -31,16 +31,7 @@ import { providerStatus, useAdminGuard } from "../_components/admin";
 import { AwsProviderSection } from "./_components/aws-provider-section";
 import type { ProviderRow } from "./_components/types";
 
-const PROVIDER_KEYS = [
-  "aws",
-  "railway",
-  "e2b",
-  "daytona",
-  "vercel",
-  "boat",
-  "exedev",
-  "cloudflare",
-];
+const PROVIDER_KEYS = ["aws", "railway", "e2b", "daytona", "vercel", "boat", "exedev"];
 
 const GROUPS = [
   { state: "setup", title: "Needs setup", description: "Enabled, but workspaces can't start yet." },

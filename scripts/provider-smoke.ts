@@ -17,7 +17,6 @@ const PROVIDERS = [
   "aws",
   "e2b",
   "daytona",
-  "cloudflare",
   "vercel",
   "boat",
   "exedev",
