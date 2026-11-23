@@ -1,9 +1,10 @@
 import { afterAll, expect, spyOn, test } from "bun:test";
 import type { SandboxCreateInput } from "@gitterm/agent-runtime/sandbox/types";
-import * as transportModule from "../../service/sandbox-transport";
-import * as timeouts from "../../service/workspace-timeouts";
-import type { WorkspaceConfig } from "../compute";
-import { GittermProvider } from ".";
+import * as transportModule from "../service/sandbox-transport";
+import * as timeouts from "../service/workspace-timeouts";
+import type { WorkspaceConfig } from "./compute";
+import { withSandboxHandles } from "./sandbox-handles";
+import { gittermProvider, TransportWorkspaceProvider } from "./transport-workspace";
 
 const created: SandboxCreateInput[] = [];
 const commands: { command: string; cwd?: string }[] = [];
@@ -33,6 +34,7 @@ const fake = {
   async destroy(id: string) {
     destroyed.push(id);
   },
+  async resume() {},
 };
 
 const mocks = [
@@ -73,7 +75,7 @@ const config = (): WorkspaceConfig => ({
 });
 
 test("a Gitterm workspace is set up through sandbox calls and keeps a sandbox handle", async () => {
-  const info = await new GittermProvider().createWorkspace(config());
+  const info = await gittermProvider.createWorkspace(config());
 
   expect(created[0]).toMatchObject({
     template: "gitterm-opencode-server",
@@ -104,10 +106,7 @@ test("a Gitterm workspace is set up through sandbox calls and keeps a sandbox ha
     accessCredential: "pairing-token",
   });
 
-  const port = await new GittermProvider().createOrGetExposedPortDomain(
-    "sandbox:gitterm:sbx1",
-    3000,
-  );
+  const port = await gittermProvider.createOrGetExposedPortDomain("sandbox:gitterm:sbx1", 3000);
   expect(port).toEqual({
     domain: "https://3000.preview.example",
     externalPortDomainId: "sbx1:3000",
@@ -118,7 +117,7 @@ test("a Gitterm workspace is set up through sandbox calls and keeps a sandbox ha
 test("a workspace started from a project snapshot refreshes its clone instead of cloning", async () => {
   created.length = 0;
   commands.length = 0;
-  await new GittermProvider().createWorkspace({ ...config(), snapshot: "snap1" });
+  await gittermProvider.createWorkspace({ ...config(), snapshot: "snap1" });
   expect(created[0]).toMatchObject({ snapshot: "snap1", template: "gitterm-opencode-server" });
   const checkout = commands.find((entry) => entry.command.includes("git fetch --prune origin"));
   expect(checkout?.cwd).toBe("/home/user/workspace/app");
@@ -135,7 +134,7 @@ test("a workspace started from a project snapshot refreshes its clone instead of
 test("a failed clone says why and removes the sandbox", async () => {
   failOn = "git clone";
   try {
-    await expect(new GittermProvider().createWorkspace(config())).rejects.toMatchObject({
+    await expect(gittermProvider.createWorkspace(config())).rejects.toMatchObject({
       name: "WorkspaceProvisionError",
       code: "BAD_REQUEST",
       message: expect.stringContaining(
@@ -151,7 +150,65 @@ test("a failed clone says why and removes the sandbox", async () => {
 test("an image the sandbox service doesn't offer is refused before anything is created", async () => {
   const before = created.length;
   await expect(
-    new GittermProvider().createWorkspace({ ...config(), imageProviderMetadata: {} }),
+    gittermProvider.createWorkspace({ ...config(), imageProviderMetadata: {} }),
   ).rejects.toThrow("not available on Gitterm");
   expect(created).toHaveLength(before);
+});
+
+test("any provider's transport hosts workspaces, and a resume starts the agent again", async () => {
+  const ran: string[] = [];
+  const written = new Map<string, string>();
+  const inputs: SandboxCreateInput[] = [];
+  const daytona = {
+    ...fake,
+    provider: "daytona" as const,
+    home: "/home/daytona",
+    async create(input: SandboxCreateInput) {
+      inputs.push(input);
+      return { id: "d1", state: "running" as const, labels: {}, startedAt: null, expiresAt: null };
+    },
+    async run(_id: string, command: string) {
+      ran.push(command);
+      return { exitCode: 0, stdout: command === "mint-token" ? "pairing-token\n" : "", stderr: "" };
+    },
+    async writeFile(_id: string, path: string, data: Uint8Array) {
+      written.set(path, Buffer.from(data).toString());
+    },
+    async resume() {},
+  };
+  mocks[0]!.mockResolvedValue(daytona as never);
+  try {
+    const provider = new TransportWorkspaceProvider("daytona", { label: "Daytona" });
+    const info = await provider.createWorkspace({
+      ...config(),
+      // The image's template and the machine profile's options, merged by the caller.
+      imageProviderMetadata: {
+        daytona: { image: "gitterm-opencode-server:1", resources: { cpu: 4 } },
+      },
+    });
+    expect(inputs[0]).toMatchObject({
+      template: "gitterm-opencode-server:1",
+      machine: { resources: { cpu: 4 } },
+    });
+    // Daytona doesn't run a resume command, so the workspace keeps one on disk instead.
+    expect(inputs[0]!.resumeCommand).toBeUndefined();
+    const script = written.get("/home/daytona/.gitterm/resume.sh");
+    expect(script).toContain("cd '/home/daytona/workspace/app'");
+    expect(script).toContain("/dev/tcp/127.0.0.1/4096");
+    expect(info.externalServiceId).toBe("sandbox:daytona:d1");
+
+    ran.length = 0;
+    await withSandboxHandles(provider).resumeWorkspace(info.externalServiceId);
+    expect(ran).toEqual([
+      "[ ! -f '/home/daytona/.gitterm/resume.sh' ] || bash '/home/daytona/.gitterm/resume.sh'",
+    ]);
+  } finally {
+    mocks[0]!.mockResolvedValue(fake as never);
+  }
+});
+
+test("a transport that runs resume commands itself is not sent the script", async () => {
+  commands.length = 0;
+  await withSandboxHandles(gittermProvider).resumeWorkspace("sandbox:gitterm:sbx1");
+  expect(commands).toEqual([]);
 });

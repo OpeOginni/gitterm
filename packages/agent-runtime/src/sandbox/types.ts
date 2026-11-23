@@ -167,7 +167,12 @@ export interface SandboxTransport {
 }
 
 /** Where commands run and what the provider guarantees. Shared by transports and clients. */
-export type SandboxProviderProfile = { home: string; capabilities: SandboxCapabilities };
+export type SandboxProviderProfile = {
+  home: string;
+  capabilities: SandboxCapabilities;
+  /** Whether the transport runs `SandboxCreateInput.resumeCommand` after every resume. */
+  resumeCommand: boolean;
+};
 
 /**
  * Managed sandboxes whose previews the Gitterm proxy serves, adding the provider's access
@@ -192,6 +197,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "pauses",
     },
+    resumeCommand: false,
   },
   daytona: {
     home: "/home/daytona",
@@ -202,6 +208,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "pauses",
     },
+    resumeCommand: false,
   },
   vercel: {
     home: "/home/vercel-sandbox",
@@ -212,6 +219,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: 5 * 60 * 60_000,
       snapshots: "stops",
     },
+    resumeCommand: false,
   },
   boat: {
     home: "/home/user",
@@ -222,6 +230,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "pauses",
     },
+    resumeCommand: false,
   },
   exedev: {
     home: "/home/exedev",
@@ -232,6 +241,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "none",
     },
+    resumeCommand: false,
   },
   railway: {
     home: "/root",
@@ -242,6 +252,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "none",
     },
+    resumeCommand: false,
   },
   aws: {
     home: "/root",
@@ -252,6 +263,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "none",
     },
+    resumeCommand: false,
   },
   // The Gitterm server enforces lifetimes and serves previews.
   gitterm: {
@@ -263,6 +275,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "pauses",
     },
+    resumeCommand: true,
   },
 };
 

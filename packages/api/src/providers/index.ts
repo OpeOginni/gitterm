@@ -7,7 +7,7 @@ import { daytonaProvider } from "./daytona";
 import { e2bProvider } from "./e2b";
 import { railwayProvider } from "./railway";
 import { vercelProvider } from "./vercel";
-import { gittermProvider } from "./gitterm";
+import { gittermProvider } from "./transport-workspace";
 import { withSandboxHandles } from "./sandbox-handles";
 
 export * from "./compute";
@@ -18,7 +18,7 @@ export { cloudflareComputeProvider } from "./cloudflare/compute-provider";
 export { boatProvider } from "./boat";
 export { exeDevProvider } from "./exedev";
 export { vercelProvider } from "./vercel";
-export { gittermProvider } from "./gitterm";
+export { gittermProvider } from "./transport-workspace";
 
 /**
  * All available provider implementations

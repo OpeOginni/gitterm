@@ -86,6 +86,8 @@ capability declaration as well. Unknown keys fail closed.
 | Central OAuth refresh integration | Yes               | OpenCode V2 only             |
 | Native saved configs              | OpenCode          | OpenCode, Claude Code, Codex |
 
+The provider side of the same standard is in [sandbox-standard.md](sandbox-standard.md).
+
 To add an agent, register its key and capabilities, implement the provisioner,
 configure provider runtime images/setup, and extend the conformance tests. Do not
 add agent-name branches to individual compute providers.
