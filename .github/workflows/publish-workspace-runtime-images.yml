@@ -17,10 +17,6 @@ on:
         required: false
       DOCKERHUB_TOKEN:
         required: false
-      E2B_API_KEY:
-        required: false
-      E2B_SMOKE_API_KEY:
-        required: true
 
 env:
   DOCKERHUB_NAMESPACE: opeoginni
@@ -72,17 +68,12 @@ jobs:
       - name: Check release credentials
         env:
           PUBLISH: ${{ inputs.publish }}
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          E2B_SMOKE_API_KEY: ${{ secrets.E2B_SMOKE_API_KEY }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          test -n "$E2B_SMOKE_API_KEY" || { echo "::error::Set E2B_SMOKE_API_KEY from a separate E2B team."; exit 1; }
-          if [[ "$PUBLISH" == true ]]; then
-            if [[ -z "$E2B_API_KEY" || "$E2B_API_KEY" == "$E2B_SMOKE_API_KEY" || -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then
-              echo "::error::Set Docker Hub publishing credentials and a distinct E2B publishing key."
-              exit 1
-            fi
+          if [[ "$PUBLISH" == true && ( -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ) ]]; then
+            echo "::error::Set Docker Hub publishing credentials."
+            exit 1
           fi
       - name: Summarize runtime selection
         env:
@@ -166,39 +157,9 @@ jobs:
             fi
           ' sh "$OPENCODE_VERSION" "$CLI_VERSION" "$IMAGE_NAME" "$T3_VERSION"
 
-  e2b:
-    needs: plan
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - name: Protect candidate tags from partial reruns
-        if: inputs.publish
-        run: test "$GITHUB_RUN_ATTEMPT" = 1
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: package.json
-      - run: bun install --frozen-lockfile
-      - name: Build candidate templates
-        if: inputs.publish
-        working-directory: packages/api
-        env:
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          OPENCODE_VERSION: ${{ needs.plan.outputs.opencode }}
-          T3_VERSION: ${{ needs.plan.outputs.t3 }}
-          RUNTIME_BUILD_TAG: ${{ needs.plan.outputs.build_tag }}
-        run: bun run e2b:build
-      - name: Start templates from a separate E2B team
-        working-directory: packages/api
-        env:
-          E2B_API_KEY: ${{ secrets.E2B_SMOKE_API_KEY }}
-          RUNTIME_BUILD_TAG: ${{ inputs.publish && needs.plan.outputs.build_tag || needs.plan.outputs.major }}
-          OPENCODE_VERSION: ${{ needs.plan.outputs.opencode }}
-        run: bun run e2b:build --verify
-
   promote:
     if: inputs.publish
-    needs: [plan, docker, e2b]
+    needs: [plan, docker]
     runs-on: ubuntu-latest
     env:
       MAJOR: ${{ needs.plan.outputs.major }}
@@ -216,11 +177,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Move E2B runtime aliases
-        working-directory: packages/api
-        env:
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-        run: bun run e2b:build --promote
       - name: Move Docker runtime aliases
         env:
           IMAGES: ${{ needs.plan.outputs.images }}

@@ -6,6 +6,7 @@ import {
   dockerTestsEnabled,
   removeDockerRun,
 } from "@gitterm/agent-runtime/sandbox/docker.test-helper";
+import { npmInstallCommand } from "@gitterm/schema/agent-install";
 import { opencodeProvisioner } from "../service/agents/opencode";
 import * as transportModule from "../service/sandbox-transport";
 import * as timeouts from "../service/workspace-timeouts";
@@ -94,4 +95,48 @@ test.skipIf(!enabled)(
     expect((await transport.info(id)).state).toBe("terminated");
   },
   600_000,
+);
+
+test.skipIf(!enabled)(
+  "a plain image without Node gets the agent from its setup commands, as E2B's base does",
+  async () => {
+    const password = randomBytes(12).toString("hex");
+    const provider = withSandboxHandles(
+      new TransportWorkspaceProvider("daytona", { label: "Docker" }),
+    );
+    const info = await provider.createWorkspace({
+      workspaceId: "ws2",
+      userId: "u1",
+      imageId: "image",
+      subdomain: "ws2",
+      imageProviderMetadata: {
+        daytona: {
+          image: "buildpack-deps:bookworm-scm",
+          setupCommands: [npmInstallCommand(["@opencode/cli@2"])],
+        },
+      },
+      provisioningSpec: {
+        agent: opencodeProvisioner.provision({
+          userId: "u1",
+          userDisplayName: "Test",
+          workspaceHostname: "ws2.localhost",
+          agentTypeName: "OpenCode",
+          serverOnly: true,
+          serverPassword: password,
+          credentials: [],
+        }),
+        repo: { url: "https://github.com/octocat/Hello-World", name: "hello" },
+        workspaceProfile: "standard",
+        editorAccessEnabled: false,
+      },
+    });
+    expect(await answers(info.upstreamUrl, password)).toBe(200);
+    const id = info.externalServiceId.replace("sandbox:daytona:", "");
+    // Node and the agent went to ~/.local; the resume finds them there too.
+    await provider.pauseWorkspace(info.externalServiceId);
+    await provider.resumeWorkspace(info.externalServiceId);
+    expect(await answers((await transport.preview(id, 4096)).url, password)).toBe(200);
+    await provider.terminateWorkspace(info.externalServiceId);
+  },
+  900_000,
 );

@@ -7,6 +7,8 @@
  * sessions and installs the extension below on the user's machine.
  */
 
+import { ENSURE_NODE_COMMAND } from "./agent-install.js";
+
 export const PI_PACKAGE = "@earendil-works/pi-coding-agent@1.6.0";
 const TTYD_VERSION = "1.7.7";
 /** The tmux session the workspace's terminal attaches to. */
@@ -15,13 +17,13 @@ export const PI_TMUX_SESSION = "pi";
 export const PI_EXTENSION_PATH = "extensions/gitterm.ts";
 
 /**
- * Installs Pi (it needs Node 22.19 or newer), ttyd and, where the package manager allows it,
- * tmux. Everything goes to `~/.local`, so it works without root; tmux needs root or sudo.
+ * Installs Pi (with Node 22.19 or newer, when the image lacks it), ttyd and, where the package
+ * manager allows it, tmux. Everything goes to `~/.local`, so it works without root; tmux needs
+ * root or sudo.
  */
 export const PI_INSTALL_COMMAND = [
   "set -e",
-  'node -e \'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 19) ? 0 : 1)\' || { echo "Pi needs Node 22.19 or newer; this image has $(node --version)." >&2; exit 1; }',
-  'mkdir -p "$HOME/.local/bin"',
+  ENSURE_NODE_COMMAND,
   `npm install -g --prefix "$HOME/.local" --ignore-scripts --no-audit --fund=false ${PI_PACKAGE}`,
   `[ -x "$HOME/.local/bin/ttyd" ] || { curl -fsSL -o "$HOME/.local/bin/ttyd" "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.$(uname -m)" && chmod +x "$HOME/.local/bin/ttyd"; }`,
   'SUDO=""; [ "$(id -u)" = 0 ] || SUDO="sudo -n"',
