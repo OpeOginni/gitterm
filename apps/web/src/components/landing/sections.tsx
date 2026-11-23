@@ -8,7 +8,6 @@ import { GITHUB_URL, INSTALL_SETUP, SANDBOX_PROVIDERS, T3_LOGO } from "@/lib/sit
 import { SITE_URL } from "@/lib/docs/content";
 import { cn } from "@/lib/utils";
 import { ClickToCopy } from "./click-to-copy";
-import { OwnKeyCode } from "./own-key-code";
 import { ReplayButton } from "./demo";
 import { AgentRoll, SetupCommand } from "./hero";
 import { SoundToggle } from "./sound-toggle";
@@ -38,7 +37,7 @@ const SETUP_PROMPT = `Set up Gitterm for me. Read ${SITE_URL}/llms.txt first and
 
 Before you change anything, ask me which of these I want:
 1. Moving my agents' sessions to a cloud workspace and back. Run \`${INSTALL_SETUP}\`: it asks which agents to set up (OpenCode, Pi, T3 Code), adds a skill for other agents, and signs me in.
-2. Remote sandboxes for my agents on this machine, for builds, tests and previews. The same setup command adds them. Ask whether I'll use a Gitterm plan or my own provider key, and if mine, which provider (E2B, Daytona, Vercel, Boat, exe.dev, Railway or AWS).
+2. Remote sandboxes for my agents on this machine, for builds, tests and previews. The same setup command adds them. Ask whether I'll use a Gitterm plan or my own provider key, and if mine, which provider (E2B, Daytona, Vercel, Boat, exe.dev or AWS). \`gitterm sandbox setup\` asks the same.
 3. A cloud workspace that runs OpenCode, Pi, or T3 Code with Codex or Claude Code, started from ${SITE_URL}/dashboard.
 
 Keep keys out of config files: use {env:VAR} references. When you're done, show me how to check that it works.`;
@@ -100,7 +99,7 @@ function CtaButtons() {
 // ---------- Providers strip (doubles as the demo's provider picker) ----------
 
 const stripButton =
-  "group relative flex flex-col items-center gap-2.5 px-2 pt-[22px] pb-5 text-[15px] leading-[1.2] font-medium text-fg-3 transition-colors duration-[350ms] focus-visible:-outline-offset-[3px] max-[860px]:nth-[-n+4]:border-b max-[860px]:nth-[-n+4]:border-line max-[420px]:px-1 max-[420px]:pt-[18px] max-[420px]:pb-4 max-[420px]:text-[13.5px]";
+  "group relative flex flex-col items-center gap-2.5 px-2 pt-[22px] pb-5 text-[15px] leading-[1.2] font-medium text-fg-3 transition-colors duration-[350ms] focus-visible:-outline-offset-[3px] max-[420px]:px-1 max-[420px]:pt-[18px] max-[420px]:pb-4 max-[420px]:text-[13.5px]";
 /** Grey until hovered or picked, so exe.dev's photo and AWS's orange tile don't outshout the rest. */
 const stripLogo =
   "size-7 object-contain grayscale transition-[opacity,transform,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] max-[420px]:size-6";
@@ -122,7 +121,7 @@ export function ProvidersStrip() {
           data-prov-strip
           role="group"
           aria-label="Sandbox providers"
-          className="grid grid-cols-7 border-y border-line max-[860px]:grid-cols-4"
+          className="grid grid-cols-[repeat(auto-fit,minmax(104px,1fr))] border-y border-line"
         >
           {SANDBOX_PROVIDERS.map((p) => (
             <button
@@ -151,12 +150,18 @@ export function ProvidersStrip() {
   );
 }
 
-// ---------- What the plugin does: chapters beside a sticky TUI ----------
+// ---------- How Gitterm works: chapters beside a sticky TUI, as OpenCode or Pi ----------
 
 const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }[] = [
   {
-    title: "Your agent stays on your laptop",
-    body: "Run the setup command and your agent gets sandbox tools: OpenCode and Pi as tools, Codex and Claude Code through the CLI. The conversation and your model keys stay on your machine.",
+    title: "Set up once",
+    body: (
+      <>
+        <code>{INSTALL_SETUP}</code> adds Gitterm to your agents and asks where sandboxes run: your
+        Gitterm plan, or your own provider key. Your agent, the conversation and your model keys
+        stay on your laptop.
+      </>
+    ),
   },
   {
     title: "It borrows a machine when it needs one",
@@ -197,9 +202,23 @@ export function HowItWorks() {
   return (
     <Band id="how">
       <Wrap wide>
-        <SectionHead title="What the plugin does">
-          The same session as above, one step at a time.
+        <SectionHead title="How Gitterm works">
+          The same session as above, one step at a time. Codex and Claude Code take the same steps
+          with <code>gitterm sandbox</code>.
         </SectionHead>
+        {/* The window takes OpenCode's or Pi's look; landing.css switches it on these radios. */}
+        <input type="radio" name="how-agent" id="how-oc" className="sr-only" defaultChecked />
+        <input type="radio" name="how-agent" id="how-pi" className="sr-only" />
+        <div className="how-agents head" role="group" aria-label="Show the session in">
+          <label htmlFor="how-oc">
+            <Logo src="/opencode.svg" className="size-4" />
+            OpenCode
+          </label>
+          <label htmlFor="how-pi">
+            <Logo src="/pi.svg" className="size-4" />
+            Pi
+          </label>
+        </div>
         <div className="story">
           <div className="chaps">
             {CHAPTERS.map((c, i) => (
@@ -223,6 +242,16 @@ export function HowItWorks() {
           </div>
           <div className="stage-col">
             <div className="stage">
+              <div className="how-agents" role="group" aria-label="Show the session in">
+                <label htmlFor="how-oc">
+                  <Logo src="/opencode.svg" className="size-4" />
+                  OpenCode
+                </label>
+                <label htmlFor="how-pi">
+                  <Logo src="/pi.svg" className="size-4" />
+                  Pi
+                </label>
+              </div>
               <div className="tui" aria-hidden>
                 <div className="tui-chrome">
                   <span className="lights">
@@ -230,22 +259,29 @@ export function HowItWorks() {
                     <i />
                     <i />
                   </span>
-                  <span className="title">opencode · ~/code/shop</span>
+                  <span className="title">
+                    <span data-oc>opencode · ~/code/shop</span>
+                    <span data-pi>π - shop</span>
+                  </span>
                 </div>
                 <div className="scenes" id="scenes" />
                 <div className="t-prompt">
                   <div className="t-input">
                     <span className="t-caret" />
                   </div>
-                  <div className="t-meta">
+                  <div className="t-meta" data-oc>
                     <b>Build</b> · <span>Claude Opus 5.5</span> Anthropic
                   </div>
                 </div>
-                <div className="t-hints">
+                <div className="t-hints" data-oc>
                   <span className="path">~/code/shop:checkout-coupons</span>
                   <span>
                     <kbd>shift+tab</kbd> agents&nbsp;&nbsp;&nbsp;<kbd>ctrl+p</kbd> commands
                   </span>
+                </div>
+                <div className="t-hints" data-pi>
+                  <span className="path">~/code/shop (checkout-coupons)</span>
+                  <span>(anthropic) claude-opus-5.5 • medium</span>
                 </div>
               </div>
             </div>
@@ -256,51 +292,129 @@ export function HowItWorks() {
   );
 }
 
+// ---------- Runs on: every provider, and the ones coming ----------
+
+/** Gitterm's own machines (gitterm.dev), then each provider, then what is coming. */
+const RUNS_ON = [
+  {
+    name: "Gitterm",
+    logo: "/gitterm.svg",
+    text: "Our machines, on your plan.",
+    ownKey: false,
+    snapshots: true,
+  },
+  ...SANDBOX_PROVIDERS.map((p) => ({
+    name: p.name,
+    logo: p.logo,
+    text: p.byoKey ? "Your own key, or your plan." : "On your Gitterm plan.",
+    ownKey: p.byoKey,
+    snapshots: p.snapshots,
+  })),
+];
+const COMING = [
+  { name: "GPU machines", text: "For training and heavy builds." },
+  { name: "macOS", text: "For iOS and Mac builds." },
+];
+
+export function RunsOn() {
+  return (
+    <Band id="runs-on">
+      <Wrap>
+        <SectionHead title="Runs on the provider you choose">
+          Sandboxes and cloud workspaces on any of these. Switching is one setting, and more are on
+          the way.
+        </SectionHead>
+        {/* Filters are radios that landing.css reads: no script. */}
+        <div className="runs-on">
+          <input type="radio" name="runs-on" id="ro-all" className="sr-only" defaultChecked />
+          <input type="radio" name="runs-on" id="ro-key" className="sr-only" />
+          <input type="radio" name="runs-on" id="ro-snap" className="sr-only" />
+          <input type="radio" name="runs-on" id="ro-soon" className="sr-only" />
+          <div className="ro-chips" role="group" aria-label="Show">
+            <label htmlFor="ro-all">All</label>
+            <label htmlFor="ro-key">Your own key</label>
+            <label htmlFor="ro-snap">Setup snapshots</label>
+            <label htmlFor="ro-soon">Coming</label>
+          </div>
+          <ul className="ro-grid">
+            {RUNS_ON.map((p) => (
+              <li key={p.name} className={cn("ro-tile", p.ownKey && "key", p.snapshots && "snap")}>
+                <span className="ro-name">
+                  <Logo src={p.logo} className="size-5 object-contain" />
+                  {p.name}
+                </span>
+                <span className="ro-text">
+                  {p.text}
+                  {p.snapshots ? " Setup snapshots." : ""}
+                </span>
+              </li>
+            ))}
+            {COMING.map((p) => (
+              <li key={p.name} className="ro-tile soon">
+                <span className="ro-name">
+                  {p.name}
+                  <span className="ro-soon">Soon</span>
+                </span>
+                <span className="ro-text">{p.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Wrap>
+    </Band>
+  );
+}
+
 // ---------- Keys ----------
 
-/** Code boxes fill their row, so all three are the same height. */
+/** Code boxes fill their row, so all three are the same height, and long lines wrap. */
 const keyCode =
-  "h-full [&_pre]:h-full max-[640px]:[&_pre]:text-[12px] max-[640px]:[&_pre]:[overflow-wrap:anywhere] max-[640px]:[&_pre]:whitespace-pre-wrap";
-const PLAN = `"sandbox": {
-  "size": "medium"
-}`;
-const SELF_HOSTED = `"sandbox": {
-  "serverUrl": "https://git.acme.dev"
-}`;
+  "h-full [&_pre]:h-full [&_pre]:whitespace-pre-wrap [&_pre]:[overflow-wrap:anywhere] max-[640px]:[&_pre]:text-[12px]";
+const OWN_KEY = `$ gitterm sandbox setup
+Where should sandboxes run?
+  1. On your Gitterm plan
+  2. On your own provider account
+Choose 1-2: 2
+Found your E2B CLI login. Use it? [Y/n]`;
+const PLAN = `$ gitterm login
+✔ Logged in as you@example.com
+$ gitterm sandbox setup
+Choose 1-2: 1`;
+const SELF_HOSTED = `$ gitterm login --server https://git.acme.dev
+$ gitterm sandbox setup
+Which provider should run them?
+  1. daytona (the default)
+  2. e2b`;
 
 export function Keys() {
   return (
     <Band>
       <Wrap>
         <SectionHead title="Your key, our plan, or your server">
-          Set one account in your sandbox settings. Add <code>limits</code> to any of them, so a
-          busy agent cannot run up a surprise bill.
+          Pick one with <code>gitterm sandbox setup</code>; there is no config to edit. Each project
+          asks once before the first sandbox, and <code>gitterm project disable</code> turns
+          sandboxes or <code>/cloud</code> off where you don't want them.
         </SectionHead>
         <div className={cn(cells, "grid-cols-3 max-[1100px]:grid-cols-1")}>
           {[
             {
               title: "Bring your own provider key",
-              body: "No Gitterm account needed. The key comes from your environment and the provider bills you directly.",
-              code: null,
+              body: "No Gitterm account needed. It uses your provider's CLI login if it finds one, or takes the key, and the provider bills you directly.",
+              code: OWN_KEY,
             },
             {
               title: "Use your Gitterm plan",
               body: (
                 <>
-                  No provider account needed. Sign in with <code>gitterm login</code>; sandboxes
-                  count against your plan, and Gitterm stops anything that outlives its deadline.
+                  No provider account needed. Sandboxes count against your plan, and Gitterm stops
+                  anything that outlives its deadline.
                 </>
               ),
               code: PLAN,
             },
             {
               title: "Use your own Gitterm",
-              body: (
-                <>
-                  Point at a self-hosted server. It uses its default provider; add{" "}
-                  <code>provider</code> to pick another one it offers.
-                </>
-              ),
+              body: <>Sign in to a self-hosted server, then pick from the providers it offers.</>,
               code: SELF_HOSTED,
             },
           ].map((k) => (
@@ -311,11 +425,7 @@ export function Keys() {
             >
               <h3 className={cn(h3, "mb-1.5")}>{k.title}</h3>
               <p className={cn(cellText, "mb-[18px]")}>{k.body}</p>
-              {k.code ? (
-                <CodeBlock code={k.code} lang="json" copy className={keyCode} />
-              ) : (
-                <OwnKeyCode className={keyCode} />
-              )}
+              <CodeBlock code={k.code} lang="text" className={keyCode} />
             </div>
           ))}
         </div>

@@ -15,7 +15,7 @@ export function GET() {
   );
   const body = [
     "# Gitterm",
-    "> Gitterm gives coding agents more room to work: sandboxes and cloud workspaces on the provider you choose. Gitterm runs no machines itself; it sits between your agent and providers such as E2B, Daytona, Vercel, Boat, exe.dev, Railway and AWS, so switching providers is a config change. Sandbox tools let a local agent (OpenCode, Pi, Codex or Claude Code) run commands, jobs, previews and artifacts in remote sandboxes, with your own provider keys or a Gitterm plan. Cloud workspaces run OpenCode, Pi, or T3 Code (which drives Codex and Claude Code), in the cloud, and `/cloud` moves a local session there. Slack and Discord bots, an SDK and a CLI build on the same workspaces. Gitterm is open source and self-hostable.",
+    "> Gitterm gives coding agents more room to work: sandboxes and cloud workspaces on the provider you choose. Gitterm runs no machines itself; it sits between your agent and providers such as E2B, Daytona, Vercel, Boat, exe.dev and AWS, so switching providers is a config change. Sandbox tools let a local agent (OpenCode, Pi, Codex or Claude Code) run commands, jobs, previews and artifacts in remote sandboxes, with your own provider keys or a Gitterm plan. Cloud workspaces run OpenCode, Pi, or T3 Code (which drives Codex and Claude Code), in the cloud, and `/cloud` moves a local session there. Slack and Discord bots, an SDK and a CLI build on the same workspaces. Gitterm is open source and self-hostable.",
     [
       "Start here:",
       "",

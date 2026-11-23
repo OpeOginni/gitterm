@@ -12,6 +12,7 @@ import {
   HowItWorks,
   Keys,
   ProvidersStrip,
+  RunsOn,
 } from "@/components/landing/sections";
 
 // The OpenCode desktop and phone mocks use OpenCode's own type: Inter and IBM Plex Mono.
@@ -31,6 +32,7 @@ export default function Home() {
         <ProvidersStrip />
         <Demo />
         <HowItWorks />
+        <RunsOn />
         <Keys />
         <Desktop />
         <Agents />

@@ -5,7 +5,7 @@
  * site), never invent capabilities here.
  */
 
-export type SandboxProviderId = "e2b" | "daytona" | "vercel" | "boat" | "exe" | "railway" | "aws";
+export type SandboxProviderId = "e2b" | "daytona" | "vercel" | "boat" | "exe" | "aws";
 
 export type SandboxProvider = {
   id: SandboxProviderId;
@@ -17,6 +17,8 @@ export type SandboxProvider = {
   publicPreviews: boolean;
   /** One-line summary for captions. */
   note: string;
+  /** Can save a set-up sandbox as a setup snapshot new ones start from. */
+  snapshots: boolean;
 };
 
 export const SANDBOX_PROVIDERS: SandboxProvider[] = [
@@ -27,6 +29,7 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
     byoKey: true,
     publicPreviews: false,
     note: "Private or public previews. Deleted at the end of its lifetime.",
+    snapshots: true,
   },
   {
     id: "daytona",
@@ -35,6 +38,7 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
     byoKey: true,
     publicPreviews: false,
     note: "Private or public previews. Deleted at the end of its lifetime.",
+    snapshots: true,
   },
   {
     id: "vercel",
@@ -43,6 +47,7 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
     byoKey: true,
     publicPreviews: true,
     note: "Public preview URLs. Stopped at the timeout, files discarded.",
+    snapshots: true,
   },
   {
     id: "boat",
@@ -51,6 +56,7 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
     byoKey: true,
     publicPreviews: false,
     note: "Private previews, public on a Gitterm plan. Archived at the TTL, storage kept until you destroy it.",
+    snapshots: true,
   },
   {
     id: "exe",
@@ -59,14 +65,7 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
     byoKey: true,
     publicPreviews: false,
     note: "Private previews on ports 3000 to 9999, public on a Gitterm plan. Never deleted by the provider.",
-  },
-  {
-    id: "railway",
-    name: "Railway",
-    logo: "/railway.svg",
-    byoKey: true,
-    publicPreviews: false,
-    note: "Private previews, port 8080 reserved. Never deleted by the provider.",
+    snapshots: false,
   },
   {
     id: "aws",
@@ -75,6 +74,7 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
     byoKey: false,
     publicPreviews: false,
     note: "Runs on your Gitterm plan only. Private previews, port 8080 reserved.",
+    snapshots: false,
   },
 ];
 

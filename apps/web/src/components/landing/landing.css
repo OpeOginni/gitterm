@@ -3339,4 +3339,203 @@
       filter: blur(2px);
     }
   }
+  /* How Gitterm works: OpenCode or Pi. The radios before the story pick the window's look. */
+  .lp .how-agents {
+    display: inline-flex;
+    gap: 4px;
+    margin: -6px 0 28px;
+    padding: 4px;
+    border-radius: 10px;
+    background: var(--fill);
+  }
+  .lp .how-agents label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 7px;
+    color: var(--fg-3);
+    font-size: 14px;
+    cursor: pointer;
+    transition:
+      background-color 0.2s,
+      color 0.2s;
+  }
+  .lp .how-agents label:hover {
+    color: var(--fg);
+  }
+  .lp #how:has(#how-oc:checked) .how-agents label[for="how-oc"],
+  .lp #how:has(#how-pi:checked) .how-agents label[for="how-pi"] {
+    background: var(--fill-2);
+    color: var(--fg);
+  }
+  .lp #how:has(#how-oc:focus-visible) .how-agents label[for="how-oc"],
+  .lp #how:has(#how-pi:focus-visible) .how-agents label[for="how-pi"] {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+  /* One switch under the heading on phones, one on the pinned window beside the chapters. */
+  .lp .stage .how-agents {
+    align-self: flex-start;
+    margin: 0;
+  }
+  @media (min-width: 901px) {
+    .lp .how-agents.head {
+      display: none;
+    }
+  }
+  .lp #how [data-pi],
+  .lp #how:has(#how-pi:checked) [data-oc] {
+    display: none;
+  }
+  .lp #how:has(#how-pi:checked) [data-pi] {
+    display: revert;
+  }
+  .lp #how:has(#how-pi:checked) .t-hints[data-pi] {
+    display: flex;
+  }
+  /* Pi: a plain terminal. Messages on a lighter band, each tool call in a dark green block with
+     its name in bold, the prompt between two rules, path and model in the footer. */
+  .lp #how:has(#how-pi:checked) .tui {
+    --t-bg: #282b33;
+    --t-raised: #383a46;
+    --t-high: #282b33;
+    --t-text: #e4e4e4;
+    --t-muted: #8c929b;
+    --t-ok: #a3d08a;
+    --t-info: #84b8cb;
+    --t-build: #e4e4e4;
+  }
+  .lp #how:has(#how-pi:checked) .tui-chrome {
+    background: #282b33;
+    border-bottom: 0;
+    color: #c8ccd3;
+    font-weight: 600;
+  }
+  .lp #how:has(#how-pi:checked) .t-user {
+    margin-inline: -16px;
+    padding: 12px 16px;
+    border-left: 0;
+  }
+  .lp #how:has(#how-pi:checked) .t-text {
+    padding-left: 0;
+  }
+  .lp #how:has(#how-pi:checked) .t-inline {
+    grid-template-columns: minmax(0, 1fr);
+    margin: 10px -16px 0;
+    padding: 10px 16px;
+    background: #2c362c;
+    color: var(--t-muted);
+  }
+  .lp #how:has(#how-pi:checked) .t-inline > span:first-child {
+    display: none;
+  }
+  .lp #how:has(#how-pi:checked) .t-inline .n {
+    color: var(--t-text);
+    font-weight: 700;
+  }
+  .lp #how:has(#how-pi:checked) .t-inline .res {
+    grid-column: 1;
+    margin-top: 2px;
+  }
+  .lp #how:has(#how-pi:checked) .t-inline .args {
+    color: var(--t-info);
+  }
+  .lp #how:has(#how-pi:checked) .t-block {
+    border-left: 0;
+    background: #2c362c;
+  }
+  .lp #how:has(#how-pi:checked) .t-prompt {
+    margin: 0;
+    padding: 8px 16px;
+    background: transparent;
+    border-left: 0;
+    border-block: 1px solid #50545e;
+  }
+
+  /* Runs on: a grid of providers that grows, filtered by radios. */
+  .lp .ro-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 18px;
+  }
+  .lp .ro-chips label {
+    padding: 6px 13px;
+    border-radius: 999px;
+    background: var(--fill);
+    color: var(--fg-3);
+    font-size: 13.5px;
+    cursor: pointer;
+    transition:
+      background-color 0.2s,
+      color 0.2s;
+  }
+  .lp .ro-chips label:hover {
+    color: var(--fg);
+  }
+  .lp #ro-all:checked ~ .ro-chips label[for="ro-all"],
+  .lp #ro-key:checked ~ .ro-chips label[for="ro-key"],
+  .lp #ro-snap:checked ~ .ro-chips label[for="ro-snap"],
+  .lp #ro-soon:checked ~ .ro-chips label[for="ro-soon"] {
+    background: var(--fg);
+    color: var(--background);
+  }
+  .lp .ro-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .lp .ro-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border-radius: 10px;
+    background: var(--bg-2);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .lp .ro-tile img {
+    filter: grayscale(1) brightness(1.3);
+    transition: filter 0.3s;
+  }
+  .lp .ro-tile:hover img {
+    filter: none;
+  }
+  .lp .ro-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--fg);
+    font-size: 15.5px;
+    font-weight: 500;
+  }
+  .lp .ro-text {
+    color: var(--fg-4);
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .lp .ro-tile.soon {
+    background: transparent;
+    box-shadow: none;
+    border: 1px dashed var(--line-2);
+  }
+  .lp .ro-tile.soon .ro-name {
+    color: var(--fg-3);
+  }
+  .lp .ro-soon {
+    margin-left: auto;
+    color: var(--gold);
+    font-size: 12px;
+  }
+  .lp #ro-key:checked ~ .ro-grid .ro-tile:not(.key),
+  .lp #ro-snap:checked ~ .ro-grid .ro-tile:not(.snap),
+  .lp #ro-soon:checked ~ .ro-grid .ro-tile:not(.soon),
+  .lp #ro-key:checked ~ .ro-grid .soon,
+  .lp #ro-snap:checked ~ .ro-grid .soon {
+    display: none;
+  }
 }

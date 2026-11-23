@@ -1045,7 +1045,7 @@ export function startLanding(root: HTMLElement): () => void {
       .join("");
     chaps.forEach((c, i) => {
       need(".chap-scene", c).innerHTML =
-        `<div class="tui"><div class="tui-chrome"><span class="lights"><i></i><i></i><i></i></span><span class="title">opencode · ~/code/shop</span></div><div class="scene">${list[i]}</div></div>`;
+        `<div class="tui"><div class="tui-chrome"><span class="lights"><i></i><i></i><i></i></span><span class="title"><span data-oc>opencode · ~/code/shop</span><span data-pi>π - shop</span></span></div><div class="scene">${list[i]}</div></div>`;
     });
   }
   function showScene(i: number) {
