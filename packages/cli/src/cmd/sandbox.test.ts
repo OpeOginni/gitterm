@@ -6,6 +6,12 @@ import path from "node:path";
 let state = { status: "failed", exitCode: 7 as number | null };
 const actual = await import("@gitterm/sdk/sandbox");
 const captures: Parameters<typeof actual.captureSource>[1][] = [];
+const execs: {
+  command: string;
+  env?: Record<string, string>;
+  waitMs?: number;
+  sessionId?: string;
+}[] = [];
 mock.module("@gitterm/sdk/sandbox", () => ({
   ...actual,
   captureSource: async (directory: string, options: Parameters<typeof actual.captureSource>[1]) => {
@@ -18,11 +24,14 @@ mock.module("@gitterm/sdk/sandbox", () => ({
   createSandboxBackend: () => ({}),
   createSandboxClient: () => ({
     identity: { mode: "direct", account: "e2b", provider: "e2b" },
-    exec: async () => ({
-      job: { id: "job_1", snapshotId: null },
-      state: { ...state, startedAt: null, finishedAt: null, processAlive: false },
-      log: { text: "", offset: 0, nextOffset: 0, totalBytes: 0 },
-    }),
+    exec: async (_ref: unknown, input: (typeof execs)[number]) => (
+      execs.push(input),
+      {
+        job: { id: "job_1", snapshotId: null },
+        state: { ...state, startedAt: null, finishedAt: null, processAlive: false },
+        log: { text: "", offset: 0, nextOffset: 0, totalBytes: 0 },
+      }
+    ),
     sync: async (_ref: unknown, captured: Awaited<ReturnType<typeof actual.captureSource>>) => ({
       snapshot: captured.snapshot,
       verified: true,
@@ -122,6 +131,66 @@ test("a literal key in the settings file is refused; {env:VAR} is the way to giv
     expect(error).toHaveBeenCalledWith(expect.stringContaining("{env:VAR}"));
     expect(error).not.toHaveBeenCalledWith(expect.stringContaining("e2b_literal"));
   } finally {
+    error.mockRestore();
+    exit.mockRestore();
+  }
+});
+
+test("exec in the background returns at once, for the session, with env files and approved secrets", async () => {
+  state = { status: "running", exitCode: null };
+  execs.length = 0;
+  const directory = await mkdtemp(path.join(tmpdir(), "gitterm-checkout-"));
+  await writeFile(path.join(directory, ".env.test"), "FROM_FILE=1\n");
+  process.env.GITTERM_TEST_SECRET = "s3cret-value";
+  try {
+    await withSettings({ envFiles: [".env.test"] }, () =>
+      runSandboxExec({
+        sandboxId: "sbx",
+        command: "bun test",
+        background: true,
+        session: "ses-1",
+        secretEnv: ["GITTERM_TEST_SECRET"],
+        dir: directory,
+        yes: true,
+        json: true,
+      }),
+    );
+    expect(execs).toEqual([
+      expect.objectContaining({
+        command: "bun test",
+        waitMs: 0,
+        sessionId: "ses-1",
+        env: { FROM_FILE: "1", GITTERM_TEST_SECRET: "s3cret-value" },
+      }),
+    ]);
+  } finally {
+    delete process.env.GITTERM_TEST_SECRET;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("exec refuses to pass a secret without approval", async () => {
+  execs.length = 0;
+  process.env.GITTERM_TEST_SECRET = "s3cret-value";
+  const exit = spyOn(process, "exit").mockImplementation(() => {
+    throw new Error("exit");
+  });
+  const error = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await expect(
+      withSettings({}, () =>
+        runSandboxExec({
+          sandboxId: "sbx",
+          command: "bun test",
+          secretEnv: ["GITTERM_TEST_SECRET"],
+          json: true,
+        }),
+      ),
+    ).rejects.toThrow("exit");
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("--yes"));
+    expect(execs).toHaveLength(0);
+  } finally {
+    delete process.env.GITTERM_TEST_SECRET;
     error.mockRestore();
     exit.mockRestore();
   }

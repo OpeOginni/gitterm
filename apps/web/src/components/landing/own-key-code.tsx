@@ -30,7 +30,7 @@ export function OwnKeyCode({ className }: { className?: string }) {
   }, [paused]);
 
   const { id, env } = PROVIDERS[index]!;
-  const code = `"options": {\n  "provider": "${id}",\n  "apiKey": "{env:${env}}"\n}`;
+  const code = `"sandbox": {\n  "provider": "${id}",\n  "apiKey": "{env:${env}}"\n}`;
   return (
     <div
       className={className}
@@ -40,7 +40,7 @@ export function OwnKeyCode({ className }: { className?: string }) {
       onBlur={() => setPaused(false)}
     >
       <CodeBlock code={code} lang="json" copy className="h-full [&_pre]:h-full">
-        {key("options")}
+        {key("sandbox")}
         {punct(": {")}
         {"\n  "}
         {key("provider")}

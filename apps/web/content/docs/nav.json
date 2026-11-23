@@ -34,12 +34,7 @@
     },
     {
       "title": "Reference",
-      "pages": [
-        "reference/sandbox-plugin",
-        "reference/cloud-plugin",
-        "reference/cli",
-        "reference/sdk"
-      ]
+      "pages": ["reference/opencode-plugin", "reference/cli", "reference/sdk"]
     },
     {
       "title": "Self-hosting",

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { ArrowUpRight, Code2, TerminalSquare } from "lucide-react";
 import { ApiTokensSection } from "@/components/dashboard/api-tokens-section";
 import { CopyField } from "@/components/dashboard/copy-field";
-import { INSTALL_CLOUD, INSTALL_SANDBOX } from "@/lib/site/providers";
+import { INSTALL_OPENCODE } from "@/lib/site/providers";
 import { SectionHeading } from "@/components/dashboard/kit";
 
 const TOOLS = [
@@ -21,15 +21,10 @@ const TOOLS = [
     icon: <Code2 className="size-4 text-fg-3" />,
   },
   {
-    name: "@gitterm/opencode-sandbox",
-    description: "Let OpenCode run builds, tests and previews in remote sandboxes.",
-    install: INSTALL_SANDBOX,
-    icon: <Image src="/opencode.svg" alt="" width={16} height={16} />,
-  },
-  {
-    name: "@gitterm/opencode-cloud",
-    description: "Move an OpenCode session to a cloud workspace with /cloud.",
-    install: INSTALL_CLOUD,
+    name: "@gitterm/opencode",
+    description:
+      "Let OpenCode run builds, tests and previews in remote sandboxes, and move a session to a cloud workspace with /cloud.",
+    install: INSTALL_OPENCODE,
     icon: <Image src="/opencode.svg" alt="" width={16} height={16} />,
   },
   {

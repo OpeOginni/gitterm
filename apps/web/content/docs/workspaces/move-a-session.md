@@ -10,15 +10,13 @@ While the session is in the cloud, nothing syncs: later local edits are not uplo
 
 ## Before you start
 
-- The cloud plugin is installed:
+- Gitterm's OpenCode plugin is installed:
 
   ```sh
-  opencode plugin add @gitterm/opencode-cloud
+  npx @gitterm/cli setup
   ```
 
-  See the [Cloud plugin reference](/docs/reference/cloud-plugin).
-
-  Or run `npx @gitterm/cli setup`, which installs it, sets up your other agents and signs you in.
+  It installs `@gitterm/opencode`, sets up your other agents and signs you in. `opencode plugin add @gitterm/opencode` installs only the plugin. See the [OpenCode plugin reference](/docs/reference/opencode-plugin).
 
 - You have a Gitterm account. If you aren't signed in, `/cloud` asks you to sign in or create one first.
 - Recommended: a model under **Models** in Gitterm. Your local model keys don't move; without one, the cloud agent uses free models. `/cloud` suggests adding one if you have none.
@@ -100,7 +98,7 @@ When you [return a session](/docs/workspaces/return-a-session), you can keep the
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "@gitterm/opencode-cloud",
+      "package": "@gitterm/opencode",
       "options": {
         "provider": { "type": "e2b" },
         "connections": ["github"],
@@ -111,7 +109,7 @@ When you [return a session](/docs/workspaces/return-a-session), you can keep the
 }
 ```
 
-Every option is listed in the [Cloud plugin reference](/docs/reference/cloud-plugin#options).
+Every option is listed in the [OpenCode plugin reference](/docs/reference/opencode-plugin#options).
 
 ## Limits
 
@@ -126,7 +124,7 @@ Every option is listed in the [Cloud plugin reference](/docs/reference/cloud-plu
 ## Related
 
 - [Bring a session back](/docs/workspaces/return-a-session)
-- [Cloud plugin reference](/docs/reference/cloud-plugin)
+- [OpenCode plugin reference](/docs/reference/opencode-plugin)
 - [Lifecycle](/docs/workspaces/lifecycle)
 - [Connections](/docs/integrations/connections)
 

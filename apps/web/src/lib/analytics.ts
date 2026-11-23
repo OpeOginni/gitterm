@@ -99,12 +99,12 @@ export function trackPendingIntegration() {
   }
 }
 
-/** A visitor copied a plugin install command: the first step of the path that needs no account. */
+/** A visitor copied an install command: the first step of the path that needs no account. */
 export function trackInstallCopied(command: string, location: "hero" | "cta") {
-  const plugin = command.includes("opencode-cloud")
-    ? "cloud"
-    : command.includes("opencode-sandbox")
-      ? "sandbox"
+  const plugin = command.includes("@gitterm/cli setup")
+    ? "setup"
+    : command.includes("@gitterm/opencode")
+      ? "opencode"
       : null;
   if (plugin) track("install_command_copied", { plugin, location });
 }

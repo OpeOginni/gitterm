@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useActiveWorkspaces } from "./use-active-workspaces";
 
 /**
- * Saved machine images. The sandbox plugin and the SDK save one after a project's setup, and
+ * Saved machine images. The sandbox tools and the SDK save one after a project's setup, and
  * cloud workspaces keep one per repository, so new machines start with dependencies installed.
  */
 export function SnapshotsList() {

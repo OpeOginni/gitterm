@@ -3,29 +3,41 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { HandoffRecord } from "./handoff";
-import { GittermCloudPlugin } from "./index";
+import { GittermPlugin, type GittermPluginOptions } from "./index";
 import { checkoutRoot, git } from "@gitterm/move/checkout/snapshot";
 
 let root: string;
+let home: string;
+const saved = { HOME: process.env.HOME, GITTERM_API_TOKEN: process.env.GITTERM_API_TOKEN };
 beforeEach(async () => {
   root = await mkdtemp(path.join(tmpdir(), "gitterm-plugin-test-"));
   await git(root, ["init", "-b", "main"]);
   root = await checkoutRoot(root);
+  // Signed out: the GitTerm login of whoever runs the tests is not seen.
+  home = await mkdtemp(path.join(tmpdir(), "gitterm-plugin-home-"));
+  process.env.HOME = home;
+  delete process.env.GITTERM_API_TOKEN;
 });
 afterEach(async () => {
+  process.env.HOME = saved.HOME;
+  if (saved.GITTERM_API_TOKEN !== undefined)
+    process.env.GITTERM_API_TOKEN = saved.GITTERM_API_TOKEN;
   await rm(root, { recursive: true, force: true });
+  await rm(home, { recursive: true, force: true });
 });
 
-type Context = Parameters<typeof GittermCloudPlugin.setup>[0];
+type Context = Parameters<typeof GittermPlugin.setup>[0];
 type Transform = Context["command"]["transform"];
+type ToolTransform = Context["tool"]["transform"];
 
-/** Sets the plugin up over `stored` records and returns the commands and hooks it registers. */
-async function setup(stored: HandoffRecord[]) {
+/** Sets the plugin up over `stored` records; returns the commands, hooks and tools it adds. */
+async function setup(stored: HandoffRecord[], options: GittermPluginOptions = {}) {
   const commands: string[] = [];
   const hooks: string[] = [];
   const rpc: string[] = [];
+  const tools: string[] = [];
   const context = {
-    options: {},
+    options,
     location: { directory: root },
     storage: {
       scan: async () => ({
@@ -53,14 +65,19 @@ async function setup(stored: HandoffRecord[]) {
       },
     },
     tool: {
-      transform: async () => {
-        throw new Error("The handoff plugin must not register tools");
+      transform: async (transform: Parameters<ToolTransform>[0]) => {
+        transform({
+          namespace: () => {},
+          add: (definition: { name: string }) => {
+            tools.push(definition.name);
+          },
+        } as unknown as Parameters<Parameters<ToolTransform>[0]>[0]);
       },
     },
   } as unknown as Context;
-  const cleanup = await GittermCloudPlugin.setup(context);
+  const cleanup = await GittermPlugin.setup(context);
   if (cleanup) await cleanup();
-  return { commands, hooks, rpc };
+  return { commands, hooks, rpc, tools };
 }
 
 const record = (phase: HandoffRecord["phase"], sourceDirectory: string): HandoffRecord => ({
@@ -72,12 +89,31 @@ const record = (phase: HandoffRecord["phase"], sourceDirectory: string): Handoff
   createdAt: "2026-01-01T00:00:00.000Z",
 });
 
-test("registers /cloud, the prompt check, the fork cleanup and the terminal channel, and no tools", async () => {
+test("signed out, no sandbox account: /cloud (it signs in), its hooks and channel, no tools", async () => {
   expect(await setup([])).toEqual({
     commands: ["cloud"],
     hooks: ["prompt", "fork"],
     rpc: ["gitterm.cloud: cancel"],
+    tools: [],
   });
+});
+
+const SANDBOX_TOOLS = ["sandbox_create", "sandbox_list", "sandbox_sync", "sandbox_exec"];
+
+test("a provider key and no GitTerm login: sandbox tools, and no /cloud", async () => {
+  const result = await setup([], {
+    sandbox: { provider: "e2b", apiKey: "{env:GITTERM_TEST_UNSET_KEY}" },
+  });
+  expect(result.tools).toEqual(expect.arrayContaining(SANDBOX_TOOLS));
+  expect(result.commands).toEqual([]);
+  expect(result.hooks).toEqual([]);
+});
+
+test("signed in to GitTerm: sandbox tools through that account, and /cloud", async () => {
+  // A server that refuses at once: nothing here needs it to answer.
+  const result = await setup([], { serverUrl: "http://127.0.0.1:9", token: "test-token" });
+  expect(result.tools).toEqual(expect.arrayContaining(SANDBOX_TOOLS));
+  expect(result.commands).toEqual(["cloud"]);
 });
 
 test("offers /cloud-return only while a session of this checkout is in the cloud", async () => {

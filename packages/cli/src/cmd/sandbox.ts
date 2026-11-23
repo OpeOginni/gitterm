@@ -1,12 +1,14 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { parseEnv } from "node:util";
 import {
   captureSource,
   createSandboxBackend,
   createSandboxClient,
   CREDENTIAL_REFERENCE,
   describeSandboxAccount,
+  projectDir,
   resolveSandboxAccount,
   sourceLimitBytes,
   startPreviewProxy,
@@ -26,24 +28,19 @@ export function sandboxConfigPath(): string {
   );
 }
 
-/** Keys in the file are `{env:VAR}` or `{file:path}` references; a literal key is refused. */
+/**
+ * Keys in the file are `{env:VAR}` or `{file:path}` references; a literal key is refused. With
+ * no file, sandboxes go through the signed-in GitTerm account.
+ */
 async function loadSettings(): Promise<SandboxSettings> {
   const file = sandboxConfigPath();
-  const text = await readFile(file, "utf8").catch(() => {
-    throw new Error(
-      `No sandbox settings at ${file}. Create it, for example:\n${JSON.stringify(
-        {
-          account: "e2b",
-          accounts: {
-            e2b: { provider: "e2b", apiKey: "{env:E2B_API_KEY}" },
-            gitterm: { size: "medium" },
-          },
-        },
-        null,
-        2,
-      )}`,
-    );
-  });
+  let text: string;
+  try {
+    text = await readFile(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw error;
+  }
   const settings = JSON.parse(text) as SandboxSettings;
   const accounts = settings.accounts ?? { [settings.provider ?? "gitterm"]: settings };
   for (const [name, account] of Object.entries(accounts)) {
@@ -54,6 +51,35 @@ async function loadSettings(): Promise<SandboxSettings> {
       );
   }
   return settings;
+}
+
+/** The checkout a command works on, as the path its records and setup snapshots use. */
+const checkout = (dir?: string) => realpath(dir ?? process.cwd());
+
+/** Variables from the settings' env files, read from the checkout. Later files win. */
+async function envFileVars(settings: SandboxSettings, dir?: string) {
+  const vars: Record<string, string> = Object.create(null);
+  if (!settings.envFiles?.length) return vars;
+  const root = await checkout(dir);
+  for (const file of settings.envFiles) {
+    const content = await readFile(path.resolve(root, file), "utf8").catch(() => {
+      throw new Error(`Cannot read ${file} from the envFiles setting`);
+    });
+    Object.assign(vars, parseEnv(content));
+  }
+  return vars;
+}
+
+/**
+ * Setup snapshots are on when the settings turn them on, the provider can save them, and the
+ * account does not start every sandbox from its own snapshot.
+ */
+function snapshotsOn(settings: SandboxSettings, client: SandboxClient, account: SandboxAccount) {
+  return (
+    settings.snapshots === true &&
+    client.snapshotEffect !== null &&
+    !describeSandboxAccount(account).pinnedSnapshot
+  );
 }
 
 async function clientFor(
@@ -138,7 +164,16 @@ export async function runSandboxAccount(args: Common) {
 }
 
 export async function runSandboxCreate(
-  args: Common & { name?: string; lifetime?: number; public?: boolean; yes?: boolean },
+  args: Common & {
+    name?: string;
+    purpose?: string;
+    lifetime?: number;
+    public?: boolean;
+    snapshot?: string;
+    session?: string;
+    dir?: string;
+    yes?: boolean;
+  },
 ) {
   try {
     const { client, settings, account } = await clientFor(args);
@@ -149,22 +184,53 @@ export async function runSandboxCreate(
       (args.public ?? settings.publicPreviews) === true &&
       client.capabilities.previews !== "private" &&
       client.capabilities.previews !== "none";
-    if (args.public && publicPreviews)
+    if (args.public && publicPreviews && !settings.publicPreviews)
       await approve(args, "Make every preview of this sandbox public to anyone with its URL?");
+    const project = await checkout(args.dir);
+    // A sandbox starts from the newest setup snapshot saved for this checkout, unless told
+    // which one, or `none`.
+    const snapshots = snapshotsOn(settings, client, account)
+      ? await client.setupSnapshots(project)
+      : [];
+    if (
+      args.snapshot &&
+      args.snapshot !== "none" &&
+      !snapshots.some((item) => item.record.snapshotId === args.snapshot)
+    )
+      throw new Error(
+        `No setup snapshot ${args.snapshot} for this checkout. See \`gitterm sandbox snapshot list\`, or pass --snapshot none.`,
+      );
+    const startFrom =
+      args.snapshot === "none"
+        ? null
+        : (args.snapshot ??
+          snapshots.find((item) => item.record.project === project)?.record.snapshotId ??
+          null);
     await guarded(
       args,
       "Creating sandbox...",
-      () =>
-        client.create({
-          name: args.name ?? "CLI sandbox",
-          purpose: "cli",
-          project: process.cwd(),
-          lifetimeMinutes: args.lifetime,
-          publicPreviews,
-        }),
+      async () => ({
+        ...(await client
+          .create({
+            name: args.name ?? "CLI sandbox",
+            purpose: args.purpose ?? "cli",
+            project,
+            sessionId: args.session ?? null,
+            lifetimeMinutes: args.lifetime,
+            publicPreviews,
+            ...(startFrom ? { snapshot: startFrom } : {}),
+          })
+          .catch((error: unknown) => {
+            if (startFrom && error instanceof Error)
+              error.message = `${error.message} It was to start from setup snapshot ${startFrom}: retry with --snapshot none, and delete the snapshot if it is gone or broken.`;
+            throw error;
+          })),
+        startedFrom: startFrom,
+        projectDir: projectDir(client.home),
+      }),
       (record) =>
         success(
-          `Sandbox ${chalk.bold(record.id)} (${record.account}) expires ${record.expiresAt ?? "-"}`,
+          `Sandbox ${chalk.bold(record.id)} (${record.account}) expires ${record.expiresAt ?? "-"}${record.startedFrom ? `, from setup snapshot ${record.startedFrom}` : ""}`,
         ),
     );
   } catch (error) {
@@ -197,7 +263,7 @@ export async function runSandboxSync(
 ) {
   try {
     const { client, settings } = await clientFor(args);
-    const captured = await captureSource(args.dir ?? process.cwd(), {
+    const captured = await captureSource(await checkout(args.dir), {
       exclude: settings.exclude,
       maxBytes: sourceLimitBytes(settings.maxSourceMiB),
     });
@@ -234,24 +300,47 @@ export async function runSandboxExec(
     cwd?: string;
     timeout?: number;
     wait?: number;
+    background?: boolean;
+    secretEnv?: string[];
+    session?: string;
+    dir?: string;
+    yes?: boolean;
   },
 ) {
-  await guarded(
-    args,
-    "Running...",
-    async () => {
-      const { client } = await clientFor(args);
-      return exitWithJob(
-        await client.exec(refOf(client, args.sandboxId), {
-          command: args.command,
-          cwd: args.cwd,
-          timeoutMinutes: args.timeout,
-          waitMs: (args.wait ?? 60) * 1000,
-        }),
+  try {
+    const { client, settings } = await clientFor(args);
+    const env = await envFileVars(settings, args.dir);
+    const names = args.secretEnv ?? [];
+    if (names.length) {
+      await approve(
+        args,
+        `Pass ${names.join(", ")} from this machine to sandbox ${args.sandboxId}?`,
       );
-    },
-    printJob,
-  );
+      for (const name of names) {
+        const value = process.env[name];
+        if (value === undefined) throw new Error(`Local environment variable ${name} is not set`);
+        env[name] = value;
+      }
+    }
+    await guarded(
+      args,
+      "Running...",
+      async () =>
+        exitWithJob(
+          await client.exec(refOf(client, args.sandboxId), {
+            command: args.command,
+            cwd: args.cwd,
+            timeoutMinutes: args.timeout,
+            env,
+            sessionId: args.session,
+            waitMs: args.background ? 0 : (args.wait ?? 60) * 1000,
+          }),
+        ),
+      printJob,
+    );
+  } catch (error) {
+    handleError(error, args.json);
+  }
 }
 
 export async function runSandboxJob(
@@ -292,13 +381,30 @@ export async function runSandboxCancel(args: Common & { sandboxId: string; jobId
 }
 
 export async function runSandboxPreview(
-  args: Common & { sandboxId: string; port: number; command?: string; serve?: boolean },
+  args: Common & {
+    sandboxId: string;
+    port: number;
+    command?: string;
+    cwd?: string;
+    public?: boolean;
+    serve?: boolean;
+    dir?: string;
+    yes?: boolean;
+  },
 ) {
   try {
-    const { client } = await clientFor(args);
+    const { client, settings } = await clientFor(args);
+    if (args.public === true && !settings.publicPreviews)
+      await approve(args, `Make port ${args.port} of this sandbox public to anyone with its URL?`);
     const spin = startSpinner("Waiting for the preview...", args.json);
     const preview = await client
-      .preview(refOf(client, args.sandboxId), { port: args.port, command: args.command })
+      .preview(refOf(client, args.sandboxId), {
+        port: args.port,
+        public: args.public,
+        command: args.command,
+        cwd: args.cwd,
+        env: args.command ? await envFileVars(settings, args.dir) : undefined,
+      })
       .finally(() => spin?.stop());
     // Access headers stay in this process; JSON output omits them.
     const { access: _access, ...visible } = preview;
@@ -371,6 +477,109 @@ export async function runSandboxResume(args: Common & { sandboxId: string }) {
       success(
         `Sandbox ${record.id} is ${record.state}${record.filesKept ? "" : ". This provider discarded files and processes while paused: sync again before running commands."}`,
       ),
+  );
+}
+
+export async function runSandboxPause(args: Common & { sandboxId: string }) {
+  await guarded(
+    args,
+    "Pausing...",
+    async () => {
+      const { client } = await clientFor(args);
+      return client.pause(refOf(client, args.sandboxId));
+    },
+    (record) =>
+      success(`Sandbox ${record.id} is ${record.state}. Its files are kept; using it resumes it.`),
+  );
+}
+
+/** The account's setup snapshots for this checkout, or why it has none. */
+export async function runSandboxSnapshotList(args: Common & { dir?: string }) {
+  await guarded(
+    args,
+    "Reading setup snapshots...",
+    async () => {
+      const { client, settings, account } = await clientFor(args);
+      if (!snapshotsOn(settings, client, account))
+        return {
+          enabled: false,
+          effect: null,
+          snapshots: [],
+          reason:
+            settings.snapshots !== true
+              ? `Setup snapshots are off. Set "snapshots": true in ${sandboxConfigPath()} to use them.`
+              : `${client.identity.provider} sandboxes on this account cannot be saved as setup snapshots, or the account starts every sandbox from its own snapshot.`,
+        };
+      return {
+        enabled: true,
+        // "pauses": saving pauses the sandbox briefly. "stops": the sandbox is gone after.
+        effect: client.snapshotEffect,
+        snapshots: await client.setupSnapshots(await checkout(args.dir)),
+      };
+    },
+    (result) => {
+      if (!result.enabled) return console.log(result.reason);
+      if (!result.snapshots.length) return console.log("No setup snapshots for this checkout.");
+      for (const { record, changed } of result.snapshots)
+        console.log(
+          `${chalk.bold(record.snapshotId)}  "${record.label}"  ${record.project ? "this checkout" : "any project"}  saved ${record.createdAt}${record.note ? `  ${record.note}` : ""}${changed.length ? chalk.yellow(`  out of date: ${changed.join(", ")}`) : ""}`,
+        );
+    },
+  );
+}
+
+export async function runSandboxSnapshotSave(
+  args: Common & {
+    sandboxId: string;
+    label: string;
+    note?: string;
+    anyProject?: boolean;
+    replace?: string;
+    dir?: string;
+  },
+) {
+  await guarded(
+    args,
+    "Saving setup snapshot...",
+    async () => {
+      const { client, settings, account } = await clientFor(args);
+      if (!snapshotsOn(settings, client, account))
+        throw new Error(
+          `Setup snapshots are not available: turn them on with "snapshots": true in ${sandboxConfigPath()}, on a provider that can save them.`,
+        );
+      const saved = await client.saveSetupSnapshot(refOf(client, args.sandboxId), {
+        label: args.label,
+        project: args.anyProject ? null : await checkout(args.dir),
+        note: args.note,
+        replace: args.replace,
+      });
+      return { ...saved, sandboxStopped: client.snapshotEffect === "stops" };
+    },
+    (saved) =>
+      success(
+        [
+          `Saved setup snapshot ${saved.record.snapshotId} "${saved.record.label}"`,
+          saved.replaced
+            ? saved.leftover
+              ? `It replaces ${saved.replaced}, which could not be deleted: delete it in the provider account.`
+              : `Deleted ${saved.replaced}, which it replaces.`
+            : "",
+          saved.sandboxStopped
+            ? `The provider stopped sandbox ${args.sandboxId} to save it: create a new one to continue.`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(". "),
+      ),
+  );
+}
+
+export async function runSandboxSnapshotDelete(args: Common & { snapshotId: string }) {
+  await guarded(
+    args,
+    "Deleting setup snapshot...",
+    async () => (await clientFor(args)).client.deleteSetupSnapshot(args.snapshotId),
+    (record) => success(`Deleted setup snapshot ${record.snapshotId} "${record.label}"`),
   );
 }
 

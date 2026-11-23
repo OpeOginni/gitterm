@@ -18,7 +18,7 @@ The public site (landing, docs, pricing, self-host, legal) and the dashboard. Co
 - Document shipped behaviour. Something planned gets a short "Coming soon" note.
 - Show what users type and see; tool-call JSON stays in the plugin code.
 - Link other pages as `/docs/<slug>`. The markdown output turns those into absolute `.md` links.
-- The plugins are `@gitterm/opencode-sandbox` (the `sandbox_*` tools) and `@gitterm/opencode-cloud` (the `/cloud` command). Site copy takes install commands and provider facts from `src/lib/site/providers.ts`.
+- OpenCode's plugin is `@gitterm/opencode` (the `sandbox_*` tools and `/cloud`); Pi gets the same from Gitterm's extension, and other agents from the `gitterm` CLI and its skills. `npx @gitterm/cli setup` installs them all. Site copy takes install commands and provider facts from `src/lib/site/providers.ts`.
 
 ## Deployment modes
 

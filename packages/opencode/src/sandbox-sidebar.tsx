@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { realpath } from "node:fs/promises";
-import { Plugin, usePlugin } from "@opencode/plugin/tui";
+import { usePlugin } from "@opencode/plugin/tui";
 import type { RGBA } from "@opentui/core";
 import { createFileSandboxStore } from "@gitterm/sdk/sandbox/store";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
@@ -23,7 +23,7 @@ type Theme = {
   };
 };
 
-function SandboxSidebar(props: { sessionID: string }) {
+export function SandboxSidebar(props: { sessionID: string }) {
   const context = usePlugin();
   const theme = () => context.theme as unknown as Theme;
   const [rows, setRows] = createSignal<SidebarRow[]>([]);
@@ -73,13 +73,3 @@ function SandboxSidebar(props: { sessionID: string }) {
     </Show>
   );
 }
-
-export default Plugin.define({
-  id: "gitterm.sandbox",
-  setup(context) {
-    return context.ui.slot({
-      append: "sidebar.content",
-      render: (input) => <SandboxSidebar sessionID={input.sessionID} />,
-    });
-  },
-});

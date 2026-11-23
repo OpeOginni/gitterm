@@ -7,9 +7,9 @@ Gitterm gives your coding agents more computers, from the cloud providers you ch
 
 ## Two products
 
-**Sandboxes, for the agent on your laptop.** The sandbox plugin for OpenCode (`@gitterm/opencode-sandbox`) gives your local agent a set of `sandbox_*` tools. The agent uses them to run builds, tests, and preview servers in a remote sandbox. The conversation and your checkout stay on your machine. A sandbox runs no coding agent and receives no model credentials. See [Sandboxes overview](/docs/sandboxes/overview).
+**Sandboxes, for the agent on your laptop.** Gitterm gives your local agent a set of `sandbox_*` tools: OpenCode through `@gitterm/opencode`, Pi through Gitterm's extension, and Codex and Claude Code through the `gitterm sandbox` commands. The agent uses them to run builds, tests, and preview servers in a remote sandbox. The conversation and your checkout stay on your machine. A sandbox runs no coding agent and receives no model credentials. See [Sandboxes overview](/docs/sandboxes/overview).
 
-**Cloud workspaces, for agents that run in the cloud.** A cloud workspace runs OpenCode, or T3 Code (which drives Codex and Claude Code), on a remote provider. You open it in the browser or connect from a local client, so you can keep working from any device with your own model keys. You can also move a local OpenCode session into a workspace with the `/cloud` command from `@gitterm/opencode-cloud`. See [Cloud workspaces](/docs/workspaces/overview).
+**Cloud workspaces, for agents that run in the cloud.** A cloud workspace runs OpenCode, or T3 Code (which drives Codex and Claude Code), on a remote provider. You open it in the browser or connect from a local client, so you can keep working from any device with your own model keys. You can also move a local OpenCode or Pi session into a workspace with `/cloud`, or ask another agent to move its session. See [Cloud workspaces](/docs/workspaces/overview).
 
 ## Who it is for
 
@@ -26,4 +26,4 @@ Sandboxes work without a Gitterm account. Use your own provider key (a **direct*
 - [Quickstart](/docs/quickstart): run your first remote command, or start a cloud workspace.
 - [Concepts](/docs/concepts): the terms these docs use, on one page.
 - [Sandbox setup](/docs/sandboxes/setup): install the plugin, add an account, and set approvals.
-- [Sandbox plugin reference](/docs/reference/sandbox-plugin) and [Cloud plugin reference](/docs/reference/cloud-plugin): every option, variable, and command.
+- [OpenCode plugin reference](/docs/reference/opencode-plugin): every option, variable, tool, and command.
