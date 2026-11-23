@@ -23,7 +23,10 @@ import {
   processWorkspaceTermination,
   retryWorkspaceTerminations,
 } from "../service/workspace-termination";
-import { railwayProvider } from "../providers/railway";
+import { TransportWorkspaceProvider } from "../providers/transport-workspace";
+
+/** Bot workspaces here use an E2B provider row, whose provider is the generic one. */
+const e2bProvider = TransportWorkspaceProvider.prototype;
 import { AwsProvider } from "../providers/aws";
 import * as proxyCache from "../service/proxy-cache";
 import * as coordination from "../service/coordination";
@@ -102,9 +105,7 @@ async function sandboxValues(
   const imageId = randomUUID();
   catalogIds.push(typeId, providerId);
   await db.insert(agentType).values({ id: typeId, key: typeId, name: typeId, serverOnly: true });
-  await db
-    .insert(cloudProvider)
-    .values({ id: providerId, name: providerId, providerKey: "railway" });
+  await db.insert(cloudProvider).values({ id: providerId, name: providerId, providerKey: "e2b" });
   await db.insert(image).values({ id: imageId, name: imageId, imageId, agentTypeId: typeId });
   const id = randomUUID();
   return {
@@ -143,7 +144,7 @@ integration(
       externalInstanceId: `service-${index}`,
     }));
     await db.insert(workspace).values(rows);
-    const teardown = spyOn(railwayProvider, "terminateWorkspace").mockResolvedValue();
+    const teardown = spyOn(e2bProvider, "terminateWorkspace").mockResolvedValue();
     try {
       expect(await caller(userId).delete({ id: identity.id })).toEqual({
         success: true,
@@ -200,7 +201,7 @@ integration(
     expect(
       await db.query.usageSession.findFirst({ where: eq(usageSession.workspaceId, values.id) }),
     ).toBeUndefined();
-    const teardown = spyOn(railwayProvider, "terminateWorkspace").mockResolvedValue();
+    const teardown = spyOn(e2bProvider, "terminateWorkspace").mockResolvedValue();
     try {
       expect(await retryWorkspaceTerminations()).toEqual({ terminated: 1, failed: 0 });
       expect(teardown).toHaveBeenCalledWith("failed-publication", "publication-volume");
@@ -219,8 +220,8 @@ for (const operation of ["ensureRunning", "restartWorkspace"] as const) {
       status: "paused",
     });
     await db.insert(workspace).values(values);
-    const teardown = spyOn(railwayProvider, "terminateWorkspace").mockResolvedValue();
-    const resume = spyOn(railwayProvider, "resumeWorkspace").mockImplementation(async () => {
+    const teardown = spyOn(e2bProvider, "terminateWorkspace").mockResolvedValue();
+    const resume = spyOn(e2bProvider, "resumeWorkspace").mockImplementation(async () => {
       await caller(userId).delete({ id: identity.id });
     });
     const api = runtimeApi.createCaller({
@@ -398,9 +399,7 @@ integration("deleting a bot terminates its sandboxes, and only those", async () 
   const imageId = randomUUID();
   catalogIds.push(typeId, providerId);
   await db.insert(agentType).values({ id: typeId, key: typeId, name: typeId, serverOnly: true });
-  await db
-    .insert(cloudProvider)
-    .values({ id: providerId, name: providerId, providerKey: "railway" });
+  await db.insert(cloudProvider).values({ id: providerId, name: providerId, providerKey: "e2b" });
   await db.insert(image).values({ id: imageId, name: imageId, imageId, agentTypeId: typeId });
   const [own, unrelated, forged] = [randomUUID(), randomUUID(), randomUUID()];
   await db.insert(workspace).values(
@@ -516,7 +515,7 @@ integration(
     expect(settled.workspace.status).toBe("terminated");
     expect(published).toBe(false);
     expect(settled.volume?.externalVolumeId).toBe(externalVolumeId);
-    const teardown = spyOn(railwayProvider, "terminateWorkspace").mockResolvedValue();
+    const teardown = spyOn(e2bProvider, "terminateWorkspace").mockResolvedValue();
     try {
       expect(await retryWorkspaceTerminations()).toEqual({ terminated: 1, failed: 0 });
       expect(teardown).toHaveBeenCalledWith("late-service", externalVolumeId);
@@ -555,7 +554,7 @@ integration(
     expect(
       (await db.query.workspace.findFirst({ where: eq(workspace.id, values.id) }))?.status,
     ).toBe("terminated");
-    const teardown = spyOn(railwayProvider, "terminateWorkspace").mockResolvedValue();
+    const teardown = spyOn(e2bProvider, "terminateWorkspace").mockResolvedValue();
     try {
       expect(await retryWorkspaceTerminations()).toEqual({ terminated: 1, failed: 0 });
       expect(teardown).toHaveBeenCalledWith("interrupted-service", undefined);
@@ -585,7 +584,7 @@ integration("provider failure retains handles and volume for an automatic retry"
     externalVolumeId: "retry-volume",
     mountPath: "/workspace",
   });
-  const teardown = spyOn(railwayProvider, "terminateWorkspace").mockRejectedValue(
+  const teardown = spyOn(e2bProvider, "terminateWorkspace").mockRejectedValue(
     new Error("temporary provider failure"),
   );
   const logs = spyOn(console, "error").mockImplementation(() => {});
@@ -653,7 +652,7 @@ integration(
     const values = await sandboxValues(identity.id, { externalInstanceId: "early-handle" });
     await reserveWorkspace(values, identity);
     await requestBotDeletion(userId, identity.id);
-    const teardown = spyOn(railwayProvider, "terminateWorkspace").mockImplementation(async () => {
+    const teardown = spyOn(e2bProvider, "terminateWorkspace").mockImplementation(async () => {
       await settleWorkspaceProvisioning(
         { ...values, externalInstanceId: "late-handle", status: "running" },
         null,
@@ -738,7 +737,7 @@ integration(
     expect(settled.cancelled).toBe(false);
     expect(settled.workspace.status).toBe("running");
     expect(settled.volume?.externalVolumeId).toBe("ready-volume");
-    const teardown = spyOn(railwayProvider, "terminateWorkspace").mockResolvedValue();
+    const teardown = spyOn(e2bProvider, "terminateWorkspace").mockResolvedValue();
     try {
       expect(await caller(userId).delete({ id: identity.id })).toEqual({
         success: true,
@@ -812,7 +811,7 @@ integration(
     });
     await db.insert(workspace).values(values);
     await requestBotDeletion(userId, identity.id);
-    const teardown = spyOn(railwayProvider, "terminateWorkspace").mockRejectedValue(
+    const teardown = spyOn(e2bProvider, "terminateWorkspace").mockRejectedValue(
       Object.assign(new Error("resource gone"), { status: 404 }),
     );
     try {

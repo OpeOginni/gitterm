@@ -16,9 +16,18 @@ document covers the provider side and the provider research behind it.
 
 ## What a provider gets from a transport
 
-A transport has these calls: `create`, `info`, `list`, `destroy`, `pause`, `resume`, optional
-`keepAlive`, `run`, `writeFile`, `readFile`, `preview`, and optional `snapshots`. A command
-that exits non-zero is a result, not an error.
+A transport has two parts:
+
+- Managing the machine: `create`, `info`, `list`, `destroy`, `pause`, `resume`, optional
+  `keepAlive` and `snapshots`. This is always the provider's own API.
+- Connecting to it: `run`, `writeFile`, `readFile` and `preview`. A command that exits
+  non-zero is a result, not an error. There are three kinds of connection:
+
+| Connection                          | Providers                                    |
+| ----------------------------------- | -------------------------------------------- |
+| The provider's command API          | E2B, Daytona, Vercel, Boat, exe.dev, Gitterm |
+| GitTerm's command server, over HTTP | Railway (deprecated), AWS plain sandboxes    |
+| SSH                                 | None yet; the Mac hosts and Lambda need it   |
 
 With only a transport and its profile, a provider supports:
 
@@ -32,13 +41,19 @@ With only a transport and its profile, a provider supports:
 
 `TransportWorkspaceProvider` builds a workspace from transport calls only:
 
-1. `create` with the image's template and the machine profile's options. The image's
-   `imageProviderMetadata[provider]` gives `image` (or `template`). Every other key is passed
-   to the transport as `machine`.
-2. Clone the repository into `<home>/workspace/<repo>` and write the agent's files.
-3. Run the blocking setup command, capture the agent's access credential, and start the
+1. `create` with the image's template, the machine profile's options and the workspace's
+   environment. The image's `imageProviderMetadata[provider]` gives `image` (or `template`,
+   or `templateId`) as the template, and `setupCommands`. Every other key is passed to the
+   transport as `machine`. Without a template, the transport uses its default image.
+2. Run `setupCommands`, which install the agent on a plain image, unless the workspace starts
+   from a project snapshot.
+3. Clone the repository into `<root>/<repo>` and write the agent's files. `<root>` is set per
+   provider and defaults to `~/workspace`. `~/` in an agent file means the sandbox user's
+   `$HOME`, which an image can set apart from the provider's default (Daytona runs the
+   runtime image with `HOME=/workspace`).
+4. Run the blocking setup command, capture the agent's access credential, and start the
    agent's serve command.
-4. `preview` the agent's port; the proxy routes the workspace there.
+5. `preview` the agent's port; the proxy routes the workspace there.
 
 The workspace keeps a `sandbox:<provider>:<id>` handle, so `withSandboxHandles` sends pause,
 resume, terminate, status, keep-alive and exec to the transport.
@@ -47,10 +62,10 @@ A resume must start the agent again when the provider's pause kills processes. I
 profile sets `resumeCommand: true`, the transport runs the start command itself (only
 Gitterm's own sandboxes do). Otherwise the workspace writes it to `~/.gitterm/resume.sh`,
 and `withSandboxHandles` runs that script after every resume. The start command does
-nothing when the agent already answers on its port.
+nothing when the agent already answers on its port. Where a resume changes the preview URLs
+(`resumeChangesPreviewUrls`, Vercel), the resume returns the agent's new URL.
 
-It doesn't offer SSH editor access. Providers that need SSH keep their own
-`ComputeProvider` until the transport gains it.
+Workspaces on a transport don't offer SSH editor access.
 
 ### Adding a provider
 
@@ -66,12 +81,23 @@ It doesn't offer SSH editor access. Providers that need SSH keep their own
 
 A provider without a command API runs the GitTerm command server
 (`packages/agent-runtime/src/sandbox/exec-server.ts`) as its start command, as Railway and
-AWS plain sandboxes do. A provider that only offers SSH needs an SSH transport (see
+AWS plain sandboxes do. A provider that only offers SSH needs an SSH connection (see
 [Next steps](#next-steps)).
 
-Existing providers have their own `ComputeProvider` from before this contract. They move to
-`TransportWorkspaceProvider` one at a time, once each is checked live. E2B needs its
-`templateSuffix` sizes, and Daytona, Boat and exe.dev need SSH access.
+### Providers today
+
+| Provider                                     | Workspaces                   | Notes                                                                                                                                                     |
+| -------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E2B, Daytona, Vercel, Boat, exe.dev, Gitterm | `TransportWorkspaceProvider` |                                                                                                                                                           |
+| AWS                                          | Its own `ComputeProvider`    | Needs per-workspace IAM roles, EFS for files across a pause, and ALB routes, which a transport can't express yet. Pausing ECS loses the disk without EFS. |
+| Cloudflare                                   | Its own `ComputeProvider`    | No transport: its worker has no file calls, and a pause loses the disk, so a resume must provision again.                                                 |
+| Railway                                      | None (deprecated)            | Plain sandboxes still work and are deprecated. Railway's own Sandboxes product (beta) has no pause and no custom images.                                  |
+
+For AWS, Lambda MicroVMs (launched June 2026) is the closest AWS service to a transport:
+Firecracker VMs from an image, a per-VM IAM role, an authenticated URL per port, and a
+suspend that keeps memory and disk. It has no command or file API, so it would run the
+command server, and a VM lives at most 8 hours including time suspended. It fits as a
+separate short-lived provider, not as a replacement for ECS.
 
 ## How providers differ
 
@@ -139,9 +165,10 @@ Sail and Sprites succeeded on under 50% of burst starts.
 
 ## Next steps
 
-1. Move existing providers to `TransportWorkspaceProvider`, starting with E2B.
-2. Add the SSH transport. It makes the Mac hosts, Lambda and Vast one implementation, and
-   exe.dev already runs commands over SSH.
+1. Check each moved provider live with `scripts/provider-smoke.ts` (workspaces) and
+   `scripts/sandbox-smoke.ts`, then remove what the providers no longer need (the runtime bundle table and its
+   `workspaceOps.runtimeBundle` endpoint, used only by Railway workspaces).
+2. Add the SSH connection. It makes the Mac hosts, Lambda and Vast one implementation.
 3. Extend the profile with `platform` and the three pause levels, and machine profiles with
    a GPU. Do it with the first GPU or macOS provider, so a real provider checks the shape.
 4. Add Daytona GPU profiles, then Namespace for macOS and arm64.

@@ -33,11 +33,11 @@ describe("workspace runtime helpers", () => {
     expect(resolveProjectDirectory("https://github.com/acme/demo", "exedev")).toBe(
       "/home/exedev/demo",
     );
-    expect(resolveProjectDirectory(null, "railway")).toBe("/workspace/workspace");
+    expect(resolveProjectDirectory(null, "aws")).toBe("/workspace/workspace");
     expect(resolveProjectDirectory(null, "e2b")).toBe("/home/user/workspace/workspace");
     expect(resolveProjectDirectory(null, "gitterm")).toBe("/home/user/workspace/workspace");
     expect(resolveProjectDirectory(null, "boat")).toBe("/home/user/workspace");
-    expect(resolveProjectDirectory(null, "daytona")).toBe("/workspace");
+    expect(resolveProjectDirectory(null, "daytona")).toBe("/workspace/workspace");
   });
 
   test("never exposes control-plane headers", () => {
@@ -62,7 +62,7 @@ describe("workspace runtime helpers", () => {
       workspace: { ...workspace, status: "terminated" },
       headers: { authorization: "Bearer secret" },
       password: "secret",
-      providerKey: "railway",
+      providerKey: "aws",
     });
 
     expect(runtime.url).toBeNull();

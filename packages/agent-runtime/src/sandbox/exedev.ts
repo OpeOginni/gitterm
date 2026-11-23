@@ -226,8 +226,11 @@ export function createExeDevSandboxTransport(config: {
         .filter((key) => machine[key])
         .map((key) => ` --${key}=${shellQuote(String(machine[key]))}`)
         .join("");
+      const env = Object.entries(input.env ?? {})
+        .map(([key, value]) => ` --env=${shellQuote(`${key}=${value}`)}`)
+        .join("");
       await exec(
-        `new --name=${name} --no-email --image=${shellQuote(input.template ?? config.image ?? DEFAULT_EXEDEV_SANDBOX_IMAGE)}${size} --json`,
+        `new --name=${name} --no-email --image=${shellQuote(input.template ?? config.image ?? DEFAULT_EXEDEV_SANDBOX_IMAGE)}${size}${env} --json`,
         "create a sandbox",
       );
       try {

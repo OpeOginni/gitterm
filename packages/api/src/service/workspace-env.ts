@@ -6,7 +6,7 @@
  * to write. Agent-specific content (config formats, credential files, launch
  * commands) is produced by the agent provisioners in `./agents`; from the spec
  * we derive:
- *  - the env handed to container providers (Railway/AWS) for their Docker
+ *  - the env handed to container providers (AWS) for their Docker
  *    entrypoint, via `buildWorkspaceEnv`, and
  *  - SDK providers (E2B/Daytona) apply the spec directly.
  */
@@ -115,8 +115,7 @@ export function buildWorkspaceEnv(
   spec: WorkspaceProvisioningSpec,
   runtime: BuildWorkspaceEnvRuntimeParams,
 ): WorkspaceEnvironmentVariables {
-  const containerCloneCredential =
-    spec.repo?.inlineAuth && ["railway", "aws"].includes(runtime.workspaceProvider);
+  const containerCloneCredential = spec.repo?.inlineAuth && runtime.workspaceProvider === "aws";
   const system: SystemWorkspaceEnv = {
     REPO_URL: spec.repo?.url,
     REPO_BRANCH: spec.repo?.branch,

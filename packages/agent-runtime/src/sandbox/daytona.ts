@@ -43,6 +43,8 @@ export function createDaytonaSandboxTransport(config: {
   snapshot?: string;
   /** Used when no machine profile is given. A snapshot carries its own size instead. */
   resources?: { cpu?: number; memory?: number; disk?: number };
+  /** Lets sandboxes reach the internet on tiers that block it by default (Daytona Tier 3+). */
+  networkAccess?: boolean;
 }): SandboxTransport {
   if (!config.apiKey?.trim()) throw new SandboxProviderError("auth", "Daytona apiKey is empty.");
   const client = new Daytona({
@@ -94,13 +96,16 @@ export function createDaytonaSandboxTransport(config: {
                 : {}),
             },
             public: input.publicPreviews === true,
+            ...(input.env ? { envVars: input.env } : {}),
+            ...(config.networkAccess ? { networkBlockAll: false } : {}),
             // Direct: deleted at the lifetime. Managed: stopped when idle, Gitterm terminates later.
             ...(kill
               ? { ttlMinutes: minutes, autoStopInterval: minutes, autoDeleteInterval: 0 }
               : { autoStopInterval: minutes, autoDeleteInterval: -1 }),
           },
-          // A plain image is built into a snapshot on first use.
-          { timeout: 600 },
+          // A plain image is built into a snapshot on first use. Under Bun's 255-second
+          // request timeout, so Daytona's error still reaches the caller.
+          { timeout: 210 },
         );
       } catch (error) {
         throw failure(error, "create a sandbox");

@@ -94,7 +94,6 @@
   },
   "scripts": {
     "check-types": "tsc -b",
-    "codegen": "graphql-codegen --config codegen.ts",
     "wrangler:deploy": "wrangler deploy",
     "wrangler:dev": "wrangler dev",
     "wrangler:start": "wrangler dev",

@@ -78,10 +78,9 @@ The deployment's admin enables providers, and you can pick only from those. Set 
 | Boat               | `boat`       | Sandbox |
 | exe.dev            | `exedev`     | Sandbox |
 | Cloudflare Sandbox | `cloudflare` | Sandbox |
-| Railway            | `railway`    | Compute |
 | AWS                | `aws`        | Compute |
 
-- Sandbox providers return a `running` workspace right away. Railway reports `pending` until its deployment succeeds, usually within a minute.
+- Sandbox providers return a `running` workspace right away.
 - Whether files survive a pause depends on the provider. See [Lifecycle](/docs/workspaces/lifecycle#what-is-kept-while-paused).
 - The admin sets the machine sizes. `client.catalog.workspaceOptions()` lists the sizes you may use, with `vcpus` and `memoryGb`.
 - On managed Gitterm, your plan limits which providers and sizes you can use. See [Plans and billing](/docs/account/plans-and-billing#plans).

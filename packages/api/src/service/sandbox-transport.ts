@@ -85,6 +85,7 @@ export async function managedSandboxTransport(
         provider,
         apiKey: config.apiKey,
         target: config.defaultTargetRegion === "eu" ? "eu" : "us",
+        networkAccess: String(config.tier3NetworkAccess) === "true",
       });
     case "vercel":
       if (!config.apiToken || !config.teamId || !config.projectId) throw missing();

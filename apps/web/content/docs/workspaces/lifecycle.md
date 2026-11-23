@@ -50,7 +50,7 @@ Running processes and terminals never survive a pause. Files depend on the provi
 | Provider                            | Files kept across a pause                                                                                                                  |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | E2B, Daytona, Vercel, Boat, exe.dev | Yes                                                                                                                                        |
-| Railway, AWS                        | Only with persistent storage                                                                                                               |
+| AWS                                 | Only with persistent storage                                                                                                               |
 | Cloudflare                          | No. The filesystem is rebuilt on restart, and T3 Code loses its sessions, projects and paired devices; use the new pairing link it returns |
 
 The dashboard turns on persistent storage whenever the provider and your plan allow it. In the SDK, pass `persistent: true` to `workspaces.create()`.

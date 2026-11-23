@@ -265,7 +265,7 @@ export function createBoatSandboxTransport(config: {
       validatePort(port);
       await running(id);
       // Same as the Boat workspace provider: host the port, then read its protected URL.
-      const hosted = await command(id, `host ${port} >/dev/null && host url ${port}`);
+      const hosted = await command(id, `host ${port} --private >/dev/null && host url ${port}`);
       const url = hosted.stdout.match(/https:\/\/\S+/)?.[0];
       if (hosted.exitCode !== 0 || !url)
         throw new SandboxProviderError("provider", `Boat did not return a URL for port ${port}.`);

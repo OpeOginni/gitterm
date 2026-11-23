@@ -59,13 +59,3 @@ export async function readWorkspaceRuntimeBundle(input: {
   }
   return Object.fromEntries(entries) as Record<string, string>;
 }
-
-export function railwayBootstrapEnvironment(environment: Record<string, string | undefined>) {
-  return {
-    GITTERM_REMOTE_BOOTSTRAP: "1",
-    WORKSPACE_ID: environment.WORKSPACE_ID,
-    WORKSPACE_API_URL: environment.WORKSPACE_API_URL,
-    WORKSPACE_AGENT_AUTH_TOKEN: environment.WORKSPACE_AGENT_AUTH_TOKEN,
-    WORKSPACE_PROVIDER: environment.WORKSPACE_PROVIDER,
-  };
-}

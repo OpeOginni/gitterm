@@ -22,7 +22,6 @@ import env from "@gitterm/env/server";
 import { isPausedWorkspacePastRetention } from "../../utils/workspace-retention";
 import { getGitHubAppService } from "../../service/github";
 import { logger } from "../../utils/logger";
-import { railwayWebhookSchema } from "../railway/webhook";
 import { e2bWebhookSchema, verifyE2BWebhookSignature } from "../e2b/webhook";
 import { daytonaWebhookSchema, verifyDaytonaWebhookSignature } from "../daytona/webhook";
 import type { DaytonaConfig } from "../../providers/daytona/types";
@@ -39,7 +38,7 @@ import {
   updateWorkspaceStatusAndInvalidate,
 } from "../../service/workspace-mutations";
 import { filterIdleWorkspacesByRedisActivityWith } from "../../service/workspace-activity";
-import type { E2BConfig } from "../../providers/e2b";
+import type { E2BConfig } from "../../providers/e2b/types";
 import { runAwsCleanupSweep } from "../../providers/aws/reconcile";
 import { finalizeWorkspaceAgentRuns } from "../../service/agent-run";
 import {
@@ -573,81 +572,6 @@ export const internalRouter = router({
   // LISTENER ENDPOINTS
   // These endpoints are called by the listener service to avoid direct DB access
   // ============================================================================
-
-  /**
-   * Process Railway webhook
-   * Called by listener when it receives a Railway deployment webhook
-   */
-  processRailwayWebhook: internalProcedure
-    .input(railwayWebhookSchema)
-    .mutation(async ({ input }) => {
-      if (input.type === "Deployment.deployed" && input.details?.serviceId) {
-        const serviceId = input.details.serviceId;
-
-        const [railwayProvider] = await db
-          .select()
-          .from(cloudProvider)
-          .where(eq(cloudProvider.providerKey, "railway"));
-
-        if (!railwayProvider) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Railway provider not found in database",
-          });
-        }
-
-        const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
-          and(
-            eq(workspace.cloudProviderId, railwayProvider.id),
-            externalIdMatches("railway", serviceId),
-            or(
-              eq(workspace.status, "pending"),
-              and(eq(workspace.status, "running"), isNull(workspace.externalRunningDeploymentId)),
-            ),
-          ),
-          {
-            status: "running",
-            updatedAt: new Date(input.timestamp),
-            externalRunningDeploymentId: input.resource.deployment?.id ?? input.details?.id,
-          },
-        );
-
-        return { updated: updatedWorkspaces };
-      }
-
-      if (input.type === "Deployment.failed" && input.details?.serviceId) {
-        const serviceId = input.details.serviceId;
-
-        const [railwayProvider] = await db
-          .select()
-          .from(cloudProvider)
-          .where(eq(cloudProvider.providerKey, "railway"));
-
-        if (!railwayProvider) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Railway provider not found in database",
-          });
-        }
-
-        const updatedWorkspaces = await updateWorkspaceStatusAndInvalidate(
-          and(
-            eq(workspace.cloudProviderId, railwayProvider.id),
-            externalIdMatches("railway", serviceId),
-            // A late failure webhook must not undo explicit deletion.
-            sql`${workspace.status} <> 'terminated'`,
-          ),
-          {
-            status: "paused",
-            updatedAt: new Date(input.timestamp),
-          },
-        );
-
-        return { updated: updatedWorkspaces };
-      }
-
-      return { updated: [] };
-    }),
 
   processE2bWebhook: internalProcedure
     .input(

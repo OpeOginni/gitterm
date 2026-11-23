@@ -8,7 +8,6 @@ export const IMAGE_PROVIDER_KEYS = [
   "vercel",
   "boat",
   "exedev",
-  "railway",
 ] as const;
 
 export type ImageProviderKey = (typeof IMAGE_PROVIDER_KEYS)[number];
@@ -61,8 +60,6 @@ export function imageSupportsProvider(
       return Boolean(metadata?.exedev);
     case "gitterm":
       return Boolean((metadata?.gitterm as { image?: string } | undefined)?.image);
-    case "railway":
-      return Boolean(metadata?.railway);
     case "local":
       return true;
     default:

@@ -309,6 +309,7 @@ export type ExeDevDirectProviderConfig = {
   runtimeSetupCommands?: string[];
 };
 
+/** @deprecated Railway will be removed in a later release; use another provider. */
 export type RailwayDirectProviderConfig = {
   type: "railway";
   apiToken: string;
