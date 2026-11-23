@@ -1,57 +1,51 @@
-import { readFile, realpath } from "node:fs/promises";
-import { homedir } from "node:os";
+import { chmod, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseEnv } from "node:util";
 import {
+  assertProjectAllows,
+  createGittermClient,
+  DEFAULT_GITTERM_SERVER_URL,
+  loadConfig,
+} from "@gitterm/sdk";
+import {
   captureSource,
+  CLI_LOGIN_PROVIDERS,
+  cliLogin,
   createSandboxBackend,
   createSandboxClient,
-  CREDENTIAL_REFERENCE,
   describeSandboxAccount,
+  loadSandboxSettingsFile,
+  sandboxSettingsPath,
   projectDir,
   resolveSandboxAccount,
   sourceLimitBytes,
   startPreviewProxy,
   type JobView,
   type SandboxAccount,
+  type SandboxAccountConfig,
   type SandboxClient,
   type SandboxSettings,
 } from "@gitterm/sdk/sandbox";
 import chalk from "chalk";
-import { confirm, handleError, printJson, startSpinner, success } from "../ui.js";
+import {
+  ask,
+  choose,
+  confirm,
+  handleError,
+  printJson,
+  startSpinner,
+  success,
+  warn,
+} from "../ui.js";
+import { signIn } from "./auth.js";
 
 type Common = { json?: boolean; account?: string };
 
-export function sandboxConfigPath(): string {
-  return (
-    process.env.GITTERM_SANDBOX_CONFIG ?? path.join(homedir(), ".config", "gitterm", "sandbox.json")
-  );
-}
+/** With no settings file, sandboxes go through the signed-in GitTerm account. */
+const loadSettings = async (): Promise<SandboxSettings> => loadSandboxSettingsFile() ?? {};
 
-/**
- * Keys in the file are `{env:VAR}` or `{file:path}` references; a literal key is refused. With
- * no file, sandboxes go through the signed-in GitTerm account.
- */
-async function loadSettings(): Promise<SandboxSettings> {
-  const file = sandboxConfigPath();
-  let text: string;
-  try {
-    text = await readFile(file, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
-    throw error;
-  }
-  const settings = JSON.parse(text) as SandboxSettings;
-  const accounts = settings.accounts ?? { [settings.provider ?? "gitterm"]: settings };
-  for (const [name, account] of Object.entries(accounts)) {
-    const key = "apiKey" in account ? account.apiKey : undefined;
-    if ((key !== undefined && !CREDENTIAL_REFERENCE.test(key.trim())) || "token" in account)
-      throw new Error(
-        `Sandbox account ${name} in ${file} contains a credential. Store it in an environment variable and use "apiKey": "{env:VAR}".`,
-      );
-  }
-  return settings;
-}
+/** Refuses when sandboxes are turned off for the project at `dir` on this machine. */
+const allowed = (dir?: string) => assertProjectAllows(dir ?? process.cwd(), "sandbox");
 
 /** The checkout a command works on, as the path its records and setup snapshots use. */
 const checkout = (dir?: string) => realpath(dir ?? process.cwd());
@@ -151,7 +145,7 @@ export async function runSandboxAccount(args: Common) {
     "Reading settings...",
     async () => {
       const account = await resolveSandboxAccount(await loadSettings(), args.account);
-      return { ...describeSandboxAccount(account), configFile: sandboxConfigPath() };
+      return { ...describeSandboxAccount(account), configFile: sandboxSettingsPath() };
     },
     (summary) => {
       console.log(`${chalk.bold(summary.name)}  ${summary.provider}`);
@@ -176,6 +170,7 @@ export async function runSandboxCreate(
   },
 ) {
   try {
+    allowed(args.dir);
     const { client, settings, account } = await clientFor(args);
     const summary = describeSandboxAccount(account);
     await approve(args, `Create a billable sandbox charged to ${summary.chargedTo}?`);
@@ -262,6 +257,7 @@ export async function runSandboxSync(
   args: Common & { sandboxId: string; dir?: string; yes?: boolean },
 ) {
   try {
+    allowed(args.dir);
     const { client, settings } = await clientFor(args);
     const captured = await captureSource(await checkout(args.dir), {
       exclude: settings.exclude,
@@ -308,6 +304,7 @@ export async function runSandboxExec(
   },
 ) {
   try {
+    allowed(args.dir);
     const { client, settings } = await clientFor(args);
     const env = await envFileVars(settings, args.dir);
     const names = args.secretEnv ?? [];
@@ -393,6 +390,7 @@ export async function runSandboxPreview(
   },
 ) {
   try {
+    allowed(args.dir);
     const { client, settings } = await clientFor(args);
     if (args.public === true && !settings.publicPreviews)
       await approve(args, `Make port ${args.port} of this sandbox public to anyone with its URL?`);
@@ -507,7 +505,7 @@ export async function runSandboxSnapshotList(args: Common & { dir?: string }) {
           snapshots: [],
           reason:
             settings.snapshots !== true
-              ? `Setup snapshots are off. Set "snapshots": true in ${sandboxConfigPath()} to use them.`
+              ? `Setup snapshots are off. Set "snapshots": true in ${sandboxSettingsPath()} to use them.`
               : `${client.identity.provider} sandboxes on this account cannot be saved as setup snapshots, or the account starts every sandbox from its own snapshot.`,
         };
       return {
@@ -542,10 +540,11 @@ export async function runSandboxSnapshotSave(
     args,
     "Saving setup snapshot...",
     async () => {
+      allowed(args.dir);
       const { client, settings, account } = await clientFor(args);
       if (!snapshotsOn(settings, client, account))
         throw new Error(
-          `Setup snapshots are not available: turn them on with "snapshots": true in ${sandboxConfigPath()}, on a provider that can save them.`,
+          `Setup snapshots are not available: turn them on with "snapshots": true in ${sandboxSettingsPath()}, on a provider that can save them.`,
         );
       const saved = await client.saveSetupSnapshot(refOf(client, args.sandboxId), {
         label: args.label,
@@ -593,4 +592,198 @@ export async function runSandboxDestroy(args: Common & { sandboxId: string }) {
     },
     (record) => success(`Sandbox ${record.id} is ${record.state} (confirmed with the provider)`),
   );
+}
+
+// ---------- gitterm sandbox setup ----------
+
+/** Providers a sandbox account can use with your own key. Railway is deprecated. */
+const DIRECT = [
+  { provider: "e2b", name: "E2B", env: "E2B_API_KEY" },
+  { provider: "daytona", name: "Daytona", env: "DAYTONA_API_KEY" },
+  { provider: "vercel", name: "Vercel", env: "VERCEL_TOKEN" },
+  { provider: "boat", name: "Boat", env: "BOAT_API_KEY" },
+  { provider: "exedev", name: "exe.dev", env: "EXEDEV_API_KEY" },
+] as const;
+
+/** Account fields; everything else in the settings applies to every account. */
+const OPTION_KEYS = [
+  "limits",
+  "exclude",
+  "maxSourceMiB",
+  "publicPreviews",
+  "snapshots",
+  "envFiles",
+];
+
+/**
+ * Writes `account` into the settings file as the selected account, keeping the settings and
+ * any other accounts already there.
+ */
+async function saveAccount(name: string, account: SandboxAccountConfig): Promise<string> {
+  const file = sandboxSettingsPath();
+  const current = (loadSandboxSettingsFile() ?? {}) as Record<string, unknown>;
+  const options = Object.fromEntries(
+    Object.entries(current).filter(([key]) => OPTION_KEYS.includes(key)),
+  );
+  const accounts = { ...(current.accounts as Record<string, SandboxAccountConfig> | undefined) };
+  if (!current.accounts) {
+    // One account written inline: keep it, under its name, next to the new one.
+    const inline = Object.fromEntries(
+      Object.entries(current).filter(([key]) => !OPTION_KEYS.includes(key) && key !== "account"),
+    ) as SandboxAccountConfig;
+    if (Object.keys(inline).length) accounts[inline.provider ?? "gitterm"] = inline;
+  }
+  accounts[name] = account;
+  const next =
+    Object.keys(accounts).length === 1
+      ? { ...options, ...account }
+      : { ...options, account: name, accounts };
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, `${JSON.stringify(next, null, 2)}\n`);
+  return file;
+}
+
+/** Saves a pasted key in a file only the user can read; the settings point at it. */
+async function saveKey(name: string, key: string): Promise<string> {
+  const dir = path.join(path.dirname(sandboxSettingsPath()), "keys");
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  const file = path.join(dir, name);
+  await writeFile(file, `${key}\n`, { mode: 0o600 });
+  await chmod(file, 0o600);
+  return file;
+}
+
+/** Sandboxes on the user's GitTerm plan: signs in if needed, then the provider and size. */
+async function gittermAccount(): Promise<{ name: string; account: SandboxAccountConfig }> {
+  let client = createGittermClient();
+  if (
+    !(await client.auth.status().then(
+      () => true,
+      () => false,
+    ))
+  ) {
+    if (
+      !(await confirm(
+        "Sign in to Gitterm now? New here? Create a free account on the same page.",
+        true,
+      ))
+    )
+      throw new Error(
+        "Sandboxes on a Gitterm plan need a Gitterm login. Run `gitterm login`, then try again.",
+      );
+    await signIn(
+      process.env.GITTERM_SERVER_URL ??
+        (await loadConfig())?.serverUrl ??
+        DEFAULT_GITTERM_SERVER_URL,
+    );
+    client = createGittermClient();
+  }
+  const offered = await client.sandboxes.providers();
+  if (!offered.providers.length)
+    throw new Error("This Gitterm server offers no sandboxes to your account.");
+  const providers = [...offered.providers].sort(
+    (a, b) => Number(b === offered.default) - Number(a === offered.default),
+  );
+  let provider: string | undefined;
+  if (providers.length > 1) {
+    const picked =
+      providers[
+        await choose(
+          "Which provider should run them?",
+          providers.map((key) => (key === offered.default ? `${key} (the default)` : key)),
+        )
+      ]!;
+    if (picked !== offered.default) provider = picked;
+  }
+  const size = await ask("Machine size, such as small or medium (Enter for your plan's default):");
+  return {
+    name: "gitterm",
+    account: {
+      ...(provider ? { provider } : {}),
+      ...(size ? { size } : {}),
+    } as SandboxAccountConfig,
+  };
+}
+
+/** Sandboxes on the user's own provider account: its CLI login, a pasted key, or a variable. */
+async function directAccount(): Promise<{ name: string; account: SandboxAccountConfig }> {
+  const { provider, name, env } =
+    DIRECT[
+      await choose(
+        "Which provider?",
+        DIRECT.map((item) => item.name),
+      )
+    ]!;
+  const account: Record<string, unknown> = { provider };
+  const login = (CLI_LOGIN_PROVIDERS as readonly string[]).includes(provider)
+    ? await cliLogin(provider)
+    : undefined;
+  if (!login || !(await confirm(`Found your ${login.source}. Use it?`, true))) {
+    const how = await choose(`How should Gitterm get your ${name} key?`, [
+      "Paste it now (saved in a file only you can read)",
+      `From an environment variable, such as ${env}`,
+    ]);
+    if (how === 0) {
+      const key = await ask(`${name} API key:`, { hidden: true });
+      if (!key) throw new Error("No key was given.");
+      account.apiKey = `{file:${await saveKey(provider, key)}}`;
+    } else {
+      const variable = await ask("Environment variable:", { fallback: env });
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable))
+        throw new Error(`${variable} is not an environment variable name.`);
+      account.apiKey = `{env:${variable}}`;
+      if (!process.env[variable])
+        warn(`${variable} is not set in this shell. Set it where your agents start.`);
+    }
+  }
+  if (provider === "vercel") {
+    account.teamId = await ask("Vercel team id (team_…):");
+    account.projectId = await ask("Vercel project id (prj_…):");
+    if (!account.teamId || !account.projectId)
+      throw new Error("Vercel sandboxes need a team id and a project id.");
+  }
+  if (provider === "exedev") {
+    if (
+      !(await confirm(
+        "exe.dev never deletes a sandbox by itself: one left behind by a crash keeps running, and billing, until you destroy it. Accept that?",
+      ))
+    )
+      throw new Error("exe.dev sandboxes need that accepted.");
+    account.allowUnboundedLifetime = true;
+  }
+  return { name: provider, account: account as SandboxAccountConfig };
+}
+
+/** Sets up the user's own provider account. Used by `gitterm setup` too. */
+export async function setUpOwnProvider() {
+  const { name, account } = await directAccount();
+  return confirmAccount(name, await saveAccount(name, account));
+}
+
+async function confirmAccount(name: string, file: string) {
+  const summary = describeSandboxAccount(await resolveSandboxAccount(await loadSettings(), name));
+  const provider =
+    DIRECT.find((item) => item.provider === summary.provider)?.name ?? summary.provider;
+  success(`Sandboxes run on ${provider}, charged to ${summary.chargedTo}. Saved in ${file}.`);
+  if (!summary.credentialPresent)
+    warn(`The key is missing (${summary.credentialSource}). Sandboxes fail until it is there.`);
+  console.log("Restart your agents so they use it.");
+}
+
+/** Asks where sandboxes run and writes the settings, so nobody edits the file by hand. */
+export async function runSandboxSetup() {
+  try {
+    if (!process.stdin.isTTY)
+      throw new Error(
+        `Run \`gitterm sandbox setup\` in a terminal, or edit ${sandboxSettingsPath()}.`,
+      );
+    const where = await choose("Where should sandboxes run?", [
+      "On your Gitterm plan: no provider account needed",
+      `On your own provider account (${DIRECT.map((item) => item.name).join(", ")}), billed by them`,
+    ]);
+    const { name, account } = where === 0 ? await gittermAccount() : await directAccount();
+    await confirmAccount(name, await saveAccount(name, account));
+  } catch (error) {
+    handleError(error);
+  }
 }

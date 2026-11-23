@@ -29,7 +29,11 @@ It finds the agents on this machine and asks before setting up each one:
   can ask the agent to move its session to the cloud, and the `gitterm-sandbox` skill, so it
   runs builds and tests in a sandbox with `gitterm sandbox`.
 
-Then it offers to sign you in; the same page creates an account if you don't have one.
+Then it offers to sign you in (the same page creates an account if you don't have one), and to
+run sandboxes on your own provider account instead of your GitTerm plan: the same as
+`gitterm sandbox setup`, which picks the provider and takes its key or CLI login, so you never
+edit a config file. `gitterm project disable sandbox` (or `cloud`, `all`) turns either off for
+one project on this machine, and every agent integration honours it.
 `--yes` sets up every agent found without asking.
 
 ## Quick Start

@@ -52,9 +52,10 @@ export function piServeCommand(port: number): string {
  *   session is in the cloud, a question before a message is sent here instead, and delivery of
  *   the notices `gitterm move` and `gitterm return` leave for a session (in
  *   `~/.pi/agent/gitterm/inbox/<session id>.txt`) when that session opens.
+ * `gitterm project disable` can turn either off for a project on this machine.
  * The work itself is the `gitterm` CLI's; the extension asks the questions and shows the outcome.
  */
-export const PI_EXTENSION = String.raw`import { existsSync, readFileSync, rmSync } from "node:fs";
+export const PI_EXTENSION = String.raw`import { existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -75,6 +76,32 @@ function signedIn() {
     return Boolean(JSON.parse(readFileSync(path.join(home, ".config", "gitterm", "cli.json"), "utf8")).token);
   } catch {
     return false;
+  }
+}
+
+/**
+ * What this machine allows in the project Pi runs in ("gitterm project disable"), from
+ * ~/.config/gitterm/projects.json: the entry for the directory or the nearest one above it.
+ * A broken file turns both off until it is fixed.
+ */
+function projectAllows(dir) {
+  let saved;
+  try {
+    saved = JSON.parse(readFileSync(path.join(home, ".config", "gitterm", "projects.json"), "utf8")) || {};
+  } catch (error) {
+    if (error?.code === "ENOENT") return { sandbox: true, cloud: true };
+    return { sandbox: false, cloud: false };
+  }
+  let at;
+  try {
+    at = realpathSync(dir);
+  } catch {
+    at = path.resolve(dir);
+  }
+  for (; ; at = path.dirname(at)) {
+    const entry = saved[at];
+    if (entry) return { sandbox: entry.sandbox !== false, cloud: entry.cloud !== false };
+    if (path.dirname(at) === at) return { sandbox: true, cloud: true };
   }
 }
 
@@ -119,11 +146,12 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export default function (pi) {
   const signed = signedIn();
   const configured = existsSync(sandboxSettings);
+  const project = projectAllows(process.cwd());
   // Sandboxes need an account: the settings file, or the GitTerm account signed in to.
-  const sandboxesOn = configured || signed;
+  const sandboxesOn = (configured || signed) && project.sandbox;
   // Moving a session needs a GitTerm account; a provider key alone is not one. Without
   // either, /cloud is offered and signs the user in.
-  const cloudOn = signed || !configured;
+  const cloudOn = (signed || !configured) && project.cloud;
 
   /** A notice GitTerm left for this session: the agent reads it as the next message. */
   const deliver = (id, send) => {

@@ -49,7 +49,7 @@ Each part of the plugin turns on by itself when it can work. There is no setting
 | A `sandbox` account with your own provider key, no login   | Yes                              | No: moving needs a Gitterm login |
 | Neither                                                    | No                               | Yes: `/cloud` signs you in       |
 
-Restart OpenCode after signing in, so the sandbox tools appear.
+A `sandbox` account here means the plugin's `sandbox` option or, without it, the `gitterm` CLI's settings file that `gitterm sandbox setup` writes. `gitterm project disable` can turn either part off for a project; see [Turn Gitterm off for a project](/docs/sandboxes/setup#turn-gitterm-off-for-a-project). Restart OpenCode after signing in or changing these, so the tools appear.
 
 ## Sign in
 
@@ -82,7 +82,7 @@ Every option is optional.
 
 ### Sandbox options
 
-These go in `sandbox`, next to one account's [fields](#account-fields). For several accounts, put them under `sandbox.accounts` instead. Without `sandbox`, sandboxes go through the Gitterm account you are signed in to.
+These go in `sandbox`, next to one account's [fields](#account-fields). For several accounts, put them under `sandbox.accounts` instead. Without `sandbox`, the plugin uses `~/.config/gitterm/sandbox.json` (which `gitterm sandbox setup` writes), and without that, the Gitterm account you are signed in to.
 
 | Option           | Type     | Required | Default               | What it does                                                                                                                                                                                                                                                  |
 | ---------------- | -------- | -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

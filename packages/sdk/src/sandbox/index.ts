@@ -35,7 +35,9 @@ export {
   createSandboxBackend,
   CREDENTIAL_REFERENCE,
   describeSandboxAccount,
+  loadSandboxSettingsFile,
   resolveSandboxAccount,
+  sandboxSettingsPath,
   type GittermAccountConfig,
   type OwnKeyAccountConfig,
   type SandboxAccount,
@@ -74,3 +76,4 @@ export {
   type SandboxStore,
 } from "./store.js";
 export { startPreviewProxy, type PreviewProxy } from "./proxy.js";
+export { CLI_LOGIN_PROVIDERS, cliLogin, type CliLogin } from "./cli-login.js";

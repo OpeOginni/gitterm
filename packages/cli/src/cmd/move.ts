@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { mkdirSync, openSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { createGittermClient, DEFAULT_GITTERM_SERVER_URL } from "@gitterm/sdk";
+import { assertProjectAllows, createGittermClient, DEFAULT_GITTERM_SERVER_URL } from "@gitterm/sdk";
+import { loadSandboxSettingsFile } from "@gitterm/sdk/sandbox";
 import chalk from "chalk";
 import { checkoutRoot, repositoryUrl } from "@gitterm/move/checkout/snapshot";
 import { AGENTS, agentByKey, currentSession } from "@gitterm/move/agents/index";
@@ -14,6 +15,7 @@ import { loadRecords, type MoveRecord } from "@gitterm/move/records";
 import { installSkill } from "../move/skill.js";
 import { confirm, handleError, printJson, startSpinner, success, warn } from "../ui.js";
 import { signIn } from "./auth.js";
+import { setUpOwnProvider } from "./sandbox.js";
 
 type JsonArgs = { json?: boolean };
 
@@ -91,6 +93,24 @@ export async function runSetup(args: JsonArgs & { yes?: boolean }) {
       ))
     )
       signedIn = (await signIn(DEFAULT_GITTERM_SERVER_URL)) ?? "your account";
+    // Signed in, sandboxes run on the GitTerm plan; the user can pick their own provider instead.
+    const sandboxSettings = (() => {
+      try {
+        return loadSandboxSettingsFile();
+      } catch {
+        return {};
+      }
+    })();
+    if (
+      ask &&
+      !sandboxSettings &&
+      (await confirm(
+        signedIn
+          ? "Run sandboxes on your own provider account (E2B, Daytona, Vercel, Boat, exe.dev) instead of your GitTerm plan?"
+          : "Set up sandboxes on your own provider account (E2B, Daytona, Vercel, Boat, exe.dev)?",
+      ))
+    )
+      await setUpOwnProvider();
     if (args.json) return printJson({ agents, skills, signedIn: signedIn ?? null });
 
     if (signedIn) success(`Signed in to GitTerm as ${signedIn}.`);
@@ -105,6 +125,9 @@ export async function runSetup(args: JsonArgs & { yes?: boolean }) {
         console.log(`  ${chalk.bold(agent.label)}: ${agent.howToMove}`);
     console.log(
       `  ${chalk.bold("Other agents")}: ask it to move this session to the cloud (gitterm-cloud skill).`,
+    );
+    console.log(
+      "\nRun builds and tests in a sandbox: ask your agent. `gitterm sandbox setup` changes where they run, and `gitterm project disable sandbox` or `cloud` turns either off for a project.",
     );
   } catch (err) {
     handleError(err, args.json);
@@ -138,6 +161,7 @@ export async function runMove(
 ) {
   const reporter = progressReporter(args.json);
   try {
+    assertProjectAllows(process.cwd(), "cloud");
     const { agent, ref, fromSession } = sessionToMove(args);
     const result = await moveToCloud(
       {
