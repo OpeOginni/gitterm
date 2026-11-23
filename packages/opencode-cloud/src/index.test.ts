@@ -69,8 +69,6 @@ const record = (phase: HandoffRecord["phase"], sourceDirectory: string): Handoff
   phase,
   workspaceID: "workspace-test",
   sourceDirectory,
-  head: "0".repeat(40),
-  includeChanges: true,
   createdAt: "2026-01-01T00:00:00.000Z",
 });
 

@@ -168,40 +168,6 @@ export function runtimeClient(
   });
 }
 
-/** Resolves with the exit code when it is 0 or one of `accept`; any other outcome throws. */
-export async function runRemoteShell(
-  remote: OpenCodeClient,
-  directory: string,
-  command: string,
-  signal: AbortSignal,
-  accept: number[] = [],
-): Promise<number> {
-  const location = { directory };
-  let shell = (
-    await remote.shell.create({ location, cwd: directory, command, timeout: 120_000 }, { signal })
-  ).data;
-  try {
-    let wait = 100;
-    while (shell.status === "running") {
-      await delay(wait, undefined, { signal });
-      wait = 300;
-      shell = (await remote.shell.get({ id: shell.id, location }, { signal })).data;
-    }
-    if (shell.status !== "exited" || (shell.exit !== 0 && !accept.includes(shell.exit ?? -1))) {
-      throw new Error(
-        "Cloud checkout restoration failed. The workspace is retained for inspection; local files are unchanged.",
-      );
-    }
-    return shell.exit ?? 0;
-  } finally {
-    // A cancelled command must not keep applying files after we report failure.
-    if (shell.status === "running")
-      await remote.shell
-        .remove({ id: shell.id, location }, { signal: AbortSignal.timeout(5_000) })
-        .catch(() => {});
-  }
-}
-
 /**
  * Whether the OpenCode server offers a model. Its catalog fills in a few seconds after it
  * starts, so a missing model is only concluded once the catalog has stopped growing.
@@ -250,5 +216,3 @@ export function importPayload(
 }
 
 /** Continues the moved session in the cloud: with the user's message, or where it was stopped. */
-export const CONTINUE_TEXT =
-  "You were moved to a cloud workspace while working. Continue where you left off.";

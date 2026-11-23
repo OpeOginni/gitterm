@@ -40,7 +40,10 @@ export interface Cloud {
    * Waits until it runs (resuming it if paused): how to reach its agent, and whether GitTerm
    * can run commands there.
    */
-  ready(workspaceId: string): Promise<WorkspaceRuntime & { canExec: boolean }>;
+  ready(
+    workspaceId: string,
+    signal?: AbortSignal,
+  ): Promise<WorkspaceRuntime & { canExec: boolean }>;
   /** The workspace through GitTerm's command endpoint. */
   machine(workspaceId: string): Machine;
   end(workspaceId: string, how: "pause" | "delete"): Promise<void>;
@@ -48,7 +51,18 @@ export interface Cloud {
 
 export class RepositoryUnreachable extends Error {}
 
-export type Progress = (message: string) => void;
+export type Progress = (message: string) => void | Promise<void>;
+
+/** Asked when a return would replace local work: true replaces it (a copy is kept). */
+export type ReturnConfirmations = {
+  /** The local session has messages from after the move. */
+  session?(): Promise<boolean>;
+  /** The local checkout changed since the move. */
+  checkout?(): Promise<boolean>;
+};
+
+/** A return the user declined: nothing here changed. */
+export class ReturnDeclined extends Error {}
 
 const VERIFIED = "GITTERM_HANDOFF_VERIFIED";
 const CAPTURE_FAILURES: Record<number, string> = {
@@ -74,7 +88,11 @@ async function createWorkspace(
     return { id, snapshot, bundled: !repo };
   } catch (error) {
     if (!repo || !(error instanceof RepositoryUnreachable)) throw error;
-    const full = await captureSnapshot(root, changes, true);
+    const full = await captureSnapshot(root, changes, true).catch((tooBig: Error) => {
+      throw new Error(
+        `GitTerm can't access this repository (${error.message}), and sending its whole history instead failed: ${tooBig.message} Give GitTerm access to the repository in the dashboard's Integrations, or push your branch, then try again.`,
+      );
+    });
     if (full.digest !== snapshot.digest)
       throw new Error("The checkout changed while it was being copied. Try again.");
     snapshot = full;
@@ -117,45 +135,93 @@ async function restore(
  * the agent there resumes as the same conversation. The local session is left as it was.
  */
 export async function moveToCloud(
-  deps: { cloud: Cloud; local: Machine; agent: AgentAdapter; progress: Progress },
+  deps: {
+    cloud: Cloud;
+    local: Machine;
+    agent: AgentAdapter;
+    progress: Progress;
+    signal?: AbortSignal;
+  },
   options: {
     ref: string;
     message?: string;
     changes: boolean;
     /** Set when the session itself runs the move: it is copied mid-turn. */
     fromSession: boolean;
+    /** Stop a working session first (where the agent can), instead of refusing. */
+    stopIfBusy?: boolean;
+    /** The workspace's name; the session's title by default. */
+    name?: string;
+    /** Called once the workspace exists, before anything else happens in it. */
+    created?(workspaceId: string): Promise<void>;
   },
 ) {
-  const { cloud, local, agent, progress } = deps;
-  progress("Reading the session");
+  const { local, agent, progress } = deps;
+  const here = agent.session(local);
+  let stopped = false;
+  if (!options.fromSession && options.stopIfBusy && here.stop) {
+    if ((await here.status({ ref: options.ref })).busy) {
+      await progress("Stopping the agent here");
+      // Set first: a cancel while stopping must still let the agent carry on here.
+      stopped = true;
+      stopped = await here.stop({ ref: options.ref });
+    }
+  }
+  try {
+    const moved = await move({ ...deps, progress }, options, stopped);
+    return { ...moved, stopped };
+  } catch (error) {
+    if (stopped)
+      await here
+        .notify({
+          ref: options.ref,
+          message: "Moving to the cloud was stopped. Continue where you left off.",
+          where: "local",
+        })
+        .catch(() => {});
+    throw error;
+  }
+}
+
+async function move(
+  deps: Parameters<typeof moveToCloud>[0],
+  options: Parameters<typeof moveToCloud>[1],
+  stopped: boolean,
+) {
+  const { cloud, local, agent, progress, signal } = deps;
+  await progress("Reading the session");
   const exported = await agent.session(local).export({
     ref: options.ref,
-    allowBusy: options.fromSession,
+    allowBusy: options.fromSession || stopped,
   });
   const root = await checkoutRoot(exported.cwd);
   const subpath = path.relative(root, exported.cwd).split(path.sep).join("/");
   const attempt = randomUUID();
+  signal?.throwIfAborted();
 
-  progress("Creating the cloud workspace");
+  await progress("Creating the cloud workspace");
   const created = await createWorkspace(
     cloud,
     root,
     options.changes,
     {
       agent: agent.key,
-      name: exported.title.slice(0, 80) || `${agent.label} session`,
+      name: options.name ?? (exported.title.slice(0, 80) || `${agent.label} session`),
       metadata: { "move.agent": agent.key, "move.session": exported.ref.slice(0, 500) },
     },
     attempt,
   );
   const workspaceId = created.id;
   try {
-    progress("Waiting for the workspace to start");
-    const runtime = await cloud.ready(workspaceId);
+    await options.created?.(workspaceId);
+    signal?.throwIfAborted();
+    await progress("Waiting for the workspace to start");
+    const runtime = await cloud.ready(workspaceId, signal);
     const { url, directory } = runtime;
     const remote = workspaceMachine(cloud, agent, workspaceId, runtime);
 
-    progress("Copying your code");
+    signal?.throwIfAborted();
+    await progress("Copying your code");
     const stage = `.gitterm-handoff-${attempt}`;
     let snapshot = created.snapshot;
     let result = await restore(remote, directory, stage, snapshot.encoded, [subpath]);
@@ -169,7 +235,8 @@ export async function moveToCloud(
     if (result.exit !== 0 || !result.stdout.includes(VERIFIED))
       throw new Error("The checkout could not be restored in the workspace.");
 
-    progress("Copying the conversation");
+    signal?.throwIfAborted();
+    await progress("Copying the conversation");
     const cloudCwd = subpath ? path.posix.join(directory, subpath) : directory;
     const imported = await agent.session(remote).import({
       payload: exported.payload,
@@ -185,7 +252,8 @@ export async function moveToCloud(
         `${agent.label} is ${here.version} here and ${there.version} in the workspace.`,
       );
 
-    progress("Starting the agent in the cloud");
+    signal?.throwIfAborted();
+    await progress("Starting the agent in the cloud");
     await agent.session(remote).notify({
       ref: imported.ref,
       where: "cloud",
@@ -254,25 +322,40 @@ export async function moveToCloud(
  * kept (a Git stash and branch, a copy of the session).
  */
 export async function returnFromCloud(
-  deps: { cloud: Cloud; local: Machine; agent: AgentAdapter; progress: Progress },
+  deps: {
+    cloud: Cloud;
+    local: Machine;
+    agent: AgentAdapter;
+    progress: Progress;
+    signal?: AbortSignal;
+  },
   record: MoveRecord,
-  options: { force: boolean; end: "pause" | "delete" | "keep"; message?: string },
+  options: {
+    force: boolean;
+    end: "pause" | "delete" | "keep";
+    message?: string;
+    confirm?: ReturnConfirmations;
+  },
 ) {
-  const { cloud, local, agent, progress } = deps;
-  progress("Checking the local session");
+  const { cloud, local, agent, progress, signal } = deps;
+  await progress("Checking the local session");
   const here = await agent.session(local).export({ ref: record.localRef });
-  if (!options.force && agent.sentSince(here, record.localMark))
-    throw new Error(
+  if (
+    !options.force &&
+    agent.sentSince(here, record.localMark) &&
+    !(await options.confirm?.session?.())
+  )
+    throw new ReturnDeclined(
       "The local session has messages from after the move, which bringing the cloud session back would replace. Run again with --force to replace it anyway (a copy of it is kept).",
     );
 
-  progress("Connecting to the cloud workspace");
-  const runtime = await cloud.ready(record.workspaceId);
+  await progress("Connecting to the cloud workspace");
+  const runtime = await cloud.ready(record.workspaceId, signal);
   const { directory } = runtime;
   const remote = workspaceMachine(cloud, agent, record.workspaceId, runtime);
   const cloudSession = await agent.session(remote).export({ ref: record.cloudRef });
 
-  progress("Copying the cloud checkout");
+  await progress("Copying the cloud checkout");
   const stage = `.gitterm-handoff-${randomUUID()}`;
   const capture = async (base: string) => {
     try {
@@ -293,7 +376,7 @@ export async function returnFromCloud(
   let snapshot = await capture(record.head);
   const summary = snapshotSummary(snapshot);
 
-  progress("Restoring it here");
+  await progress("Restoring it here");
   const restoreHere = async (force: boolean) => {
     const dir = path.join(record.root, stage);
     try {
@@ -317,8 +400,14 @@ export async function returnFromCloud(
       throw new Error("The cloud checkout changed while it was being captured. Try again.");
     result = await restoreHere(options.force);
   }
+  if (
+    result.exit === RESTORE_NEEDS_CONFIRMATION &&
+    !options.force &&
+    (await options.confirm?.checkout?.())
+  )
+    result = await restoreHere(true);
   if (result.exit === RESTORE_NEEDS_CONFIRMATION)
-    throw new Error(
+    throw new ReturnDeclined(
       "This checkout changed since the session moved. Run again with --force to replace it with the cloud's (your changes are kept in a Git stash and a gitterm/before-return branch).",
     );
   if (result.exit !== 0 || !result.stdout.startsWith(VERIFIED))
@@ -326,7 +415,7 @@ export async function returnFromCloud(
       "The cloud checkout could not be applied here, so this checkout was left as it was. A file ignored by Git may be in the way of one the cloud added.",
     );
 
-  progress("Bringing the conversation back");
+  await progress("Bringing the conversation back");
   await agent.session(local).import({
     ref: record.localRef,
     payload: cloudSession.payload,

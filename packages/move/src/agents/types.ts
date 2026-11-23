@@ -27,6 +27,8 @@ export interface SessionOps {
   /** Starts the agent on the message, without waiting. */
   notify(input: { ref: string; message: string; where: "cloud" | "local" }): Promise<void>;
   status(input: { ref: string }): Promise<{ busy: boolean }>;
+  /** Stops a working session and waits until it stays stopped. Returns whether anything ran. */
+  stop?(input: { ref: string }): Promise<boolean>;
 }
 
 /** How to reach a workspace's agent: its public URL and credentials, and its checkout. */

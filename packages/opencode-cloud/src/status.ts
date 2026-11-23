@@ -1,6 +1,7 @@
 import type { OpenCodeClient } from "@opencode/client";
 import { GittermError, type GittermClient } from "@gitterm/sdk";
-import { markCloudSession, runtimeClient, type HandoffRecord } from "./handoff";
+import { runtimeClient } from "@gitterm/move/agents/opencode-session";
+import { markCloudSession, type HandoffRecord } from "./handoff";
 import type { CloudStatus } from "./marker";
 
 /**
