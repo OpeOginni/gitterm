@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { HandoffRecord } from "./handoff";
@@ -8,7 +8,11 @@ import { checkoutRoot, git } from "@gitterm/move/checkout/snapshot";
 
 let root: string;
 let home: string;
-const saved = { HOME: process.env.HOME, GITTERM_API_TOKEN: process.env.GITTERM_API_TOKEN };
+const saved = {
+  HOME: process.env.HOME,
+  GITTERM_API_TOKEN: process.env.GITTERM_API_TOKEN,
+  GITTERM_SANDBOX_CONFIG: process.env.GITTERM_SANDBOX_CONFIG,
+};
 beforeEach(async () => {
   root = await mkdtemp(path.join(tmpdir(), "gitterm-plugin-test-"));
   await git(root, ["init", "-b", "main"]);
@@ -17,11 +21,14 @@ beforeEach(async () => {
   home = await mkdtemp(path.join(tmpdir(), "gitterm-plugin-home-"));
   process.env.HOME = home;
   delete process.env.GITTERM_API_TOKEN;
+  delete process.env.GITTERM_SANDBOX_CONFIG;
 });
 afterEach(async () => {
   process.env.HOME = saved.HOME;
   if (saved.GITTERM_API_TOKEN !== undefined)
     process.env.GITTERM_API_TOKEN = saved.GITTERM_API_TOKEN;
+  if (saved.GITTERM_SANDBOX_CONFIG !== undefined)
+    process.env.GITTERM_SANDBOX_CONFIG = saved.GITTERM_SANDBOX_CONFIG;
   await rm(root, { recursive: true, force: true });
   await rm(home, { recursive: true, force: true });
 });
@@ -121,4 +128,27 @@ test("offers /cloud-return only while a session of this checkout is in the cloud
   // A session that came back, and one that belongs to another checkout, do not count.
   expect((await setup([record("returned", root)])).commands).toEqual(["cloud"]);
   expect((await setup([record("ready", "/another/checkout")])).commands).toEqual(["cloud"]);
+});
+
+test("a project turned off on this machine gets no sandbox tools and no /cloud", async () => {
+  await mkdir(path.join(home, ".config", "gitterm"), { recursive: true });
+  await writeFile(
+    path.join(home, ".config", "gitterm", "projects.json"),
+    JSON.stringify({ [root]: { sandbox: false, cloud: false } }),
+  );
+  const result = await setup([], { serverUrl: "http://127.0.0.1:9", token: "test-token" });
+  expect(result.tools).toEqual([]);
+  expect(result.commands).toEqual([]);
+});
+
+test("the gitterm CLI's sandbox settings count when the plugin has no sandbox option", async () => {
+  await mkdir(path.join(home, ".config", "gitterm"), { recursive: true });
+  await writeFile(
+    path.join(home, ".config", "gitterm", "sandbox.json"),
+    JSON.stringify({ provider: "e2b", apiKey: "{env:GITTERM_TEST_UNSET_KEY}" }),
+  );
+  const result = await setup([]);
+  expect(result.tools).toEqual(expect.arrayContaining(SANDBOX_TOOLS));
+  // A provider key and no GitTerm login: nothing to move a session with.
+  expect(result.commands).toEqual([]);
 });

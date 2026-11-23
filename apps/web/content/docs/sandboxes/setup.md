@@ -25,9 +25,17 @@ Not sure which? See [Managed and direct accounts](/docs/concepts#managed-and-dir
 
    It asks about each agent it finds: it installs `@gitterm/opencode` for OpenCode and Gitterm's extension for Pi, adds the `gitterm-sandbox` skill for Codex, Claude Code and other agents, and offers to sign you in. Signed in, sandboxes are billed to your Gitterm plan and nothing else is needed: go to step 3.
 
-2. To use your own provider key instead, add a [direct account](#direct-accounts). The settings are the same everywhere; only where they go differs:
+2. To use your own provider account instead, run:
 
-   - **OpenCode**: under `sandbox` in the plugin's options.
+   ```sh
+   gitterm sandbox setup
+   ```
+
+   Pick your Gitterm plan or a provider. If you already signed in to that provider's CLI (E2B, Daytona, exe.dev), it offers to use that login. Otherwise paste the key, which is saved in a file only you can read, or name the environment variable that holds it. Every agent then uses that account. `gitterm setup` asks the same.
+
+   To write the settings by hand instead, they are the same everywhere; only where they go differs:
+
+   - **OpenCode**: under `sandbox` in the plugin's options. Without that option, the plugin uses the file below too.
 
      ```jsonc
      {
@@ -126,6 +134,16 @@ The provider must be enabled on the deployment and allowed by your plan. If it i
 
 > [!NOTE]
 > On E2B, Daytona, Boat, and exe.dev, managed previews are served through Gitterm. They can be public, or private and open in your browser when you are signed in to Gitterm. See [Previews through Gitterm](/docs/sandboxes/jobs-and-previews#previews-through-gitterm).
+
+## Turn Gitterm off for a project
+
+To keep an agent from using sandboxes, moving sessions to the cloud, or both in one project, run this in the project:
+
+```sh
+gitterm project disable sandbox   # or: cloud, all
+```
+
+It applies to the whole checkout, on this machine only: nothing is written to the repository. It is saved in `~/.config/gitterm/projects.json`. In that project the OpenCode plugin and Pi's extension don't offer the sandbox tools (or `/cloud`), and the `gitterm` commands refuse, so agents using the skills stop too. Restart your agents after changing it. `gitterm project` shows what the project allows, and `gitterm project enable sandbox` turns it back on.
 
 ## Several accounts
 

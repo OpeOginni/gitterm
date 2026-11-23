@@ -59,6 +59,7 @@ The CLI does not create workspaces. Use the dashboard, the SDK, or `/cloud`. See
 
 | Command                                                 | Flags                                                                                                                                                   | What it does                                                                                                                                                                                                                                                          |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gitterm sandbox setup`                                 |                                                                                                                                                         | Choose where sandboxes run: your Gitterm plan or your own provider account. Offers a provider CLI login it finds, or takes a key (saved in `~/.config/gitterm/keys/`, readable only by you) or an environment variable name. Writes the accounts file                 |
 | `gitterm sandbox account`                               |                                                                                                                                                         | Show the selected account, its provider, and who is charged                                                                                                                                                                                                           |
 | `gitterm sandbox create`                                | `--name`, `--purpose`, `--lifetime <minutes>` (default 30), `--public`, `--snapshot <id\|none>`, `--session`, `--dir`, `--yes`/`-y`                     | Create a billable sandbox. `--public` makes every preview public and can't be changed later. `--public` or `--no-public` overrides the `publicPreviews` setting. With setup snapshots on, it starts from the checkout's newest one unless `--snapshot` says otherwise |
 | `gitterm sandbox list`                                  |                                                                                                                                                         | List live sandboxes for the account                                                                                                                                                                                                                                   |
@@ -99,6 +100,16 @@ The CLI reads accounts from `~/.config/gitterm/sandbox.json`, or from the file i
 `apiKey` takes `{env:VAR}` or `{file:path}`, as in OpenCode config. A literal key in the file is refused. With `"publicPreviews": true`, `create` makes public previews without asking. Whether a provider can make a preview public: [Previews by provider](/docs/sandboxes/jobs-and-previews#previews-by-provider).
 
 An account with `apiKey` uses your own provider key and needs no Gitterm login. E2B, Daytona, and exe.dev can also use a [provider CLI login](/docs/sandboxes/setup#direct-accounts). A single account can sit at the top level: `{ "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" }`.
+
+## Projects
+
+| Command                                         | Flags    | What it does                                                                |
+| ----------------------------------------------- | -------- | --------------------------------------------------------------------------- |
+| `gitterm project`                               | `--json` | Show whether this project allows sandboxes and moving sessions to the cloud |
+| `gitterm project disable <sandbox\|cloud\|all>` | `--json` | Turn them off for this project (the Git checkout's root), on this machine   |
+| `gitterm project enable <sandbox\|cloud\|all>`  | `--json` | Turn them back on                                                           |
+
+The switches are saved in `~/.config/gitterm/projects.json`, never in the repository, and cover every folder inside the checkout. With sandboxes off, `sandbox create`, `sync`, `exec`, `preview` and `snapshot save` refuse there; with cloud off, `move` does. The OpenCode plugin and Pi's extension follow the same switches. See [Turn Gitterm off for a project](/docs/sandboxes/setup#turn-gitterm-off-for-a-project).
 
 ## Inside a workspace
 

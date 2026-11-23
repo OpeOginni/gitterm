@@ -16,6 +16,7 @@ description: Move this coding session to a GitTerm cloud workspace and back. Use
 
 Run these with your shell tool. If \`gitterm\` is not installed, use \`npx -y @gitterm/cli\`
 instead. If a command says the user is not signed in, ask them to run \`gitterm login\` and stop.
+If it says moving is turned off for this project, tell the user and stop.
 In OpenCode and Pi, their \`/cloud\` and \`/cloud-return\` commands do the same.
 
 ## Move this session to the cloud
@@ -62,7 +63,8 @@ there. If you have \`sandbox_*\` tools (OpenCode, Pi), use those instead of thes
 
 Run these with your shell tool. If \`gitterm\` is not installed, use \`npx -y @gitterm/cli\`
 instead. If a command says the user is not signed in or has no sandbox account, ask them to run
-\`gitterm login\` (or to add a provider key in \`~/.config/gitterm/sandbox.json\`) and stop.
+\`gitterm sandbox setup\` and stop. If it says sandboxes are turned off for this project, tell
+the user and stop: don't work around it.
 
 ## Before you start
 

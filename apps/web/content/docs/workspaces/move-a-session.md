@@ -23,6 +23,7 @@ While the session is in the cloud, nothing syncs: later local edits are not uplo
 - For a private repository, a GitHub connection under **Integrations** is best. Without one, `/cloud` uploads the repository's history instead (up to 25 MiB), and the cloud checkout has no remote, so the agent can't push or pull there.
 - If the repository has an `origin` remote, it is a credential-free HTTPS URL or a GitHub SSH URL.
 - OpenCode 2.3.0 or newer.
+- Moving isn't turned off for the project with `gitterm project disable cloud`; see [Turn Gitterm off for a project](/docs/sandboxes/setup#turn-gitterm-off-for-a-project).
 
 ## Move the session
 

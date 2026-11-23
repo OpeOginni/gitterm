@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Plugin } from "@opencode/plugin";
 import { OpenCode, type OpenCodeClient } from "@opencode/client";
 import { Service } from "@opencode/client/service";
-import { createGittermClient, loadConfigSync } from "@gitterm/sdk";
-import type { SandboxSettings } from "@gitterm/sdk/sandbox";
+import { createGittermClient, loadConfigSync, projectSettings } from "@gitterm/sdk";
+import { loadSandboxSettingsFile, type SandboxSettings } from "@gitterm/sdk/sandbox";
 import {
   handoffSession,
   HandoffCancelled,
@@ -328,11 +328,12 @@ export type GittermPluginOptions = HandoffOptions & { sandbox?: SandboxSettings 
 /**
  * GitTerm for OpenCode: sandbox tools for the local agent, and /cloud to move the session to
  * a cloud workspace. Each turns on by itself when it can work:
- * - Sandboxes, with the account in `sandbox` (a provider key or GitTerm), or else the GitTerm
- *   account the user is signed in to.
+ * - Sandboxes, with the account in `sandbox`, else the gitterm CLI's sandbox settings (written
+ *   by `gitterm sandbox setup`), else the GitTerm account the user is signed in to.
  * - /cloud, unless the user set up sandboxes and is not signed in to GitTerm: moving a session
  *   needs a GitTerm account (gitterm.dev or self-hosted), which a provider key alone is not.
  *   Without either, /cloud is on and signs the user in.
+ * `gitterm project disable` can turn either off for a project on this machine.
  */
 export const GittermPlugin = Plugin.define({
   id: "gitterm",
@@ -342,16 +343,39 @@ export const GittermPlugin = Plugin.define({
     const signedIn = Boolean(
       options.token?.trim() || process.env.GITTERM_API_TOKEN?.trim() || loadConfigSync(),
     );
-    const configured = sandbox && Object.keys(sandbox).length > 0 ? sandbox : undefined;
+    const configured = sandbox && Object.keys(sandbox).length > 0 ? sandbox : sandboxSettingsFile();
     const account = configured ?? (signedIn ? gittermAccount(options) : undefined);
-    const stopSandboxes = account ? await registerSandboxTools(ctx, account) : undefined;
-    const stopCloud = signedIn || !configured ? await registerCloud(ctx, cloud) : undefined;
+    const project = allowed(ctx.location.directory);
+    const stopSandboxes =
+      account && project.sandbox ? await registerSandboxTools(ctx, account) : undefined;
+    const stopCloud =
+      (signedIn || !configured) && project.cloud ? await registerCloud(ctx, cloud) : undefined;
     return async () => {
       await stopSandboxes?.();
       await stopCloud?.();
     };
   },
 });
+
+/** The gitterm CLI's sandbox settings. A broken file turns sandboxes off until it is fixed. */
+function sandboxSettingsFile(): SandboxSettings | undefined {
+  try {
+    return loadSandboxSettingsFile();
+  } catch (error) {
+    console.error("GitTerm sandboxes are off:", error);
+    return undefined;
+  }
+}
+
+/** What this machine allows in the project. A broken file turns both off until it is fixed. */
+function allowed(directory: string) {
+  try {
+    return projectSettings(directory);
+  } catch (error) {
+    console.error("GitTerm is off for this project:", error);
+    return { sandbox: false, cloud: false };
+  }
+}
 
 /** Sandboxes through the GitTerm account the plugin's `serverUrl` and `token` point at. */
 const gittermAccount = (options: GittermPluginOptions): SandboxSettings => ({

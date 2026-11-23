@@ -25,12 +25,14 @@ import {
   runSandboxPause,
   runSandboxPreview,
   runSandboxResume,
+  runSandboxSetup,
   runSandboxSnapshotDelete,
   runSandboxSnapshotList,
   runSandboxSnapshotSave,
   runSandboxSync,
 } from "./cmd/sandbox.js";
 import { runMove, runMoves, runReturn, runSetup, runT3Link, runT3Unlink } from "./cmd/move.js";
+import { runProjectSet, runProjectStatus } from "./cmd/project.js";
 import {
   runCurrentWorkspaceInfo,
   runPortClose,
@@ -307,9 +309,49 @@ if (workspaceEnvironment) {
         .demandCommand(1, "Please specify a t3 command")
         .strict(),
     )
+    .command("project", "Turn sandboxes or cloud moves on or off for this project", (project) =>
+      project
+        .command(
+          ["status", "$0"],
+          "Show what this project allows",
+          (b) => b.options(jsonOption),
+          (argv) => runProjectStatus(argv),
+        )
+        .command(
+          "disable <feature>",
+          "Turn sandboxes, cloud moves, or all of GitTerm off for this project",
+          (b) =>
+            b
+              .positional("feature", {
+                choices: ["sandbox", "cloud", "all"] as const,
+                demandOption: true,
+              })
+              .options(jsonOption),
+          (argv) => runProjectSet({ ...argv, on: false }),
+        )
+        .command(
+          "enable <feature>",
+          "Turn sandboxes, cloud moves, or all of GitTerm back on for this project",
+          (b) =>
+            b
+              .positional("feature", {
+                choices: ["sandbox", "cloud", "all"] as const,
+                demandOption: true,
+              })
+              .options(jsonOption),
+          (argv) => runProjectSet({ ...argv, on: true }),
+        )
+        .strict(),
+    )
     .command(["sandbox", "sb"], "Run commands in remote sandboxes (no remote agent)", (sandbox) =>
       sandbox
         .options(sandboxOptions)
+        .command(
+          "setup",
+          "Choose where sandboxes run: your Gitterm plan or your own provider account",
+          (b) => b,
+          () => runSandboxSetup(),
+        )
         .command(
           "account",
           "Show the selected mode, account, and who is charged",
