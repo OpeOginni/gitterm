@@ -69,8 +69,42 @@ export function Hero() {
           </ClickToCopy>
         </div>
         <CtaButtons />
+        <RunsOn />
       </Wrap>
     </section>
+  );
+}
+
+/** Every provider: Gitterm first, AWS last, exe.dev among the white logos. */
+const GITTERM = { name: "Gitterm", logo: "/gitterm.svg" };
+const byId = Object.fromEntries(SANDBOX_PROVIDERS.map((p) => [p.id, p]));
+const RUNS_ON = [
+  GITTERM,
+  byId.e2b,
+  byId.daytona,
+  byId.exe,
+  byId.vercel,
+  byId.boat,
+  byId.aws,
+].flatMap((p) => (p ? [{ name: p.name, logo: p.logo }] : []));
+
+/** A quiet row under the hero's buttons: where sandboxes and workspaces can run. */
+function RunsOn() {
+  return (
+    <div className="mt-[clamp(48px,6vw,72px)]">
+      <p className="m-0 mb-5 text-[13px] text-fg-4">Sandboxes and cloud workspaces run on</p>
+      <ul className="m-0 flex list-none flex-wrap justify-center gap-x-7 gap-y-4 p-0 max-[640px]:gap-x-5">
+        {RUNS_ON.map((p) => (
+          <li
+            key={p.name}
+            className="flex items-center gap-2 text-[14.5px] font-medium text-fg-3 max-[640px]:text-[13px]"
+          >
+            <Logo src={p.logo} className="size-5 object-contain max-[640px]:size-[18px]" />
+            {p.name}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -96,55 +130,21 @@ function CtaButtons() {
   );
 }
 
-// ---------- Providers strip (doubles as the demo's provider picker) ----------
-
-const stripButton =
-  "group relative flex flex-col items-center gap-2.5 px-2 pt-[22px] pb-5 text-[15px] leading-[1.2] font-medium text-fg-3 transition-colors duration-[350ms] focus-visible:-outline-offset-[3px] max-[420px]:px-1 max-[420px]:pt-[18px] max-[420px]:pb-4 max-[420px]:text-[13.5px]";
-/** Grey until hovered or picked, so exe.dev's photo and AWS's orange tile don't outshout the rest. */
-const stripLogo =
-  "size-7 object-contain grayscale transition-[opacity,transform,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] max-[420px]:size-6";
+// ---------- Extend your laptop: introduces the demo below it ----------
 
 export function ProvidersStrip() {
   return (
     <section
       id="providers"
       aria-labelledby="prov-h"
-      className="mt-[clamp(56px,7vw,88px)] scroll-mt-20 text-center"
+      className="mt-[clamp(56px,7vw,88px)] mb-[26px] scroll-mt-20 text-center"
     >
       <Wrap>
         <PartHeading className="mb-2.5">Extend your laptop</PartHeading>
-        <p id="prov-h" className="mx-auto mb-[26px] max-w-[40rem] text-[15px] text-fg-3">
-          Your agent can attach sandboxes from any of these. The demo moves through them on its own,
-          or pick one to see it.
+        <p id="prov-h" className="mx-auto max-w-[40rem] text-[15px] text-fg-3">
+          Your agent borrows a sandbox when your laptop isn't enough. The demo moves through each
+          provider on its own.
         </p>
-        <div
-          data-prov-strip
-          role="group"
-          aria-label="Sandbox providers"
-          className="grid grid-cols-[repeat(auto-fit,minmax(104px,1fr))] border-y border-line"
-        >
-          {SANDBOX_PROVIDERS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              data-prov={p.id}
-              aria-pressed={p.id === "e2b"}
-              className={cn(
-                stripButton,
-                "cursor-pointer after:absolute after:inset-x-[22%] after:-bottom-px after:h-0.5 after:scale-x-0 after:rounded-sm after:bg-primary after:transition-transform after:duration-500 after:ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-white/[0.025] hover:text-fg aria-pressed:text-fg aria-pressed:after:scale-x-100",
-              )}
-            >
-              <Logo
-                src={p.logo}
-                className={cn(
-                  stripLogo,
-                  "opacity-60 group-hover:opacity-90 group-hover:grayscale-0 group-aria-pressed:-translate-y-0.5 group-aria-pressed:opacity-100 group-aria-pressed:grayscale-0",
-                )}
-              />
-              {p.name}
-            </button>
-          ))}
-        </div>
       </Wrap>
     </section>
   );
@@ -287,41 +287,6 @@ export function HowItWorks() {
             </div>
           </div>
         </div>
-      </Wrap>
-    </Band>
-  );
-}
-
-// ---------- Runs on: every provider Gitterm supports ----------
-
-/** Every provider: Gitterm first, AWS last, exe.dev among the white logos. */
-const GITTERM = { name: "Gitterm", logo: "/gitterm.svg" };
-const byId = Object.fromEntries(SANDBOX_PROVIDERS.map((p) => [p.id, p]));
-const RUNS_ON = [
-  GITTERM,
-  byId.e2b,
-  byId.daytona,
-  byId.exe,
-  byId.vercel,
-  byId.boat,
-  byId.aws,
-].flatMap((p) => (p ? [{ name: p.name, logo: p.logo }] : []));
-export function RunsOn() {
-  return (
-    <Band id="runs-on">
-      <Wrap>
-        <SectionHead title="Runs on the provider you choose">
-          Sandboxes and cloud workspaces on any of these. Switching is one setting, and more are on
-          the way.
-        </SectionHead>
-        <ul className="ro-grid">
-          {RUNS_ON.map((p) => (
-            <li key={p.name} className="ro-tile">
-              <Logo src={p.logo} className="ro-logo" />
-              {p.name}
-            </li>
-          ))}
-        </ul>
       </Wrap>
     </Band>
   );

@@ -3452,42 +3452,4 @@
     border-left: 0;
     border-block: 1px solid #50545e;
   }
-
-  /* Runs on: every provider, in a grid that grows. */
-  .lp .ro-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 40px 16px;
-    margin: 8px 0 0;
-    padding: 0;
-    list-style: none;
-  }
-  .lp .ro-tile {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    color: var(--fg-2);
-    font-size: 17px;
-    font-weight: 500;
-  }
-  .lp .ro-logo {
-    width: 56px;
-    height: 56px;
-    object-fit: contain;
-  }
-  @media (max-width: 640px) {
-    .lp .ro-grid {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 28px 8px;
-    }
-    .lp .ro-logo {
-      width: 40px;
-      height: 40px;
-    }
-    .lp .ro-tile {
-      gap: 12px;
-      font-size: 14px;
-    }
-  }
 }
