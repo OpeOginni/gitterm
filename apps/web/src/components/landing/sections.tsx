@@ -294,17 +294,17 @@ export function HowItWorks() {
 
 // ---------- Runs on: every provider Gitterm supports ----------
 
-/** Every provider, with the coloured logos (Gitterm, exe.dev, AWS) between the white ones. */
+/** Every provider: Gitterm first, AWS last, exe.dev among the white logos. */
 const GITTERM = { name: "Gitterm", logo: "/gitterm.svg" };
 const byId = Object.fromEntries(SANDBOX_PROVIDERS.map((p) => [p.id, p]));
 const RUNS_ON = [
-  byId.e2b,
   GITTERM,
+  byId.e2b,
   byId.daytona,
   byId.exe,
   byId.vercel,
-  byId.aws,
   byId.boat,
+  byId.aws,
 ].flatMap((p) => (p ? [{ name: p.name, logo: p.logo }] : []));
 export function RunsOn() {
   return (
