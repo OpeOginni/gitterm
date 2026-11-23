@@ -40,7 +40,7 @@ async function standIn(config: Config, cloudDir: string) {
   process.env.HOME = join(config.root, "home");
   process.env.T3CODE_CLI_PATH = config.t3bin;
   process.env.T3CODE_HOME = config.localBase;
-  const { localMachine, remoteMachine } = await import("../packages/cli/src/move/machine");
+  const { localMachine, remoteMachine } = await import("../packages/move/src/machine");
   const local = localMachine({ HOME: config.realHome, T3CODE_HOME: config.localBase });
   const cloudEnv = { ...process.env, HOME: config.realHome, T3CODE_HOME: config.cloudBase };
   const stats = { commands: 0, ended: [] as string[] };
@@ -73,8 +73,8 @@ if (process.argv[2] === "agent-move") {
   const cloudDir = join(config.root, "cloud", "agent");
   mkdirSync(cloudDir, { recursive: true });
   const { local, cloud } = await standIn(config, cloudDir);
-  const { moveToCloud } = await import("../packages/cli/src/move/flows");
-  const { currentSession } = await import("../packages/cli/src/move/agents/index");
+  const { moveToCloud } = await import("../packages/move/src/flows");
+  const { currentSession } = await import("../packages/move/src/agents/index");
   // As `gitterm move` does: the agent and session come from the agent's own environment.
   const current = currentSession()!;
   const moved = await moveToCloud(
@@ -160,8 +160,8 @@ const git = (cwd: string, ...args: string[]) =>
   run("git", ["-c", "user.email=t@example.com", "-c", "user.name=T", ...args], { cwd }).then((r) =>
     r.stdout.trim(),
   );
-async function idle(machine: import("../packages/cli/src/move/machine").Machine, threadId: string) {
-  const { t3Agent } = await import("../packages/cli/src/move/agents/t3");
+async function idle(machine: import("../packages/move/src/machine").Machine, threadId: string) {
+  const { t3Agent } = await import("../packages/move/src/agents/t3");
   for (let i = 0; i < 150; i++) {
     if (
       !(await machine.agent<{ busy: boolean }>(t3Agent.script!, "status", { ref: threadId })).busy
@@ -191,9 +191,9 @@ try {
     cloudUrl: "http://127.0.0.1:47912",
   };
   const { local, cloud, cloudMachine, stats } = await standIn(config, cloudDir);
-  const { moveToCloud, returnFromCloud } = await import("../packages/cli/src/move/flows");
-  const { loadRecords } = await import("../packages/cli/src/move/records");
-  const { t3Agent: agent, pairEnvironment } = await import("../packages/cli/src/move/agents/t3");
+  const { moveToCloud, returnFromCloud } = await import("../packages/move/src/flows");
+  const { loadRecords } = await import("../packages/move/src/records");
+  const { t3Agent: agent, pairEnvironment } = await import("../packages/move/src/agents/t3");
   const progress = (message: string) => console.log(`  … ${message}`);
 
   console.log("# 1. Move an idle thread, work in the cloud, bring it back");

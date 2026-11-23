@@ -9,7 +9,7 @@ import {
   runtimeClient,
   sessionBusy,
   tellMoved,
-} from "../../../../opencode-cloud/src/handoff.js";
+} from "./opencode-session.js";
 import { localMachine, remoteMachine, type Exec, type Machine } from "../machine.js";
 import type { AgentAdapter, ExportedSession, SessionOps } from "./types.js";
 

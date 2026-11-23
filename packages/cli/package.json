@@ -38,6 +38,7 @@
     "yargs": "^18.0.0"
   },
   "devDependencies": {
+    "@gitterm/move": "workspace:*",
     "@gitterm/agent-runtime": "workspace:*",
     "@gitterm/config": "workspace:*",
     "@gitterm/schema": "workspace:*",

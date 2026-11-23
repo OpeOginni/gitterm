@@ -6,7 +6,7 @@ import type { OpenCodeClient } from "@opencode/client";
 import { GittermError, type GittermClient } from "@gitterm/sdk";
 import type { HandoffRecord } from "./handoff";
 import { askWorkspaceEnd, confirmLocalPrompt, endWorkspace, returnSession } from "./return";
-import { checkoutRoot, git } from "./snapshot";
+import { checkoutRoot, git } from "@gitterm/move/checkout/snapshot";
 
 let root: string;
 let server: ReturnType<typeof Bun.serve> | undefined;

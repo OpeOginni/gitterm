@@ -6,7 +6,7 @@ import {
   checkoutRoot,
   repositoryUrl,
   snapshotSummary,
-} from "../../../opencode-cloud/src/snapshot.js";
+} from "./checkout/snapshot.js";
 import {
   CAPTURE_BUSY,
   CAPTURE_TOO_LARGE,
@@ -17,7 +17,7 @@ import {
   RESTORE_SCRIPT,
   CAPTURE_SCRIPT,
   runLocalScript,
-} from "../../../opencode-cloud/src/restore.js";
+} from "./checkout/restore.js";
 import type { AgentAdapter, WorkspaceRuntime } from "./agents/types.js";
 import type { Machine } from "./machine.js";
 import { saveRecord, type MoveRecord } from "./records.js";

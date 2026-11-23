@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { HandoffRecord } from "./handoff";
 import { GittermCloudPlugin } from "./index";
-import { checkoutRoot, git } from "./snapshot";
+import { checkoutRoot, git } from "@gitterm/move/checkout/snapshot";
 
 let root: string;
 beforeEach(async () => {

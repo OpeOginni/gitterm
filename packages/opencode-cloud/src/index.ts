@@ -15,7 +15,7 @@ import {
 import { CLOUD_KEY, CLOUD_RPC, type CloudProgress } from "./marker";
 import { confirmLocalPrompt, endWorkspace, returnSession } from "./return";
 import { suggestModels, signedIn } from "./signin";
-import { checkoutRoot } from "./snapshot";
+import { checkoutRoot } from "@gitterm/move/checkout/snapshot";
 import { deleteLeftover, watchCloudSessions, workspaceGone } from "./status";
 
 const sessionKey = (sessionID: string) => `handoff/session/${sessionID}`;
