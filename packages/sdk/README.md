@@ -963,7 +963,10 @@ Both modes run OpenCode 2 and share its run, permission, question, and SSE adapt
 images/templates must ship OpenCode 2 (`@opencode/cli`). Direct mode does not accept saved/dashboard
 credential sources or `inherit: "defaults"`.
 
-Every adapter receives the same normalized plan: repository/ref and optional Git credentials, agent files, model credentials, environment, setup commands, serve command, and port. Provider-specific configuration only describes how to allocate and expose compute.
+Every built-in adapter except the deprecated Railway one sets up the workspace the same way,
+on the provider's sandbox API: the plan's repository and ref, agent files, model
+credentials, environment, setup commands, serve command, and port. Provider-specific
+configuration only describes how to allocate the machine.
 
 Direct setup has explicit phases. `beforeAgent` blocks workspace creation, while
 `afterAgent` runs in the background and can be observed with `setupStatus()` or
@@ -990,7 +993,7 @@ await direct.workspaces.waitForSetup(workspace);
 
 To attach to an existing exe.dev VM without giving Gitterm ownership of that VM, pass
 `exedev: { existingVmName: "acme-agent-machine" }` to `workspaces.create()`. Terminating
-that workspace stops only its tracked agent process and does not remove the VM.
+that workspace stops only the agent and does not remove the VM.
 
 Trusted integration context can be appended to the generated global `AGENTS.md` without changing the model system prompt:
 

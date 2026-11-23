@@ -216,7 +216,6 @@ test("any provider's transport hosts workspaces, and a resume starts the agent a
   try {
     const provider = new TransportWorkspaceProvider("daytona", {
       label: "Daytona",
-      root: "/workspace",
     });
     const info = await provider.createWorkspace({
       ...config(),
@@ -254,7 +253,6 @@ test("agent files go to the image's own home, which can differ from the provider
   try {
     await new TransportWorkspaceProvider("daytona", {
       label: "Daytona",
-      root: "/workspace",
     }).createWorkspace({ ...config(), imageProviderMetadata: { daytona: { image: "img" } } });
     expect(written.get("/workspace/.config/agent.json")).toBe("{}");
   } finally {
@@ -265,7 +263,7 @@ test("agent files go to the image's own home, which can differ from the provider
 test("an image's setup commands install the agent, except from a project snapshot", async () => {
   const { ran, inputs } = recorder("boat", "/home/user");
   try {
-    const provider = new TransportWorkspaceProvider("boat", { label: "Boat", root: "/home/user" });
+    const provider = new TransportWorkspaceProvider("boat", { label: "Boat" });
     const metadata = { boat: { setupCommands: ["npm install -g @opencode/cli@2"], size: "large" } };
     await provider.createWorkspace({ ...config(), imageProviderMetadata: metadata as never });
     // No image: the provider's own default image, with the agent installed before the clone.
@@ -312,7 +310,6 @@ test("a Vercel resume returns the agent's new URL, as Vercel's change per sessio
   try {
     const provider = new TransportWorkspaceProvider("vercel", {
       label: "Vercel",
-      root: "/vercel/sandbox",
     });
     const info = await provider.createWorkspace({
       ...config(),

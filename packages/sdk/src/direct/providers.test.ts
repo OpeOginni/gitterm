@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { SANDBOX_PROVIDER_PROFILES } from "@gitterm/agent-runtime/sandbox/types";
 import { createDirectGittermClient } from "./client";
+import { createTransportDirectProvider } from "./transport";
 import type { DirectProviderConfig } from "./types";
 
 const configs: DirectProviderConfig[] = [
@@ -30,37 +32,72 @@ describe("built-in direct providers", () => {
     }
   });
 
-  test("attaches to an existing exe.dev VM without deleting owned compute", async () => {
+  test("a workspace on an existing sandbox is set up there, and terminating it keeps the sandbox", async () => {
+    const calls: string[] = [];
+    const transport = {
+      provider: "exedev" as const,
+      home: "/home/exedev",
+      capabilities: SANDBOX_PROVIDER_PROFILES.exedev.capabilities,
+      async create() {
+        calls.push("create");
+        throw new Error("must not create");
+      },
+      async info(id: string) {
+        return { id, state: "running" as const, labels: {}, startedAt: null, expiresAt: null };
+      },
+      async list() {
+        return [];
+      },
+      async destroy(id: string) {
+        calls.push(`destroy ${id}`);
+      },
+      async pause() {},
+      async resume() {},
+      async run(id: string, command: string) {
+        calls.push(`run ${id}: ${command.split("\n")[0]!.slice(0, 40)}`);
+        return {
+          exitCode: 0,
+          stdout: command.includes('"$HOME"') ? "/home/exedev" : "",
+          stderr: "",
+        };
+      },
+      async writeFile() {},
+      async readFile() {
+        return new Uint8Array();
+      },
+      async preview() {
+        return { url: "https://existing-vm.example/", headers: {} };
+      },
+    };
     const originalFetch = globalThis.fetch;
-    const commands: string[] = [];
-    globalThis.fetch = (async (input, init) => {
-      const request = new Request(input, init);
-      if (request.url === "https://exe.dev/exec") {
-        const command = await request.text();
-        commands.push(command);
-        if (command.startsWith("ssh-key ")) return new Response("exe0.test-token");
-        if (command === "ls existing-vm") {
-          return Response.json({ status: "running" });
-        }
-        return Response.json({ ok: true });
-      }
-      if (request.url === "https://existing-vm.exe.xyz/") return new Response("ok");
-      throw new Error(`Unexpected request: ${request.method} ${request.url}`);
-    }) as typeof fetch;
-
+    globalThis.fetch = (async () => new Response("ok")) as unknown as typeof fetch;
     try {
       const client = createDirectGittermClient({
-        provider: { type: "exedev", apiToken: "key" },
+        provider: createTransportDirectProvider({
+          name: "exedev",
+          capabilities: {
+            persistence: "supported",
+            recommendedLifecycle: "ephemeral",
+            supportsPause: true,
+            ephemeralPause: "stateful",
+            supportsKeepAlive: false,
+          },
+          transport,
+          timeoutMs: 60 * 60_000,
+          existing: (input) => input.exedev?.existingVmName,
+        }),
       });
       const workspace = await client.workspaces.create({
         id: "attached-workspace",
         exedev: { existingVmName: "existing-vm" },
       });
+      expect(workspace.externalId).toBe("existing:existing-vm");
+      expect(workspace.runtime.directory).toBe("/home/exedev/workspace");
       await client.workspaces.terminate(workspace);
 
-      expect(commands.some((command) => command.startsWith("new "))).toBe(false);
-      expect(commands).not.toContain("rm existing-vm");
-      expect(commands.at(-1)).toContain("gitterm-attachedworkspace.pid");
+      expect(calls).not.toContain("create");
+      expect(calls.some((call) => call.startsWith("destroy"))).toBe(false);
+      expect(calls.at(-1)).toContain("agent.pid");
     } finally {
       globalThis.fetch = originalFetch;
     }

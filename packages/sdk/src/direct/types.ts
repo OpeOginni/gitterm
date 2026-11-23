@@ -291,14 +291,16 @@ export type BoatDirectProviderConfig = {
   apiKey: string;
   size?: "small" | "default" | "large";
   runtimeSetupCommands?: string[];
+  /** Box lifetime. `null` keeps it for Boat's maximum, one day. */
   timeoutMs?: number | null;
 };
 
 export type ExeDevDirectProviderConfig = {
   type: "exedev";
   /**
-   * Token `cmds` must include `new`, `ls`, `ssh`, `share`, `ssh-key`, `pause`, `resume`, and `rm`.
-   * Default tokens cannot provision or clean up a Gitterm workspace.
+   * Token `cmds` must include `new`, `ls`, `ssh`, `pause`, `resume`, `rm`, and
+   * `ssh-key generate-api-key`, `ssh-key list` and `ssh-key remove` (for the agent's private
+   * URL). Default tokens cannot provision or clean up a Gitterm workspace.
    */
   apiToken: string;
   /** Optional. Defaults to the public Gitterm OpenCode server image. */

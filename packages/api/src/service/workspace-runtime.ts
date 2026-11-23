@@ -1,4 +1,5 @@
 import type { Workspace } from "@gitterm/db/schema/workspace";
+import { SANDBOX_PROVIDER_PROFILES } from "@gitterm/agent-runtime/sandbox/types";
 import { buildProjectPathHint } from "../providers/ssh-access";
 import { getWorkspaceUrl } from "../utils/routing";
 
@@ -73,37 +74,17 @@ export function mayReconcilePending(
 }
 
 /**
- * Resolve the project directory inside a sandbox for a given provider.
- * E2B and Gitterm use `/home/user/workspace`, Vercel uses `/vercel/sandbox`, Boat uses
- * `/home/user`, exe.dev uses `/home/exedev`, and most other providers use
- * `/workspace`.
+ * The project directory inside a workspace: `<root>/<repo>`, with the provider profile's
+ * `workspaceRoot`, where the workspace provider clones it. Others use `/workspace`.
  */
 export function resolveProjectDirectory(
   repositoryUrl: string | null | undefined,
   providerKey?: string | null,
 ): string {
-  const key = (providerKey ?? "").toLowerCase();
-  // Empty-workspace paths must match each provider's provisioning directory, and
-  // getWorkspaceProjectPath in apps/web/src/lib/utils.ts.
-  const hint = buildProjectPathHint(
-    repositoryUrl ||
-      (["e2b", "gitterm", "daytona", "vercel", "boat", "exedev", "aws"].includes(key)
-        ? "workspace"
-        : null),
-  );
-  if (["e2b", "gitterm"].includes((providerKey ?? "").toLowerCase())) {
-    return hint.replace(/^\/workspace/, "/home/user/workspace");
-  }
-  if ((providerKey ?? "").toLowerCase() === "vercel") {
-    return hint.replace(/^\/workspace/, "/vercel/sandbox");
-  }
-  if ((providerKey ?? "").toLowerCase() === "boat") {
-    return hint.replace(/^\/workspace/, "/home/user");
-  }
-  if ((providerKey ?? "").toLowerCase() === "exedev") {
-    return hint.replace(/^\/workspace/, "/home/exedev");
-  }
-  return hint;
+  const profiles: Partial<Record<string, { workspaceRoot: string }>> = SANDBOX_PROVIDER_PROFILES;
+  const root = profiles[(providerKey ?? "").toLowerCase()]?.workspaceRoot;
+  const hint = buildProjectPathHint(repositoryUrl || (root ? "workspace" : null));
+  return root ? hint.replace(/^\/workspace/, root) : hint;
 }
 
 /** Control-plane secrets that must never leave the server. */

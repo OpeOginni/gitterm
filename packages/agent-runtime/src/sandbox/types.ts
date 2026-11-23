@@ -174,6 +174,8 @@ export type SandboxProviderProfile = {
   resumeCommand: boolean;
   /** Whether a resume gives the sandbox's ports new preview URLs (Vercel's are per session). */
   resumeChangesPreviewUrls: boolean;
+  /** Where agent workspaces keep their checkouts, `<workspaceRoot>/<repo>`. */
+  workspaceRoot: string;
 };
 
 /**
@@ -201,6 +203,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
     },
     resumeCommand: false,
     resumeChangesPreviewUrls: false,
+    workspaceRoot: "/home/user/workspace",
   },
   daytona: {
     home: "/home/daytona",
@@ -213,6 +216,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
     },
     resumeCommand: false,
     resumeChangesPreviewUrls: false,
+    workspaceRoot: "/workspace",
   },
   vercel: {
     home: "/home/vercel-sandbox",
@@ -225,6 +229,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
     },
     resumeCommand: false,
     resumeChangesPreviewUrls: true,
+    workspaceRoot: "/vercel/sandbox",
   },
   boat: {
     home: "/home/user",
@@ -237,6 +242,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
     },
     resumeCommand: false,
     resumeChangesPreviewUrls: false,
+    workspaceRoot: "/home/user",
   },
   exedev: {
     home: "/home/exedev",
@@ -249,6 +255,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
     },
     resumeCommand: false,
     resumeChangesPreviewUrls: false,
+    workspaceRoot: "/home/exedev",
   },
   railway: {
     home: "/root",
@@ -261,6 +268,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
     },
     resumeCommand: false,
     resumeChangesPreviewUrls: false,
+    workspaceRoot: "/workspace",
   },
   aws: {
     home: "/root",
@@ -273,6 +281,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
     },
     resumeCommand: false,
     resumeChangesPreviewUrls: false,
+    workspaceRoot: "/workspace",
   },
   // The Gitterm server enforces lifetimes and serves previews.
   gitterm: {
@@ -286,6 +295,7 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
     },
     resumeCommand: true,
     resumeChangesPreviewUrls: false,
+    workspaceRoot: "/home/user/workspace",
   },
 };
 

@@ -46,9 +46,6 @@ claiming secrets are inaccessible to an authorized workspace.
   Use narrowly scoped credentials and verify the gateway's actual policy and approval behavior.
 - **Caller secret files:** encrypted in transit/provider storage and materialized under
   `/run/gitterm/secrets/<workspace>`. A repository path is a git-excluded symlink only.
-- **Railway:** raw runtime values are envelope-encrypted in `workspace_runtime_bundle`. Railway gets
-  only workspace identity, API location, and a revocable bootstrap capability. The canonical image
-  fetches and exports the bundle before clone or agent startup.
 - **AWS:** values remain in a per-workspace AWS Secrets Manager secret and are injected by the ECS
   execution role. Secret bytes written as files still live under `/run` rather than EFS.
 - **SDK sandbox providers:** values cross the provider's authenticated sandbox API. The provider
@@ -62,7 +59,7 @@ claiming secrets are inaccessible to an authorized workspace.
   with a token derived from the provider credential (AWS: the deployment encryption key); it is never stored. See [Agent sandboxes](agent-sandboxes.md).
 
 Credential issuance metadata is stored in `workspace_credential_audit`; tokens, authorization
-headers, runtime bundles, and secret contents are never audit fields.
+headers, and secret contents are never audit fields.
 
 ## Encryption and rotation
 
@@ -95,7 +92,7 @@ This revision reads legacy AES-GCM, v2, and record-bound v3 values. v3 binds mod
 their owner, record, and provider; provider configurations to their record and provider type;
 environment sets to their owner, record, and agent type; workspace passwords to their owner and
 workspace; route headers to their workspace and port; and SSH revocation tokens to their workspace.
-Existing MCP and runtime-bundle values already have record-specific contexts. Deployment-wide
+Existing MCP values already have record-specific contexts. Deployment-wide
 GitHub and Google keys retain their separate authenticated contexts.
 
 New-format authentication failures never fall back to a legacy context. Legacy values remain
@@ -237,7 +234,7 @@ ENCRYPTION_MASTER_KEYS={"primary":"<previous key>"}
 ```
 
 The rewrap scan covers model credentials, provider configs, workspace passwords, route headers,
-runtime bundles, environment sets, MCP auth, SSH revocation tokens, Google issuer keys, and GitHub
+environment sets, MCP auth, SSH revocation tokens, Google issuer keys, and GitHub
 App keys/webhook secrets/PATs. Login OAuth tokens have the separate `security:oauth` migration and
 depend on the Better Auth secret. Do not retire that secret through the application keyring.
 
@@ -250,7 +247,7 @@ encrypt every profile field or protect against an attacker controlling the runni
 
 - Workspace bearer tokens include `authVersion`; middleware compares it with the workspace row.
 - Terminated workspaces and deleted integrations cannot issue credentials.
-- Paused workspaces cannot fetch runtime bundles or mint GitHub/Google/model credentials.
+- Paused workspaces cannot mint GitHub/Google/model credentials.
 - Revoking or deleting a model credential stops every workspace from getting new access tokens
   for it; tokens already issued last until they expire.
 - Removing or disabling an MCP connection prevents future attachments, not existing direct
@@ -258,7 +255,6 @@ encrypt every profile field or protect against an attacker controlling the runni
   credential at the MCP provider/Executor to invalidate those copies; updates apply to newly
   created workspaces. Signed-in (OAuth) connections stop issuing tokens to workspaces at once;
   access tokens already issued last until they expire.
-- Runtime bundles are deleted on failed provisioning and termination.
 - Incrementing `workspace.authVersion` revokes all tokens for that workspace. The workspace must be
   reprovisioned because its runtime no longer has a valid identity.
 
@@ -266,24 +262,3 @@ The long-lived workspace token is a bootstrap capability, not a third-party cred
 necessary on providers without attested workload identity so a persistent workspace can restart.
 It is narrowly scoped, state/version checked on every backend request, and never passed to GitHub or
 Google. Third-party credentials issued from it are short-lived.
-
-## Deployment order
-
-Railway's brokered bootstrap requires a matching canonical image:
-
-1. Apply migrations through `0033_mcp_connections` before deploying the integration API.
-2. Configure the encryption master key. Generate the Google workload-identity signing key in
-   **Admin → Integrations** after deploying the API, or retain the legacy env key during migration.
-3. Build and publish all canonical agent images from this revision; verify they contain
-   `/usr/local/bin/gitterm-runtime-bootstrap` and OpenCode 2 (`@opencode/cli`). Model credentials
-   are provisioned through `~/.gitterm/opencode/credentials.json`, imported into OpenCode's
-   credential store by the `gitterm-credentials` plugin at startup.
-4. Update image catalog entries to those images.
-5. Deploy the API/server.
-6. Create a Railway smoke workspace and confirm Railway variables contain
-   `GITTERM_REMOTE_BOOTSTRAP` but not `AGENT_FILES_BASE64`, model keys, repository tokens, or secret
-   file contents.
-7. Validate pause/resume, GitHub refresh, Google ADC, setup logs, and termination cleanup.
-
-Do not deploy the Railway control-plane change against older images: they cannot fetch the runtime
-bundle and will start without the required environment.

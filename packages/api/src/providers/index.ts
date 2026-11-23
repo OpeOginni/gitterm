@@ -18,10 +18,10 @@ export { gittermProvider } from "./transport-workspace";
 const availableProviders: Record<string, ComputeProvider> = {
   // Every provider below except AWS and Cloudflare is only a sandbox transport.
   e2b: new TransportWorkspaceProvider("e2b", { label: "E2B" }),
-  daytona: new TransportWorkspaceProvider("daytona", { label: "Daytona", root: "/workspace" }),
-  vercel: new TransportWorkspaceProvider("vercel", { label: "Vercel", root: "/vercel/sandbox" }),
-  boat: new TransportWorkspaceProvider("boat", { label: "Boat", root: "/home/user" }),
-  exedev: new TransportWorkspaceProvider("exedev", { label: "exe.dev", root: "/home/exedev" }),
+  daytona: new TransportWorkspaceProvider("daytona", { label: "Daytona" }),
+  vercel: new TransportWorkspaceProvider("vercel", { label: "Vercel" }),
+  boat: new TransportWorkspaceProvider("boat", { label: "Boat" }),
+  exedev: new TransportWorkspaceProvider("exedev", { label: "exe.dev" }),
   // gitterm.dev only: there is no cloud provider row for it elsewhere, so nothing offers it.
   gitterm: gittermProvider,
   aws: awsProvider,

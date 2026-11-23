@@ -128,8 +128,7 @@ ENV LANG=C.UTF-8 \
 COPY ./opencode/entrypoint.sh /entrypoint.sh
 COPY ./workspace-setup-runner.sh /usr/local/bin/gitterm-workspace-setup
 COPY ./git-credential-github.mjs /usr/local/bin/gitterm-git-credential
-COPY ./runtime-bootstrap.mjs /usr/local/bin/gitterm-runtime-bootstrap
-RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup /usr/local/bin/gitterm-git-credential /usr/local/bin/gitterm-runtime-bootstrap
+RUN chmod +x /entrypoint.sh /usr/local/bin/gitterm-workspace-setup /usr/local/bin/gitterm-git-credential
 
 # Expose the ttyd port
 ENV PORT=7681

@@ -1,6 +1,5 @@
 import { and, db, eq, isNull, lte, or } from "@gitterm/db";
 import { cloudProvider } from "@gitterm/db/schema/cloud";
-import { workspaceRuntimeBundle } from "@gitterm/db/schema/credential-security";
 import { volume, workspace, workspaceTermination } from "@gitterm/db/schema/workspace";
 import { TRPCError } from "@trpc/server";
 import { WORKSPACE_EVENTS } from "../events/workspace";
@@ -41,9 +40,6 @@ export async function terminateWorkspace(userId: string, workspaceId: string, ba
     updatedAt: terminatedAt,
   });
   await deleteAllWorkspaceRouteAccess(workspaceId);
-  await db
-    .delete(workspaceRuntimeBundle)
-    .where(eq(workspaceRuntimeBundle.workspaceId, workspaceId));
   WORKSPACE_EVENTS.emitStatus({
     workspaceId,
     status: "terminated",

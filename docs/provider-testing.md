@@ -133,7 +133,7 @@ export BOAT_API_KEY=...
 
 # exe.dev
 export EXEDEV_API_TOKEN=...
-# Token cmds must include new, ls, ssh, share, "ssh-key generate-api-key", "ssh-key list",
+# Token cmds must include new, ls, ssh, "ssh-key generate-api-key", "ssh-key list",
 # "ssh-key remove", pause, resume, and rm. Listing and removing keys lets teardown clean up VM access keys.
 
 # Railway

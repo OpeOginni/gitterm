@@ -130,7 +130,6 @@ export function buildWorkspaceEnv(
     CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: runtime.googleApplicationCredentials,
     GOOGLE_CLOUD_PROJECT: runtime.googleProjectId,
     CLOUDSDK_CORE_PROJECT: runtime.googleProjectId,
-    GITTERM_REMOTE_BOOTSTRAP: undefined,
     GITTERM_REPOSITORY_USERNAME: containerCloneCredential
       ? (spec.repo?.authUsername ?? "x-access-token")
       : undefined,

@@ -33,13 +33,16 @@ With only a transport and its profile, a provider supports:
 
 - Plain sandboxes from the SDK, `gitterm sandbox`, and the OpenCode sandbox plugin, in managed
   and direct mode.
-- Agent workspaces, through `TransportWorkspaceProvider`
+- Agent workspaces on a Gitterm server, through `TransportWorkspaceProvider`
   (`packages/api/src/providers/transport-workspace.ts`).
+- Direct agent workspaces from the SDK, with the caller's own provider account, through
+  `createTransportDirectProvider` (`packages/sdk/src/direct/transport.ts`).
 - Commands in a running workspace (`ComputeProvider.execCommand`), which T3 pairing uses.
 
 ### Workspaces on a transport
 
-`TransportWorkspaceProvider` builds a workspace from transport calls only:
+Both kinds of workspace run the same steps, `provisionWorkspace` in
+`packages/agent-runtime/src/sandbox/workspace.ts`, using transport calls only:
 
 1. `create` with the image's template, the machine profile's options and the workspace's
    environment. The image's `imageProviderMetadata[provider]` gives `image` (or `template`,
@@ -47,21 +50,25 @@ With only a transport and its profile, a provider supports:
    transport as `machine`. Without a template, the transport uses its default image.
 2. Run `setupCommands`, which install the agent on a plain image, unless the workspace starts
    from a project snapshot.
-3. Clone the repository into `<root>/<repo>` and write the agent's files. `<root>` is set per
-   provider and defaults to `~/workspace`. `~/` in an agent file means the sandbox user's
+3. Clone the repository into `<workspaceRoot>/<repo>` and write the agent's files.
+   `workspaceRoot` is in the provider's profile; `resolveProjectDirectory` reads it too.
+   `~/` in an agent file means the sandbox user's
    `$HOME`, which an image can set apart from the provider's default (Daytona runs the
    runtime image with `HOME=/workspace`).
 4. Run the blocking setup command, capture the agent's access credential, and start the
    agent's serve command.
 5. `preview` the agent's port; the proxy routes the workspace there.
 
-The workspace keeps a `sandbox:<provider>:<id>` handle, so `withSandboxHandles` sends pause,
-resume, terminate, status, keep-alive and exec to the transport.
+On a server, the workspace keeps a `sandbox:<provider>:<id>` handle, so `withSandboxHandles`
+sends pause, resume, terminate, status, keep-alive and exec to the transport. A direct
+workspace keeps the transport's id; one started on a sandbox the caller already had (an
+exe.dev VM) keeps `existing:<id>`, and terminating it stops the agent instead of deleting
+the sandbox.
 
 A resume must start the agent again when the provider's pause kills processes. If the
 profile sets `resumeCommand: true`, the transport runs the start command itself (only
 Gitterm's own sandboxes do). Otherwise the workspace writes it to `~/.gitterm/resume.sh`,
-and `withSandboxHandles` runs that script after every resume. The start command does
+and `afterResume` runs that script after every resume. The start command does
 nothing when the agent already answers on its port. Where a resume changes the preview URLs
 (`resumeChangesPreviewUrls`, Vercel), the resume returns the agent's new URL.
 
@@ -74,7 +81,9 @@ Workspaces on a transport don't offer SSH editor access.
 2. Add its managed credentials to `managedSandboxTransport`
    (`packages/api/src/service/sandbox-transport.ts`).
 3. Register workspaces with one line in `packages/api/src/providers/index.ts`:
-   `new TransportWorkspaceProvider("<provider>", { label: "<Name>" })`.
+   `new TransportWorkspaceProvider("<provider>", { label: "<Name>" })`, and for direct
+   workspaces add a config type and a `createTransportDirectProvider` call in
+   `packages/sdk/src/direct/`.
 4. Seed the runtime image for it (`imageProviderMetadata.<provider>.image`) and its machine
    profiles, with `vcpus`, `memoryGb` and the options the transport reads.
 5. Run the transport tests and a live smoke test ([provider-testing.md](provider-testing.md)).
@@ -86,12 +95,12 @@ AWS plain sandboxes do. A provider that only offers SSH needs an SSH connection 
 
 ### Providers today
 
-| Provider                                     | Workspaces                   | Notes                                                                                                                                                     |
-| -------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E2B, Daytona, Vercel, Boat, exe.dev, Gitterm | `TransportWorkspaceProvider` |                                                                                                                                                           |
-| AWS                                          | Its own `ComputeProvider`    | Needs per-workspace IAM roles, EFS for files across a pause, and ALB routes, which a transport can't express yet. Pausing ECS loses the disk without EFS. |
-| Cloudflare                                   | Its own `ComputeProvider`    | No transport: its worker has no file calls, and a pause loses the disk, so a resume must provision again.                                                 |
-| Railway                                      | None (deprecated)            | Plain sandboxes still work and are deprecated. Railway's own Sandboxes product (beta) has no pause and no custom images.                                  |
+| Provider                                     | Workspaces                   | Notes                                                                                                                                                            |
+| -------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E2B, Daytona, Vercel, Boat, exe.dev, Gitterm | `TransportWorkspaceProvider` | Direct SDK workspaces on all but Gitterm use `createTransportDirectProvider`.                                                                                    |
+| AWS                                          | Its own `ComputeProvider`    | Needs per-workspace IAM roles, EFS for files across a pause, and ALB routes, which a transport can't express yet. Pausing ECS loses the disk without EFS.        |
+| Cloudflare                                   | Its own `ComputeProvider`    | No transport: its worker has no file calls, and a pause loses the disk, so a resume must provision again.                                                        |
+| Railway                                      | None (deprecated)            | Plain sandboxes and direct SDK workspaces (its own adapter) still work and are deprecated. Railway's Sandboxes product (beta) has no pause and no custom images. |
 
 For AWS, Lambda MicroVMs (launched June 2026) is the closest AWS service to a transport:
 Firecracker VMs from an image, a per-VM IAM role, an authenticated URL per port, and a
@@ -166,8 +175,7 @@ Sail and Sprites succeeded on under 50% of burst starts.
 ## Next steps
 
 1. Check each moved provider live with `scripts/provider-smoke.ts` (workspaces) and
-   `scripts/sandbox-smoke.ts`, then remove what the providers no longer need (the runtime bundle table and its
-   `workspaceOps.runtimeBundle` endpoint, used only by Railway workspaces).
+   `scripts/sandbox-smoke.ts`.
 2. Add the SSH connection. It makes the Mac hosts, Lambda and Vast one implementation.
 3. Extend the profile with `platform` and the three pause levels, and machine profiles with
    a GPU. Do it with the first GPU or macOS provider, so a real provider checks the shape.
@@ -182,6 +190,9 @@ cd packages/api && bun test src/providers/transport-workspace.test.ts
 # A real OpenCode workspace on a Docker container posing as a transport-only provider.
 # Stops and starts the container to check that a resume starts the agent again.
 GITTERM_SANDBOX_DOCKER_TESTS=1 bun test src/providers/transport-workspace.docker.test.ts
+
+# The same for a direct SDK workspace, through the real direct client.
+cd packages/sdk && GITTERM_SANDBOX_DOCKER_TESTS=1 bun test src/direct/transport.docker.test.ts
 ```
 
 The Docker test uses the locally built runtime image `gitterm-release-local-opencode:verify`.

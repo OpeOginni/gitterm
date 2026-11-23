@@ -156,10 +156,7 @@ import {
   sealWorkspaceEnvironment,
 } from "../../service/workspace-environment-secrets";
 import { redactSensitiveText } from "../../utils/redact-secrets";
-import {
-  workspaceCredentialAudit,
-  workspaceRuntimeBundle,
-} from "@gitterm/db/schema/credential-security";
+import { workspaceCredentialAudit } from "@gitterm/db/schema/credential-security";
 import {
   buildGoogleExternalAccountConfig,
   GOOGLE_ADC_PATH,
@@ -2625,7 +2622,7 @@ export const workspaceRouter = router({
         const workspaceAgentAuthToken = workspaceJWT.generateToken(
           workspaceId,
           userId,
-          ["agent:bootstrap", "agent:credential"],
+          ["agent:credential"],
           "agent",
         );
         const workspaceSetupAuthToken = workspaceJWT.generateToken(
@@ -3346,9 +3343,6 @@ export const workspaceRouter = router({
               console.error("Failed provisioning cleanup will be retried:", cleanupError),
             );
           }
-          await db
-            .delete(workspaceRuntimeBundle)
-            .where(eq(workspaceRuntimeBundle.workspaceId, workspaceId));
         }
         // A snapshot that no longer starts must not stop the caller from working: say so in
         // a way it can recognise, so it can create the workspace fresh instead.
