@@ -87,22 +87,26 @@ const RUNS_ON = [
   byId.aws,
 ].flatMap((p) => (p ? [{ name: p.name, logo: p.logo }] : []));
 
-/** A quiet row under the hero's buttons: where sandboxes and workspaces can run. */
+/**
+ * Under the hero's buttons: where sandboxes and workspaces run, as a slow strip that fades at
+ * both ends. It holds any number of providers in one line. Two copies make the loop seamless.
+ */
 function RunsOn() {
   return (
     <div className="mt-12">
-      <p className="m-0 mb-5 text-[13px] text-fg-4">Sandboxes and cloud workspaces run on</p>
-      <ul className="m-0 flex list-none flex-wrap justify-center gap-x-7 gap-y-4 p-0 max-[640px]:gap-x-5">
-        {RUNS_ON.map((p) => (
-          <li
-            key={p.name}
-            className="flex items-center gap-2 text-[14.5px] font-medium text-fg-3 max-[640px]:text-[13px]"
-          >
-            <Logo src={p.logo} className="size-5 object-contain max-[640px]:size-[18px]" />
-            {p.name}
-          </li>
+      <p className="m-0 mb-4 text-[13px] text-fg-4">Sandboxes and cloud workspaces run on</p>
+      <div className="ro-marquee">
+        {[false, true].map((copy) => (
+          <ul key={String(copy)} className="ro-track" aria-hidden={copy || undefined}>
+            {RUNS_ON.map((p) => (
+              <li key={p.name}>
+                <Logo src={p.logo} className="size-5 object-contain" />
+                {p.name}
+              </li>
+            ))}
+          </ul>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

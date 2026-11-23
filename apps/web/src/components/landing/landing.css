@@ -3452,4 +3452,55 @@
     border-left: 0;
     border-block: 1px solid #50545e;
   }
+
+  /* The hero's providers: one line that scrolls slowly and fades at both ends. */
+  .lp .ro-marquee {
+    display: flex;
+    max-width: 640px;
+    margin: 0 auto;
+    overflow: hidden;
+    mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  }
+  .lp .ro-track {
+    display: flex;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    animation: ro-scroll 45s linear infinite;
+  }
+  .lp .ro-marquee:hover .ro-track {
+    animation-play-state: paused;
+  }
+  .lp .ro-track li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 18px;
+    color: var(--fg-3);
+    font-size: 14.5px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  @keyframes ro-scroll {
+    to {
+      transform: translateX(-100%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lp .ro-marquee {
+      flex-wrap: wrap;
+      justify-content: center;
+      mask-image: none;
+    }
+    .lp .ro-track {
+      flex-wrap: wrap;
+      justify-content: center;
+      flex-shrink: 1;
+      animation: none;
+    }
+    .lp .ro-track[aria-hidden] {
+      display: none;
+    }
+  }
 }

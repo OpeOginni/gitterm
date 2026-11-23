@@ -91,7 +91,7 @@ export function AgentRoll() {
           </span>
         </span>
       </h1>
-      <ul className="mx-auto mt-9 mb-0 flex list-none justify-center gap-[clamp(14px,4.5vw,40px)] p-0">
+      <ul className="mx-auto mt-10 mb-0 flex list-none justify-center gap-[clamp(14px,5vw,56px)] p-0">
         {AGENTS.map((agent) => {
           // Every agent is lit while the headline says "your agents".
           const lit = !current || current === agent;
@@ -99,15 +99,15 @@ export function AgentRoll() {
             <li
               key={agent.name}
               className={cn(
-                "flex flex-col items-center gap-2 text-[13px] whitespace-nowrap transition-colors duration-500 max-[420px]:text-[11px]",
+                "flex flex-col items-center gap-2.5 text-[14px] whitespace-nowrap transition-colors duration-500 max-[420px]:text-[11px]",
                 lit ? "text-fg" : "text-fg-4",
               )}
             >
               <Logo
                 src={agent.logo}
                 className={cn(
-                  "size-[26px] transition-[filter,opacity,translate] duration-500",
-                  agent.icon && "rounded-[5px]",
+                  "size-9 transition-[filter,opacity,translate] duration-500 max-[420px]:size-7",
+                  agent.icon && "rounded-[7px]",
                   lit ? "-translate-y-0.5" : "opacity-40 grayscale",
                 )}
               />
@@ -120,7 +120,7 @@ export function AgentRoll() {
   );
 }
 
-/** The setup command. Clicking anywhere copies it; hovering draws a gold line along the top. */
+/** The setup command, under a gold line. Clicking anywhere on it copies it. */
 export function SetupCommand({
   location,
   className,
