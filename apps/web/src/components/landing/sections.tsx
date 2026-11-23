@@ -51,7 +51,7 @@ export function Hero() {
           <SetupCommand location="hero" />
           {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow.
               Clicking anywhere on the strip copies it, and sweeps a glow across the copy button. */}
-          <ClickToCopy className="prompt-strip group/strip flex items-center gap-4 border-t border-line py-2.5 pr-3.5 pl-5 text-left transition-colors hover:bg-fill">
+          <ClickToCopy className="prompt-strip group/strip flex items-center gap-4 border-t border-line py-2.5 pr-3.5 pl-5 text-left">
             <span className="shrink-0 text-[14px] text-fg-2">Or let your agent set it up</span>
             <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-fg-4 max-[640px]:hidden">
               {SETUP_PROMPT.split("\n")[0]}
