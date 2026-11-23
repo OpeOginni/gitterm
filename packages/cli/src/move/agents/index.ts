@@ -1,9 +1,10 @@
+import { opencodeAgent } from "./opencode.js";
 import { piAgent } from "./pi.js";
 import { t3Agent } from "./t3.js";
 import type { AgentAdapter } from "./types.js";
 
 /** Every agent whose sessions can move. Adding one is an adapter here. */
-export const AGENTS: AgentAdapter[] = [t3Agent, piAgent];
+export const AGENTS: AgentAdapter[] = [t3Agent, piAgent, opencodeAgent];
 
 export function agentByKey(key: string): AgentAdapter {
   const agent = AGENTS.find((item) => item.key === key);

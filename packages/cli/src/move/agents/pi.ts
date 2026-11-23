@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
 import { PI_EXTENSION, PI_EXTENSION_PATH, PI_TMUX_SESSION } from "@gitterm/schema/pi";
-import { agentScript } from "../script.js";
+import { agentScript, scriptSession } from "../script.js";
 import type { AgentAdapter, ExportedSession } from "./types.js";
 
 /**
@@ -134,6 +134,7 @@ export const piAgent: AgentAdapter = {
   key: "pi",
   label: "Pi",
   script: PI_SCRIPT,
+  session: scriptSession(PI_SCRIPT),
   // Pi gives its bash tool the session it runs in.
   currentSession: (env) => env.PI_SESSION_ID,
   sentSince: (exported: ExportedSession, mark) =>

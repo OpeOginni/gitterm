@@ -60,7 +60,7 @@ async function standIn(config: Config, cloudDir: string) {
       if (input.agent !== "t3code") throw new Error(`asked for a ${input.agent} workspace`);
       return `ws-${cloudDir.split("/").at(-1)}`;
     },
-    ready: async () => ({ url: config.cloudUrl, directory: cloudDir }),
+    ready: async () => ({ url: config.cloudUrl, directory: cloudDir, canExec: true }),
     machine: () => cloudMachine,
     end: async (_id: string, how: string) => void stats.ended.push(how),
   };
@@ -163,7 +163,9 @@ const git = (cwd: string, ...args: string[]) =>
 async function idle(machine: import("../packages/cli/src/move/machine").Machine, threadId: string) {
   const { t3Agent } = await import("../packages/cli/src/move/agents/t3");
   for (let i = 0; i < 150; i++) {
-    if (!(await machine.agent<{ busy: boolean }>(t3Agent.script, "status", { ref: threadId })).busy)
+    if (
+      !(await machine.agent<{ busy: boolean }>(t3Agent.script!, "status", { ref: threadId })).busy
+    )
       return;
     await new Promise((r) => setTimeout(r, 2000));
   }

@@ -174,9 +174,7 @@ export async function runReturn(
 
     if (args.detached) {
       for (let waited = 0; ; waited += 2) {
-        const status = await local.agent<{ busy: boolean }>(agent.script, "status", {
-          ref: record.localRef,
-        });
+        const status = await agent.session(local).status({ ref: record.localRef });
         if (!status.busy) break;
         if (waited > 30 * 60) throw new Error("The session was still working after 30 minutes.");
         await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -189,9 +187,11 @@ export async function runReturn(
       { force: args.force, end: args.end, message: args.message },
     ).catch(async (error: unknown) => {
       if (args.detached)
-        await local
-          .agent(agent.script, "notify", {
+        await agent
+          .session(local)
+          .notify({
             ref: record.localRef,
+            where: "local",
             message: `[GitTerm] Bringing this session back from the cloud failed: ${error instanceof Error ? error.message : String(error)}\nNothing here changed; the cloud workspace ${record.workspaceId} is as it was. Tell the user, then wait.`,
           })
           .catch(() => {});

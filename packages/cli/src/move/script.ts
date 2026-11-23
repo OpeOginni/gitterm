@@ -14,7 +14,21 @@
  *   `where` is `cloud` or `local`.
  * - `status { ref }` → `{ busy }`
  */
+import type { Machine } from "./machine.js";
+import type { ExportedSession, SessionOps } from "./agents/types.js";
+
 export const RESULT_MARKER = "GITTERM_AGENT_RESULT ";
+
+/** An agent's session operations, run by its script on the machine. */
+export function scriptSession(script: string) {
+  return (machine: Machine): SessionOps => ({
+    info: () => machine.agent<{ version: string }>(script, "info"),
+    export: (input) => machine.agent<ExportedSession>(script, "export", input),
+    import: (input) => machine.agent<{ ref: string }>(script, "import", input),
+    notify: async (input) => void (await machine.agent(script, "notify", input)),
+    status: (input) => machine.agent<{ busy: boolean }>(script, "status", input),
+  });
+}
 
 /**
  * Wraps an agent's operations into a script. `body` defines `const ops = { ... }`; each op is

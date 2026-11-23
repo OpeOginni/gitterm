@@ -17,10 +17,6 @@ export function gittermCloud(
   client: GittermClient,
   options: { provider?: string; connections?: string[] } = {},
 ): Cloud {
-  if (options.provider && NO_EXEC.has(options.provider))
-    throw new Error(
-      `${options.provider} workspaces can't run the commands this needs. Pick another provider.`,
-    );
   return {
     async create(input) {
       try {
@@ -43,11 +39,13 @@ export function gittermCloud(
     async ready(workspaceId) {
       const { runtime } = await client.workspaces.ensureRunning(workspaceId);
       if (!runtime.url) throw new Error("The workspace has no public URL.");
-      if (runtime.providerKey && NO_EXEC.has(runtime.providerKey))
-        throw new Error(
-          `This workspace runs on ${runtime.providerKey}, which can't run the commands this needs. Pick another provider.`,
-        );
-      return { url: runtime.url, directory: runtime.directory };
+      return {
+        url: runtime.url,
+        directory: runtime.directory,
+        ...(runtime.headers ? { headers: runtime.headers } : {}),
+        ...(runtime.password ? { password: runtime.password } : {}),
+        canExec: !runtime.providerKey || !NO_EXEC.has(runtime.providerKey),
+      };
     },
     machine: (workspaceId) =>
       remoteMachine((command) => client.workspaces.exec(workspaceId, command)),

@@ -3,7 +3,7 @@ import { accessSync, constants, statSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
-import { agentScript } from "../script.js";
+import { agentScript, scriptSession } from "../script.js";
 import type { AgentAdapter, ExportedSession } from "./types.js";
 
 /**
@@ -357,6 +357,7 @@ export const t3Agent: AgentAdapter = {
   key: "t3code",
   label: "T3 Code",
   script: T3_SCRIPT,
+  session: scriptSession(T3_SCRIPT),
   currentSession: (env) => env.T3CODE_THREAD_ID,
   sentSince: (exported, mark) => sentSince(sessionText(exported), mark),
 
