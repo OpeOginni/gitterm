@@ -40,7 +40,7 @@ Restart OpenCode after changing the options. When you load the plugin from a loc
 
 ## What turns on
 
-Each part of the plugin turns on by itself when it can work. There is no setting to turn a part off.
+Each part of the plugin turns on by itself when it can work. To turn one off, see [Turn a part off](#turn-a-part-off).
 
 | You have                                                   | Sandbox tools                    | `/cloud` and `/cloud-return`     |
 | ---------------------------------------------------------- | -------------------------------- | -------------------------------- |
@@ -49,7 +49,20 @@ Each part of the plugin turns on by itself when it can work. There is no setting
 | A `sandbox` account with your own provider key, no login   | Yes                              | No: moving needs a Gitterm login |
 | Neither                                                    | No                               | Yes: `/cloud` signs you in       |
 
-A `sandbox` account here means the plugin's `sandbox` option or, without it, the `gitterm` CLI's settings file that `gitterm sandbox setup` writes. `gitterm project disable` can turn either part off for a project; see [Turn Gitterm off for a project](/docs/sandboxes/setup#turn-gitterm-off-for-a-project). Restart OpenCode after signing in or changing these, so the tools appear.
+A `sandbox` account here means the plugin's `sandbox` option or, without it, the `gitterm` CLI's settings file that `gitterm sandbox setup` writes. Restart OpenCode after signing in or changing these, so the tools appear.
+
+## Turn a part off
+
+Set `"sandbox": false` or `"cloud": false` in the plugin's options. In your global config it applies everywhere. For one project only, add the plugin to that project's `opencode.json` with its own options. They replace the global options in that project, so repeat any you still want there:
+
+```jsonc
+// opencode.json in the project
+{
+  "plugins": [{ "package": "@gitterm/opencode", "options": { "cloud": false } }],
+}
+```
+
+To leave the plugin out of a project entirely, add `"-gitterm"` to that project's `plugins`. `gitterm project disable` turns either part off for a project too, for every agent on your machine; see [Turn Gitterm off for a project](/docs/sandboxes/setup#turn-gitterm-off-for-a-project).
 
 ## Sign in
 
@@ -65,18 +78,19 @@ Your model keys stay on your computer. In the cloud, the agent can use free mode
 
 Every option is optional.
 
-| Option                | Type     | Required                             | Default                  | What it does                                                                                                                    |
-| --------------------- | -------- | ------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `sandbox`             | object   | No                                   | Your Gitterm login       | The sandbox account and its settings. See [Sandbox options](#sandbox-options).                                                  |
-| `serverUrl`           | string   | No                                   | Saved CLI login          | Gitterm API URL, for `/cloud` and for sandboxes billed to Gitterm.                                                              |
-| `token`               | string   | No                                   | Saved CLI login          | Gitterm API token. Prefer `gitterm login` or `GITTERM_API_TOKEN`.                                                               |
-| `provider`            | object   | No                                   | Your Gitterm default     | Provider for the cloud workspace, for example `{ "type": "e2b" }`. Must be enabled on your deployment.                          |
-| `connections`         | string[] | Only for private repositories        | None                     | Saved Gitterm connections to attach, by id, name, or integration key. `"github"` picks a connection that covers the repository. |
-| `name`                | string   | No                                   | The conversation title   | Cloud workspace name.                                                                                                           |
-| `persistent`          | boolean  | No                                   | Not requested            | Requests persistent storage for the cloud workspace where the provider supports it.                                             |
-| `envFiles`            | string[] | No                                   | None                     | Env files, relative to the checkout, whose variables the cloud workspace gets. Later files win.                                 |
-| `localServerUrl`      | string   | Only for standalone OpenCode servers | Discovered automatically | Loopback URL of your local OpenCode server: `localhost`, `127.0.0.1`, or `[::1]`, with no credentials in the URL.               |
-| `localServerPassword` | string   | Only if that server needs one        | None                     | Password for that local server.                                                                                                 |
+| Option                | Type              | Required                             | Default                  | What it does                                                                                                                    |
+| --------------------- | ----------------- | ------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `sandbox`             | object or `false` | No                                   | Your Gitterm login       | The sandbox account and its settings, see [Sandbox options](#sandbox-options). `false` turns the sandbox tools off.             |
+| `cloud`               | boolean           | No                                   | `true`                   | `false` turns `/cloud` and `/cloud-return` off.                                                                                 |
+| `serverUrl`           | string            | No                                   | Saved CLI login          | Gitterm API URL, for `/cloud` and for sandboxes billed to Gitterm.                                                              |
+| `token`               | string            | No                                   | Saved CLI login          | Gitterm API token. Prefer `gitterm login` or `GITTERM_API_TOKEN`.                                                               |
+| `provider`            | object            | No                                   | Your Gitterm default     | Provider for the cloud workspace, for example `{ "type": "e2b" }`. Must be enabled on your deployment.                          |
+| `connections`         | string[]          | Only for private repositories        | None                     | Saved Gitterm connections to attach, by id, name, or integration key. `"github"` picks a connection that covers the repository. |
+| `name`                | string            | No                                   | The conversation title   | Cloud workspace name.                                                                                                           |
+| `persistent`          | boolean           | No                                   | Not requested            | Requests persistent storage for the cloud workspace where the provider supports it.                                             |
+| `envFiles`            | string[]          | No                                   | None                     | Env files, relative to the checkout, whose variables the cloud workspace gets. Later files win.                                 |
+| `localServerUrl`      | string            | Only for standalone OpenCode servers | Discovered automatically | Loopback URL of your local OpenCode server: `localhost`, `127.0.0.1`, or `[::1]`, with no credentials in the URL.               |
+| `localServerPassword` | string            | Only if that server needs one        | None                     | Password for that local server.                                                                                                 |
 
 `serverUrl` and `token` resolve in this order: the option, then `GITTERM_SERVER_URL` / `GITTERM_API_TOKEN`, then the saved CLI login. The server defaults to `https://api.gitterm.dev`.
 

@@ -52,7 +52,9 @@ export function piServeCommand(port: number): string {
  *   session is in the cloud, a question before a message is sent here instead, and delivery of
  *   the notices `gitterm move` and `gitterm return` leave for a session (in
  *   `~/.pi/agent/gitterm/inbox/<session id>.txt`) when that session opens.
- * `gitterm project disable` can turn either off for a project on this machine.
+ * Pi's settings can turn either off, or give the sandbox account, under "gitterm" (globally, or
+ * in a project's .pi/settings.json), and `gitterm project disable` can for a project on this
+ * machine.
  * The work itself is the `gitterm` CLI's; the extension asks the questions and shows the outcome.
  */
 export const PI_EXTENSION = String.raw`import { existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
@@ -105,6 +107,22 @@ function projectAllows(dir) {
   }
 }
 
+/**
+ * GitTerm's part of Pi's settings: "gitterm" in ~/.pi/agent/settings.json, overridden by the
+ * project's .pi/settings.json, as Pi does with its own settings:
+ * { "sandbox": false or a sandbox account, "cloud": false }.
+ */
+function piSettings(dir) {
+  const read = (file) => {
+    try {
+      return JSON.parse(readFileSync(file, "utf8"))?.gitterm || {};
+    } catch {
+      return {};
+    }
+  };
+  return { ...read(path.join(agentDir, "settings.json")), ...read(path.join(dir, ".pi", "settings.json")) };
+}
+
 /** The move that took this session to the cloud and has not come back, from gitterm's records. */
 function movedTo(id) {
   try {
@@ -145,13 +163,22 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function (pi) {
   const signed = signedIn();
-  const configured = existsSync(sandboxSettings);
+  const settings = piSettings(process.cwd());
+  // A sandbox account in Pi's settings goes to the gitterm CLI, which runs the sandboxes.
+  if (settings.sandbox && typeof settings.sandbox === "object") {
+    process.env.GITTERM_SANDBOX_SETTINGS = JSON.stringify(settings.sandbox);
+    process.env.GITTERM_SANDBOX_SETTINGS_FROM_PI = "1";
+  } else if (process.env.GITTERM_SANDBOX_SETTINGS_FROM_PI) {
+    delete process.env.GITTERM_SANDBOX_SETTINGS;
+    delete process.env.GITTERM_SANDBOX_SETTINGS_FROM_PI;
+  }
+  const configured = Boolean(process.env.GITTERM_SANDBOX_SETTINGS?.trim()) || existsSync(sandboxSettings);
   const project = projectAllows(process.cwd());
-  // Sandboxes need an account: the settings file, or the GitTerm account signed in to.
-  const sandboxesOn = (configured || signed) && project.sandbox;
+  // Sandboxes need an account: Pi's settings, the CLI's settings, or the GitTerm login.
+  const sandboxesOn = (configured || signed) && project.sandbox && settings.sandbox !== false;
   // Moving a session needs a GitTerm account; a provider key alone is not one. Without
   // either, /cloud is offered and signs the user in.
-  const cloudOn = (signed || !configured) && project.cloud;
+  const cloudOn = (signed || !configured) && project.cloud && settings.cloud !== false;
 
   /** A notice GitTerm left for this session: the agent reads it as the next message. */
   const deliver = (id, send) => {

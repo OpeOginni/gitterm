@@ -62,9 +62,11 @@ To use your own provider account instead, put its key under `sandbox`:
 ```
 
 Never paste a key directly. OpenCode fills it in for you: `"{env:E2B_API_KEY}"` reads an
-environment variable and `"{file:~/.secrets/e2b}"` reads a file. OpenCode's background service
-doesn't load plugins from a project's config, so with a project config start OpenCode with
-`opencode --standalone`.
+environment variable and `"{file:~/.secrets/e2b}"` reads a file.
+
+`"sandbox": false` or `"cloud": false` turns that part off. In a project's own `opencode.json`,
+the plugin's options apply to that project only and replace the global ones there;
+`"-gitterm"` in its `plugins` leaves the plugin out of that project.
 
 #### Other providers
 

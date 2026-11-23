@@ -322,8 +322,15 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
   };
 }
 
-/** The plugin's options: the cloud's at the top level, the sandbox account under `sandbox`. */
-export type GittermPluginOptions = HandoffOptions & { sandbox?: SandboxSettings };
+/**
+ * The plugin's options: the cloud's at the top level, the sandbox account under `sandbox`.
+ * `sandbox: false` or `cloud: false` turns that part off. In a project's own `opencode.json`
+ * they apply to that project only, replacing the global options there.
+ */
+export type GittermPluginOptions = HandoffOptions & {
+  sandbox?: SandboxSettings | false;
+  cloud?: boolean;
+};
 
 /**
  * GitTerm for OpenCode: sandbox tools for the local agent, and /cloud to move the session to
@@ -333,23 +340,26 @@ export type GittermPluginOptions = HandoffOptions & { sandbox?: SandboxSettings 
  * - /cloud, unless the user set up sandboxes and is not signed in to GitTerm: moving a session
  *   needs a GitTerm account (gitterm.dev or self-hosted), which a provider key alone is not.
  *   Without either, /cloud is on and signs the user in.
- * `gitterm project disable` can turn either off for a project on this machine.
+ * The options can turn either off (`sandbox: false`, `cloud: false`), and so can
+ * `gitterm project disable` for a project on this machine.
  */
 export const GittermPlugin = Plugin.define({
   id: "gitterm",
   async setup(ctx) {
     const options = (ctx.options ?? {}) as GittermPluginOptions;
-    const { sandbox, ...cloud } = options;
+    const { sandbox, cloud: cloudOption, ...cloud } = options;
     const signedIn = Boolean(
       options.token?.trim() || process.env.GITTERM_API_TOKEN?.trim() || loadConfigSync(),
     );
     const configured = sandbox && Object.keys(sandbox).length > 0 ? sandbox : sandboxSettingsFile();
     const account = configured ?? (signedIn ? gittermAccount(options) : undefined);
     const project = allowed(ctx.location.directory);
+    const sandboxOn = sandbox !== false && project.sandbox;
+    const cloudOn = cloudOption !== false && project.cloud;
     const stopSandboxes =
-      account && project.sandbox ? await registerSandboxTools(ctx, account) : undefined;
+      account && sandboxOn ? await registerSandboxTools(ctx, account) : undefined;
     const stopCloud =
-      (signedIn || !configured) && project.cloud ? await registerCloud(ctx, cloud) : undefined;
+      (signedIn || !configured) && cloudOn ? await registerCloud(ctx, cloud) : undefined;
     return async () => {
       await stopSandboxes?.();
       await stopCloud?.();
