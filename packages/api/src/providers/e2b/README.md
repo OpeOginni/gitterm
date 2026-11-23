@@ -29,18 +29,16 @@ Subscribe to at least these events:
 
 ## Templates
 
-By default, workspaces start from E2B's `base` template (2 vCPU, 512 MB) and install the agent
-with the image's `setupCommands`. GitTerm publishes no templates.
+E2B fixes a sandbox's size per template, so every machine size is its own template
+(`<name>`, `<name>-sm`, `<name>-lg`). The **Release GitTerm** action builds them with the
+`runtimes` or `both` target, including the `gitterm-sandbox` templates. Published templates
+are public so self-hosted installs can start them, and the seed uses them by default.
 
-E2B fixes a sandbox's size per template, so larger machines and faster starts need your own
-templates. Build them into your account with `E2B_API_KEY=... bun run e2b:build` in
-`packages/api` (`--agent opencode|t3code|sandbox` for one). It builds each agent at every size
-(`<name>`, `<name>-sm`, `<name>-lg`). Then, in the admin panel:
-
-1. Set the image's E2B `templateId` to your template. The workspace starts from it and skips
-   the install.
-2. Add a machine profile for each size, with `{"templateSuffix": "-sm"}` or `"-lg"` as its
-   provider options and the template's vCPUs and memory.
+To use your own instead, run `E2B_API_KEY=... bun run e2b:build` in `packages/api`
+(`--agent opencode|t3code|sandbox` for one; `E2B_TEMPLATE_OWNER` for `--verify` and
+`--promote`), then set the image's E2B `templateId` in the admin panel. The seed keeps a template
+you set. With no `templateId`, a workspace starts from E2B's `base` template and installs the
+agent with the image's `setupCommands`.
 
 ## Reference
 

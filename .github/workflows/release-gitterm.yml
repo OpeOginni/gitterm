@@ -57,6 +57,8 @@ jobs:
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+      E2B_SMOKE_API_KEY: ${{ secrets.E2B_SMOKE_API_KEY }}
 
   platform:
     if: ${{ inputs.target != 'runtimes' }}

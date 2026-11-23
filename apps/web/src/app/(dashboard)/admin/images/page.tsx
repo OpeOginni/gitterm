@@ -55,8 +55,8 @@ const PROVIDER_DEFINITIONS = [
     key: "e2b",
     label: "E2B",
     description:
-      "Install commands for E2B's base template, or templateId: a template that already has the agent.",
-    initial: { setupCommands: [] },
+      "templateId: a template that has the agent (sizes append -sm/-lg). Without one, setupCommands install it on base.",
+    initial: { templateId: "", setupCommands: [] },
   },
   {
     key: "daytona",
