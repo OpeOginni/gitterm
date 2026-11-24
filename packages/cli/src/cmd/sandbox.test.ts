@@ -1,5 +1,6 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { setProjectFeatures } from "@gitterm/sdk";
@@ -35,7 +36,14 @@ mock.module("@gitterm/sdk/sandbox", () => ({
       archive: Buffer.alloc(0),
     };
   },
-  createSandboxBackend: () => ({}),
+  // The provider rejects the key "bad-key" when setup checks it.
+  createSandboxBackend: (account: { ownKey: boolean; config: { apiKey?: string } }) => ({
+    list: async () => {
+      if (account.ownKey && account.config.apiKey === "bad-key")
+        throw new Error("E2B rejected the key");
+      return [];
+    },
+  }),
   createSandboxClient: () => ({
     identity: { mode: "direct", account: "e2b", provider: "e2b" },
     capabilities: { previews: "either" },
@@ -59,13 +67,26 @@ mock.module("@gitterm/sdk/sandbox", () => ({
     }),
   }),
 }));
+/** Answers for the setup prompts, in order. */
+const answers: unknown[] = [];
+const next = async () => answers.shift();
+const actualUi = await import("../ui.js");
+mock.module("../ui.js", () => ({ ...actualUi, choose: next, ask: next, confirm: next }));
+// Signing in sets a token for the test server; nothing is written to this machine's login.
+mock.module("./auth.js", () => ({
+  signIn: async () => {
+    process.env.GITTERM_API_TOKEN = "gt_test";
+  },
+}));
 const {
   runSandboxCreate,
   runSandboxExec,
   runSandboxJob,
   runSandboxPause,
   runSandboxResume,
+  runSandboxSetup,
   runSandboxSync,
+  setUpOwnProvider,
 } = await import("./sandbox.js");
 
 afterEach(() => {
@@ -256,6 +277,7 @@ test("sync asks once per project: NEEDS_APPROVAL, then --always, then no more as
     await rm(checkout, { recursive: true, force: true });
   }
 });
+
 /** Runs `run` in a throwaway HOME and checkout, catching the CLI's exit and its errors. */
 async function inProject(run: (checkout: string, errors: string[]) => Promise<void>) {
   const home = await mkdtemp(path.join(tmpdir(), "gitterm-home-"));
@@ -305,4 +327,67 @@ test("create with public previews asks one question that --always cannot answer"
     await runSandboxCreate({ ...args, yes: true });
     expect(woke).toEqual(["create"]);
   });
+});
+
+test("setup with a rejected key leaves the working account and writes no key", async () => {
+  await inProject(async () => {
+    const file = process.env.GITTERM_SANDBOX_CONFIG!;
+    const before = await readFile(file, "utf8");
+    // E2B, paste a key.
+    answers.push(0, 0, "bad-key");
+    await expect(setUpOwnProvider()).rejects.toThrow("E2B rejected the key");
+    expect(await readFile(file, "utf8")).toBe(before);
+    expect(existsSync(path.join(path.dirname(file), "keys"))).toBe(false);
+    // A key the provider accepts is saved, and the account before it is kept.
+    answers.push(0, 0, "good-key");
+    await setUpOwnProvider();
+    const saved = JSON.parse(await readFile(file, "utf8"));
+    const keyFile = path.join(path.dirname(file), "keys", "e2b");
+    expect(saved).toMatchObject({
+      account: "e2b",
+      accounts: { e2b: { apiKey: `{file:${keyFile}}` } },
+    });
+    expect(await readFile(keyFile, "utf8")).toBe("good-key\n");
+  });
+});
+
+test("setup on the GitTerm plan signs in first, and a non-default provider stays a GitTerm account", async () => {
+  const server = Bun.serve({
+    port: 0,
+    fetch: (request) =>
+      new URL(request.url).pathname.endsWith("/sandbox.providers")
+        ? Response.json([
+            { result: { data: { providers: ["gitterm", "e2b"], default: "gitterm" } } },
+          ])
+        : new Response("not found", { status: 404 }),
+  });
+  const saved = {
+    url: process.env.GITTERM_SERVER_URL,
+    token: process.env.GITTERM_API_TOKEN,
+    tty: process.stdin.isTTY,
+  };
+  process.env.GITTERM_SERVER_URL = server.url.origin;
+  delete process.env.GITTERM_API_TOKEN;
+  process.stdin.isTTY = true;
+  try {
+    await inProject(async () => {
+      // GitTerm plan, sign in, E2B (not the default), the plan's size.
+      answers.push(0, true, 1, "");
+      await runSandboxSetup();
+      const settings = JSON.parse(await readFile(process.env.GITTERM_SANDBOX_CONFIG!, "utf8"));
+      expect(settings.accounts.gitterm).toEqual({ serverUrl: server.url.origin, provider: "e2b" });
+      const { loadSandboxSettingsFile, resolveSandboxAccount } = actual;
+      const account = await resolveSandboxAccount(loadSandboxSettingsFile()!, "gitterm");
+      expect(account).toMatchObject({ ownKey: false, provider: "e2b" });
+    });
+  } finally {
+    server.stop(true);
+    process.stdin.isTTY = saved.tty;
+    for (const [name, value] of [
+      ["GITTERM_SERVER_URL", saved.url],
+      ["GITTERM_API_TOKEN", saved.token],
+    ] as const)
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+  }
 });
