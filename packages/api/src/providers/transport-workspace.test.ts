@@ -1,11 +1,13 @@
 import { afterAll, expect, spyOn, test } from "bun:test";
 import {
   SandboxProviderError,
+  terminated,
   type SandboxCreateInput,
 } from "@gitterm/agent-runtime/sandbox/types";
 import * as transportModule from "../service/sandbox-transport";
 import * as timeouts from "../service/workspace-timeouts";
 import type { WorkspaceConfig } from "./compute";
+import { getProviderByCloudProviderId } from ".";
 import { withSandboxHandles } from "./sandbox-handles";
 import { gittermProvider, TransportWorkspaceProvider } from "./transport-workspace";
 
@@ -163,6 +165,22 @@ test("a sandbox the provider made but couldn't delete is recorded, so cleanup ca
       }),
     ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
     expect(recorded).toEqual(["sandbox:gitterm:sbx9"]);
+  } finally {
+    mocks[0]!.mockResolvedValue(fake as never);
+  }
+});
+
+test("a managed Railway sandbox is deleted through its handle, as Railway hosts no workspaces", async () => {
+  const removed: string[] = [];
+  mocks[0]!.mockResolvedValue({
+    provider: "railway",
+    destroy: async (id: string) => void removed.push(id),
+    info: async (id: string) => terminated(id),
+  } as never);
+  try {
+    const provider = await getProviderByCloudProviderId("railway", "cp1");
+    await provider.terminateWorkspace("sandbox:railway:svc1");
+    expect(removed).toEqual(["svc1"]);
   } finally {
     mocks[0]!.mockResolvedValue(fake as never);
   }
