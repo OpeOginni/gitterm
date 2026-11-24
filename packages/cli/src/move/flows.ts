@@ -275,6 +275,14 @@ export async function returnFromCloud(
   };
   let snapshot = await capture(record.head);
   const summary = snapshotSummary(snapshot);
+  // A turn that ran while the checkout was copied would be missing from the conversation.
+  const after = await remote.agent<ExportedSession>(agent.script, "export", {
+    ref: record.cloudRef,
+  });
+  if (after.mark !== cloudSession.mark)
+    throw new Error(
+      `The cloud ${agent.label} session went on while it was being copied. Try again once it is done.`,
+    );
 
   progress("Restoring it here");
   const restoreHere = async (force: boolean) => {

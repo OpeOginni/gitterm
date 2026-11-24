@@ -43,14 +43,17 @@ export function piServeCommand(port: number): string {
 /**
  * Pi's GitTerm extension: `/cloud` and `/cloud-return`, and delivery of the notices
  * `gitterm move` and `gitterm return` leave for a session (in
- * `~/.pi/agent/gitterm/inbox/<session id>.txt`) when that session opens.
+ * `~/.pi/agent/gitterm/inbox/<session id>.txt`) when that session opens. While Pi works in a
+ * session, `~/.pi/agent/gitterm/busy/<session id>` holds Pi's process id, so GitTerm doesn't
+ * copy the session mid-turn.
  */
-export const PI_EXTENSION = String.raw`import { existsSync, readFileSync, rmSync } from "node:fs";
+export const PI_EXTENSION = String.raw`import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
 const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(homedir(), ".pi", "agent");
 const inbox = (id) => path.join(agentDir, "gitterm", "inbox", id + ".txt");
+const busy = (ctx) => path.join(agentDir, "gitterm", "busy", ctx.sessionManager.getSessionId());
 
 export default function (pi) {
   /** A notice GitTerm left for this session: the agent reads it as the next message. */
@@ -70,6 +73,13 @@ export default function (pi) {
     if (event.reason !== "startup") return;
     deliver(ctx.sessionManager.getSessionId(), (text) => pi.sendUserMessage(text));
   });
+
+  pi.on("agent_start", async (_event, ctx) => {
+    mkdirSync(path.dirname(busy(ctx)), { recursive: true });
+    writeFileSync(busy(ctx), String(process.pid));
+  });
+  // Settled: Pi won't continue by itself (no retry, compaction or queued message is left).
+  pi.on("agent_settled", async (_event, ctx) => rmSync(busy(ctx), { force: true }));
 
   pi.registerCommand("cloud", {
     description: "Move this session and its checkout to a GitTerm cloud workspace",

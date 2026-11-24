@@ -15,6 +15,8 @@ import type { AgentAdapter, ExportedSession } from "./types.js";
  * Pi has no server to start a turn in. A notice for the session goes to
  * `<agent dir>/gitterm/inbox/<id>.txt`, which GitTerm's Pi extension sends when the session
  * opens; in a workspace, `notify` also opens it in the tmux session the terminal attaches to.
+ * While Pi works in a session, the extension keeps Pi's process id in
+ * `<agent dir>/gitterm/busy/<id>`, which `status` reads.
  */
 const PI_SCRIPT = agentScript(String.raw`
 const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(home, ".pi", "agent");
@@ -39,6 +41,13 @@ function entries(text) {
   return text.split("\n").filter((line) => line.trim()).map((line) => { try { return JSON.parse(line); } catch { return null; } });
 }
 
+/** Whether a running Pi is working in the session, as GitTerm's Pi extension records it. */
+function busy(id) {
+  let pid;
+  try { pid = Number(fs.readFileSync(path.join(agentDir, "gitterm", "busy", id), "utf8")); } catch { return false; }
+  try { process.kill(pid, 0); return true; } catch (error) { return error.code === "EPERM"; }
+}
+
 const textOf = (content) => typeof content === "string" ? content
   : Array.isArray(content) ? content.filter((part) => part && part.type === "text").map((part) => part.text).join(" ") : "";
 
@@ -55,6 +64,7 @@ const ops = {
     const all = entries(text);
     const header = all[0];
     if (!header || header.type !== "session") fail(file + " is not a Pi session.");
+    if (!input.allowBusy && busy(header.id)) fail("Pi is still working in this session. Let it finish or stop it, then try again.");
     let title = "";
     for (const entry of all) if (entry && entry.type === "session_info" && entry.name) title = entry.name;
     if (!title) {
@@ -108,9 +118,8 @@ const ops = {
     return { started: true };
   },
 
-  /** Pi keeps no state to ask; a return waits for nothing. */
   async status() {
-    return { busy: false };
+    return { busy: busy(input.ref) };
   },
 };
 `);
