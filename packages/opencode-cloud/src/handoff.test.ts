@@ -91,6 +91,11 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
   let creates = 0;
   let terminates = 0;
   const gitterm = {
+    catalog: {
+      workspaceOptions: async () => ({
+        providers: [{ id: "p1", type: "e2b", agentKeys: ["opencode"], isDefault: true }],
+      }),
+    },
     workspaces: {
       // GitTerm clones the repository into the workspace.
       create: async (input: { repo?: string }) => {

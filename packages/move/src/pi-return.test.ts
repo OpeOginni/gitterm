@@ -13,8 +13,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { git } from "../../../opencode-cloud/src/snapshot.js";
-import { CAPTURE_SCRIPT } from "../../../opencode-cloud/src/restore.js";
+import { git } from "./checkout/snapshot.js";
+import { CAPTURE_SCRIPT } from "./checkout/restore.js";
 import { piAgent } from "./agents/pi.js";
 import { moveToCloud, returnFromCloud, type Cloud } from "./flows.js";
 import { localMachine, type Machine } from "./machine.js";
@@ -86,7 +86,7 @@ test("a Pi session comes back only with its last turn, and the workspace stays u
   const ended: string[] = [];
   const cloud: Cloud = {
     create: async () => "ws1",
-    ready: async () => ({ url: "https://ws1.example", directory }),
+    ready: async () => ({ url: "https://ws1.example", directory, canExec: true }),
     machine: () => machine(thereAgent),
     end: async (_id, how) => void ended.push(how),
   };
@@ -107,11 +107,7 @@ test("a Pi session comes back only with its last turn, and the workspace stays u
   mkdirSync(path.dirname(busy), { recursive: true });
   writeFileSync(busy, String(process.pid));
   expect(
-    (
-      await deps.cloud.machine("ws1").agent<{ busy: boolean }>(piAgent.script, "status", {
-        ref: record!.cloudRef,
-      })
-    ).busy,
+    (await piAgent.session(deps.cloud.machine("ws1")).status({ ref: record!.cloudRef })).busy,
   ).toBe(true);
   await expect(returnFromCloud(deps, record!, { force: false, end: "delete" })).rejects.toThrow(
     "Pi is still working",

@@ -2,18 +2,15 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { git } from "../../../opencode-cloud/src/snapshot.js";
+import { git } from "./checkout/snapshot.js";
 import type { AgentAdapter } from "./agents/types.js";
 import { moveToCloud, returnFromCloud, type Cloud } from "./flows.js";
 import { localMachine } from "./machine.js";
 import { loadRecords } from "./records.js";
-import { agentScript } from "./script.js";
+import { agentScript, scriptSession } from "./script.js";
 
 /** An agent whose sessions are JSON files of messages under FAKE_AGENT_HOME. */
-const fakeAgent: AgentAdapter = {
-  key: "fake",
-  label: "Fake",
-  script: agentScript(String.raw`
+const FAKE_SCRIPT = agentScript(String.raw`
 const file = (ref) => path.join(process.env.FAKE_AGENT_HOME, ref + ".json");
 const read = (ref) => JSON.parse(fs.readFileSync(file(ref), "utf8"));
 const write = (ref, session) => { fs.mkdirSync(path.dirname(file(ref)), { recursive: true }); fs.writeFileSync(file(ref), JSON.stringify(session)); };
@@ -24,7 +21,14 @@ const ops = {
   async notify() { const s = read(input.ref); s.messages.push(input.message); write(input.ref, s); return {}; },
   async status() { return { busy: false }; },
 };
-`),
+`);
+const fakeAgent: AgentAdapter = {
+  key: "fake",
+  label: "Fake",
+  script: FAKE_SCRIPT,
+  session: scriptSession(FAKE_SCRIPT),
+  installed: async () => true,
+  howToMove: "",
   currentSession: () => undefined,
   sentSince: (session, mark) => (session.payload.messages as string[]).length > mark,
 };
@@ -69,7 +73,7 @@ test("a return whose workspace cannot be ended is still done, and says so", asyn
   let ending: Error | undefined;
   const cloud: Cloud = {
     create: async () => "ws-1",
-    ready: async () => ({ url: "http://workspace", directory: cloudDirectory }),
+    ready: async () => ({ url: "http://workspace", directory: cloudDirectory, canExec: true }),
     machine: () => remote,
     end: async () => {
       if (ending) throw ending;

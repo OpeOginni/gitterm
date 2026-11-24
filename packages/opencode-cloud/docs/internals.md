@@ -19,7 +19,7 @@ progress events; the terminal calls back to cancel an attempt. Questions use nat
 forms. The server writes cloud status to session metadata for the terminal to display.
 
 The plugin keeps no move state of its own. The shared flows in `@gitterm/move` record each
-move in `~/.config/gitterm/moves.json`, the same records the `gitterm` CLI reads and writes,
+move in `~/.config/gitterm/moves/` (one file per move), the same records the `gitterm` CLI reads and writes,
 so a session moved with either is known to both. They hold the workspace ID and the digests
 used to detect changes, never checkout snapshots or credentials.
 
