@@ -4,5 +4,5 @@
     "declaration": true,
     "emitDeclarationOnly": true
   },
-  "exclude": ["src/**/*.test.ts", "src/gui.tsx"]
+  "exclude": ["src/**/*.test.ts"]
 }
