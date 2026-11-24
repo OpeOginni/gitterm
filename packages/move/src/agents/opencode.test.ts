@@ -3,7 +3,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { OpenCode } from "@opencode/client";
+import { OpenCode, type OpenCodeClient } from "@opencode/client";
 import { moveToCloud, returnFromCloud, type Cloud } from "../flows.js";
 import { loadRecords } from "../records.js";
 import type { ExportedSession } from "./types.js";
@@ -15,6 +15,37 @@ test("only a user message after the move counts as local work", () => {
   expect(opencodeAgent.sentSince(session(["user", "assistant", "agent-switched"]), 2)).toBe(false);
   expect(opencodeAgent.sentSince(session(["user", "assistant", "user"]), 2)).toBe(true);
   expect(opencodeAgent.currentSession({ OPENCODE_SESSION_ID: "ses_1" })).toBe("ses_1");
+});
+
+test("a failed import puts back the session it was replacing", async () => {
+  const original = {
+    info: { id: "ses_1", location: { directory: "/repo" } },
+    messages: [{ type: "user" }],
+  };
+  const sessions = new Map<string, unknown>([["ses_1", original]]);
+  let failNext = true;
+  const opencode = {
+    session: {
+      export: async ({ sessionID }: { sessionID: string }) => sessions.get(sessionID),
+      fork: async () => {},
+      remove: async ({ sessionID }: { sessionID: string }) => sessions.delete(sessionID),
+      import: async (input: { info: { id: string } }) => {
+        if (failNext) {
+          failNext = false;
+          throw new Error("import failed");
+        }
+        sessions.set(input.info.id, input);
+        return { id: input.info.id };
+      },
+    },
+  } as unknown as OpenCodeClient;
+  const incoming = { info: { id: "ses_1" }, messages: [{ type: "user" }, { type: "assistant" }] };
+  await expect(
+    opencodeAgent
+      .session(opencodeMachine(opencode))
+      .import({ payload: incoming, cwd: "/repo", ref: "ses_1" }),
+  ).rejects.toThrow("import failed");
+  expect(sessions.get("ses_1")).toMatchObject(original);
 });
 
 /**
