@@ -12,14 +12,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OpenCodeClient } from "@opencode/client";
 import { GittermError, type GittermClient } from "@gitterm/sdk";
-import {
-  changePrompt,
-  handoffSession,
-  HandoffCancelled,
-  showConnection,
-  type HandoffRecord,
-} from "./handoff";
+import { changePrompt, handoffSession, HandoffCancelled, showConnection } from "./handoff";
 import { git } from "@gitterm/move/checkout/snapshot";
+import { loadRecords } from "@gitterm/move/records";
 
 let root: string;
 /** The cloud workspace's checkout. */
@@ -93,8 +88,6 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
       },
     },
   } as unknown as OpenCodeClient;
-  const records: HandoffRecord[] = [];
-  const discarded: HandoffRecord[] = [];
   let creates = 0;
   let terminates = 0;
   const gitterm = {
@@ -122,8 +115,6 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
     gitterm,
     forms,
     notes,
-    records,
-    discarded,
     creates: () => creates,
     terminates: () => terminates,
     deps: {
@@ -131,12 +122,6 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
       gitterm,
       options: {},
       signal: AbortSignal.timeout(10_000),
-      save: async (record: HandoffRecord) => {
-        records.push({ ...record });
-      },
-      discard: async (record: HandoffRecord) => {
-        discarded.push({ ...record });
-      },
       progress: async (_step: string) => {},
     },
   };
@@ -221,12 +206,12 @@ test("prompts differ only by shared-checkout warning", () => {
 test("a clean checkout moves without a question and stores no credentials", async () => {
   const cloud = cloudServer();
   const f = fixture([]);
-  const { record } = await handoffSession("ses_test", f.deps);
-  expect(record.phase).toBe("ready");
+  expect(await handoffSession("ses_test", f.deps)).toEqual({ workspaceID: "workspace-test" });
   expect(f.forms).toEqual([]);
-  expect(f.records.map((item) => [item.phase, item.workspaceID])).toEqual([
-    ["moving", "workspace-test"],
-    ["ready", "workspace-test"],
+  // The move is in GitTerm's records, where the CLI and /cloud-return find it.
+  const records = await loadRecords();
+  expect(records.map((item) => [item.agent, item.localRef, item.workspaceId])).toEqual([
+    ["opencode", "ses_test", "workspace-test"],
   ]);
   expect((await head(cloudRoot)).toString()).toBe((await head(root)).toString());
   expect(cloud.entry).toContain(`(checkout ${root})`);
@@ -243,7 +228,7 @@ test("a clean checkout moves without a question and stores no credentials", asyn
     }),
   ]);
   expect(cloud.prompts).toEqual([]);
-  expect(JSON.stringify(f.records)).not.toContain("password");
+  expect(JSON.stringify(records)).not.toContain("password");
   expect(f.terminates()).toBe(0);
 });
 
@@ -251,13 +236,13 @@ test("uncommitted changes are asked about and go along when the user says so", a
   await writeFile(path.join(root, "file.txt"), "local edit\n");
   cloudServer();
   const f = fixture([{ changes: "yes" }]);
-  expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+  expect((await handoffSession("ses_test", f.deps)).workspaceID).toBe("workspace-test");
   expect(f.forms.map((form) => (form.fields[0] as { title?: string }).title)).toEqual([
     "Bring your uncommitted changes to the cloud?",
   ]);
   expect(JSON.stringify(f.forms)).not.toContain('"default"');
   expect(await readFile(path.join(cloudRoot, "file.txt"), "utf8")).toBe("local edit\n");
-  expect(JSON.stringify(f.records)).not.toContain("local edit");
+  expect(JSON.stringify(await loadRecords())).not.toContain("local edit");
 });
 
 test("cancelling the question never provisions compute", async () => {
@@ -265,7 +250,7 @@ test("cancelling the question never provisions compute", async () => {
   const f = fixture(["cancelled"]);
   await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
   expect(f.creates()).toBe(0);
-  expect(f.records).toEqual([]);
+  expect(await loadRecords()).toEqual([]);
 });
 
 test("a running agent and its subagent are stopped here and continue in the cloud", async () => {
@@ -300,8 +285,7 @@ test("a running agent and its subagent are stopped here and continue in the clou
   f.deps.progress = async (step) => {
     steps.push(step);
   };
-  const { record } = await handoffSession("ses_test", f.deps);
-  expect(record.phase).toBe("ready");
+  expect((await handoffSession("ses_test", f.deps)).workspaceID).toBe("workspace-test");
   expect(steps[0]).toBe("Stopping the agent here");
   expect(interrupted.toSorted()).toEqual(["ses_child", "ses_test", "ses_test"]);
   expect(cloud.notes).toEqual([
@@ -363,7 +347,7 @@ test("sends the whole history when the cloud clone lacks the commits a smaller u
     await git(cloudRoot, ["init", "--quiet", "-b", "main"]);
     return { workspace: { id: "workspace-test", status: "running" } };
   }) as unknown as typeof f.gitterm.workspaces.create;
-  expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+  expect((await handoffSession("ses_test", f.deps)).workspaceID).toBe("workspace-test");
   expect(uploads(cloud)).toBe(2);
   expect((await head(cloudRoot)).toString()).toBe((await head(root)).toString());
 });
@@ -385,7 +369,7 @@ test("a repository GitTerm can't reach goes with its whole history instead", asy
       );
     return { workspace: { id: "workspace-test", status: "running" } };
   }) as unknown as typeof f.gitterm.workspaces.create;
-  expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+  expect((await handoffSession("ses_test", f.deps)).workspaceID).toBe("workspace-test");
   expect(attempts.map((attempt) => [attempt.repo, attempt.connections])).toEqual([
     ["https://github.com/example/repo.git", ["github", "mcp"]],
     [undefined, ["mcp"]],
@@ -452,7 +436,7 @@ test("starts from the project snapshot, and fresh when that snapshot no longer s
       const terminated = input.useProjectSnapshot && outcome === "terminated";
       return { workspace: { id: "workspace-test", status: terminated ? "terminated" : "running" } };
     }) as unknown as typeof f.gitterm.workspaces.create;
-    expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+    expect((await handoffSession("ses_test", f.deps)).workspaceID).toBe("workspace-test");
     return attempts;
   };
   expect(await run("starts")).toEqual([{ fresh: false, snapshot: true }]);
@@ -480,7 +464,7 @@ test("warns about another active session in a subdirectory of the same checkout"
   expect(f.forms[0]?.fields[0]?.description).toContain("1 other active session(s)");
 });
 
-test("a failed create says why, and the attempt is forgotten", async () => {
+test("a failed create says why, and nothing is recorded", async () => {
   const f = fixture([]);
   f.gitterm.workspaces.create = async () => {
     throw new GittermError(
@@ -493,7 +477,7 @@ test("a failed create says why, and the attempt is forgotten", async () => {
     "Moving to the cloud failed while creating the cloud workspace. Gitterm couldn't start a small machine. Reference: ws1 Local files",
   );
   expect(f.terminates()).toBe(0);
-  expect(f.discarded.length).toBe(1);
+  expect(await loadRecords()).toEqual([]);
 });
 
 test("a failure part way deletes the workspace and lets a stopped agent continue here", async () => {
@@ -516,7 +500,7 @@ test("a failure part way deletes the workspace and lets a stopped agent continue
   );
   await expect(failure).rejects.not.toThrow("secret upstream body");
   expect(f.terminates()).toBe(1);
-  expect(f.discarded.map((record) => record.workspaceID)).toEqual(["workspace-test"]);
+  expect(await loadRecords()).toEqual([]);
   expect(f.notes).toEqual([expect.objectContaining({ resume: true })]);
 });
 
@@ -530,7 +514,7 @@ test("cancelling part way deletes the workspace", async () => {
   };
   await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
   expect(f.terminates()).toBe(1);
-  expect(f.discarded.length).toBe(1);
+  expect(await loadRecords()).toEqual([]);
 });
 
 test("import detaches parent/fork, local revert state, and local permission grants", () => {
@@ -574,20 +558,12 @@ test("reconnect offers a fresh pairing link without creating compute or saving t
     },
   });
   const f = fixture([{ done: true }]);
-  const record: HandoffRecord = {
-    attemptID: "attempt",
-    sessionID: "ses_test",
-    phase: "ready",
-    workspaceID: "workspace-test",
-    sourceDirectory: root,
-    createdAt: "now",
-  };
-  await showConnection(f.local, f.gitterm, record, f.deps.signal);
+  await showConnection(f.local, f.gitterm, "ses_test", "workspace-test", f.deps.signal);
   expect((f.forms[0]?.fields[0] as { url: string } | undefined)?.url).toContain(
     "/auth/connect/one-time-code",
   );
   expect(f.creates()).toBe(0);
-  expect(f.records).toEqual([]);
+  expect(await loadRecords()).toEqual([]);
 });
 
 test("a model is kept when the cloud offers it, waiting for a catalog that is still loading", async () => {

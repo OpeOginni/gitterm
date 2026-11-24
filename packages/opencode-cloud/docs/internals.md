@@ -18,8 +18,10 @@ The two plugins communicate through the `gitterm.cloud` plugin RPC channel. The 
 progress events; the terminal calls back to cancel an attempt. Questions use native OpenCode
 forms. The server writes cloud status to session metadata for the terminal to display.
 
-Plugin storage keeps one handoff record per session, including the phase, workspace ID and
-digests used to detect changes. It does not store checkout snapshots or credentials.
+The plugin keeps no move state of its own. The shared flows in `@gitterm/move` record each
+move in `~/.config/gitterm/moves.json`, the same records the `gitterm` CLI reads and writes,
+so a session moved with either is known to both. They hold the workspace ID and the digests
+used to detect changes, never checkout snapshots or credentials.
 
 ## Moving to the cloud
 
