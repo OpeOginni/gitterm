@@ -1,5 +1,8 @@
 import { afterAll, expect, spyOn, test } from "bun:test";
-import type { SandboxCreateInput } from "@gitterm/agent-runtime/sandbox/types";
+import {
+  SandboxProviderError,
+  type SandboxCreateInput,
+} from "@gitterm/agent-runtime/sandbox/types";
 import * as transportModule from "../service/sandbox-transport";
 import * as timeouts from "../service/workspace-timeouts";
 import type { WorkspaceConfig } from "./compute";
@@ -144,6 +147,24 @@ test("a failed clone says why and removes the sandbox", async () => {
     expect(destroyed).toEqual(["sbx1"]);
   } finally {
     failOn = undefined;
+  }
+});
+
+test("a sandbox the provider made but couldn't delete is recorded, so cleanup can delete it", async () => {
+  const error = new SandboxProviderError("provider", "boot failed");
+  error.leftoverId = "sbx9";
+  mocks[0]!.mockResolvedValue({ ...fake, create: () => Promise.reject(error) } as never);
+  const recorded: string[] = [];
+  try {
+    await expect(
+      gittermProvider.createWorkspace({
+        ...config(),
+        onProvisioned: async (info) => void recorded.push(info.externalServiceId),
+      }),
+    ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
+    expect(recorded).toEqual(["sandbox:gitterm:sbx9"]);
+  } finally {
+    mocks[0]!.mockResolvedValue(fake as never);
   }
 });
 
