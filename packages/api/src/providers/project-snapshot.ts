@@ -54,18 +54,20 @@ export function repositoryCheckoutCommand(
 
 /**
  * Shell run in a workspace just before its disk is saved as a project snapshot. The
- * workspace is deleted afterwards, so nothing in it has to keep working. It stops the agent
- * and removes what must not be kept: credentials GitTerm wrote, and the agent's own data,
- * which holds the conversations of the session that is ending. Every step is best effort.
+ * workspace is deleted afterwards, so nothing in it has to keep working. It removes what
+ * must not be kept: credentials GitTerm wrote, and OpenCode's data, which holds the
+ * conversations of the session that is ending. It covers OpenCode only, so only OpenCode
+ * workspaces are saved. Any step that fails fails the command, and the snapshot is not taken.
  */
 export const SCRUB_WORKSPACE_COMMAND = [
-  "rm -rf /tmp/gitterm-repository-auth /tmp/gitterm-git-askpass /tmp/agent-server.log 2>/dev/null || true",
-  "(rm -rf /run/gitterm 2>/dev/null || sudo -n rm -rf /run/gitterm 2>/dev/null) || true",
-  'rm -f "$HOME/.gitterm/opencode/credentials.json" "$HOME/.gitterm/github/config.json" "$HOME/.gitterm/callback.env" 2>/dev/null || true',
-  'rm -rf "${XDG_STATE_HOME:-$HOME/.local/state}/opencode" "${OPENCODE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/opencode}" 2>/dev/null || true',
-  "git config --global --unset-all credential.helper 2>/dev/null || true",
-  "sync 2>/dev/null || true",
-].join("; ");
+  "rm -rf /tmp/gitterm-repository-auth /tmp/gitterm-git-askpass /tmp/agent-server.log",
+  "{ rm -rf /run/gitterm 2>/dev/null || sudo -n rm -rf /run/gitterm; }",
+  'rm -f "$HOME/.gitterm/opencode/credentials.json" "$HOME/.gitterm/github/config.json" "$HOME/.gitterm/callback.env"',
+  'rm -rf "${XDG_STATE_HOME:-$HOME/.local/state}/opencode" "${OPENCODE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/opencode}"',
+  // Exit 5: there was no helper to remove.
+  "{ git config --global --unset-all credential.helper || [ $? -eq 5 ]; }",
+  "sync",
+].join(" && ");
 export const PREPARE_PROJECT_SNAPSHOT_COMMAND = [
   "pkill -f 'opencode serve' 2>/dev/null || true",
   "sleep 1",

@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { SandboxProviderError } from "@gitterm/agent-runtime/sandbox/types";
 import { SANDBOX_PROVIDER_PROFILES } from "@gitterm/agent-runtime/sandbox/types";
 import { and, db, desc, eq, gt, isNotNull, ne, or, sql } from "@gitterm/db";
-import { cloudProvider } from "@gitterm/db/schema/cloud";
+import { agentType, cloudProvider, image } from "@gitterm/db/schema/cloud";
 import { sandboxSnapshot, workspace } from "@gitterm/db/schema/workspace";
 import { PROJECT_SNAPSHOT_PROVIDERS, type ProjectSnapshotProvider } from "../providers/compute";
 import { getProviderByCloudProviderId } from "../providers";
@@ -41,6 +41,20 @@ export function workspaceMachineId(externalInstanceId: string): string {
   return externalInstanceId;
 }
 
+/**
+ * Whether a workspace's agent is one whose credentials and conversations the snapshot's scrub
+ * removes. Only OpenCode's are; other agents' workspaces are not saved.
+ */
+async function agentIsScrubbed(row: WorkspaceRow): Promise<boolean> {
+  if (!row.imageId) return false;
+  const [agent] = await db
+    .select({ provisionerKey: agentType.provisionerKey })
+    .from(image)
+    .innerJoin(agentType, eq(image.agentTypeId, agentType.id))
+    .where(eq(image.id, row.imageId));
+  return agent?.provisionerKey === "opencode";
+}
+
 const sameProject = (userId: string, repositoryUrl: string, cloudProviderId: string) =>
   and(
     eq(sandboxSnapshot.userId, userId),
@@ -77,7 +91,7 @@ export type ProjectSnapshotStatus = {
   /** Whether this workspace can be kept as its repository's snapshot right now. */
   available: boolean;
   /** Why not, when it cannot. */
-  reason?: "provider" | "plan" | "repository" | "not_running";
+  reason?: "provider" | "agent" | "plan" | "repository" | "not_running";
   /** The snapshot already saved for this repository on this provider. */
   existing: { id: string; createdAt: string } | null;
 };
@@ -98,13 +112,15 @@ export async function projectSnapshotStatus(
       : undefined;
   const reason = !projectSnapshotProvider(providerKey)
     ? "provider"
-    : !row.repositoryUrl
-      ? "repository"
-      : maxSnapshots === 0
-        ? "plan"
-        : row.status !== "running" || !row.externalInstanceId
-          ? "not_running"
-          : undefined;
+    : !(await agentIsScrubbed(row))
+      ? "agent"
+      : !row.repositoryUrl
+        ? "repository"
+        : maxSnapshots === 0
+          ? "plan"
+          : row.status !== "running" || !row.externalInstanceId
+            ? "not_running"
+            : undefined;
   return {
     available: !reason,
     ...(reason ? { reason } : {}),
@@ -125,6 +141,8 @@ export async function saveProjectSnapshot(
   const provider = projectSnapshotProvider(providerKey);
   const refuse = (message: string) => new TRPCError({ code: "PRECONDITION_FAILED", message });
   if (!provider) throw refuse(`${providerKey} workspaces can't be saved as a snapshot.`);
+  if (!(await agentIsScrubbed(row)))
+    throw refuse("Only OpenCode workspaces can be saved as a project snapshot.");
   if (!row.userId || !row.repositoryUrl || !row.cloudProviderId)
     throw refuse("Only a workspace with a repository can be saved as a project snapshot.");
   if (row.status !== "running" || !row.externalInstanceId)
@@ -180,7 +198,16 @@ export async function saveProjectSnapshot(
     // cannot be prepared is not saved.
     const compute = await getProviderByCloudProviderId(providerKey, cloudProviderId);
     if (!compute.execCommand) throw refuse(`${providerKey} workspaces can't be prepared.`);
-    await compute.execCommand(row.externalInstanceId, PREPARE_PROJECT_SNAPSHOT_COMMAND);
+    const prepared = await compute.execCommand(
+      row.externalInstanceId,
+      PREPARE_PROJECT_SNAPSHOT_COMMAND,
+    );
+    if (prepared.exitCode !== 0)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message:
+          "The workspace's credentials and conversations could not be removed, so no snapshot was saved.",
+      });
     const transport = await managedSandboxTransport(provider, cloudProviderId);
     if (!transport.snapshots) throw refuse(`${providerKey} workspaces can't be saved.`);
     external = await transport.snapshots.create(

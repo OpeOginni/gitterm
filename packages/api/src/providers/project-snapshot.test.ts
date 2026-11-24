@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -120,14 +120,23 @@ test("preparing a workspace for a snapshot removes credentials and the agent's d
   }
   // Only the scrub: the full command also stops the agent, which on a developer's machine
   // would stop their own OpenCode. Its own HOME and Git config keep it away from theirs.
-  await execute("bash", ["-c", SCRUB_WORKSPACE_COMMAND], {
-    env: {
-      PATH: process.env.PATH,
-      HOME: home,
-      GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"),
-    } as unknown as NodeJS.ProcessEnv,
-  });
+  const env = {
+    PATH: process.env.PATH,
+    HOME: home,
+    GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"),
+  } as unknown as NodeJS.ProcessEnv;
+  await execute("bash", ["-c", SCRUB_WORKSPACE_COMMAND], { env });
   for (const file of files)
     expect(await readFile(path.join(home, file), "utf8").catch(() => "gone")).toBe("gone");
   expect(await readFile(path.join(home, "project/keep.txt"), "utf8")).toBe("x");
+
+  // A credential that cannot be removed fails the scrub, so no snapshot is taken.
+  await mkdir(path.join(home, ".gitterm/github"), { recursive: true });
+  await writeFile(path.join(home, ".gitterm/github/config.json"), "x");
+  await chmod(path.join(home, ".gitterm/github"), 0o500);
+  try {
+    await expect(execute("bash", ["-c", SCRUB_WORKSPACE_COMMAND], { env })).rejects.toThrow();
+  } finally {
+    await chmod(path.join(home, ".gitterm/github"), 0o700);
+  }
 });
