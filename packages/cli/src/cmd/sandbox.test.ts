@@ -2,8 +2,22 @@ import { afterEach, expect, mock, spyOn, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setProjectFeatures } from "@gitterm/sdk";
 
 let state = { status: "failed", exitCode: 7 as number | null };
+/** Client calls that start or resume compute, and pauses. */
+const woke: string[] = [];
+const view = () => ({
+  job: { id: "job_1", snapshotId: null },
+  state: {
+    status: "succeeded",
+    exitCode: 0,
+    startedAt: null,
+    finishedAt: null,
+    processAlive: false,
+  },
+  log: { text: "", offset: 0, nextOffset: 0, totalBytes: 0 },
+});
 const actual = await import("@gitterm/sdk/sandbox");
 const captures: Parameters<typeof actual.captureSource>[1][] = [];
 const execs: {
@@ -24,6 +38,13 @@ mock.module("@gitterm/sdk/sandbox", () => ({
   createSandboxBackend: () => ({}),
   createSandboxClient: () => ({
     identity: { mode: "direct", account: "e2b", provider: "e2b" },
+    capabilities: { previews: "either" },
+    create: async () => (woke.push("create"), { id: "sbx", account: "e2b", expiresAt: null }),
+    job: async () => (woke.push("job"), view()),
+    wait: async () => (woke.push("job"), view()),
+    cancel: async () => (woke.push("cancel"), view()),
+    resume: async () => (woke.push("resume"), { id: "sbx", state: "running" }),
+    pause: async () => (woke.push("pause"), { id: "sbx", state: "paused" }),
     exec: async (_ref: unknown, input: (typeof execs)[number]) => (
       execs.push(input),
       {
@@ -38,7 +59,14 @@ mock.module("@gitterm/sdk/sandbox", () => ({
     }),
   }),
 }));
-const { runSandboxExec, runSandboxSync } = await import("./sandbox.js");
+const {
+  runSandboxCreate,
+  runSandboxExec,
+  runSandboxJob,
+  runSandboxPause,
+  runSandboxResume,
+  runSandboxSync,
+} = await import("./sandbox.js");
 
 afterEach(() => {
   process.exitCode = 0;
@@ -227,4 +255,54 @@ test("sync asks once per project: NEEDS_APPROVAL, then --always, then no more as
     await rm(home, { recursive: true, force: true });
     await rm(checkout, { recursive: true, force: true });
   }
+});
+/** Runs `run` in a throwaway HOME and checkout, catching the CLI's exit and its errors. */
+async function inProject(run: (checkout: string, errors: string[]) => Promise<void>) {
+  const home = await mkdtemp(path.join(tmpdir(), "gitterm-home-"));
+  const checkout = await mkdtemp(path.join(tmpdir(), "gitterm-checkout-"));
+  const previousHome = process.env.HOME;
+  process.env.HOME = home;
+  const errors: string[] = [];
+  const exit = spyOn(process, "exit").mockImplementation(() => {
+    throw new Error("exit");
+  });
+  const error = spyOn(console, "error").mockImplementation((text) => void errors.push(text));
+  const log = spyOn(console, "log").mockImplementation(() => {});
+  try {
+    await withSettings({}, () => run(checkout, errors));
+  } finally {
+    process.env.HOME = previousHome;
+    log.mockRestore();
+    error.mockRestore();
+    exit.mockRestore();
+    await rm(home, { recursive: true, force: true });
+    await rm(checkout, { recursive: true, force: true });
+  }
+}
+
+test("with sandboxes off for the project, nothing wakes a sandbox; pausing still works", async () => {
+  await inProject(async (checkout) => {
+    setProjectFeatures(checkout, ["sandbox"], false);
+    woke.length = 0;
+    const base = { sandboxId: "sbx", dir: checkout, json: true };
+    await expect(runSandboxJob({ ...base, jobId: "job_1", wait: 5 })).rejects.toThrow("exit");
+    await expect(runSandboxResume(base)).rejects.toThrow("exit");
+    await expect(runSandboxCreate({ ...base, yes: true })).rejects.toThrow("exit");
+    await runSandboxPause(base);
+    expect(woke).toEqual(["pause"]);
+  });
+});
+
+test("create with public previews asks one question that --always cannot answer", async () => {
+  await inProject(async (checkout, errors) => {
+    woke.length = 0;
+    const args = { dir: checkout, json: true, public: true };
+    await expect(runSandboxCreate({ ...args, always: true })).rejects.toThrow("exit");
+    const { error } = JSON.parse(errors.at(-1)!);
+    expect(error).toMatchObject({ code: "NEEDS_APPROVAL", always: false });
+    expect(error.question).toContain("public");
+    expect(woke).toEqual([]);
+    await runSandboxCreate({ ...args, yes: true });
+    expect(woke).toEqual(["create"]);
+  });
 });

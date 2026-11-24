@@ -181,9 +181,11 @@ export function handleError(err: unknown, json?: boolean): never {
   const own = (err as { code?: unknown } | null)?.code;
   const code = err instanceof GittermError ? err.code : typeof own === "string" ? own : "ERROR";
   const message = err instanceof Error ? err.message : String(err);
+  // Fields a caller acts on, such as NEEDS_APPROVAL's question.
+  const details = (err as { details?: Record<string, unknown> } | null)?.details;
 
   if (json) {
-    console.error(JSON.stringify({ error: { code, message } }, null, 2));
+    console.error(JSON.stringify({ error: { code, message, ...details } }, null, 2));
   } else {
     console.error(`${chalk.red("✖")} ${message}`);
   }
