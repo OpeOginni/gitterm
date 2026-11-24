@@ -8,6 +8,7 @@ import * as transportModule from "../service/sandbox-transport";
 import * as timeouts from "../service/workspace-timeouts";
 import type { WorkspaceConfig } from "./compute";
 import { getProviderByCloudProviderId } from ".";
+import { imageSupportsProvider } from "./image-compat";
 import { withSandboxHandles } from "./sandbox-handles";
 import { gittermProvider, TransportWorkspaceProvider } from "./transport-workspace";
 
@@ -395,6 +396,27 @@ test("an admin's prebuilt snapshot starts the workspace and replaces the install
       imageProviderMetadata: { daytona: { image: "node:24", setupCommands: ["install-agent"] } },
     });
     expect(ran).toContain('export PATH="$HOME/.local/bin:$PATH"; install-agent');
+  } finally {
+    mocks[0]!.mockResolvedValue(fake as never);
+  }
+});
+
+test("the provisioner takes exactly the images the catalog offers", async () => {
+  const { inputs } = recorder("vercel", "/vercel/sandbox");
+  try {
+    const provider = new TransportWorkspaceProvider("vercel", { label: "Vercel" });
+    // A prebuilt snapshot alone is enough to start from.
+    const snapshotOnly = { vercel: { snapshot: "agent-snap" } };
+    expect(imageSupportsProvider("vercel", snapshotOnly)).toBe(true);
+    await provider.createWorkspace({ ...config(), imageProviderMetadata: snapshotOnly });
+    expect(inputs[0]).toMatchObject({ snapshot: "agent-snap" });
+    // Settings with nothing to start from are refused by both.
+    const nothing = { vercel: { vcpus: 2 } };
+    expect(imageSupportsProvider("vercel", nothing)).toBe(false);
+    await expect(
+      provider.createWorkspace({ ...config(), imageProviderMetadata: nothing }),
+    ).rejects.toThrow("not available on Vercel");
+    expect(inputs).toHaveLength(1);
   } finally {
     mocks[0]!.mockResolvedValue(fake as never);
   }

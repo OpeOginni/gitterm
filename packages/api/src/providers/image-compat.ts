@@ -31,11 +31,21 @@ export function pickImageForProvider<
     )[0];
 }
 
+/**
+ * Whether an image has something to start a machine from on a provider. The catalog offers,
+ * and workspaces are provisioned from, exactly these images.
+ */
 export function imageSupportsProvider(
   providerKey: string,
   metadata: ImageProviderMetadata | null | undefined,
 ): boolean {
-  switch (providerKey.toLowerCase()) {
+  const key = providerKey.toLowerCase();
+  // An admin's prebuilt snapshot starts the machine on its own.
+  const options = metadata?.[key as keyof ImageProviderMetadata] as
+    | { snapshot?: string }
+    | undefined;
+  if (options?.snapshot) return true;
+  switch (key) {
     case "e2b":
       return Boolean(metadata?.e2b?.templateId);
     case "aws":
