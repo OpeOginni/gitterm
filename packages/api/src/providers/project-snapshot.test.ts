@@ -89,6 +89,21 @@ test("a requested branch or tag is checked out from the refreshed clone", async 
   expect(await git(machine, "rev-parse", "HEAD")).toBe(await git(origin, "rev-parse", "v1"));
 });
 
+test("a pinned commit is checked out on a fresh machine and on a snapshot's clone", async () => {
+  const pinned = await git(origin, "rev-parse", "HEAD");
+  await writeFile(path.join(origin, "app.txt"), "two\n");
+  await git(origin, "commit", "-qam", "two");
+
+  await checkout({ branch: "main", baseCommit: pinned });
+  expect(await git(machine, "rev-parse", "HEAD")).toBe(pinned);
+
+  // The snapshot's clone was left on a later commit.
+  await git(machine, "checkout", "-q", "main");
+  await checkout({ branch: "main", baseCommit: pinned });
+  expect(await git(machine, "rev-parse", "HEAD")).toBe(pinned);
+  expect(await readFile(path.join(machine, "app.txt"), "utf8")).toBe("one\n");
+});
+
 test("a refresh that cannot reach the repository fails instead of leaving stale code", async () => {
   await checkout();
   await rm(origin, { recursive: true, force: true });
