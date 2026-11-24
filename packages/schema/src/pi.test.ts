@@ -1,5 +1,5 @@
 import { afterAll, expect, mock, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PI_EXTENSION } from "./pi";
@@ -112,4 +112,18 @@ test("Pi asks the CLI's question and runs again with the answer", async () => {
     tools.sandbox_sync!.execute("2", { sandboxId: "sbx" }, undefined, undefined, ctx("No")),
   ).rejects.toThrow(/did not approve/);
   expect(calls).toHaveLength(3);
+});
+
+test("Pi runs gitterm from PATH, or through npx when setup ran from npx", async () => {
+  const bin = path.join(root, "bin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(path.join(bin, "gitterm"), "#!/bin/sh\n");
+  chmodSync(path.join(bin, "gitterm"), 0o755);
+  const list = () => ok([]);
+  const onPath = await load("on-path", bin, list);
+  await onPath.tools.sandbox_pause!.execute("1", { sandboxId: "sbx" });
+  expect(onPath.calls[0]!.slice(0, 3)).toEqual(["gitterm", "sandbox", "pause"]);
+  const viaNpx = await load("via-npx", "/nonexistent", list);
+  await viaNpx.tools.sandbox_pause!.execute("1", { sandboxId: "sbx" });
+  expect(viaNpx.calls[0]!.slice(0, 5)).toEqual(["npx", "-y", "@gitterm/cli", "sandbox", "pause"]);
 });

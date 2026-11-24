@@ -73,6 +73,14 @@ const records = path.join(home, ".config", "gitterm", "moves");
 /** The sandbox account the gitterm CLI uses: a provider key, or a GitTerm account. */
 const sandboxSettings =
   process.env.GITTERM_SANDBOX_CONFIG || path.join(home, ".config", "gitterm", "sandbox.json");
+/**
+ * The gitterm CLI: on PATH, else through npx, as the skills run it. "npx @gitterm/cli setup"
+ * installs this extension without putting gitterm on PATH; Pi needs Node, so npx is there.
+ */
+const cli = (process.env.PATH || "").split(path.delimiter).some((dir) => dir && existsSync(path.join(dir, "gitterm")))
+  ? ["gitterm"]
+  : ["npx", "-y", "@gitterm/cli"];
+
 /** Signed in to a GitTerm server (gitterm.dev or self-hosted), with gitterm login or a token. */
 function signedIn() {
   if (process.env.GITTERM_API_TOKEN?.trim()) return true;
@@ -203,20 +211,16 @@ export default function (pi) {
   const show = (text) => pi.sendMessage({ customType: "gitterm", content: text, display: true });
   /** Runs the gitterm CLI: its JSON result, or its error ({ code, message }). */
   const gitterm = async (args, options = {}) => {
-    let result;
-    try {
-      result = await pi.exec("gitterm", [...args, "--json"], { timeout: 15 * 60_000, ...options });
-    } catch {
-      return { error: { code: "MISSING", message: "The gitterm CLI is not installed: npm install -g @gitterm/cli" } };
-    }
+    const result = await pi.exec(cli[0], [...cli.slice(1), ...args, "--json"], { timeout: 15 * 60_000, ...options });
     // A job that failed still prints its JSON, with a failing exit code.
     if (result.stdout.trim()) {
       try {
         return { ok: JSON.parse(result.stdout) };
       } catch {}
     }
+    // npx can print its own warnings before the CLI's error.
     try {
-      return { error: JSON.parse(result.stderr).error };
+      return { error: JSON.parse(result.stderr.slice(result.stderr.indexOf("{"))).error };
     } catch {
       return { error: { code: "ERROR", message: (result.stderr || result.stdout).trim() || "gitterm failed." } };
     }
