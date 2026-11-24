@@ -143,7 +143,7 @@ test("a project turned off on this machine gets no sandbox tools and no /cloud",
     path.join(home, ".config", "gitterm", "projects.json"),
     JSON.stringify({ [root]: { sandbox: false, cloud: false } }),
   );
-  const result = await setup([], { serverUrl: "http://127.0.0.1:9", token: "test-token" });
+  const result = await setup({ serverUrl: "http://127.0.0.1:9", token: "test-token" });
   expect(result.tools).toEqual([]);
   expect(result.commands).toEqual([]);
 });
@@ -154,7 +154,7 @@ test("the gitterm CLI's sandbox settings count when the plugin has no sandbox op
     path.join(home, ".config", "gitterm", "sandbox.json"),
     JSON.stringify({ provider: "e2b", apiKey: "{env:GITTERM_TEST_UNSET_KEY}" }),
   );
-  const result = await setup([]);
+  const result = await setup();
   expect(result.tools).toEqual(expect.arrayContaining(SANDBOX_TOOLS));
   // A provider key and no GitTerm login: nothing to move a session with.
   expect(result.commands).toEqual([]);
@@ -162,10 +162,10 @@ test("the gitterm CLI's sandbox settings count when the plugin has no sandbox op
 
 test("the options can turn each part off, as a project's own opencode.json does", async () => {
   const signedIn = { serverUrl: "http://127.0.0.1:9", token: "test-token" };
-  const noSandbox = await setup([], { ...signedIn, sandbox: false });
+  const noSandbox = await setup({ ...signedIn, sandbox: false });
   expect(noSandbox.tools).toEqual([]);
   expect(noSandbox.commands).toEqual(["cloud"]);
-  const noCloud = await setup([], { ...signedIn, cloud: false });
+  const noCloud = await setup({ ...signedIn, cloud: false });
   expect(noCloud.tools).toEqual(expect.arrayContaining(SANDBOX_TOOLS));
   expect(noCloud.commands).toEqual([]);
 });
