@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -51,4 +51,46 @@ export async function saveRecord(record: MoveRecord) {
   await mkdir(recordsDir(), { recursive: true, mode: 0o700 });
   await writeFile(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 });
   await rename(temporary, file);
+}
+
+/** Whether a process with this id runs (one of another user's counts). */
+const alive = (pid: number) => {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+};
+
+/**
+ * Claims the move of one session until the returned function releases it, so a second move of
+ * it from any process on this machine (the CLI, /cloud, Pi) is refused while the first runs.
+ * The claim holds the claiming process's id; one left by a process that died is taken over.
+ */
+export async function claimMove(agent: string, ref: string): Promise<() => Promise<void>> {
+  const file = path.join(recordsDir(), `${encodeURIComponent(`${agent}:${ref}`)}.lock`);
+  await mkdir(recordsDir(), { recursive: true, mode: 0o700 });
+  // Written whole, then linked: a claim is never seen without its process id.
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  await writeFile(temporary, String(process.pid), { mode: 0o600 });
+  try {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await link(temporary, file);
+        return () => rm(file, { force: true });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        const holder = Number(await readFile(file, "utf8").catch(() => ""));
+        if (attempt > 0 || alive(holder))
+          throw new Error(
+            "This session is already moving to the cloud. Wait for that move to finish.",
+          );
+        await rm(file, { force: true });
+      }
+    }
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
