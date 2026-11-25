@@ -1,5 +1,6 @@
 import {
   SANDBOX_PROVIDER_PROFILES,
+  SandboxProviderError,
   shellQuote,
   type SandboxCreateInput,
   type SandboxPreviewAccess,
@@ -68,7 +69,7 @@ export class WorkspaceSetupError extends Error {
 export type WorkspaceSetupHooks = {
   /** Wraps each step, e.g. to log its timing. */
   step?: <T>(name: string, run: () => Promise<T>) => Promise<T>;
-  /** Called with the sandbox's id as soon as it exists, before any setup. */
+  /** Called with the sandbox's id as soon as it exists, before any setup, even if creating it failed. */
   created?: (id: string) => Promise<void>;
 };
 
@@ -144,7 +145,10 @@ export async function provisionWorkspace(
           labels: { ...plan.create.labels, [AGENT_PORT_LABEL]: String(plan.serve.port) },
           ...(profile.resumeCommand ? { resumeCommand: resume } : {}),
         })
-        .catch((error: unknown) => {
+        .catch(async (error: unknown) => {
+          // The provider made a sandbox it couldn't delete: record it so the caller deletes it.
+          if (error instanceof SandboxProviderError && error.leftoverId)
+            await hooks.created?.(error.leftoverId);
           throw new WorkspaceSetupError(
             "create",
             error instanceof Error ? error.message : String(error),
