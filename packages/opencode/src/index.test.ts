@@ -40,6 +40,7 @@ type ToolTransform = Context["tool"]["transform"];
 /** Sets the plugin up over GitTerm's move records; returns the commands, hooks and tools it adds. */
 async function setup(options: GittermPluginOptions = {}) {
   const commands: string[] = [];
+  const run: Record<string, (input: { sessionID: string }) => Promise<void>> = {};
   const hooks: string[] = [];
   const rpc: string[] = [];
   const tools: string[] = [];
@@ -51,6 +52,7 @@ async function setup(options: GittermPluginOptions = {}) {
         transform({
           add: (definition) => {
             commands.push(definition.name);
+            run[definition.name] = definition.execute as (typeof run)[string];
           },
         } as Parameters<Parameters<Transform>[0]>[0]);
       },
@@ -79,7 +81,7 @@ async function setup(options: GittermPluginOptions = {}) {
   } as unknown as Context;
   const cleanup = await GittermPlugin.setup(context);
   if (cleanup) await cleanup();
-  return { commands, hooks, rpc, tools };
+  return { commands, hooks, rpc, tools, run };
 }
 
 /** A move recorded by @gitterm/move, from /cloud or from the CLI alike. */
@@ -100,9 +102,9 @@ const moved = (changes: Partial<MoveRecord>) =>
     ...changes,
   });
 
-test("signed out, no sandbox account: /cloud (it signs in), its hooks and channel, no tools", async () => {
-  expect(await setup()).toEqual({
-    commands: ["cloud"],
+test("signed out, no sandbox account: /cloud (it signs in), /cloud-return, its hooks and channel, no tools", async () => {
+  expect(await setup()).toMatchObject({
+    commands: ["cloud", "cloud-return"],
     hooks: ["prompt", "fork"],
     rpc: ["gitterm.cloud: cancel"],
     tools: [],
@@ -124,17 +126,25 @@ test("signed in to GitTerm: sandbox tools through that account, and /cloud", asy
   // A server that refuses at once: nothing here needs it to answer.
   const result = await setup({ serverUrl: "http://127.0.0.1:9", token: "test-token" });
   expect(result.tools).toEqual(expect.arrayContaining(SANDBOX_TOOLS));
-  expect(result.commands).toEqual(["cloud"]);
+  expect(result.commands).toEqual(["cloud", "cloud-return"]);
 });
 
-test("offers /cloud-return only while a session of this checkout is in the cloud", async () => {
-  // A session that came back, one of another checkout, and one of another agent do not count.
+test("/cloud-return finds a move made after the plugin started, from the CLI too", async () => {
+  // Nothing reaches an OpenCode server: this port is closed.
+  const { run } = await setup({ localServerUrl: "http://127.0.0.1:9" });
+  await expect(run["cloud-return"]!({ sessionID: "ses_test" })).rejects.toThrow(
+    "not in a cloud workspace",
+  );
+  // A session that came back, one of another agent: nothing to return.
   await moved({ workspaceId: "w-back", returnedAt: "2026-01-02T00:00:00.000Z" });
-  await moved({ workspaceId: "w-other", root: "/another/checkout" });
   await moved({ workspaceId: "w-pi", agent: "pi" });
-  expect((await setup()).commands).toEqual(["cloud"]);
+  await expect(run["cloud-return"]!({ sessionID: "ses_test" })).rejects.toThrow(
+    "not in a cloud workspace",
+  );
+  // Moved now: the return goes on, to the (closed) OpenCode server.
   await moved({ workspaceId: "w-1" });
-  expect((await setup()).commands).toEqual(["cloud", "cloud-return"]);
+  const error = await run["cloud-return"]!({ sessionID: "ses_test" }).catch((e: Error) => e);
+  expect(String(error)).not.toContain("not in a cloud workspace");
 });
 
 test("a project turned off on this machine gets no sandbox tools and no /cloud", async () => {
@@ -164,7 +174,7 @@ test("the options can turn each part off, as a project's own opencode.json does"
   const signedIn = { serverUrl: "http://127.0.0.1:9", token: "test-token" };
   const noSandbox = await setup({ ...signedIn, sandbox: false });
   expect(noSandbox.tools).toEqual([]);
-  expect(noSandbox.commands).toEqual(["cloud"]);
+  expect(noSandbox.commands).toEqual(["cloud", "cloud-return"]);
   const noCloud = await setup({ ...signedIn, cloud: false });
   expect(noCloud.tools).toEqual(expect.arrayContaining(SANDBOX_TOOLS));
   expect(noCloud.commands).toEqual([]);

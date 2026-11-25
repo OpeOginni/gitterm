@@ -120,5 +120,13 @@ export function gittermCloud(client: GittermClient, options: GittermCloudOptions
       if (how === "pause") await client.workspaces.pause(workspaceId);
       else await client.workspaces.terminate(workspaceId);
     },
+    async gone(workspaceId) {
+      try {
+        return (await client.workspaces.get(workspaceId)).status === "terminated";
+      } catch (error) {
+        if (error instanceof GittermError && error.code === "NOT_FOUND") return true;
+        throw error;
+      }
+    },
   };
 }

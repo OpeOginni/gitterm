@@ -80,6 +80,12 @@ describe("replacing a local session", () => {
     expect(sessions.get("ses_1")).toMatchObject(original);
   });
 
+  test("a put-back that comes back short keeps the copy too", async () => {
+    const { sessions, run } = fake(["throw", "short"]);
+    await expect(run()).rejects.toThrow('kept as ses_fork ("Fix the build")');
+    expect(sessions.get("ses_fork")?.messages).toEqual(original.messages);
+  });
+
   test("when it can't be put back, its copy stays and the error names it", async () => {
     const { sessions, run } = fake(["throw", "throw"]);
     await expect(run()).rejects.toThrow('kept as ses_fork ("Fix the build")');
@@ -216,6 +222,7 @@ test.skipIf(!withOpencode)(
         end: async (_id, how) => {
           ends.push(how);
         },
+        gone: async () => false,
       };
       const deps = {
         cloud: gitterm,

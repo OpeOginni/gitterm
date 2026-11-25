@@ -44,7 +44,8 @@ afterEach(async () => {
   await rm(temporary, { recursive: true, force: true });
 });
 
-test("a return whose workspace cannot be ended is still done, and says so", async () => {
+/** A checkout with one fake-agent session, s1, and a cloud whose workspaces are folders here. */
+async function fixture() {
   const source = path.join(temporary, "source");
   const cloudDirectory = path.join(temporary, "cloud");
   await mkdir(source);
@@ -70,21 +71,27 @@ test("a return whose workspace cannot be ended is still done, and says so", asyn
 
   const local = localMachine({ FAKE_AGENT_HOME: localHome });
   const remote = localMachine({ FAKE_AGENT_HOME: path.join(temporary, "agent-cloud") });
-  let ending: Error | undefined;
+  const state = { ending: undefined as Error | undefined, created: 0, gone: new Set<string>() };
   const cloud: Cloud = {
-    create: async () => "ws-1",
+    create: async () => `ws-${++state.created}`,
     ready: async () => ({ url: "http://workspace", directory: cloudDirectory, canExec: true }),
     machine: () => remote,
     end: async () => {
-      if (ending) throw ending;
+      if (state.ending) throw state.ending;
     },
+    gone: async (id) => state.gone.has(id),
   };
   const deps = { cloud, local, agent: fakeAgent, progress: () => {} };
+  return { source, cloudDirectory, localHome, state, deps };
+}
+
+test("a return whose workspace cannot be ended is still done, and says so", async () => {
+  const { source, cloudDirectory, localHome, state, deps } = await fixture();
   await moveToCloud(deps, { ref: "s1", changes: true, fromSession: false });
 
   // Work in the cloud, then a return whose last step fails.
   await writeFile(path.join(cloudDirectory, "hello.txt"), "from the cloud\n");
-  ending = new Error("API down");
+  state.ending = new Error("API down");
   const [record] = await loadRecords();
   const result = await returnFromCloud(deps, record!, { force: false, end: "delete" });
 
@@ -96,4 +103,22 @@ test("a return whose workspace cannot be ended is still done, and says so", asyn
   expect(session.messages[0]).toBe("hello");
   expect(session.messages.at(-1)).toContain("This session is back");
   expect((await loadRecords())[0]!.returnedAt).toBeDefined();
+});
+
+test("a session already in the cloud is not moved again until its workspace is gone", async () => {
+  const { state, deps } = await fixture();
+  await moveToCloud(deps, { ref: "s1", changes: true, fromSession: false });
+  await expect(moveToCloud(deps, { ref: "s1", changes: true, fromSession: false })).rejects.toThrow(
+    "already in cloud workspace ws-1",
+  );
+  expect(state.created).toBe(1);
+
+  // Deleted elsewhere: that move is closed and a new one starts.
+  state.gone.add("ws-1");
+  await moveToCloud(deps, { ref: "s1", changes: true, fromSession: false });
+  const records = await loadRecords();
+  expect(records.map((record) => [record.workspaceId, Boolean(record.returnedAt)])).toEqual([
+    ["ws-1", true],
+    ["ws-2", false],
+  ]);
 });
