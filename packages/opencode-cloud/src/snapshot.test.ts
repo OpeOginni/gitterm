@@ -645,6 +645,37 @@ describe("coming back from the cloud", () => {
     expect(await readFile(path.join(source, "hello.txt"), "utf8")).toBe("edited after handoff\n");
   });
 
+  test("a branch here that the cloud's work lands on is replaced only when forced, and is kept", async () => {
+    const snapshot = await handOffAndWorkInCloud();
+    // The local "other" has a commit of its own; the checkout handed off stays untouched.
+    await git(source, ["branch", "other"]);
+    await git(source, ["worktree", "add", "-q", path.join(temporary, "other"), "other"]);
+    await writeFile(path.join(temporary, "other", "mine.txt"), "only here\n");
+    await git(path.join(temporary, "other"), ["add", "mine.txt"]);
+    await commit(path.join(temporary, "other"), "local only on other");
+    await git(source, ["worktree", "remove", path.join(temporary, "other")]);
+    const local = (await git(source, ["rev-parse", "other"])).toString();
+    // The cloud moved its work to a branch of that name.
+    await git(cloud, ["checkout", "-q", "-b", "other"]);
+    const before = await look(source);
+    const encoded = await captureCloud(snapshot.head);
+
+    await expect(bringBack(encoded, snapshot.state)).rejects.toMatchObject({
+      code: RESTORE_NEEDS_CONFIRMATION,
+    });
+    expect(await look(source)).toEqual(before);
+    expect((await git(source, ["rev-parse", "other"])).toString()).toBe(local);
+
+    const result = await bringBack(encoded, snapshot.state, true);
+    expect(result.stdout).toBe(
+      'GITTERM_HANDOFF_VERIFIED {"stash":false,"branch":"gitterm/before-return-1234-abcd"}',
+    );
+    expect(await look(source)).toEqual(await look(cloud));
+    expect((await git(source, ["rev-parse", "gitterm/before-return-1234-abcd"])).toString()).toBe(
+      local,
+    );
+  });
+
   test("a failed forced return puts the local work back", async () => {
     const snapshot = await handOffAndWorkInCloud();
     await writeFile(path.join(source, "hello.txt"), "edited after handoff\n");
