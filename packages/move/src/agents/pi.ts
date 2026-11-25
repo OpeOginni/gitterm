@@ -115,10 +115,11 @@ const ops = {
 };
 `);
 
-/** Whether a user message entry was added to a Pi session after `bytes`. */
+/** Whether a user message entry was added to a Pi session after its first `bytes` (UTF-8). */
 export function piSentSince(session: string, bytes: number): boolean {
-  return session
-    .slice(bytes)
+  return Buffer.from(session)
+    .subarray(bytes)
+    .toString("utf8")
     .split("\n")
     .some((line) => {
       try {
