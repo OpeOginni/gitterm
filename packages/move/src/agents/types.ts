@@ -36,6 +36,11 @@ export interface SessionOps {
   status(input: { ref: string }): Promise<{ busy: boolean }>;
   /** Stops a working session and waits until it stays stopped. Returns whether anything ran. */
   stop?(input: { ref: string }): Promise<boolean>;
+  /**
+   * Stops the agent itself, so nothing it does by itself changes the session until the
+   * workspace ends; refuses while it works. A return holds the cloud session first.
+   */
+  hold?(input: { ref: string }): Promise<void>;
 }
 
 /** How to reach a workspace's agent: its public URL and credentials, and its checkout. */

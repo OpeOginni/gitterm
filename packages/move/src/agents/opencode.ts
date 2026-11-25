@@ -115,7 +115,8 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
     /**
      * OpenCode keeps a session's id when it imports one, and refuses an id it has, so a replaced
      * session is removed first. A fork of it stays until the import is read back whole (and for
-     * good when it has messages the incoming one lacks); a failed import puts it back as it was.
+     * good when it has messages the incoming one lacks), or until a failed import is put back as
+     * it was and read back whole too.
      */
     async import({ payload, cwd, ref }) {
       const opencode = await client();
@@ -124,18 +125,20 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
       const keepModel = model
         ? await offersModel(opencode, cwd, model, signal()).catch(() => false)
         : false;
-      const write = async () =>
-        (
-          await opencode.session.import(importPayload(exported, cwd, { keepModel }), {
-            signal: signal(),
-          })
-        ).id;
-      if (!ref) return { ref: await write() };
-      // Read back before the session it replaces is let go.
-      const writeWhole = async () => {
-        const id = await write();
+      if (!ref)
+        return {
+          ref: (
+            await opencode.session.import(importPayload(exported, cwd, { keepModel }), {
+              signal: signal(),
+            })
+          ).id,
+        };
+      type Payload = Parameters<OpenCodeClient["session"]["import"]>[0];
+      // Read back before the copy that could replace it is let go.
+      const importWhole = async (payload: Payload, messages: Exported["messages"]) => {
+        const { id } = await opencode.session.import(payload, { signal: signal() });
         const back = await opencode.session.export({ sessionID: id }, { signal: signal() });
-        if (!continues(exported.messages, back.messages))
+        if (!continues(messages, back.messages))
           throw new Error("OpenCode did not import the whole conversation.");
         return id;
       };
@@ -154,17 +157,16 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
       await opencode.session.remove({ sessionID: ref }, { signal: signal() });
       let id: string;
       try {
-        id = await writeWhole();
+        id = await importWhole(importPayload(exported, cwd, { keepModel }), exported.messages);
       } catch (error) {
+        // Put back as it was, under its own id; a short import there is removed first.
         const restored = await opencode.session
           .remove({ sessionID: ref }, { signal: signal() })
           .catch(() => {})
           .then(() =>
-            opencode.session.import(
-              { ...current, location: current.info.location } as Parameters<
-                OpenCodeClient["session"]["import"]
-              >[0],
-              { signal: signal() },
+            importWhole(
+              { ...current, location: current.info.location } as Payload,
+              current.messages,
             ),
           )
           .then(

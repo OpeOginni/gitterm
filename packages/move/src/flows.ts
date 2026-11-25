@@ -20,7 +20,7 @@ import {
 } from "./checkout/restore.js";
 import type { AgentAdapter, WorkspaceRuntime } from "./agents/types.js";
 import type { Machine } from "./machine.js";
-import { saveRecord, type MoveRecord } from "./records.js";
+import { loadRecords, saveRecord, type MoveRecord } from "./records.js";
 
 /** GitTerm, as these flows use it. Tests stand in a second local agent home. */
 export interface Cloud {
@@ -47,6 +47,8 @@ export interface Cloud {
   /** The workspace through GitTerm's command endpoint. */
   machine(workspaceId: string): Machine;
   end(workspaceId: string, how: "pause" | "delete"): Promise<void>;
+  /** Whether the workspace was deleted. */
+  gone(workspaceId: string): Promise<boolean>;
 }
 
 export class RepositoryUnreachable extends Error {}
@@ -62,6 +64,10 @@ export type ReturnConfirmations = {
 };
 
 /** A return the user declined: nothing here changed. */
+/** Why a returned session's workspace was left running. */
+export const cloudWentOn = (workspaceId: string) =>
+  `The cloud session went on after it was copied, so workspace ${workspaceId} was kept running with what it did since. Open it there, or end it with: gitterm ws terminate ${workspaceId}`;
+
 export class ReturnDeclined extends Error {
   /** How the CLI reports it (`--json`), so a caller can ask and run again with --force. */
   readonly code = "NEEDS_CONFIRMATION";
@@ -160,7 +166,19 @@ export async function moveToCloud(
     created?(workspaceId: string): Promise<void>;
   },
 ) {
-  const { local, agent, progress } = deps;
+  const { cloud, local, agent, progress } = deps;
+  // One workspace per session: a second move would bill a second one. A move whose workspace
+  // was deleted has nothing to return, so it is closed.
+  const open = (await loadRecords()).findLast(
+    (record) => record.agent === agent.key && record.localRef === options.ref && !record.returnedAt,
+  );
+  if (open) {
+    if (!(await cloud.gone(open.workspaceId)))
+      throw new Error(
+        `This session is already in cloud workspace ${open.workspaceId}. Continue it there, or bring it back with: gitterm return ${open.workspaceId}`,
+      );
+    await saveRecord({ ...open, returnedAt: new Date().toISOString() });
+  }
   const here = agent.session(local);
   let stopped = false;
   if (!options.fromSession && options.stopIfBusy && here.stop) {
@@ -357,7 +375,14 @@ export async function returnFromCloud(
   const runtime = await cloud.ready(record.workspaceId, signal);
   const { directory } = runtime;
   const remote = workspaceMachine(cloud, agent, record.workspaceId, runtime);
-  const cloudSession = await agent.session(remote).export({ ref: record.cloudRef });
+  const there = agent.session(remote);
+  // Where the agent can be stopped, nothing changes the session after this read.
+  await there.hold?.({ ref: record.cloudRef });
+  const cloudSession = await there.export({ ref: record.cloudRef });
+  /** Whether the cloud session is still as it was read; anything it gained would go with the workspace. */
+  const cloudUnchanged = async () =>
+    (await there.export({ ref: record.cloudRef, allowBusy: true }).catch(() => undefined))?.mark ===
+    cloudSession.mark;
 
   await progress("Copying the cloud checkout");
   const stage = `.gitterm-handoff-${randomUUID()}`;
@@ -455,7 +480,9 @@ export async function returnFromCloud(
 
   if (record.connection && agent.disconnect)
     await agent.disconnect(record.connection).catch(() => {});
-  if (options.end !== "keep")
+  if (options.end !== "keep" && !(await cloudUnchanged()))
+    warnings.push(cloudWentOn(record.workspaceId));
+  else if (options.end !== "keep")
     await cloud
       .end(record.workspaceId, options.end)
       .catch(
@@ -463,5 +490,10 @@ export async function returnFromCloud(
           `Could not ${options.end} workspace ${record.workspaceId} (run gitterm ws ${options.end === "pause" ? "pause" : "terminate"} ${record.workspaceId})`,
         ),
       );
-  return { ref: record.localRef, link: await agent.link?.(local, record.localRef), warnings };
+  return {
+    ref: record.localRef,
+    link: await agent.link?.(local, record.localRef),
+    warnings,
+    cloudUnchanged,
+  };
 }
