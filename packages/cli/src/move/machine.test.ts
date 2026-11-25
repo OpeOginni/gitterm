@@ -11,7 +11,8 @@ import { remoteMachine } from "./machine.js";
 function shell(limit = 120_000) {
   const commands: string[] = [];
   const exec = async (command: string) => {
-    if (command.length > limit) throw new Error(`command of ${command.length} characters`);
+    if (Buffer.byteLength(command) > limit)
+      throw new Error(`command of ${command.length} characters`);
     commands.push(command);
     const child = spawn("bash", ["-c", command]);
     let stdout = "";
@@ -25,12 +26,12 @@ function shell(limit = 120_000) {
   return { exec, commands };
 }
 
-test("files of any size go up and come back intact, in commands under the API limit", async () => {
+test("files go up and come back intact under the exe.dev command limit", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "gitterm-t3-machine-"));
   try {
-    const { exec, commands } = shell();
+    const { exec, commands } = shell(63_000);
     const machine = remoteMachine(exec);
-    for (const size of [0, 10, 200_000, 7 << 20]) {
+    for (const size of [0, 10, 55 << 10, 200_000, 7 << 20]) {
       const data = randomBytes(size);
       const file = path.join(dir, `f${size}`);
       await machine.writeFile(file, data);
