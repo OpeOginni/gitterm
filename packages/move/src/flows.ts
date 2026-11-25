@@ -20,7 +20,7 @@ import {
 } from "./checkout/restore.js";
 import type { AgentAdapter, WorkspaceRuntime } from "./agents/types.js";
 import type { Machine } from "./machine.js";
-import { loadRecords, saveRecord, type MoveRecord } from "./records.js";
+import { claimMove, loadRecords, saveRecord, type MoveRecord } from "./records.js";
 
 /** GitTerm, as these flows use it. Tests stand in a second local agent home. */
 export interface Cloud {
@@ -166,9 +166,22 @@ export async function moveToCloud(
     created?(workspaceId: string): Promise<void>;
   },
 ) {
+  // One workspace per session: a second move would bill a second one, so a move in flight
+  // anywhere on this machine holds the session until its record is saved.
+  const release = await claimMove(deps.agent.key, options.ref);
+  try {
+    return await moveOnce(deps, options);
+  } finally {
+    await release();
+  }
+}
+
+async function moveOnce(
+  deps: Parameters<typeof moveToCloud>[0],
+  options: Parameters<typeof moveToCloud>[1],
+) {
   const { cloud, local, agent, progress } = deps;
-  // One workspace per session: a second move would bill a second one. A move whose workspace
-  // was deleted has nothing to return, so it is closed.
+  // A move whose workspace was deleted has nothing to return, so it is closed.
   const open = (await loadRecords()).findLast(
     (record) => record.agent === agent.key && record.localRef === options.ref && !record.returnedAt,
   );

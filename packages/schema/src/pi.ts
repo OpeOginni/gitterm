@@ -459,7 +459,7 @@ export default function (pi) {
           "--name", params.name || "Pi sandbox",
           ...(params.purpose ? ["--purpose", params.purpose] : []),
           ...(params.lifetimeMinutes ? ["--lifetime", String(params.lifetimeMinutes)] : []),
-          ...(params.publicPreviews ? ["--public"] : []),
+          ...(params.publicPreviews === true ? ["--public"] : params.publicPreviews === false ? ["--no-public"] : []),
           ...(params.snapshot ? ["--snapshot", params.snapshot] : []),
         ],
         signal,
