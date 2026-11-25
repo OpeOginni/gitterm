@@ -96,7 +96,7 @@ Once hardened writes are on, only roll back to a release that can read them. Tur
 4. Run `security-rewrap.mjs` as above to see how many records still use the old key, then run it with `--apply`.
 5. Repeat the dry run until it prints `"candidates":0` and `"conflicts":0`. Then remove the old key from the live services, and keep it separately until old backups expire.
 
-The rewrap covers model credentials, provider configs, workspace passwords, route headers, runtime bundles, environment sets, MCP auth, SSH revocation tokens, Google issuer keys, and GitHub App keys, webhook secrets and tokens. A failed or interrupted run is safe to repeat. Don't remove a key after a run that didn't finish cleanly.
+The rewrap covers model credentials, provider configs, workspace passwords, route headers, environment sets, MCP auth, SSH revocation tokens, Google issuer keys, and GitHub App keys, webhook secrets and tokens. A failed or interrupted run is safe to repeat. Don't remove a key after a run that didn't finish cleanly.
 
 ## Revocation
 

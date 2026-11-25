@@ -41,7 +41,6 @@ const PROVIDER_LABELS: Record<string, string> = {
   aws: "AWS",
   e2b: "E2B",
   daytona: "Daytona",
-  cloudflare: "Cloudflare",
   vercel: "Vercel",
   boat: "Boat",
   exedev: "exe.dev",

@@ -14,22 +14,15 @@ import { createSmokeMcp, getSmokeMcp, runSmokeMcp, smokeMcpConnectionId } from "
 dotenv.config({ path: join(import.meta.dir, ".env") });
 
 const PROVIDERS = [
-  "railway",
   "aws",
   "e2b",
   "daytona",
-  "cloudflare",
   "vercel",
   "boat",
   "exedev",
 ] as const satisfies readonly ProviderKey[];
 
-const HOSTED_PROVIDERS = [
-  "railway",
-  "e2b",
-  "daytona",
-  "vercel",
-] as const satisfies readonly ProviderKey[];
+const HOSTED_PROVIDERS = ["e2b", "daytona", "vercel"] as const satisfies readonly ProviderKey[];
 const MAX_ENSURE_RUNNING_TIMEOUT_MS = 360_000;
 // The API rate-limits connection tests, so a saved connection is tested once per smoke run.
 let savedMcpTest: ReturnType<typeof getSmokeMcp> | undefined;

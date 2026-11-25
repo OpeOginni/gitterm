@@ -119,8 +119,8 @@ export type SandboxCreateInput = {
    */
   machine?: Record<string, unknown>;
   /**
-   * Environment for every process in the sandbox, set at creation. E2B and Boat support it;
-   * other providers ignore it, so pass per-command env there.
+   * Environment for every process in the sandbox, set at creation. Railway and AWS ignore it,
+   * so pass per-command env there.
    */
   env?: Record<string, string>;
   /** Run after every resume, to restart services a pause stopped. Gitterm only. */
@@ -167,7 +167,16 @@ export interface SandboxTransport {
 }
 
 /** Where commands run and what the provider guarantees. Shared by transports and clients. */
-export type SandboxProviderProfile = { home: string; capabilities: SandboxCapabilities };
+export type SandboxProviderProfile = {
+  home: string;
+  capabilities: SandboxCapabilities;
+  /** Whether the transport runs `SandboxCreateInput.resumeCommand` after every resume. */
+  resumeCommand: boolean;
+  /** Whether a resume gives the sandbox's ports new preview URLs (Vercel's are per session). */
+  resumeChangesPreviewUrls: boolean;
+  /** Where agent workspaces keep their checkouts, `<workspaceRoot>/<repo>`. */
+  workspaceRoot: string;
+};
 
 /**
  * Managed sandboxes whose previews the Gitterm proxy serves, adding the provider's access
@@ -192,6 +201,9 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "pauses",
     },
+    resumeCommand: false,
+    resumeChangesPreviewUrls: false,
+    workspaceRoot: "/home/user/workspace",
   },
   daytona: {
     home: "/home/daytona",
@@ -202,6 +214,9 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "pauses",
     },
+    resumeCommand: false,
+    resumeChangesPreviewUrls: false,
+    workspaceRoot: "/workspace",
   },
   vercel: {
     home: "/home/vercel-sandbox",
@@ -212,6 +227,9 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: 5 * 60 * 60_000,
       snapshots: "stops",
     },
+    resumeCommand: false,
+    resumeChangesPreviewUrls: true,
+    workspaceRoot: "/vercel/sandbox",
   },
   boat: {
     home: "/home/user",
@@ -222,6 +240,9 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "pauses",
     },
+    resumeCommand: false,
+    resumeChangesPreviewUrls: false,
+    workspaceRoot: "/home/user",
   },
   exedev: {
     home: "/home/exedev",
@@ -232,6 +253,9 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "none",
     },
+    resumeCommand: false,
+    resumeChangesPreviewUrls: false,
+    workspaceRoot: "/home/exedev",
   },
   railway: {
     home: "/root",
@@ -242,6 +266,9 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "none",
     },
+    resumeCommand: false,
+    resumeChangesPreviewUrls: false,
+    workspaceRoot: "/workspace",
   },
   aws: {
     home: "/root",
@@ -252,6 +279,9 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "none",
     },
+    resumeCommand: false,
+    resumeChangesPreviewUrls: false,
+    workspaceRoot: "/workspace",
   },
   // The Gitterm server enforces lifetimes and serves previews.
   gitterm: {
@@ -263,6 +293,9 @@ export const SANDBOX_PROVIDER_PROFILES: Record<SandboxProviderKey, SandboxProvid
       maxLifetimeMs: DAY,
       snapshots: "pauses",
     },
+    resumeCommand: true,
+    resumeChangesPreviewUrls: false,
+    workspaceRoot: "/home/user/workspace",
   },
 };
 

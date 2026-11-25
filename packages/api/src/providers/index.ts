@@ -1,24 +1,11 @@
 import type { ComputeProvider } from "./compute";
-import { boatProvider } from "./boat";
-import { exeDevProvider } from "./exedev";
 import { awsProvider, AwsProvider } from "./aws";
-import { cloudflareComputeProvider } from "./cloudflare/compute-provider";
-import { daytonaProvider } from "./daytona";
-import { e2bProvider } from "./e2b";
-import { railwayProvider } from "./railway";
-import { vercelProvider } from "./vercel";
-import { gittermProvider } from "./gitterm";
+import { gittermProvider, TransportWorkspaceProvider } from "./transport-workspace";
 import { withSandboxHandles } from "./sandbox-handles";
 
 export * from "./compute";
 export { awsProvider } from "./aws";
-export { railwayProvider } from "./railway";
-export { e2bProvider } from "./e2b";
-export { cloudflareComputeProvider } from "./cloudflare/compute-provider";
-export { boatProvider } from "./boat";
-export { exeDevProvider } from "./exedev";
-export { vercelProvider } from "./vercel";
-export { gittermProvider } from "./gitterm";
+export { gittermProvider } from "./transport-workspace";
 
 /**
  * All available provider implementations
@@ -27,19 +14,15 @@ export { gittermProvider } from "./gitterm";
  *
  */
 const availableProviders: Record<string, ComputeProvider> = {
-  boat: boatProvider,
-  exedev: exeDevProvider,
-  aws: awsProvider,
-  railway: railwayProvider,
-  e2b: e2bProvider,
-  daytona: daytonaProvider,
-  cloudflare: cloudflareComputeProvider,
-  vercel: vercelProvider,
+  // Every provider below except AWS is only a sandbox transport.
+  e2b: new TransportWorkspaceProvider("e2b", { label: "E2B" }),
+  daytona: new TransportWorkspaceProvider("daytona", { label: "Daytona" }),
+  vercel: new TransportWorkspaceProvider("vercel", { label: "Vercel" }),
+  boat: new TransportWorkspaceProvider("boat", { label: "Boat" }),
+  exedev: new TransportWorkspaceProvider("exedev", { label: "exe.dev" }),
   // gitterm.dev only: there is no cloud provider row for it elsewhere, so nothing offers it.
   gitterm: gittermProvider,
-  // Future providers:
-  // docker: dockerProvider,
-  // kubernetes: kubernetesProvider,
+  aws: awsProvider,
 };
 
 /**
@@ -88,5 +71,11 @@ export async function getProviderByCloudProviderId(
 ): Promise<ComputeProvider> {
   if (cloudProviderKey === "aws" && providerId)
     return withSandboxHandles(new AwsProvider(providerId), providerId);
+  // Railway hosts only managed sandboxes, whose `sandbox:` handles `withSandboxHandles` serves.
+  if (cloudProviderKey === "railway")
+    return withSandboxHandles(
+      new TransportWorkspaceProvider("railway", { label: "Railway" }),
+      providerId,
+    );
   return withSandboxHandles(getProvider(cloudProviderKey), providerId);
 }

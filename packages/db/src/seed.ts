@@ -74,26 +74,6 @@ const seedCloudProviders: Array<{
   // first seeded region (typically us-east-1) regardless of which AWS provider
   // was picked. Admins must explicitly add the regions they want to use.
   {
-    name: "Cloudflare",
-    providerKey: "cloudflare",
-    isEnabled: false,
-    isSandbox: true,
-    autoPersistent: false,
-    supportsPersistence: false,
-    supportsRegions: false,
-    machineSelectionPolicy: { mode: "standard" },
-    supportServerOnly: true,
-    sshAccessSupport: {
-      supported: false,
-      label: "Not supported",
-      description: "This provider does not currently expose editor SSH access.",
-    },
-    creationSettlement: "immediate" as ProviderSettlement,
-    stopSettlement: "immediate" as ProviderSettlement,
-    restartSettlement: "immediate" as ProviderSettlement,
-    terminationSettlement: "immediate" as ProviderSettlement,
-  },
-  {
     name: "E2B",
     providerKey: "e2b",
     isEnabled: false,
@@ -105,11 +85,9 @@ const seedCloudProviders: Array<{
     supportServerOnly: true,
     location: "US",
     sshAccessSupport: {
-      supported: true,
-      transportKind: "proxycommand-ssh",
-      label: "SSH via ProxyCommand",
-      description: "Connect over SSH using an SSH config snippet and a local websocat bridge.",
-      requiresLocalBinaries: ["websocat"],
+      supported: false,
+      label: "Not supported",
+      description: "Workspaces on this provider do not offer SSH editor access.",
     },
     creationSettlement: "immediate" as ProviderSettlement,
     stopSettlement: "webhook" as ProviderSettlement,
@@ -129,10 +107,9 @@ const seedCloudProviders: Array<{
     allowUserRegionSelection: false,
     supportServerOnly: true,
     sshAccessSupport: {
-      supported: true,
-      transportKind: "direct-ssh",
-      label: "Native SSH",
-      description: "Short-lived SSH access without any local proxy helper.",
+      supported: false,
+      label: "Not supported",
+      description: "Workspaces on this provider do not offer SSH editor access.",
     },
     creationSettlement: "immediate" as ProviderSettlement,
     stopSettlement: "webhook" as ProviderSettlement,
@@ -172,10 +149,9 @@ const seedCloudProviders: Array<{
     supportServerOnly: true,
     location: "EU",
     sshAccessSupport: {
-      supported: true,
-      transportKind: "direct-ssh",
-      label: "Native SSH",
-      description: "Your saved SSH public key is authorized directly on the Box.",
+      supported: false,
+      label: "Not supported",
+      description: "Workspaces on this provider do not offer SSH editor access.",
     },
     creationSettlement: "immediate" as ProviderSettlement,
     stopSettlement: "immediate" as ProviderSettlement,
@@ -192,10 +168,9 @@ const seedCloudProviders: Array<{
     machineSelectionPolicy: { mode: "profiles" },
     supportServerOnly: true,
     sshAccessSupport: {
-      supported: true,
-      transportKind: "direct-ssh",
-      label: "Native SSH",
-      description: "Your saved SSH public key is scoped to this exe.dev workspace.",
+      supported: false,
+      label: "Not supported",
+      description: "Workspaces on this provider do not offer SSH editor access.",
     },
     creationSettlement: "immediate" as ProviderSettlement,
     stopSettlement: "immediate" as ProviderSettlement,
@@ -286,12 +261,6 @@ const seedImages = [
         resources: { cpu: 2, memory: 4 },
         editorResources: { cpu: 4, memory: 8 },
       },
-      // The Cloudflare worker runs whatever this says inside the public
-      // gitterm-cf-sandbox image (which bakes in opencode).
-      cloudflare: {
-        startCommand: "opencode serve --hostname 0.0.0.0 --port 4096",
-        port: 4096,
-      },
       aws: {
         cpu: 4096,
         memory: 16384,
@@ -328,16 +297,6 @@ const seedImages = [
         memory: 16384,
         containerPort: 7681,
         healthCheckPath: "/",
-      },
-      // The public CF sandbox image only bakes opencode; install T3 and the
-      // agent CLIs it drives at boot.
-      cloudflare: {
-        setupCommands: [
-          `npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`,
-        ],
-        startCommand:
-          "t3 start --host 0.0.0.0 --port 4096 --no-browser --auto-bootstrap-project-from-cwd",
-        port: 4096,
       },
       vercel: {
         runtime: "node22" as const,

@@ -5,7 +5,6 @@ export const PROVIDER_KEYS = [
   "aws",
   "e2b",
   "daytona",
-  "cloudflare",
   "vercel",
   "boat",
   "exedev",
@@ -67,7 +66,6 @@ export const providerMachineOptionsSchemas = {
         .optional(),
     })
     .strict(),
-  cloudflare: z.object({}).strict(),
   vercel: z.object({ vcpus: positiveResourceSchema.optional() }).strict(),
   boat: z.object({ size: z.enum(["small", "default", "large"]).optional() }).strict(),
   exedev: z
@@ -115,8 +113,8 @@ export const workspaceProviderSelectionSchema = z.discriminatedUnion("type", [
       region: z.string().min(1).optional(),
     })
     .strict(),
-  ...(["e2b", "daytona", "cloudflare", "vercel", "boat", "exedev", "gitterm"] as const).map(
-    (type) => z.object({ type: z.literal(type), ...providerSelectionBase }).strict(),
+  ...(["e2b", "daytona", "vercel", "boat", "exedev", "gitterm"] as const).map((type) =>
+    z.object({ type: z.literal(type), ...providerSelectionBase }).strict(),
   ),
 ]);
 

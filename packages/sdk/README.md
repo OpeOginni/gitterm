@@ -372,8 +372,8 @@ await client.workspaces.create({
 });
 ```
 
-Supported on Railway, AWS, Daytona, exe.dev, and E2B. Vercel and Cloudflare run fixed
-runtimes and reject `image`. Floating tags such as `latest` are pinned to the digest verified
+Supported on AWS, Daytona, exe.dev, and E2B. Vercel runs fixed runtimes and rejects
+`image`. Floating tags such as `latest` are pinned to the digest verified
 at create time, so a restart months later runs the same image; `workspace.customImage` shows
 what was pinned.
 
@@ -481,10 +481,7 @@ A workspace has one of four statuses:
 | `terminated` | Gone for good.                                                                            |
 
 Whether `create()` returns `running` or `pending` depends on the provider. Sandbox providers
-(E2B, Daytona, Vercel, boat, exe.dev, Cloudflare) settle immediately and return `running`.
-Railway settles by webhook and returns `pending` until its deployment reports success, usually
-within a minute. Code that only ever ran against a sandbox provider will see `pending` for the
-first time when it moves to Railway.
+(E2B, Daytona, Vercel, boat, exe.dev) settle immediately and return `running`.
 
 Three things have to be true before a prompt can be delivered, and the SDK handles each:
 
@@ -915,8 +912,6 @@ All built-in compute providers use the same provisioning plan and workspace/run 
 
 AWS remains available through `createGittermClient()` and the Gitterm control plane; it is intentionally not exposed in direct mode.
 
-Cloudflare remains available through the Gitterm control plane. Direct Cloudflare support is deferred until the OpenCode v2 Workerd runtime is stable.
-
 ```ts
 import { createDirectGittermClient } from "@gitterm/sdk/direct";
 
@@ -963,7 +958,10 @@ Both modes run OpenCode 2 and share its run, permission, question, and SSE adapt
 images/templates must ship OpenCode 2 (`@opencode/cli`). Direct mode does not accept saved/dashboard
 credential sources or `inherit: "defaults"`.
 
-Every adapter receives the same normalized plan: repository/ref and optional Git credentials, agent files, model credentials, environment, setup commands, serve command, and port. Provider-specific configuration only describes how to allocate and expose compute.
+Every built-in adapter except the deprecated Railway one sets up the workspace the same way,
+on the provider's sandbox API: the plan's repository and ref, agent files, model
+credentials, environment, setup commands, serve command, and port. Provider-specific
+configuration only describes how to allocate the machine.
 
 Direct setup has explicit phases. `beforeAgent` blocks workspace creation, while
 `afterAgent` runs in the background and can be observed with `setupStatus()` or
@@ -990,7 +988,7 @@ await direct.workspaces.waitForSetup(workspace);
 
 To attach to an existing exe.dev VM without giving Gitterm ownership of that VM, pass
 `exedev: { existingVmName: "acme-agent-machine" }` to `workspaces.create()`. Terminating
-that workspace stops only its tracked agent process and does not remove the VM.
+that workspace stops only the agent and does not remove the VM.
 
 Trusted integration context can be appended to the generated global `AGENTS.md` without changing the model system prompt:
 

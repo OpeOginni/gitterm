@@ -27,7 +27,6 @@ import { updateWorkspaceRoutingAndInvalidate } from "../../service/workspace-mut
 import { getProviderByCloudProviderId } from "../../providers";
 import { getWorkspacePortUrl, getWorkspaceUrl } from "../../utils/routing";
 import { WorkspaceLifecycleTRPCError } from "../../utils/workspace-lifecycle-error";
-import { readWorkspaceRuntimeBundle } from "../../service/workspace-runtime-bundle";
 import { recordCredentialAudit } from "../../service/credential-audit";
 import { integrationPolicy } from "../../service/integrations/catalog";
 import { redactSensitiveText } from "../../utils/redact-secrets";
@@ -97,26 +96,6 @@ async function getAuthenticatedWorkspace(workspaceId: string, userId: string) {
  */
 
 export const workspaceOperationsRouter = router({
-  runtimeBundle: workspaceAgentAuthProcedure.query(async ({ ctx }) => {
-    if (!workspaceJWT.hasScope(ctx.workspaceAuth, "agent:bootstrap")) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient workspace scope" });
-    }
-    try {
-      const environment = await readWorkspaceRuntimeBundle({
-        workspaceId: ctx.workspaceAuth.workspaceId,
-        userId: ctx.workspaceAuth.userId,
-      });
-      await recordCredentialAudit({
-        workspaceId: ctx.workspaceAuth.workspaceId,
-        userId: ctx.workspaceAuth.userId,
-        credentialKind: "runtime_bundle",
-        action: "read",
-      });
-      return { environment };
-    } catch {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Runtime bundle unavailable" });
-    }
-  }),
   gitCredential: workspaceAgentAuthProcedure.mutation(async ({ ctx }) => {
     if (!(await integrationPolicy("github")).enabled)
       throw new TRPCError({

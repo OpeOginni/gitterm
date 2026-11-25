@@ -13,7 +13,6 @@ import { TRPCError } from "@trpc/server";
 export type CustomImageKind = "registry" | "e2b-template";
 
 const PROVIDER_IMAGE_KIND: Record<string, CustomImageKind> = {
-  railway: "registry",
   aws: "registry",
   daytona: "registry",
   exedev: "registry",

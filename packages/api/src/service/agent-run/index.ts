@@ -97,7 +97,7 @@ function requestHash(input: RunCreateInput): string {
     .digest("hex");
 }
 
-/** Webhook-settled providers (Railway) stay `pending` until the deployment reports success. */
+/** Webhook-settled providers stay `pending` until the provider reports success. */
 async function waitForWorkspaceRunning(workspaceId: string, userId: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
   while (true) {

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { buildWorkspaceEnv, buildWorkspaceProvisioningSpec } from "./workspace-env";
-import { railwayBootstrapEnvironment } from "./workspace-runtime-bundle";
 import type { WorkspaceProvisioningSpec } from "../providers/compute";
 import { resolveGitCommitIdentity } from "./git-commit-identity";
 
@@ -50,14 +49,14 @@ describe("managed clone credentials", () => {
       expect(spec.agent.files).toEqual([]);
     },
   );
-  test.each(["railway", "aws"])("passes inline auth to %s entrypoints", (provider) => {
+  test.each(["aws"])("passes inline auth to %s entrypoints", (provider) => {
     const env = buildWorkspaceEnv(spec, runtime(provider));
     expect(env.GITTERM_REPOSITORY_USERNAME).toBe("x-access-token");
     expect(env.GITTERM_REPOSITORY_TOKEN).toBe("inline-pat");
     expect(env.GITHUB_APP_TOKEN).toBeUndefined();
   });
 
-  test.each(["e2b", "daytona", "vercel", "boat", "exedev", "cloudflare"])(
+  test.each(["e2b", "daytona", "vercel", "boat", "exedev"])(
     "does not expose inline auth in the %s runtime environment",
     (provider) => {
       const env = buildWorkspaceEnv(spec, runtime(provider));
@@ -68,7 +67,7 @@ describe("managed clone credentials", () => {
 
 test("Google variables are the user's to set when no Google connection sets them", () => {
   const env = buildWorkspaceEnv(spec, {
-    ...runtime("railway"),
+    ...runtime("aws"),
     userEnv: {
       GOOGLE_APPLICATION_CREDENTIALS: "/workspace/key.json",
       CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: "/workspace/key.json",
@@ -84,7 +83,7 @@ test("Google variables are the user's to set when no Google connection sets them
 
 test("Google integration identity variables cannot be overridden by user env", () => {
   const env = buildWorkspaceEnv(spec, {
-    ...runtime("railway"),
+    ...runtime("aws"),
     googleApplicationCredentials: "/run/gitterm/google/adc.json",
     googleProjectId: "trusted-project",
     userEnv: {
@@ -102,7 +101,7 @@ test("Google integration identity variables cannot be overridden by user env", (
 
 test("system env checks ignore inherited properties and protect empty connection values", () => {
   const env = buildWorkspaceEnv(spec, {
-    ...runtime("railway"),
+    ...runtime("aws"),
     googleProjectId: "",
     userEnv: { constructor: "user-value", GOOGLE_CLOUD_PROJECT: "override" },
   });
@@ -110,33 +109,15 @@ test("system env checks ignore inherited properties and protect empty connection
   expect(env.GOOGLE_CLOUD_PROJECT).toBe("");
 });
 
-test("MCP credential environment variables are reserved and stay inside Railway's runtime bundle", () => {
+test("MCP credential environment variables are reserved", () => {
   const full = buildWorkspaceEnv(
     { ...spec, agent: { ...spec.agent, env: { GITTERM_MCP_connection_H0: "upstream-token" } } },
     {
-      ...runtime("railway"),
+      ...runtime("aws"),
       userEnv: { GITTERM_MCP_connection_H0: "override" },
     },
   );
   expect(full.GITTERM_MCP_connection_H0).toBe("upstream-token");
-  expect(railwayBootstrapEnvironment(full)).not.toHaveProperty("GITTERM_MCP_connection_H0");
-});
-
-test("Railway receives only a revocable bootstrap capability", () => {
-  const full = buildWorkspaceEnv(spec, {
-    ...runtime("railway"),
-    userEnv: { DATABASE_URL: "postgres://secret" },
-  });
-  const bootstrap = railwayBootstrapEnvironment(full);
-  expect(bootstrap).toEqual({
-    GITTERM_REMOTE_BOOTSTRAP: "1",
-    WORKSPACE_ID: "workspace-id",
-    WORKSPACE_API_URL: "https://api.example.com",
-    WORKSPACE_AGENT_AUTH_TOKEN: "agent-auth",
-    WORKSPACE_PROVIDER: "railway",
-  });
-  expect(JSON.stringify(bootstrap)).not.toContain("postgres://secret");
-  expect(JSON.stringify(bootstrap)).not.toContain("inline-pat");
 });
 
 test("commit attribution is provisioned before credentials, setup, and agent startup", () => {
@@ -155,7 +136,7 @@ test("commit attribution is provisioned before credentials, setup, and agent sta
   expect(provision.beforeAgentCommand).toContain("git config --local committer.name 'GitTerm'");
   expect(provision.beforeAgentCommand).toEndWith("git commit --allow-empty -m setup");
   const env = buildWorkspaceEnv(provision, {
-    ...runtime("railway"),
+    ...runtime("aws"),
     userEmail: identity.author.email,
     userEnv: { USER_EMAIL: "spoof@example.com" },
   });

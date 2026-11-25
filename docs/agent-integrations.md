@@ -86,6 +86,8 @@ capability declaration as well. Unknown keys fail closed.
 | Central OAuth refresh integration | Yes               | OpenCode V2 only             |
 | Native saved configs              | OpenCode          | OpenCode, Claude Code, Codex |
 
+The provider side of the same standard is in [sandbox-standard.md](sandbox-standard.md).
+
 To add an agent, register its key and capabilities, implement the provisioner,
 configure provider runtime images/setup, and extend the conformance tests. Do not
 add agent-name branches to individual compute providers.
@@ -106,9 +108,6 @@ add agent-name branches to individual compute providers.
 - **Pairing parity:** one provider-neutral capture helper replaces duplicated
   best-effort implementations. boat and exe.dev now return pairing grants too.
   Required credential capture failures do not report a usable workspace.
-- **Cloudflare:** transport the standard launch/mint spec, return pairing grants,
-  support control-plane exec for regeneration, and encrypt replacement grants on
-  restart. An outdated worker that omits a required grant produces an error.
 - **Installation:** Vercel setup must succeed before launch; exe.dev accepts
   blocking setup commands. T3 runtime setup installs `@opencode/cli@2`.
 - **Updates:** resolve versions from npm, honor explicit pins in E2B builds, and
@@ -144,17 +143,12 @@ account in GitTerm before creating a T3 workspace, or use an API key and complet
 native ChatGPT sign-in after pairing. OpenCode 2 remains compatible with those
 older dashboard credentials.
 
-Cloudflare reconstructs its container filesystem on restart. T3's sessions,
-projects, and paired-device grants do **not** survive that reconstruction; a
-replacement pairing link is returned and must be used. Use a persistent provider
-when T3 history and paired-device continuity are required.
-
-AWS/Railway still use the image's callback to issue links and do not implement
+AWS still uses the image's callback to issue links and does not implement
 provider exec. Generate another link inside T3's Connections settings, or restart
 the workspace to have the entrypoint report a fresh link.
 
-Deployment requires rebuilding T3 Docker images/E2B templates, deploying the
-Cloudflare worker, and running the normal catalog seed to apply changed runtime
+Deployment requires rebuilding T3 Docker images/E2B templates and running the normal
+catalog seed to apply changed runtime
 metadata. Existing workspaces keep their current images/config files until
 recreated; a service deploy alone does not rewrite their native configuration.
 For the signed-pairing fix, boat and other SDK providers need a server deploy

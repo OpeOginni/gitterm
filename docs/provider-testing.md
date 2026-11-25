@@ -19,7 +19,6 @@ WORKSPACE_API_URL=https://<tunnel-domain>/api/trpc
 Configure webhook providers against the same tunnel:
 
 ```text
-Railway: https://<tunnel-domain>/listener/trpc/railway.handleWebhook
 E2B:     https://<tunnel-domain>/listener/trpc/e2b.handleWebhook
 ```
 
@@ -28,7 +27,7 @@ Before testing scoped CLI commands, publish the current `@gitterm/cli`, run **Re
 The go-to local smoke test for the hosted providers is:
 
 ```bash
-GITTERM_E2E_TIMEOUT_MS=360000 GITTERM_SERVER_URL=http://localhost:3000 GITTERM_API_TOKEN=<your-token> GITTERM_E2E_REPO=https://github.com/OpeOginni/opencode-copilot-auto bun run test:providers --provider railway,e2b,daytona,vercel
+GITTERM_E2E_TIMEOUT_MS=360000 GITTERM_SERVER_URL=http://localhost:3000 GITTERM_API_TOKEN=<your-token> GITTERM_E2E_REPO=https://github.com/OpeOginni/opencode-copilot-auto bun run test:providers --provider e2b,daytona,vercel
 ```
 
 Replace `<your-token>` with a valid GitTerm API token that includes `integrations:read` and `integrations:write` as well as the workspace, run, and credential scopes needed by the smoke test. Enable the MCP integration with personal connections on the deployment. The server must be running at `http://localhost:3000`, and the local proxy, listener, and tunnel requirements above still apply when cloud providers need to reach the local server.
@@ -134,7 +133,7 @@ export BOAT_API_KEY=...
 
 # exe.dev
 export EXEDEV_API_TOKEN=...
-# Token cmds must include new, ls, ssh, share, "ssh-key generate-api-key", "ssh-key list",
+# Token cmds must include new, ls, ssh, "ssh-key generate-api-key", "ssh-key list",
 # "ssh-key remove", pause, resume, and rm. Listing and removing keys lets teardown clean up VM access keys.
 
 # Railway
@@ -166,9 +165,8 @@ Managed-only authentication, catalog, account CLI, and workspace-scoped CLI chec
 
 ## Hosted GitHub Actions
 
-Run the `Provider smoke tests` workflow manually to test the hosted GitTerm application. It runs one job each for the four hosted providers:
+Run the `Provider smoke tests` workflow manually to test the hosted GitTerm application. It runs one job each for the three hosted providers:
 
-- Railway
 - E2B
 - Daytona
 - Vercel

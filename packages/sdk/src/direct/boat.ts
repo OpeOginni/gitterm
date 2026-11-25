@@ -1,98 +1,11 @@
-import { BoatApi, Configuration, waitUntilReady } from "@boatdev/sdk";
-import {
-  cloneRepositoryScript,
-  setupCommandScript,
-  shellQuote,
-  waitForDirectRuntime,
-} from "./provisioning.js";
+import { createSandboxTransport } from "@gitterm/agent-runtime/sandbox/index";
+import { createTransportDirectProvider } from "./transport.js";
 import type { BoatDirectProviderConfig, DirectProviderAdapter } from "./types.js";
 
-const HOME = "/home/user";
-
-type BoatHandle = {
-  // Keep the stored key so existing workspaces remain accessible.
-  boxId: string;
-  repoDir: string;
-  serve: { command: string; port: number };
-};
-
-function serializeHandle(handle: BoatHandle): string {
-  return JSON.stringify(handle);
-}
-
-function parseHandle(value: string): BoatHandle {
-  try {
-    const handle = JSON.parse(value) as BoatHandle;
-    if (!handle.boxId || !handle.repoDir || !handle.serve?.command || !handle.serve.port) {
-      throw new Error("missing required fields");
-    }
-    return handle;
-  } catch {
-    throw new Error("Invalid Boat direct workspace handle");
-  }
-}
-
+/** Boat's base image has no current agent, so it is installed. */
 export function createBoatDirectProvider(config: BoatDirectProviderConfig): DirectProviderAdapter {
   if (!config.apiKey.trim()) throw new Error("Boat apiKey is required");
-
-  const client = new BoatApi(
-    new Configuration({
-      basePath: "https://boat.dev/api/v1",
-      accessToken: config.apiKey,
-    }),
-  );
-
-  async function runCommand(
-    boxId: string,
-    command: string,
-    cwd?: string,
-    timeoutSeconds = 60,
-  ): Promise<string> {
-    const result = await client.command({
-      sandboxId: boxId,
-      commandRequest: { command, cwd, timeoutSeconds },
-    });
-    if (result.type !== "command.finished") {
-      throw new Error("Boat command did not finish");
-    }
-    if (!result.success || result.exitCode !== 0) {
-      throw new Error(`Boat command failed: ${result.stderr || result.stdout}`);
-    }
-    return result.stdout;
-  }
-
-  async function startRuntime(handle: BoatHandle): Promise<void> {
-    await runCommand(
-      handle.boxId,
-      `nohup setsid bash -lc ${shellQuote(handle.serve.command)} > /tmp/opencode-server.log 2>&1 </dev/null &`,
-      handle.repoDir,
-    );
-  }
-
-  async function getPublicUrl(handle: BoatHandle): Promise<string> {
-    await runCommand(handle.boxId, `host ${handle.serve.port}`);
-    const output = await runCommand(handle.boxId, `host url ${handle.serve.port}`);
-    const value = output.match(/https:\/\/\S+/)?.[0];
-    if (!value) {
-      throw new Error(`Boat did not return a hosted URL for port ${handle.serve.port}`);
-    }
-    const hosted = new URL(value);
-    hosted.search = "";
-    return hosted.toString();
-  }
-
-  async function deleteBox(boxId: string): Promise<void> {
-    const response = await fetch(`https://boat.dev/api/v1/sandboxes/${encodeURIComponent(boxId)}`, {
-      method: "DELETE",
-      // boat requires the target id as an explicit delete confirmation (409 without it).
-      headers: { Authorization: `Bearer ${config.apiKey}`, "X-Ascii-Confirm-Delete": boxId },
-    });
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`Boat deletion failed (${response.status})`);
-    }
-  }
-
-  return {
+  return createTransportDirectProvider({
     name: "boat",
     capabilities: {
       persistence: "supported",
@@ -101,119 +14,12 @@ export function createBoatDirectProvider(config: BoatDirectProviderConfig): Dire
       ephemeralPause: "stateful",
       supportsKeepAlive: true,
     },
-    async create(input) {
-      const plan = input.provisioning;
-      const directory = `${HOME}/${plan.repository?.name ?? "workspace"}`;
-      const created = await client.create({
-        createSandboxRequest: {
-          type: config.size,
-          ttlSeconds:
-            config.timeoutMs === null ? null : Math.ceil((config.timeoutMs ?? 10 * 60_000) / 1000),
-          noEnv: true,
-          env: plan.agent.environmentVariables,
-        },
-      });
-      const handle: BoatHandle = {
-        boxId: created.sandbox.id,
-        repoDir: directory,
-        serve: { command: plan.agent.command, port: plan.agent.port },
-      };
-
-      try {
-        await waitUntilReady(client, handle.boxId);
-        await client.update({
-          sandboxId: handle.boxId,
-          updateSandboxRequest: { name: `gitterm-${input.id}` },
-        });
-        await runCommand(handle.boxId, `mkdir -p ${shellQuote(directory)}`);
-        for (const command of config.runtimeSetupCommands ?? [
-          "npm install -g @opencode/cli@2 --no-audit --fund=false",
-        ]) {
-          await runCommand(handle.boxId, command, undefined, 600);
-        }
-        if (plan.repository) {
-          await runCommand(
-            handle.boxId,
-            cloneRepositoryScript(plan.repository, directory),
-            "/",
-            600,
-          );
-        }
-        for (const file of plan.agent.files) {
-          const path = file.path.startsWith("~/") ? file.path.slice(2) : file.path;
-          await client.writeFile({
-            sandboxId: handle.boxId,
-            fileWriteRequest: { path, content: file.contentBase64, encoding: "base64" },
-          });
-          if (file.mode != null) {
-            await runCommand(
-              handle.boxId,
-              `chmod ${file.mode.toString(8)} ${shellQuote(`${HOME}/${path}`)}`,
-            );
-          }
-        }
-        if (plan.setup.beforeAgent.length) {
-          await runCommand(
-            handle.boxId,
-            setupCommandScript(plan.setup.beforeAgent),
-            directory,
-            600,
-          );
-        }
-        await startRuntime(handle);
-        const runtime = {
-          url: await getPublicUrl(handle),
-          directory,
-          password: input.password,
-        };
-        await waitForDirectRuntime(runtime);
-        return { externalId: serializeHandle(handle), runtime };
-      } catch (error) {
-        await deleteBox(handle.boxId).catch(() => undefined);
-        throw error;
-      }
-    },
-    async status(workspace) {
-      try {
-        const box = (await client.get({ sandboxId: parseHandle(workspace.externalId).boxId }))
-          .sandbox;
-        if (["ready", "idle", "running"].includes(box.state)) return "running";
-        if (["init", "provisioning", "provisioned", "cloning", "archiving"].includes(box.state)) {
-          return "pending";
-        }
-        if (box.state === "archived") return "paused";
-        return "terminated";
-      } catch (error) {
-        if (error instanceof Error && /not found|404|does not exist/i.test(error.message)) {
-          return "terminated";
-        }
-        throw error;
-      }
-    },
-    async pause(workspace) {
-      await client.stop({ sandboxId: parseHandle(workspace.externalId).boxId });
-    },
-    async resume(workspace) {
-      const handle = parseHandle(workspace.externalId);
-      await client.resume({ sandboxId: handle.boxId, resumeRequest: { noEnv: true } });
-      await waitUntilReady(client, handle.boxId);
-      await startRuntime(handle);
-      const runtime = {
-        ...workspace.runtime,
-        url: await getPublicUrl(handle),
-        headers: undefined,
-      };
-      await waitForDirectRuntime(runtime);
-      return runtime;
-    },
-    async terminate(workspace) {
-      await deleteBox(parseHandle(workspace.externalId).boxId);
-    },
-    async keepAlive(workspace, timeoutMs) {
-      await client.update({
-        sandboxId: parseHandle(workspace.externalId).boxId,
-        updateSandboxRequest: { ttlSeconds: Math.ceil(timeoutMs / 1000) },
-      });
-    },
-  };
+    transport: createSandboxTransport({ provider: "boat", apiKey: config.apiKey }),
+    ...(config.size ? { machine: { size: config.size } } : {}),
+    // `null` asked for no time limit; Boat allows at most a day.
+    timeoutMs: config.timeoutMs === null ? 24 * 60 * 60_000 : (config.timeoutMs ?? 10 * 60_000),
+    setupCommands: config.runtimeSetupCommands ?? [
+      "npm install -g @opencode/cli@2 --no-audit --fund=false",
+    ],
+  });
 }

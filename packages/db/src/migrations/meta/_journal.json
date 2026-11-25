@@ -365,6 +365,13 @@
       "when": 1794850454003,
       "tag": "0051_mcp_binding_url",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1795429075692,
+      "tag": "0052_providers_on_transports",
+      "breakpoints": true
     }
   ]
 }

@@ -70,18 +70,16 @@ Only `repo` is required. Without `agent`, the server uses `opencode`. Without `p
 
 The deployment's admin enables providers, and you can pick only from those. Set your default under **Compute** in the dashboard.
 
-| Provider           | Key          | Kind    |
-| ------------------ | ------------ | ------- |
-| E2B                | `e2b`        | Sandbox |
-| Daytona            | `daytona`    | Sandbox |
-| Vercel Sandbox     | `vercel`     | Sandbox |
-| Boat               | `boat`       | Sandbox |
-| exe.dev            | `exedev`     | Sandbox |
-| Cloudflare Sandbox | `cloudflare` | Sandbox |
-| Railway            | `railway`    | Compute |
-| AWS                | `aws`        | Compute |
+| Provider       | Key       | Kind    |
+| -------------- | --------- | ------- |
+| E2B            | `e2b`     | Sandbox |
+| Daytona        | `daytona` | Sandbox |
+| Vercel Sandbox | `vercel`  | Sandbox |
+| Boat           | `boat`    | Sandbox |
+| exe.dev        | `exedev`  | Sandbox |
+| AWS            | `aws`     | Compute |
 
-- Sandbox providers return a `running` workspace right away. Railway reports `pending` until its deployment succeeds, usually within a minute.
+- Sandbox providers return a `running` workspace right away.
 - Whether files survive a pause depends on the provider. See [Lifecycle](/docs/workspaces/lifecycle#what-is-kept-while-paused).
 - The admin sets the machine sizes. `client.catalog.workspaceOptions()` lists the sizes you may use, with `vcpus` and `memoryGb`.
 - On managed Gitterm, your plan limits which providers and sizes you can use. See [Plans and billing](/docs/account/plans-and-billing#plans).

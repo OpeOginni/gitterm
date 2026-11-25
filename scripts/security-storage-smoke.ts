@@ -80,7 +80,6 @@ try {
   const { providerType } = await import("../packages/db/src/schema/provider-config");
   const { workspace, workspaceEnvironmentVariables } =
     await import("../packages/db/src/schema/workspace");
-  const { workspaceRuntimeBundle } = await import("../packages/db/src/schema/credential-security");
   const { githubRepositoryConfig, googleIssuerConfig } =
     await import("../packages/db/src/schema/integrations");
   const { mcpConnection } = await import("../packages/db/src/schema/mcp");
@@ -181,10 +180,6 @@ try {
     encryptedHeaders: encryption.encrypt(
       JSON.stringify({ Authorization: "synthetic-route-token" }),
     ),
-  });
-  await db.insert(workspaceRuntimeBundle).values({
-    workspaceId: ws!.id,
-    encryptedPayload: encryption.encrypt("synthetic-bundle", `gitterm:workspace-runtime:${ws!.id}`),
   });
   await db.insert(workspaceEnvironmentVariables).values({
     userId,
@@ -364,7 +359,6 @@ try {
       getEncryptionService().decrypt(row.encryptedPat, "github:global:pat");
     }
     for (const row of await db.query.mcpConnection.findMany()) getEncryptionService().decrypt(row.encryptedAuth, "gitterm:mcp:" + row.id + ":auth");
-    for (const row of await db.query.workspaceRuntimeBundle.findMany()) getEncryptionService().decrypt(row.encryptedPayload, "gitterm:workspace-runtime:" + row.workspaceId);
     const { Hono } = await import(Bun.resolveSync("hono", ${JSON.stringify(`${root}/packages/api/src`)}));
     const { workspaceRouter } = await import("./packages/api/src/routers/workspace/managment");
     const { createContext } = await import("./packages/api/src/context");

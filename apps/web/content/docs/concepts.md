@@ -36,7 +36,7 @@ Cloud workspaces always run through a Gitterm account.
 
 ## Providers
 
-A provider is the company whose machines run the sandbox or workspace. Sandboxes support E2B, Daytona, Vercel, Boat, exe.dev, and Railway with either kind of account, and AWS with managed accounts only. Cloudflare sandboxes are planned. See [Providers](/docs/sandboxes/providers).
+A provider is the company whose machines run the sandbox or workspace. Sandboxes support E2B, Daytona, Vercel, Boat, exe.dev, and Railway with either kind of account, and AWS with managed accounts only. See [Providers](/docs/sandboxes/providers).
 
 ## Sandbox terms
 

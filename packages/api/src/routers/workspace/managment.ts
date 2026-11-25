@@ -108,7 +108,6 @@ import {
 } from "../../providers/ssh-access";
 import { normalizeSshPublicKey } from "../../utils/ssh-public-key";
 import { imageSupportsProvider, pickImageForProvider } from "../../providers/image-compat";
-import { RAILWAY_RUNTIME_PORT } from "../../providers/railway";
 import {
   applyMachineProfile,
   getDefaultMachineProfile,
@@ -157,10 +156,7 @@ import {
   sealWorkspaceEnvironment,
 } from "../../service/workspace-environment-secrets";
 import { redactSensitiveText } from "../../utils/redact-secrets";
-import {
-  workspaceCredentialAudit,
-  workspaceRuntimeBundle,
-} from "@gitterm/db/schema/credential-security";
+import { workspaceCredentialAudit } from "@gitterm/db/schema/credential-security";
 import {
   buildGoogleExternalAccountConfig,
   GOOGLE_ADC_PATH,
@@ -171,10 +167,6 @@ import { workspaceMcpConnection } from "@gitterm/db/schema/mcp";
 import { recordCredentialAudit } from "../../service/credential-audit";
 import { integrationPolicy } from "../../service/integrations/catalog";
 import { githubRepositoryMode } from "../../service/github/config";
-import {
-  railwayBootstrapEnvironment,
-  storeWorkspaceRuntimeBundle,
-} from "../../service/workspace-runtime-bundle";
 import {
   deleteWorkspaceForUser,
   processWorkspaceTermination,
@@ -261,6 +253,9 @@ async function relaunchWorkspaceSetup(
     .execCommand(record.externalInstanceId, `cd ${shellQuote(directory)} && ${setup.command}`)
     .catch((error) => console.warn("Failed to relaunch workspace setup:", error));
 }
+
+/** The port the canonical images' entrypoint serves the agent on (AWS runs the entrypoint). */
+const CONTAINER_RUNTIME_PORT = 7681;
 
 // Reserved subdomains that cannot be used by users
 const RESERVED_SUBDOMAINS = [
@@ -1893,7 +1888,7 @@ export const workspaceRouter = router({
               headers,
               password,
               providerKey: existingProvider?.providerKey ?? null,
-              providerCanResume: existingProvider?.providerKey !== "cloudflare",
+              providerCanResume: true,
             }),
           };
         }
@@ -2627,7 +2622,7 @@ export const workspaceRouter = router({
         const workspaceAgentAuthToken = workspaceJWT.generateToken(
           workspaceId,
           userId,
-          ["agent:bootstrap", "agent:credential"],
+          ["agent:credential"],
           "agent",
         );
         const workspaceSetupAuthToken = workspaceJWT.generateToken(
@@ -2805,11 +2800,10 @@ export const workspaceRouter = router({
         const setupExecutionId = setupRequested ? randomUUID() : undefined;
         // The setup script's readiness probe must target the port the runtime
         // actually listens on. SDK providers launch serve.command themselves,
-        // so serve.port is correct; Railway and AWS run the image entrypoint,
-        // which serves on the image's fixed port instead.
-        const setupProbePort = ["railway", "aws"].includes(providerKey)
-          ? RAILWAY_RUNTIME_PORT
-          : agentProvisioning.serve?.port;
+        // so serve.port is correct; AWS runs the image entrypoint, which serves
+        // on the image's fixed port instead.
+        const setupProbePort =
+          providerKey === "aws" ? CONTAINER_RUNTIME_PORT : agentProvisioning.serve?.port;
         // Tier 1/2 Daytona sandboxes cannot reach the API: skip push reports
         // (their retry backoff would delay setup ~30s per report) and rely on
         // the server-side polling reconciler instead.
@@ -2973,8 +2967,8 @@ export const workspaceRouter = router({
           });
         }
 
-        // Force ephemeral when the provider can't persist files (e.g. Cloudflare
-        // sandboxes). The UI disables the toggle, but guard server-side too.
+        // Force ephemeral when the provider can't persist files. The UI disables the
+        // toggle, but guard server-side too.
         const effectivePersistent =
           cloudProviderRecord.supportsPersistence === false ? false : input.persistent;
 
@@ -3050,13 +3044,6 @@ export const workspaceRouter = router({
             });
           }
         }
-        if (providerKey === "railway") {
-          await storeWorkspaceRuntimeBundle(workspaceId, DEFAULT_DOCKER_ENV_VARS);
-        }
-        const providerEnvironment =
-          providerKey === "railway"
-            ? railwayBootstrapEnvironment(DEFAULT_DOCKER_ENV_VARS)
-            : DEFAULT_DOCKER_ENV_VARS;
 
         // Providers that call this record their handle before setup, so a failure can clean it up.
         const onProvisioned = async (info: { externalServiceId: string }) => {
@@ -3087,7 +3074,7 @@ export const workspaceRouter = router({
                     repositoryBaseCommit: resolvedBaseCommit ?? undefined,
                     repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
                     regionIdentifier: regionRecord?.externalRegionIdentifier,
-                    environmentVariables: providerEnvironment,
+                    environmentVariables: DEFAULT_DOCKER_ENV_VARS,
                     provisioningSpec,
                     snapshot: startSnapshot?.externalSnapshotId ?? undefined,
                     persistent: effectivePersistent,
@@ -3105,7 +3092,7 @@ export const workspaceRouter = router({
                     repositoryBaseCommit: resolvedBaseCommit ?? undefined,
                     repositoryCheckoutRef: resolvedCheckoutRef ?? undefined,
                     regionIdentifier: regionRecord?.externalRegionIdentifier,
-                    environmentVariables: providerEnvironment,
+                    environmentVariables: DEFAULT_DOCKER_ENV_VARS,
                     provisioningSpec,
                     snapshot: startSnapshot?.externalSnapshotId ?? undefined,
                   }),
@@ -3356,9 +3343,6 @@ export const workspaceRouter = router({
               console.error("Failed provisioning cleanup will be retried:", cleanupError),
             );
           }
-          await db
-            .delete(workspaceRuntimeBundle)
-            .where(eq(workspaceRuntimeBundle.workspaceId, workspaceId));
         }
         // A snapshot that no longer starts must not stop the caller from working: say so in
         // a way it can recognise, so it can create the workspace fresh instead.
@@ -3540,8 +3524,7 @@ export const workspaceRouter = router({
         headers,
         password,
         providerKey: provider?.providerKey ?? null,
-        providerCanResume:
-          workspaceRecord.status === "paused" && provider?.providerKey !== "cloudflare",
+        providerCanResume: workspaceRecord.status === "paused",
       });
     }),
 
@@ -3689,19 +3672,6 @@ export const workspaceRouter = router({
             });
           }
 
-          if (provider.providerKey === "cloudflare") {
-            await updateWorkspaceByIdAndInvalidate(
-              input.workspaceId,
-              { status: "paused", updatedAt: new Date() },
-              existingWorkspace.subdomain,
-            );
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message:
-                "WORKSPACE_NON_RECOVERABLE: provider does not preserve paused filesystem state",
-            });
-          }
-
           let workspaceRegion: typeof region.$inferSelect | undefined;
           if (provider.supportsRegions && existingWorkspace.regionId) {
             [workspaceRegion] = await db
@@ -3828,7 +3798,7 @@ export const workspaceRouter = router({
         headers,
         password,
         providerKey: runtimeProvider?.providerKey ?? null,
-        providerCanResume: runtimeProvider?.providerKey !== "cloudflare",
+        providerCanResume: true,
       });
 
       if (!runtime.url) {

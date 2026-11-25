@@ -278,19 +278,6 @@ export const boatWebhookProcedure = t.procedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
-export const cloudflareWebhookProcedure = t.procedure.use(({ ctx, next }) => {
-  const token = ctx.bearerToken;
-
-  if (!token) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Bearer token required",
-    });
-  }
-
-  return next({ ctx });
-});
-
 /**
  * Workspace-authenticated procedure
  * Uses JWT tokens for workspace-to-backend communication

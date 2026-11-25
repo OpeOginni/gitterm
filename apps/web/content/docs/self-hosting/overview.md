@@ -187,20 +187,18 @@ You should see the provider listed as **Configured**, without a **Disabled** lab
 
 For AWS, use **Add a region** in the AWS section of **Admin → Cloud providers**. Each region is its own provider.
 
-| Provider       | Webhook  | Setup guide                                                                                                  |
-| -------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
-| E2B            | Required | [E2B](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/e2b/README.md)               |
-| Railway        | Required | [Railway](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/railway/README.md)       |
-| Daytona        | Optional | [Daytona](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/daytona/README.md)       |
-| Boat           | Optional | [Boat](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/boat/README.md)             |
-| Vercel Sandbox | No       | [Vercel](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/vercel/README.md)         |
-| exe.dev        | No       | [exe.dev](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/exedev/README.md)        |
-| Cloudflare     | No       | [Cloudflare](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/cloudflare/README.md) |
-| AWS            | No       | [AWS](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/aws/README.md)               |
+| Provider       | Webhook  | Setup guide                                                                                            |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| E2B            | Required | [E2B](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/e2b/README.md)         |
+| Daytona        | Optional | [Daytona](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/daytona/README.md) |
+| Boat           | Optional | [Boat](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/boat/README.md)       |
+| Vercel Sandbox | No       | [Vercel](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/vercel/README.md)   |
+| exe.dev        | No       | [exe.dev](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/exedev/README.md)  |
+| AWS            | No       | [AWS](https://github.com/OpeOginni/gitterm/blob/main/packages/api/src/providers/aws/README.md)         |
 
 Webhooks go to the listener through the proxy: `<PUBLIC_URL>/listener/trpc/<provider>.handleWebhook`.
 
-What each provider offers to workspaces is on [Workspaces](/docs/workspaces/overview#providers). Enabled providers also back managed sandboxes for local agents; see [Sandbox providers](/docs/sandboxes/providers).
+What each provider offers to workspaces is on [Workspaces](/docs/workspaces/overview#providers). Enabled providers also back managed sandboxes for local agents; see [Sandbox providers](/docs/sandboxes/providers). Railway no longer hosts workspaces; it still backs sandboxes, and is deprecated for those too.
 
 ## Optional admin settings
 

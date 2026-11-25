@@ -1,6 +1,7 @@
 import type { ComputeProvider, WorkspaceStatusResult } from "./compute";
 import { destroyAndConfirm } from "@gitterm/agent-runtime/sandbox/types";
 import { managedSandboxTransport, parseSandboxHandle } from "../service/sandbox-transport";
+import { afterResume } from "@gitterm/agent-runtime/sandbox/workspace";
 
 /**
  * Managed sandboxes are workspace rows whose `externalInstanceId` is a
@@ -44,6 +45,8 @@ export function withSandboxHandles(
             const sandbox = await transportFor(externalId);
             if (!sandbox) return original.call(target, externalId, ...rest);
             await sandbox.transport.resume(sandbox.id);
+            const preview = await afterResume(sandbox.transport, sandbox.id);
+            return preview ? { upstreamUrl: preview.url } : undefined;
           };
         case "getStatus":
           return async (externalId: string): Promise<WorkspaceStatusResult> => {
