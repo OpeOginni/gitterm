@@ -7,8 +7,6 @@ import { Mark } from "@/components/site/mark";
 import { GITHUB_URL, INSTALL_SETUP, SANDBOX_PROVIDERS, T3_LOGO } from "@/lib/site/providers";
 import { SITE_URL } from "@/lib/docs/content";
 import { cn } from "@/lib/utils";
-import { ClickToCopy } from "./click-to-copy";
-import { OwnKeyCode } from "./own-key-code";
 import { ReplayButton } from "./demo";
 import { AgentRoll, SetupCommand } from "./hero";
 import { SoundToggle } from "./sound-toggle";
@@ -38,44 +36,34 @@ const SETUP_PROMPT = `Set up Gitterm for me. Read ${SITE_URL}/llms.txt first and
 
 Before you change anything, ask me which of these I want:
 1. Moving my agents' sessions to a cloud workspace and back. Run \`${INSTALL_SETUP}\`: it asks which agents to set up (OpenCode, Pi, T3 Code), adds a skill for other agents, and signs me in.
-2. Remote sandboxes for my agents on this machine, for builds, tests and previews. The same setup command adds them. Ask whether I'll use a Gitterm plan or my own provider key, and if mine, which provider (E2B, Daytona, Vercel, Boat, exe.dev, Railway or AWS).
+2. Remote sandboxes for my agents on this machine, for builds, tests and previews. The same setup command adds them. Ask whether I'll use a Gitterm plan or my own provider key. If I want to use my own key, offer only providers that support it. \`gitterm sandbox setup\` asks the same.
 3. A cloud workspace that runs OpenCode, Pi, or T3 Code with Codex or Claude Code, started from ${SITE_URL}/dashboard.
 
 Keep keys out of config files: use {env:VAR} references. When you're done, show me how to check that it works.`;
 
 export function Hero() {
   return (
-    <section className="pt-[clamp(48px,8vw,104px)] pb-6 text-center">
+    // Fills the first screen under the 64px header, less a strip where the next section peeks in.
+    <section className="relative flex min-h-[calc(100svh-64px-220px)] flex-col justify-center py-12 text-center">
       <Wrap>
         <AgentRoll />
-        <div className="mx-auto mt-9 max-w-[640px]">
-          <SetupCommand location="hero" />
-          {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow.
-              Clicking anywhere on the strip copies it, and sweeps a glow across the copy button. */}
-          <ClickToCopy className="prompt-strip group/strip flex items-center gap-4 border-t border-line py-2.5 pr-3.5 pl-5 text-left transition-colors hover:bg-fill">
-            <span className="shrink-0 text-[14px] text-fg-2">Or let your agent set it up</span>
-            <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-fg-4 max-[640px]:hidden">
-              {SETUP_PROMPT.split("\n")[0]}
-            </span>
-            <CopyButton
-              value={SETUP_PROMPT}
-              label="Copy prompt"
-              icon
-              // Clicking anywhere on the strip presses this button.
-              target
-              // Gold while the strip is hovered. Set here: landing.css sits in a lower layer than
-              // the button's own Tailwind colours, so it can't override them.
-              className="prompt-copy ml-auto group-focus-within/strip:bg-primary group-focus-within/strip:text-primary-foreground group-hover/strip:bg-primary group-hover/strip:text-primary-foreground hover:bg-[#c09a45] hover:text-primary-foreground"
-            />
-          </ClickToCopy>
-        </div>
-        <CtaButtons />
+        <SetupCommand location="hero" className="mx-auto mt-10 max-w-[480px]" />
+        {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow. */}
+        <p className="m-0 mt-5 text-[14px] text-fg-4">
+          Or{" "}
+          <CopyButton
+            value={SETUP_PROMPT}
+            label="copy a prompt"
+            className="inline h-auto rounded-none bg-transparent px-0 text-[14px] font-normal text-fg-2 underline decoration-line-2 underline-offset-4 hover:bg-transparent hover:decoration-fg-3"
+          />{" "}
+          and let your agent set it up.
+        </p>
       </Wrap>
     </section>
   );
 }
 
-/** Start in the browser, or read the code. Under the hero and at the end of the page. */
+/** Start in the browser, or read the code. At the end of the page. */
 function CtaButtons() {
   return (
     <div className="mt-9 flex flex-wrap justify-center gap-3">
@@ -97,50 +85,43 @@ function CtaButtons() {
   );
 }
 
-// ---------- Providers strip (doubles as the demo's provider picker) ----------
+// ---------- Extend your laptop: the providers, which double as the demo's picker ----------
 
-const stripButton =
-  "group relative flex flex-col items-center gap-2.5 px-2 pt-[22px] pb-5 text-[15px] leading-[1.2] font-medium text-fg-3 transition-colors duration-[350ms] focus-visible:-outline-offset-[3px] max-[860px]:nth-[-n+4]:border-b max-[860px]:nth-[-n+4]:border-line max-[420px]:px-1 max-[420px]:pt-[18px] max-[420px]:pb-4 max-[420px]:text-[13.5px]";
-/** Grey until hovered or picked, so exe.dev's photo and AWS's orange tile don't outshout the rest. */
-const stripLogo =
-  "size-7 object-contain grayscale transition-[opacity,transform,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] max-[420px]:size-6";
+/** The demo's order: the white logos split up by the coloured ones. */
+const DEMO_PROVIDERS = ["e2b", "daytona", "exe", "vercel", "boat", "aws"].flatMap((id) =>
+  SANDBOX_PROVIDERS.filter((p) => p.id === id),
+);
 
 export function ProvidersStrip() {
   return (
     <section
       id="providers"
       aria-labelledby="prov-h"
-      className="mt-[clamp(56px,7vw,88px)] scroll-mt-20 text-center"
+      className="mt-6 mb-[30px] scroll-mt-20 text-center"
     >
       <Wrap>
         <PartHeading className="mb-2.5">Extend your laptop</PartHeading>
-        <p id="prov-h" className="mx-auto mb-[26px] max-w-[40rem] text-[15px] text-fg-3">
-          Your agent can attach sandboxes from any of these. The demo moves through them on its own,
-          or pick one to see it.
+        <p id="prov-h" className="mx-auto max-w-[40rem] text-[15px] text-balance text-fg-3">
+          Sandboxes run on the provider you choose.
         </p>
+        {/* engine.ts lights the provider the demo is on and moves to one when it's clicked. */}
         <div
           data-prov-strip
           role="group"
           aria-label="Sandbox providers"
-          className="grid grid-cols-7 border-y border-line max-[860px]:grid-cols-4"
+          className="mt-7 flex flex-wrap justify-center gap-x-[clamp(8px,3vw,28px)] gap-y-3"
         >
-          {SANDBOX_PROVIDERS.map((p) => (
+          {DEMO_PROVIDERS.map((p) => (
             <button
               key={p.id}
               type="button"
               data-prov={p.id}
               aria-pressed={p.id === "e2b"}
-              className={cn(
-                stripButton,
-                "cursor-pointer after:absolute after:inset-x-[22%] after:-bottom-px after:h-0.5 after:scale-x-0 after:rounded-sm after:bg-primary after:transition-transform after:duration-500 after:ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-white/[0.025] hover:text-fg aria-pressed:text-fg aria-pressed:after:scale-x-100",
-              )}
+              className="group flex min-w-[76px] cursor-pointer max-[640px]:basis-[30%] flex-col items-center gap-2.5 rounded-lg px-2 py-2 text-[14px] text-fg-4 transition-colors duration-500 hover:text-fg-2 aria-pressed:text-fg max-[420px]:text-[12.5px]"
             >
               <Logo
                 src={p.logo}
-                className={cn(
-                  stripLogo,
-                  "opacity-60 group-hover:opacity-90 group-hover:grayscale-0 group-aria-pressed:-translate-y-0.5 group-aria-pressed:opacity-100 group-aria-pressed:grayscale-0",
-                )}
+                className="size-8 object-contain opacity-40 grayscale transition-[filter,opacity,translate] duration-500 group-hover:opacity-80 group-hover:grayscale-0 group-aria-pressed:-translate-y-0.5 group-aria-pressed:opacity-100 group-aria-pressed:grayscale-0 max-[420px]:size-7"
               />
               {p.name}
             </button>
@@ -151,12 +132,18 @@ export function ProvidersStrip() {
   );
 }
 
-// ---------- What the plugin does: chapters beside a sticky TUI ----------
+// ---------- How Gitterm works: chapters beside a sticky TUI, as OpenCode or Pi ----------
 
 const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }[] = [
   {
-    title: "Your agent stays on your laptop",
-    body: "Run the setup command and your agent gets sandbox tools: OpenCode and Pi as tools, Codex and Claude Code through the CLI. The conversation and your model keys stay on your machine.",
+    title: "Set up once",
+    body: (
+      <>
+        <code>{INSTALL_SETUP}</code> adds Gitterm to your agents and asks where sandboxes run: your
+        Gitterm plan, or your own provider key. Your agent, the conversation and your model keys
+        stay on your laptop.
+      </>
+    ),
   },
   {
     title: "It borrows a machine when it needs one",
@@ -185,9 +172,9 @@ const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }
     body: (
       <>
         Run <code>{INSTALL_SETUP}</code> once, then type <code>/cloud</code>. The conversation, your
-        unpublished commits and, if you choose, uncommitted changes move to a cloud workspace. Pi
-        works the same way, and other agents move when you ask them. Your laptop copy stays as it
-        was until you bring the session back with <code>/cloud-return</code>.
+        unpublished commits and, if you choose, uncommitted changes move to a cloud workspace.
+        OpenCode and Pi both support <code>/cloud</code> and <code>/cloud-return</code>. Your laptop
+        copy stays as it was until you bring the session back.
       </>
     ),
   },
@@ -197,9 +184,23 @@ export function HowItWorks() {
   return (
     <Band id="how">
       <Wrap wide>
-        <SectionHead title="What the plugin does">
-          The same session as above, one step at a time.
+        <SectionHead title="How Gitterm works">
+          The same session as above, one step at a time. Codex and Claude Code take the same steps
+          with <code>gitterm sandbox</code>.
         </SectionHead>
+        {/* The window takes OpenCode's or Pi's look; landing.css switches it on these radios. */}
+        <input type="radio" name="how-agent" id="how-oc" className="sr-only" defaultChecked />
+        <input type="radio" name="how-agent" id="how-pi" className="sr-only" />
+        <div className="how-agents head" role="group" aria-label="Show the session in">
+          <label htmlFor="how-oc">
+            <Logo src="/opencode.svg" className="size-4" />
+            OpenCode
+          </label>
+          <label htmlFor="how-pi">
+            <Logo src="/pi.svg" className="size-4" />
+            Pi
+          </label>
+        </div>
         <div className="story">
           <div className="chaps">
             {CHAPTERS.map((c, i) => (
@@ -223,6 +224,16 @@ export function HowItWorks() {
           </div>
           <div className="stage-col">
             <div className="stage">
+              <div className="how-agents" role="group" aria-label="Show the session in">
+                <label htmlFor="how-oc">
+                  <Logo src="/opencode.svg" className="size-4" />
+                  OpenCode
+                </label>
+                <label htmlFor="how-pi">
+                  <Logo src="/pi.svg" className="size-4" />
+                  Pi
+                </label>
+              </div>
               <div className="tui" aria-hidden>
                 <div className="tui-chrome">
                   <span className="lights">
@@ -230,22 +241,29 @@ export function HowItWorks() {
                     <i />
                     <i />
                   </span>
-                  <span className="title">opencode · ~/code/shop</span>
+                  <span className="title">
+                    <span data-oc>opencode · ~/code/shop</span>
+                    <span data-pi>π - shop</span>
+                  </span>
                 </div>
                 <div className="scenes" id="scenes" />
                 <div className="t-prompt">
                   <div className="t-input">
                     <span className="t-caret" />
                   </div>
-                  <div className="t-meta">
+                  <div className="t-meta" data-oc>
                     <b>Build</b> · <span>Claude Opus 5.5</span> Anthropic
                   </div>
                 </div>
-                <div className="t-hints">
+                <div className="t-hints" data-oc>
                   <span className="path">~/code/shop:checkout-coupons</span>
                   <span>
                     <kbd>shift+tab</kbd> agents&nbsp;&nbsp;&nbsp;<kbd>ctrl+p</kbd> commands
                   </span>
+                </div>
+                <div className="t-hints" data-pi>
+                  <span className="path">~/code/shop (checkout-coupons)</span>
+                  <span>(anthropic) claude-opus-5.5 • medium</span>
                 </div>
               </div>
             </div>
@@ -258,64 +276,82 @@ export function HowItWorks() {
 
 // ---------- Keys ----------
 
-/** Code boxes fill their row, so all three are the same height. */
-const keyCode =
-  "h-full [&_pre]:h-full max-[640px]:[&_pre]:text-[12px] max-[640px]:[&_pre]:[overflow-wrap:anywhere] max-[640px]:[&_pre]:whitespace-pre-wrap";
-const PLAN = `"sandbox": {
-  "size": "medium"
-}`;
-const SELF_HOSTED = `"sandbox": {
-  "serverUrl": "https://git.acme.dev"
-}`;
+/**
+ * A card's logos, stacked so they overlap; hovering the card spreads them apart. A logo marked
+ * `demo` follows the provider the demo is on (engine.ts swaps every `img[data-plogo]`).
+ */
+function LogoStack({ logos }: { logos: { src: string; demo?: boolean }[] }) {
+  return (
+    <div className="mb-5 flex">
+      {logos.map((l, i) => (
+        <span
+          key={l.src}
+          className={cn(
+            "grid size-12 place-items-center rounded-xl bg-fill-2 shadow-[0_0_0_1px_var(--color-line),0_0_0_4px_var(--color-background)] backdrop-blur transition-[margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            i > 0 && "-ml-4 group-hover:ml-2.5",
+          )}
+        >
+          <Logo
+            src={l.src}
+            className="size-6 object-contain"
+            {...(l.demo ? { "data-plogo": true } : {})}
+          />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const OWN_KEY_LOGOS = ["e2b", "daytona", "exe", "vercel", "boat"].flatMap((id) =>
+  SANDBOX_PROVIDERS.filter((p) => p.id === id && p.byoKey).map((p) => ({ src: p.logo })),
+);
 
 export function Keys() {
   return (
     <Band>
       <Wrap>
-        <SectionHead title="Your key, our plan, or your server">
-          Set one account in your sandbox settings. Add <code>limits</code> to any of them, so a
-          busy agent cannot run up a surprise bill.
-        </SectionHead>
+        <SectionHead title="Your key, our plan, or your server" />
         <div className={cn(cells, "grid-cols-3 max-[1100px]:grid-cols-1")}>
           {[
             {
               title: "Bring your own provider key",
-              body: "No Gitterm account needed. The key comes from your environment and the provider bills you directly.",
-              code: null,
+              body: "No Gitterm account needed. It uses your provider's CLI login if it finds one, or takes the key, and the provider bills you directly.",
+              logos: OWN_KEY_LOGOS,
+              command: "gitterm sandbox setup",
             },
             {
               title: "Use your Gitterm plan",
               body: (
                 <>
-                  No provider account needed. Sign in with <code>gitterm login</code>; sandboxes
-                  count against your plan, and Gitterm stops anything that outlives its deadline.
+                  No provider account needed. Sandboxes count against your plan, and Gitterm stops
+                  anything that outlives its deadline.
                 </>
               ),
-              code: PLAN,
+              logos: [{ src: "/gitterm.svg" }],
+              command: "gitterm login",
             },
             {
               title: "Use your own Gitterm",
-              body: (
-                <>
-                  Point at a self-hosted server. It uses its default provider; add{" "}
-                  <code>provider</code> to pick another one it offers.
-                </>
-              ),
-              code: SELF_HOSTED,
+              body: <>Sign in to a self-hosted server, then pick from the providers it offers.</>,
+              logos: [{ src: "/gitterm.svg" }, { src: "/E2B.svg", demo: true }],
+              command: "gitterm login --server <url>",
             },
           ].map((k) => (
-            // A subgrid, so titles, text and code boxes line up across the cards.
+            // A subgrid, so logos, titles, text and commands line up across the cards.
             <div
               key={k.title}
-              className="row-span-3 grid min-w-0 grid-rows-subgrid gap-y-0 px-6 py-[26px] max-[640px]:px-[18px] max-[640px]:py-5"
+              className="group row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0 px-6 py-[26px] max-[640px]:px-[18px] max-[640px]:py-5"
             >
+              <LogoStack logos={k.logos} />
               <h3 className={cn(h3, "mb-1.5")}>{k.title}</h3>
               <p className={cn(cellText, "mb-[18px]")}>{k.body}</p>
-              {k.code ? (
-                <CodeBlock code={k.code} lang="json" copy className={keyCode} />
-              ) : (
-                <OwnKeyCode className={keyCode} />
-              )}
+              <div className="flex min-w-0 items-center gap-3 self-end rounded-[10px] border border-line bg-[#0b0b0e] py-2 pr-2 pl-4">
+                <code className="min-w-0 flex-1 break-words font-mono text-[13px] text-fg max-[640px]:text-[12px]">
+                  <span className="text-primary">$ </span>
+                  {k.command}
+                </code>
+                <CopyButton value={k.command} />
+              </div>
             </div>
           ))}
         </div>

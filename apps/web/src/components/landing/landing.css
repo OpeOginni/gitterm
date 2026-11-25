@@ -1604,15 +1604,11 @@
   }
   /* It turns gold through Tailwind classes on the button (see sections.tsx and hero.tsx); this adds the
      shine passing over it as it does */
-  .lp .prompt-strip:hover .prompt-copy::before,
-  .lp .prompt-strip:focus-within .prompt-copy::before,
   .lp .setup-cmd:hover .prompt-copy::before,
   .lp .setup-cmd:focus-within .prompt-copy::before {
     animation: lp-whoosh 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
   }
   @media (prefers-reduced-motion: reduce) {
-    .lp .prompt-strip:hover .prompt-copy::before,
-    .lp .prompt-strip:focus-within .prompt-copy::before,
     .lp .setup-cmd:hover .prompt-copy::before,
     .lp .setup-cmd:focus-within .prompt-copy::before {
       animation: none;
@@ -3337,6 +3333,187 @@
     from {
       opacity: 0;
       filter: blur(2px);
+    }
+  }
+  /* How Gitterm works: OpenCode or Pi. The radios before the story pick the window's look. */
+  .lp .how-agents {
+    display: inline-flex;
+    gap: 4px;
+    margin: -6px 0 28px;
+    padding: 4px;
+    border-radius: 10px;
+    background: var(--fill);
+  }
+  .lp .how-agents label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 7px;
+    color: var(--fg-3);
+    font-size: 14px;
+    cursor: pointer;
+    transition:
+      background-color 0.2s,
+      color 0.2s;
+  }
+  .lp .how-agents label:hover {
+    color: var(--fg);
+  }
+  .lp #how:has(#how-oc:checked) .how-agents label[for="how-oc"],
+  .lp #how:has(#how-pi:checked) .how-agents label[for="how-pi"] {
+    background: var(--fill-2);
+    color: var(--fg);
+  }
+  .lp #how:has(#how-oc:focus-visible) .how-agents label[for="how-oc"],
+  .lp #how:has(#how-pi:focus-visible) .how-agents label[for="how-pi"] {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+  /* One switch under the heading on phones, one on the pinned window beside the chapters. */
+  .lp .stage .how-agents {
+    align-self: flex-start;
+    margin: 0;
+  }
+  @media (min-width: 901px) {
+    .lp .how-agents.head {
+      display: none;
+    }
+  }
+  .lp #how [data-pi],
+  .lp #how:has(#how-pi:checked) [data-oc] {
+    display: none;
+  }
+  .lp #how:has(#how-pi:checked) [data-pi] {
+    display: revert;
+  }
+  .lp #how:has(#how-pi:checked) .t-hints[data-pi] {
+    display: flex;
+  }
+  /* Pi: a plain terminal. Messages on a lighter band, each tool call in a dark green block with
+     its name in bold, the prompt between two rules, path and model in the footer. */
+  .lp #how:has(#how-pi:checked) .tui {
+    --t-bg: #282b33;
+    --t-raised: #383a46;
+    --t-high: #282b33;
+    --t-text: #e4e4e4;
+    --t-muted: #8c929b;
+    --t-ok: #a3d08a;
+    --t-info: #84b8cb;
+    --t-build: #e4e4e4;
+  }
+  .lp #how:has(#how-pi:checked) .tui-chrome {
+    background: #282b33;
+    border-bottom: 0;
+    color: #c8ccd3;
+    font-weight: 600;
+  }
+  .lp #how:has(#how-pi:checked) .t-user {
+    margin-inline: -16px;
+    padding: 12px 16px;
+    border-left: 0;
+  }
+  .lp #how:has(#how-pi:checked) .t-text {
+    padding-left: 0;
+  }
+  .lp #how:has(#how-pi:checked) .t-inline {
+    grid-template-columns: minmax(0, 1fr);
+    margin: 10px -16px 0;
+    padding: 10px 16px;
+    background: #2c362c;
+    color: var(--t-muted);
+  }
+  .lp #how:has(#how-pi:checked) .t-inline > span:first-child {
+    display: none;
+  }
+  .lp #how:has(#how-pi:checked) .t-inline .n {
+    color: var(--t-text);
+    font-weight: 700;
+  }
+  .lp #how:has(#how-pi:checked) .t-inline .res {
+    grid-column: 1;
+    margin-top: 2px;
+  }
+  .lp #how:has(#how-pi:checked) .t-inline .args {
+    color: var(--t-info);
+  }
+  .lp #how:has(#how-pi:checked) .t-block {
+    border-left: 0;
+    background: #2c362c;
+  }
+  .lp #how:has(#how-pi:checked) .t-prompt {
+    margin: 0;
+    padding: 8px 16px;
+    background: transparent;
+    border-left: 0;
+    border-block: 1px solid #50545e;
+  }
+
+  /* The hero's agents on wide screens: tiles that float beside the headline. Grey until the
+     headline names one (it glows gold, its name shows) or says "your agents" (all in colour). */
+  .lp .agent-float li {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    animation: lp-bob 7s ease-in-out infinite;
+  }
+  .lp .agent-float .tile {
+    display: grid;
+    place-items: center;
+    width: clamp(68px, 4.6vw, 88px);
+    aspect-ratio: 1;
+    border-radius: 22px;
+    background: var(--fill);
+    box-shadow: inset 0 0 0 1px var(--line);
+    transition:
+      box-shadow 0.5s,
+      background-color 0.5s;
+  }
+  .lp .agent-float .tile img {
+    width: 54%;
+    height: 54%;
+    object-fit: contain;
+    opacity: 0.4;
+    filter: grayscale(1);
+    transition:
+      opacity 0.5s,
+      filter 0.5s;
+  }
+  .lp .agent-float .lit .tile img,
+  .lp .agent-float .named .tile img {
+    opacity: 1;
+    filter: none;
+  }
+  .lp .agent-float .named .tile {
+    background: color-mix(in oklab, var(--gold) 7%, transparent);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--gold) 50%, transparent),
+      0 0 44px -6px color-mix(in oklab, var(--gold) 50%, transparent);
+  }
+  .lp .agent-float .name {
+    color: var(--fg-2);
+    font-size: 14px;
+    white-space: nowrap;
+    opacity: 0;
+    translate: 0 -4px;
+    transition:
+      opacity 0.5s,
+      translate 0.5s;
+  }
+  .lp .agent-float .named .name {
+    opacity: 1;
+    translate: 0;
+  }
+  @keyframes lp-bob {
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lp .agent-float li {
+      animation: none;
     }
   }
 }

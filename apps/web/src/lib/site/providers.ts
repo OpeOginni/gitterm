@@ -5,7 +5,7 @@
  * site), never invent capabilities here.
  */
 
-export type SandboxProviderId = "e2b" | "daytona" | "vercel" | "boat" | "exe" | "railway" | "aws";
+export type SandboxProviderId = "e2b" | "daytona" | "vercel" | "boat" | "exe" | "aws";
 
 export type SandboxProvider = {
   id: SandboxProviderId;
@@ -59,14 +59,6 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
     byoKey: true,
     publicPreviews: false,
     note: "Private previews on ports 3000 to 9999, public on a Gitterm plan. Never deleted by the provider.",
-  },
-  {
-    id: "railway",
-    name: "Railway",
-    logo: "/railway.svg",
-    byoKey: true,
-    publicPreviews: false,
-    note: "Private previews, port 8080 reserved. Never deleted by the provider.",
   },
   {
     id: "aws",

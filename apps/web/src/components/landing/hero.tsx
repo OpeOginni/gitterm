@@ -7,13 +7,22 @@ import { cn } from "@/lib/utils";
 import { ClickToCopy } from "./click-to-copy";
 import { Logo } from "./logo";
 
-/** `icon` marks a square app icon, which gets rounded corners; the other marks are drawn shapes. */
+/**
+ * `icon` marks a square app icon, which gets rounded corners; the other marks are drawn shapes.
+ * `float` places its tile beside the headline on wide screens (1200px and up): `x` is the side
+ * (negative is left), `y` how far down the hero, `gap` extra pixels out from the headline.
+ */
 const AGENTS = [
-  { logo: "/opencode.svg", name: "OpenCode" },
-  { logo: "/pi.svg", name: "Pi" },
-  { logo: T3_LOGO, name: "T3 Code", icon: true },
-  { logo: "/openai-codex.svg", name: "Codex" },
-  { logo: "/claude.svg", name: "Claude Code" },
+  { logo: "/opencode.svg", name: "OpenCode", float: { x: -1, y: "20%", gap: 30, delay: 0 } },
+  { logo: "/pi.svg", name: "Pi", float: { x: -1, y: "58%", gap: 90, delay: 1.2 } },
+  {
+    logo: T3_LOGO,
+    name: "T3 Code",
+    icon: true,
+    float: { x: 1, y: "16%", gap: 50, delay: 0.6 },
+  },
+  { logo: "/openai-codex.svg", name: "Codex", float: { x: 1, y: "50%", gap: 90, delay: 1.8 } },
+  { logo: "/claude.svg", name: "Claude Code", float: { x: 1, y: "78%", gap: 0, delay: 0.9 } },
 ];
 /** The headline's last line: "your agents", each agent, then "your agents" again to roll back to. */
 const LINES = [undefined, ...AGENTS, undefined];
@@ -91,7 +100,34 @@ export function AgentRoll() {
           </span>
         </span>
       </h1>
-      <ul className="mx-auto mt-9 mb-0 flex list-none justify-center gap-[clamp(14px,4.5vw,40px)] p-0">
+      {/* Wide screens: the agents float in the space around the headline, and the one it names
+          glows with its name under it. The hero section is their positioning box. */}
+      <ul className="agent-float m-0 hidden list-none p-0 min-[1200px]:block">
+        {AGENTS.map((agent) => {
+          const named = current === agent;
+          const { x, y, gap, delay } = agent.float;
+          return (
+            <li
+              key={agent.name}
+              className={cn(!current && "lit", named && "named")}
+              style={{
+                top: y,
+                // Clear of the headline (at most 380px either side of the centre), moving out
+                // as the screen widens so wide screens use their space and 1200px still fits.
+                [x < 0 ? "right" : "left"]: `calc(50% + ${380 + gap}px + (100vw - 1200px) * 0.35)`,
+                animationDelay: `-${delay}s`,
+              }}
+            >
+              <span className="tile">
+                <Logo src={agent.logo} className={cn(agent.icon && "rounded-[9px]")} />
+              </span>
+              <span className="name">{agent.name}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {/* Narrower screens: one row under the headline. */}
+      <ul className="mx-auto mt-10 mb-0 flex list-none justify-center gap-[clamp(14px,5vw,56px)] p-0 min-[1200px]:hidden">
         {AGENTS.map((agent) => {
           // Every agent is lit while the headline says "your agents".
           const lit = !current || current === agent;
@@ -99,15 +135,15 @@ export function AgentRoll() {
             <li
               key={agent.name}
               className={cn(
-                "flex flex-col items-center gap-2 text-[13px] whitespace-nowrap transition-colors duration-500 max-[420px]:text-[11px]",
+                "flex flex-col items-center gap-2.5 text-[14px] whitespace-nowrap transition-colors duration-500 max-[420px]:text-[11px]",
                 lit ? "text-fg" : "text-fg-4",
               )}
             >
               <Logo
                 src={agent.logo}
                 className={cn(
-                  "size-[26px] transition-[filter,opacity,translate] duration-500",
-                  agent.icon && "rounded-[5px]",
+                  "size-9 transition-[filter,opacity,translate] duration-500 max-[420px]:size-7",
+                  agent.icon && "rounded-[7px]",
                   lit ? "-translate-y-0.5" : "opacity-40 grayscale",
                 )}
               />
@@ -120,7 +156,7 @@ export function AgentRoll() {
   );
 }
 
-/** The setup command. Clicking anywhere copies it; hovering draws a gold line along the top. */
+/** The setup command as a terminal line, with Copy at its side. Clicking anywhere copies it. */
 export function SetupCommand({
   location,
   className,
@@ -132,13 +168,12 @@ export function SetupCommand({
   return (
     <ClickToCopy
       className={cn(
-        "setup-cmd group/cmd relative flex items-center gap-4 border-t border-line-2 bg-fill py-3.5 pr-3.5 pl-5 text-left",
-        "before:absolute before:inset-x-0 before:-top-px before:h-0.5 before:origin-left before:scale-x-0 before:bg-primary before:transition-transform before:duration-[450ms] before:ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:before:scale-x-100 hover:before:scale-x-100",
+        "setup-cmd group/cmd flex items-center gap-4 rounded-[10px] bg-[#0a0a0a] py-2 pr-2 pl-4 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.1)] transition-shadow hover:shadow-[0_0_0_1px_rgba(255,255,255,0.18)]",
         className,
       )}
     >
-      <code className="min-w-0 flex-1 truncate font-mono text-[15px] text-fg">
-        <span className="text-primary/70 transition-colors group-hover/cmd:text-primary">$ </span>
+      <code className="min-w-0 flex-1 break-words font-mono text-[15px] text-fg">
+        <span className="text-primary">$ </span>
         {INSTALL_SETUP}
       </code>
       <CopyButton
@@ -146,7 +181,7 @@ export function SetupCommand({
         installLocation={location}
         icon
         target
-        className="prompt-copy group-focus-within/cmd:bg-primary group-focus-within/cmd:text-primary-foreground group-hover/cmd:bg-primary group-hover/cmd:text-primary-foreground hover:bg-[#c09a45] hover:text-primary-foreground"
+        className="prompt-copy h-8 group-focus-within/cmd:bg-primary group-focus-within/cmd:text-primary-foreground group-hover/cmd:bg-primary group-hover/cmd:text-primary-foreground hover:bg-[#c09a45] hover:text-primary-foreground"
       />
     </ClickToCopy>
   );
