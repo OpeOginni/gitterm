@@ -302,7 +302,7 @@ export async function returnFromCloud(
   }
   if (result.exit === RESTORE_NEEDS_CONFIRMATION)
     throw new Error(
-      "This checkout changed since the session moved. Run again with --force to replace it with the cloud's (your changes are kept in a Git stash and a gitterm/before-return branch).",
+      "This checkout, or the branch the cloud's work goes to, changed since the session moved. Run again with --force to replace it with the cloud's (your changes are kept in a Git stash and a gitterm/before-return branch).",
     );
   if (result.exit !== 0 || !result.stdout.startsWith(VERIFIED))
     throw new Error(

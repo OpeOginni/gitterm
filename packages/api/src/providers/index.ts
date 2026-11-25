@@ -71,5 +71,11 @@ export async function getProviderByCloudProviderId(
 ): Promise<ComputeProvider> {
   if (cloudProviderKey === "aws" && providerId)
     return withSandboxHandles(new AwsProvider(providerId), providerId);
+  // Railway hosts only managed sandboxes, whose `sandbox:` handles `withSandboxHandles` serves.
+  if (cloudProviderKey === "railway")
+    return withSandboxHandles(
+      new TransportWorkspaceProvider("railway", { label: "Railway" }),
+      providerId,
+    );
   return withSandboxHandles(getProvider(cloudProviderKey), providerId);
 }
