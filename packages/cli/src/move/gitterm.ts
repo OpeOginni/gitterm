@@ -12,6 +12,20 @@ const unreachableRepository = (error: unknown) =>
     error.message,
   );
 
+/**
+ * The provider for a workspace running `agent`: your default when it runs that agent, else
+ * the first one that does. Without one, GitTerm would use your default even where it can't.
+ */
+async function providerFor(client: GittermClient, agent: string) {
+  const { providers } = await client.catalog.workspaceOptions();
+  const usable = providers.filter(
+    (provider) => provider.agentKeys.includes(agent) && !NO_EXEC.has(provider.type),
+  );
+  const provider = usable.find((item) => item.isDefault) ?? usable[0];
+  if (!provider) throw new Error(`None of your GitTerm providers can run ${agent} workspaces.`);
+  return { type: provider.type, providerId: provider.id } as WorkspaceProviderSelection;
+}
+
 /** Agent workspaces on GitTerm. */
 export function gittermCloud(
   client: GittermClient,
@@ -26,9 +40,9 @@ export function gittermCloud(
       try {
         const created = await client.workspaces.create({
           ...input,
-          ...(options.provider
-            ? { provider: { type: options.provider } as WorkspaceProviderSelection }
-            : {}),
+          provider: options.provider
+            ? ({ type: options.provider } as WorkspaceProviderSelection)
+            : await providerFor(client, input.agent),
           // GitTerm rejects a GitHub connection on a workspace without a repository.
           ...(options.connections?.length && input.repo
             ? { connections: options.connections }

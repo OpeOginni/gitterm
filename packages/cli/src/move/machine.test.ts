@@ -62,8 +62,19 @@ test("only real messages sent after the move count as local work", () => {
     record({ type: "user", message: { content: [{ type: "tool_result", content: "moved" }] } }) +
     record({ type: "assistant", message: { content: [{ type: "text", text: "Moved." }] } }) +
     record({ type: "user", isMeta: true, message: { content: "caveat" } });
-  expect(sentSince(finished, moved.length)).toBe(false);
-  expect(
-    sentSince(finished + record({ type: "user", message: { content: "more" } }), moved.length),
-  ).toBe(true);
+  const mark = Buffer.byteLength(moved);
+  expect(sentSince(finished, mark)).toBe(false);
+  expect(sentSince(finished + record({ type: "user", message: { content: "more" } }), mark)).toBe(
+    true,
+  );
+});
+
+test("the session's mark counts bytes, so non-ASCII history doesn't hide a new message", () => {
+  const record = (value: unknown) => `${JSON.stringify(value)}\n`;
+  const moved = record({ type: "user", message: { content: `Grüße 🚀 ${"ü".repeat(200)}` } });
+  const mark = Buffer.byteLength(moved);
+  expect(sentSince(moved, mark)).toBe(false);
+  expect(sentSince(moved + record({ type: "user", message: { content: "more" } }), mark)).toBe(
+    true,
+  );
 });

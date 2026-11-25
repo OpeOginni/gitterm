@@ -105,13 +105,16 @@ export async function runMove(
   }
 }
 
-function pickRecord(records: MoveRecord[], workspaceId?: string): MoveRecord {
+function pickRecord(
+  records: MoveRecord[],
+  pick: { workspaceId?: string; session?: string },
+): MoveRecord {
   const open = records.filter((record) => !record.returnedAt);
-  const current = currentSession();
-  const match = workspaceId
-    ? open.find((record) => record.workspaceId === workspaceId)
-    : (open.find((record) => current && record.localRef === current.ref) ??
-      (open.length === 1 ? open[0] : undefined));
+  const session = pick.session ?? currentSession()?.ref;
+  const match = pick.workspaceId
+    ? open.find((record) => record.workspaceId === pick.workspaceId)
+    : (open.find((record) => session && record.localRef === session) ??
+      (!pick.session && open.length === 1 ? open[0] : undefined));
   if (match) return match;
   if (!open.length) throw new Error("No session from this machine is in the cloud.");
   throw new Error(
@@ -122,6 +125,7 @@ function pickRecord(records: MoveRecord[], workspaceId?: string): MoveRecord {
 export async function runReturn(
   args: JsonArgs & {
     workspaceId?: string;
+    session?: string;
     force: boolean;
     end: "pause" | "delete" | "keep";
     message?: string;
@@ -130,13 +134,15 @@ export async function runReturn(
 ) {
   const reporter = progressReporter(args.json || args.detached);
   try {
-    const record = pickRecord(await loadRecords(), args.workspaceId);
+    const record = pickRecord(await loadRecords(), args);
     const agent = agentByKey(record.agent);
     const local = localMachine();
+    const inside = record.localRef === currentSession()?.ref;
+    if (inside && agent.insideReturn) throw new Error(agent.insideReturn);
 
     // Run from the session it returns to, it waits for the session's reply to end: a session
     // can only be replaced while nothing writes to it.
-    if (!args.detached && record.localRef === currentSession()?.ref) {
+    if (!args.detached && inside) {
       const dir = path.join(process.env.HOME || homedir(), ".config", "gitterm");
       mkdirSync(dir, { recursive: true });
       const log = path.join(dir, `return-${record.workspaceId}.log`);

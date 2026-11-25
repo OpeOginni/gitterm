@@ -78,13 +78,18 @@ Legacy name resolution is limited to older proxy cache entries and UI callers
 without a key. Dashboard pairing controls and MCP selection use the shared
 capability declaration as well. Unknown keys fail closed.
 
-| GitTerm capability                | OpenCode          | T3Code                       |
-| --------------------------------- | ----------------- | ---------------------------- |
-| Primary authentication            | Server password   | Native one-time pairing      |
-| GitTerm run API / bots            | Server workspaces | Not implemented              |
-| GitTerm-managed MCP connections   | Yes               | Not implemented              |
-| Central OAuth refresh integration | Yes               | OpenCode V2 only             |
-| Native saved configs              | OpenCode          | OpenCode, Claude Code, Codex |
+| GitTerm capability                | OpenCode          | T3Code                       | Pi                                    |
+| --------------------------------- | ----------------- | ---------------------------- | ------------------------------------- |
+| Primary authentication            | Server password   | Native one-time pairing      | Server password (ttyd basic auth)     |
+| GitTerm run API / bots            | Server workspaces | Not implemented              | Not implemented (Pi has an RPC mode)  |
+| GitTerm-managed MCP connections   | Yes               | Not implemented              | Not implemented (Pi reads `mcp.json`) |
+| Central OAuth refresh integration | Yes               | OpenCode V2 only             | No: Pi refreshes its own `auth.json`  |
+| Native saved configs              | OpenCode          | OpenCode, Claude Code, Codex | None                                  |
+| Session moves                     | `/cloud` plugin   | `gitterm move` adapter       | Adapter plus `/cloud` extension       |
+
+Pi has no server, so its workspace serves Pi in ttyd inside tmux (`packages/schema/src/pi.ts`).
+Its image is a plain Node 24 image with Pi installed by `setupCommands`; E2B has no Pi
+template yet.
 
 The provider side of the same standard is in [sandbox-standard.md](sandbox-standard.md).
 

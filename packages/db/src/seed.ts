@@ -15,6 +15,7 @@ import { MODEL_PROVIDERS } from "@gitterm/schema/model-providers";
 import { removeRetiredImageProviders, RETIRED_IMAGE_PROVIDERS } from "./seed-image-cleanup";
 import { RUNTIME_IMAGE_MAJOR } from "./runtime-image";
 import cliPackage from "../../cli/package.json" with { type: "json" };
+import { PI_INSTALL_COMMAND } from "@gitterm/schema/pi";
 
 /**
  * Seed data definitions
@@ -208,6 +209,15 @@ const seedAgentTypes = [
       "Run a T3 Code server driving Claude Code, Codex, and OpenCode. Pair it with the T3 web or mobile app via a one-time pairing link.",
     aliases: ["T3Code Server"],
   },
+  {
+    key: "pi",
+    name: "Pi",
+    provisionerKey: "pi",
+    serverOnly: false,
+    description:
+      "Run the Pi coding agent in a browser terminal. Sessions keep running when you close the tab.",
+    aliases: [],
+  },
 ];
 
 /**
@@ -315,6 +325,22 @@ const seedImages = [
           `npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`,
         ],
       },
+    },
+  },
+  // Pi installs on a Node 24 image, or on providers' own runtimes. No E2B template yet.
+  {
+    name: "gitterm-pi",
+    imageId: "node:24-bookworm",
+    agentTypeName: "Pi",
+    providerMetadata: {
+      daytona: {
+        image: "node:24-bookworm",
+        resources: { cpu: 2, memory: 4 },
+        setupCommands: [PI_INSTALL_COMMAND],
+      },
+      vercel: { runtime: "node24" as const, setupCommands: [PI_INSTALL_COMMAND], vcpus: 2 },
+      boat: { setupCommands: [PI_INSTALL_COMMAND] },
+      exedev: { image: "node:24-bookworm", setupCommands: [PI_INSTALL_COMMAND] },
     },
   },
 ];

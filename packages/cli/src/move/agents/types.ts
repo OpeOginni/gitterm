@@ -36,6 +36,11 @@ export interface AgentAdapter {
   currentSession(env: NodeJS.ProcessEnv): string | undefined;
   /** Whether a real user message was added to a session after `mark`. */
   sentSince(session: ExportedSession, mark: number): boolean;
+  /**
+   * Set when a session can't be returned from inside itself (the agent would write over the
+   * returned session): the message saying what to do instead.
+   */
+  insideReturn?: string;
   /** Optional setup on this machine, run by `gitterm setup`. Returns what changed. */
   setup?(local: Machine): Promise<string[]>;
   /** Optional link between the workspace and this machine's agent, after a move. */

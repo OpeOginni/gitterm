@@ -168,6 +168,7 @@ export async function moveToCloud(
     progress("Starting the agent in the cloud");
     await remote.agent(agent.script, "notify", {
       ref: imported.ref,
+      where: "cloud",
       message: [
         `[GitTerm] This conversation moved from the user's machine (checkout ${root}) to a GitTerm cloud workspace. The working directory is now ${cloudCwd}.`,
         "Earlier messages ran on the user's machine: paths, processes and tool output in them describe that machine, and the command that moved you ended there.",
@@ -274,6 +275,14 @@ export async function returnFromCloud(
   };
   let snapshot = await capture(record.head);
   const summary = snapshotSummary(snapshot);
+  // A turn that ran while the checkout was copied would be missing from the conversation.
+  const after = await remote.agent<ExportedSession>(agent.script, "export", {
+    ref: record.cloudRef,
+  });
+  if (after.mark !== cloudSession.mark)
+    throw new Error(
+      `The cloud ${agent.label} session went on while it was being copied. Try again once it is done.`,
+    );
 
   progress("Restoring it here");
   const restoreHere = async (force: boolean) => {
@@ -324,6 +333,7 @@ export async function returnFromCloud(
   await local
     .agent(agent.script, "notify", {
       ref: record.localRef,
+      where: "local",
       message: [
         `[GitTerm] This session is back on the user's machine (checkout ${record.root}) from a GitTerm cloud workspace.`,
         `Messages since it moved ran in the cloud under ${record.cloudDirectory}; what they say about that machine was true there. The cloud's commits and uncommitted changes are now in this checkout; processes it started are not running here.`,
