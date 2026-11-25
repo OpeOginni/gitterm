@@ -192,6 +192,12 @@ test("publicPreviews in the options makes every sandbox public without asking", 
   });
 });
 
+test("an explicit false keeps a sandbox private when the options make previews public", async () => {
+  expect(await createSandbox({ publicPreviews: true }, { publicPreviews: false })).toMatchObject({
+    publicPreviews: false,
+  });
+});
+
 test("without the option, previews are private unless the agent asks and you approve", async () => {
   expect(await createSandbox({}, {})).toMatchObject({
     asked: ["gitterm.sandbox.provision"],

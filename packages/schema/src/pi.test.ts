@@ -127,3 +127,20 @@ test("Pi runs gitterm from PATH, or through npx when setup ran from npx", async 
   await viaNpx.tools.sandbox_pause!.execute("1", { sandboxId: "sbx" });
   expect(viaNpx.calls[0]!.slice(0, 5)).toEqual(["npx", "-y", "@gitterm/cli", "sandbox", "pause"]);
 });
+
+test("sandbox_create passes the agent's choice of public previews, false too", async () => {
+  const { tools, calls } = await load("previews", "/nonexistent", () =>
+    ok({ ...record, projectDir: "/work", snapshot: { id: "s" }, verified: true }),
+  );
+  const create = (params: Record<string, unknown>) =>
+    tools.sandbox_create!.execute("1", params, undefined, undefined, ctx("Yes"));
+  await create({ publicPreviews: false });
+  await create({ publicPreviews: true });
+  await create({});
+  // An explicit false must reach the CLI: the saved default may be public.
+  expect(calls.map((call) => call.filter((arg) => arg.endsWith("public")))).toEqual([
+    ["--no-public"],
+    ["--public"],
+    [],
+  ]);
+});
