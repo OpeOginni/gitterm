@@ -36,12 +36,15 @@ mock.module("@gitterm/sdk/sandbox", () => ({
       archive: Buffer.alloc(0),
     };
   },
-  // The provider rejects the key "bad-key" when setup checks it.
+  // The provider rejects the key "bad-key" when setup checks it. Setup must not list: listing
+  // deletes expired paused sandboxes.
   createSandboxBackend: (account: { ownKey: boolean; config: { apiKey?: string } }) => ({
-    list: async () => {
+    check: async () => {
       if (account.ownKey && account.config.apiKey === "bad-key")
         throw new Error("E2B rejected the key");
-      return [];
+    },
+    list: async () => {
+      throw new Error("setup listed the account's sandboxes");
     },
   }),
   createSandboxClient: () => ({
@@ -348,6 +351,25 @@ test("setup with a rejected key leaves the working account and writes no key", a
       accounts: { e2b: { apiKey: `{file:${keyFile}}` } },
     });
     expect(await readFile(keyFile, "utf8")).toBe("good-key\n");
+
+    // Rotating the key changes the key only: the account's other settings stay.
+    saved.accounts.e2b = { ...saved.accounts.e2b, template: "big", snapshot: "snap_1" };
+    await writeFile(file, JSON.stringify(saved));
+    answers.push(0, 0, "new-key");
+    await setUpOwnProvider();
+    expect(JSON.parse(await readFile(file, "utf8")).accounts.e2b).toEqual({
+      provider: "e2b",
+      apiKey: `{file:${keyFile}}`,
+      template: "big",
+      snapshot: "snap_1",
+    });
+    expect(await readFile(keyFile, "utf8")).toBe("new-key\n");
+    // A rejected rotation leaves that account and its key as they were.
+    const rotated = await readFile(file, "utf8");
+    answers.push(0, 0, "bad-key");
+    await expect(setUpOwnProvider()).rejects.toThrow("E2B rejected the key");
+    expect(await readFile(file, "utf8")).toBe(rotated);
+    expect(await readFile(keyFile, "utf8")).toBe("new-key\n");
   });
 });
 
@@ -379,6 +401,13 @@ test("setup on the GitTerm plan signs in first, and a non-default provider stays
       const { loadSandboxSettingsFile, resolveSandboxAccount } = actual;
       const account = await resolveSandboxAccount(loadSandboxSettingsFile()!, "gitterm");
       expect(account).toMatchObject({ ownKey: false, provider: "e2b" });
+
+      // Run again: the default provider, which clears E2B, and a size.
+      answers.push(0, true, 0, "small");
+      await runSandboxSetup();
+      expect(
+        JSON.parse(await readFile(process.env.GITTERM_SANDBOX_CONFIG!, "utf8")).accounts.gitterm,
+      ).toEqual({ serverUrl: server.url.origin, size: "small" });
     });
   } finally {
     server.stop(true);

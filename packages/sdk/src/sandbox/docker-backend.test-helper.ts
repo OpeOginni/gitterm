@@ -125,6 +125,7 @@ export function createDockerSandboxBackend(account: string, runLabel: string): S
       return inspect(id);
     },
     get: inspect,
+    check: async () => {},
     async list() {
       const result = await docker([
         "ps",

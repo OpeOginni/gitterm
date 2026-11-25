@@ -187,7 +187,8 @@ const usesCliLogin = (config: SandboxAccountConfig) =>
   (CLI_LOGIN_PROVIDERS as readonly unknown[]).includes(config.provider) &&
   !["serverUrl", "token", "size"].some((key) => key in config);
 
-const isOwnKey = (config: SandboxAccountConfig): config is OwnKeyAccountConfig =>
+/** Whether an account uses the user's own provider credential rather than a Gitterm plan. */
+export const isOwnKey = (config: SandboxAccountConfig): config is OwnKeyAccountConfig =>
   "apiKey" in config || "apiKeyEnv" in config || usesCliLogin(config);
 
 function selected(settings: SandboxSettings, accountName?: string) {
