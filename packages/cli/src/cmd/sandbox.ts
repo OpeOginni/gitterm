@@ -675,11 +675,10 @@ const OPTION_KEYS = [
 ];
 
 /**
- * Writes `account` into the settings file as the selected account, keeping the settings and
- * any other accounts already there.
+ * The settings file's contents with `account` as the selected account, keeping the settings
+ * and any other accounts already there.
  */
-async function saveAccount(name: string, account: SandboxAccountConfig): Promise<string> {
-  const file = sandboxSettingsPath();
+function withAccount(name: string, account: SandboxAccountConfig) {
   const current = (loadSandboxSettingsFile() ?? {}) as Record<string, unknown>;
   const options = Object.fromEntries(
     Object.entries(current).filter(([key]) => OPTION_KEYS.includes(key)),
@@ -693,13 +692,40 @@ async function saveAccount(name: string, account: SandboxAccountConfig): Promise
     if (Object.keys(inline).length) accounts[inline.provider ?? "gitterm"] = inline;
   }
   accounts[name] = account;
-  const next =
-    Object.keys(accounts).length === 1
-      ? { ...options, ...account }
-      : { ...options, account: name, accounts };
+  return { ...options, account: name, accounts };
+}
+
+/**
+ * Checks the account with GitTerm or the provider, then saves it (and a pasted `key`) as the
+ * selected account. A failed check writes nothing, so the account that worked before stays.
+ */
+async function saveAccount(name: string, account: SandboxAccountConfig, key?: string) {
+  const settings = withAccount(
+    name,
+    key ? ({ ...account, apiKey: key } as SandboxAccountConfig) : account,
+  );
+  const resolved = await resolveSandboxAccount(settings, name);
+  const summary = describeSandboxAccount(resolved);
+  if (summary.credentialPresent) {
+    const spin = startSpinner("Checking the account...");
+    await createSandboxBackend(resolved)
+      .list()
+      .finally(() => spin?.stop());
+  }
+  if (key)
+    settings.accounts[name] = {
+      ...account,
+      apiKey: `{file:${await saveKey(name, key)}}`,
+    } as SandboxAccountConfig;
+  const file = sandboxSettingsPath();
   await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(next, null, 2)}\n`);
-  return file;
+  await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`);
+  const provider =
+    DIRECT.find((item) => item.provider === summary.provider)?.name ?? summary.provider;
+  success(`Sandboxes run on ${provider}, charged to ${summary.chargedTo}. Saved in ${file}.`);
+  if (!summary.credentialPresent)
+    warn(`The key is missing (${summary.credentialSource}). Sandboxes fail until it is there.`);
+  console.log("Restart your agents so they use it.");
 }
 
 /** Saves a pasted key in a file only the user can read; the settings point at it. */
@@ -714,12 +740,14 @@ async function saveKey(name: string, key: string): Promise<string> {
 
 /** Sandboxes on the user's GitTerm plan: signs in if needed, then the provider and size. */
 async function gittermAccount(): Promise<{ name: string; account: SandboxAccountConfig }> {
-  let client = createGittermClient();
+  // With no login at all, creating the client throws: that is "not signed in" too.
   if (
-    !(await client.auth.status().then(
-      () => true,
-      () => false,
-    ))
+    !(await Promise.resolve()
+      .then(() => createGittermClient().auth.status())
+      .then(
+        () => true,
+        () => false,
+      ))
   ) {
     if (
       !(await confirm(
@@ -735,8 +763,8 @@ async function gittermAccount(): Promise<{ name: string; account: SandboxAccount
         (await loadConfig())?.serverUrl ??
         DEFAULT_GITTERM_SERVER_URL,
     );
-    client = createGittermClient();
   }
+  const client = createGittermClient();
   const offered = await client.sandboxes.providers();
   if (!offered.providers.length)
     throw new Error("This Gitterm server offers no sandboxes to your account.");
@@ -758,6 +786,8 @@ async function gittermAccount(): Promise<{ name: string; account: SandboxAccount
   return {
     name: "gitterm",
     account: {
+      // The server marks it a GitTerm account: { provider: "e2b" } alone is E2B's CLI login.
+      serverUrl: client.serverUrl,
       ...(provider ? { provider } : {}),
       ...(size ? { size } : {}),
     } as SandboxAccountConfig,
@@ -765,7 +795,11 @@ async function gittermAccount(): Promise<{ name: string; account: SandboxAccount
 }
 
 /** Sandboxes on the user's own provider account: its CLI login, a pasted key, or a variable. */
-async function directAccount(): Promise<{ name: string; account: SandboxAccountConfig }> {
+async function directAccount(): Promise<{
+  name: string;
+  account: SandboxAccountConfig;
+  key?: string;
+}> {
   const { provider, name, env } =
     DIRECT[
       await choose(
@@ -774,6 +808,7 @@ async function directAccount(): Promise<{ name: string; account: SandboxAccountC
       )
     ]!;
   const account: Record<string, unknown> = { provider };
+  let key: string | undefined;
   const login = (CLI_LOGIN_PROVIDERS as readonly string[]).includes(provider)
     ? await cliLogin(provider)
     : undefined;
@@ -783,9 +818,8 @@ async function directAccount(): Promise<{ name: string; account: SandboxAccountC
       `From an environment variable, such as ${env}`,
     ]);
     if (how === 0) {
-      const key = await ask(`${name} API key:`, { hidden: true });
+      key = await ask(`${name} API key:`, { hidden: true });
       if (!key) throw new Error("No key was given.");
-      account.apiKey = `{file:${await saveKey(provider, key)}}`;
     } else {
       const variable = await ask("Environment variable:", { fallback: env });
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable))
@@ -810,23 +844,13 @@ async function directAccount(): Promise<{ name: string; account: SandboxAccountC
       throw new Error("exe.dev sandboxes need that accepted.");
     account.allowUnboundedLifetime = true;
   }
-  return { name: provider, account: account as SandboxAccountConfig };
+  return { name: provider, account: account as SandboxAccountConfig, key };
 }
 
 /** Sets up the user's own provider account. Used by `gitterm setup` too. */
 export async function setUpOwnProvider() {
-  const { name, account } = await directAccount();
-  return confirmAccount(name, await saveAccount(name, account));
-}
-
-async function confirmAccount(name: string, file: string) {
-  const summary = describeSandboxAccount(await resolveSandboxAccount(await loadSettings(), name));
-  const provider =
-    DIRECT.find((item) => item.provider === summary.provider)?.name ?? summary.provider;
-  success(`Sandboxes run on ${provider}, charged to ${summary.chargedTo}. Saved in ${file}.`);
-  if (!summary.credentialPresent)
-    warn(`The key is missing (${summary.credentialSource}). Sandboxes fail until it is there.`);
-  console.log("Restart your agents so they use it.");
+  const { name, account, key } = await directAccount();
+  await saveAccount(name, account, key);
 }
 
 /** Asks where sandboxes run and writes the settings, so nobody edits the file by hand. */
@@ -840,8 +864,9 @@ export async function runSandboxSetup() {
       "On your Gitterm plan: no provider account needed",
       `On your own provider account (${DIRECT.map((item) => item.name).join(", ")}), billed by them`,
     ]);
-    const { name, account } = where === 0 ? await gittermAccount() : await directAccount();
-    await confirmAccount(name, await saveAccount(name, account));
+    const { name, account, key } =
+      where === 0 ? { ...(await gittermAccount()), key: undefined } : await directAccount();
+    await saveAccount(name, account, key);
   } catch (error) {
     handleError(error);
   }

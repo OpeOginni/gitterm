@@ -12,6 +12,20 @@ const unreachableRepository = (error: unknown) =>
     error.message,
   );
 
+/**
+ * The provider for a workspace running `agent`: your default when it runs that agent, else
+ * the first one that does. Without one, GitTerm would use your default even where it can't.
+ */
+async function providerFor(client: GittermClient, agent: string) {
+  const { providers } = await client.catalog.workspaceOptions();
+  const usable = providers.filter(
+    (provider) => provider.agentKeys.includes(agent) && !NO_EXEC.has(provider.type),
+  );
+  const provider = usable.find((item) => item.isDefault) ?? usable[0];
+  if (!provider) throw new Error(`None of your GitTerm providers can run ${agent} workspaces.`);
+  return { type: provider.type, providerId: provider.id } as WorkspaceProviderSelection;
+}
+
 const INTEGRATION_KEYS = new Set(["github", "google", "gitlab", "bitbucket", "executor", "mcp"]);
 
 /** GitTerm rejects a GitHub connection on a workspace without a repository; others are kept. */
@@ -54,6 +68,7 @@ export function gittermCloud(client: GittermClient, options: GittermCloudOptions
       : options.provider;
   return {
     async create(input) {
+      const chosen = provider ?? (await providerFor(client, input.agent));
       const connections = input.repo
         ? options.connections
         : await withoutGithub(client, options.connections);
@@ -62,7 +77,7 @@ export function gittermCloud(client: GittermClient, options: GittermCloudOptions
           ...input,
           // A failed snapshot start must not be reused for the fresh attempt.
           idempotencyKey: `${input.idempotencyKey}${useProjectSnapshot ? "" : ":fresh"}`,
-          ...(provider ? { provider } : {}),
+          provider: chosen,
           ...(options.persistent !== undefined ? { persistent: options.persistent } : {}),
           ...(connections?.length ? { connections } : {}),
           ...(options.environmentVariables && Object.keys(options.environmentVariables).length
