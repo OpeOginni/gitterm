@@ -332,9 +332,9 @@ export function Keys() {
             },
             {
               title: "Use your own Gitterm",
-              body: <>Sign in to a self-hosted server, then pick from the providers it offers.</>,
+              body: "Replace the example URL with your server's API URL, then pick from the providers it offers.",
               logos: [{ src: "/gitterm.svg" }, { src: "/E2B.svg", demo: true }],
-              command: "gitterm login --server <url>",
+              command: "gitterm login --server https://gitterm.acme.dev/api",
             },
           ].map((k) => (
             // A subgrid, so logos, titles, text and commands line up across the cards.
