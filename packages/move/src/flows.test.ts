@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { git } from "./checkout/snapshot.js";
@@ -121,4 +122,29 @@ test("a session already in the cloud is not moved again until its workspace is g
     ["ws-1", true],
     ["ws-2", false],
   ]);
+});
+
+test("two moves of a session at once create one workspace", async () => {
+  const { state, deps } = await fixture();
+  const results = await Promise.allSettled([
+    moveToCloud(deps, { ref: "s1", changes: true, fromSession: false }),
+    moveToCloud(deps, { ref: "s1", changes: true, fromSession: false }),
+  ]);
+  expect(results.map((result) => result.status).sort()).toEqual(["fulfilled", "rejected"]);
+  expect(
+    String((results.find((r) => r.status === "rejected") as PromiseRejectedResult).reason),
+  ).toContain("already moving to the cloud");
+  expect(state.created).toBe(1);
+});
+
+test("a claim left by a process that died does not hold the session", async () => {
+  const { state, deps } = await fixture();
+  const dead = spawnSync("true").pid!;
+  const moves = path.join(process.env.HOME!, ".config", "gitterm", "moves");
+  await mkdir(moves, { recursive: true });
+  await writeFile(path.join(moves, `${encodeURIComponent("fake:s1")}.lock`), String(dead));
+  await moveToCloud(deps, { ref: "s1", changes: true, fromSession: false });
+  expect(state.created).toBe(1);
+  // Released once the move is recorded.
+  expect((await readdir(moves)).filter((name) => name.endsWith(".lock"))).toEqual([]);
 });
