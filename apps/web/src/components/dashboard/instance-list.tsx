@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Seg } from "@/components/site/seg";
 import { CopyField } from "@/components/dashboard/copy-field";
-import { INSTALL_OPENCODE } from "@/lib/site/providers";
+import { INSTALL_SETUP } from "@/lib/site/providers";
 import { formatHourlyPrice } from "@/components/dashboard/create-instance/types";
 import { WorkspaceRow } from "@/components/dashboard/workspaces/workspace-row";
 import { useActiveWorkspaces } from "@/components/dashboard/workspaces/use-active-workspaces";
@@ -136,15 +136,15 @@ export function InstanceList({ kind }: { kind: "agents" | "sandboxes" }) {
             No agent sandboxes running
           </h2>
           <p className="mt-1.5 max-w-md text-[13.5px] leading-relaxed text-fg-3">
-            Add Gitterm's plugin to OpenCode and your agent starts one when it needs to run a build,
-            tests or a preview. Your own code can start them with the SDK.
+            Set up Gitterm for your coding agents so they can run builds, tests, and previews in
+            sandboxes. You can also start sandboxes from your code with the SDK.
           </p>
-          <CopyField value={INSTALL_OPENCODE} className="mt-5 w-full max-w-md text-left" />
+          <CopyField value={INSTALL_SETUP} className="mt-5 w-full max-w-md text-left" />
           <Link
-            href={"/docs/sandboxes/overview" as Route}
+            href={"/docs/sandboxes/setup" as Route}
             className="mt-4 inline-flex items-center gap-1 text-[13px] text-fg-3 transition-colors hover:text-fg"
           >
-            How agent sandboxes work
+            Sandbox setup guide
             <ArrowUpRight className="size-3.5" />
           </Link>
         </div>
