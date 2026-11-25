@@ -5,14 +5,13 @@ import { opencodeAgent, opencodeMachine } from "@gitterm/move/agents/opencode";
 import { checkoutRoot } from "@gitterm/move/checkout/snapshot";
 import { ReturnDeclined, returnFromCloud } from "@gitterm/move/flows";
 import { gittermCloud } from "@gitterm/move/gitterm";
-import { loadRecords } from "@gitterm/move/records";
-import { askForm, HandoffCancelled, markCloudSession, type HandoffRecord } from "./handoff";
+import type { MoveRecord } from "@gitterm/move/records";
+import { askForm, HandoffCancelled, markCloudSession } from "./handoff";
 
 export type ReturnDependencies = {
   local: OpenCodeClient;
   gitterm: GittermClient;
   signal: AbortSignal;
-  save(record: HandoffRecord): Promise<void>;
   progress(text: string): Promise<void>;
 };
 
@@ -27,25 +26,16 @@ export type WorkspaceEnd = "delete" | "pause" | "snapshot";
  * the conversation).
  */
 export async function returnSession(
-  record: HandoffRecord,
+  moved: MoveRecord,
   deps: ReturnDependencies,
-): Promise<{ record: HandoffRecord; end: WorkspaceEnd }> {
+): Promise<{ end: WorkspaceEnd }> {
   const { local, gitterm, signal } = deps;
-  const { sessionID, workspaceID } = record;
-  if (record.phase !== "ready" || !workspaceID)
-    throw new Error("This session is not in a cloud workspace. Run /cloud to move it there.");
-  const moved = (await loadRecords()).find(
-    (item) => item.workspaceId === workspaceID && item.localRef === sessionID,
-  );
-  if (!moved)
-    throw new Error(
-      `GitTerm has no record of how this session moved, so it can't bring it back. Open it in cloud workspace ${workspaceID} instead.`,
-    );
+  const { localRef: sessionID, workspaceId: workspaceID } = moved;
   const session = await local.session.get({ sessionID }, { signal });
   if ((await checkoutRoot(await realpath(session.location.directory))) !== moved.root)
     throw new Error("This session is no longer in the checkout it was moved from.");
   // Asked while nothing has changed yet, here in the session the user is looking at.
-  const end = await askWorkspaceEnd(local, gitterm, record, signal);
+  const end = await askWorkspaceEnd(local, gitterm, moved, signal);
 
   // Asked when something here changed since the move. No cancels the return.
   const agrees = async (question: string, yes: string) =>
@@ -102,10 +92,8 @@ export async function returnSession(
         },
       },
     );
-    record.phase = "returned";
-    await deps.save(record);
     await markCloudSession(local, sessionID, undefined, signal).catch(() => {});
-    return { record, end };
+    return { end };
   } catch (error) {
     if (error instanceof ReturnDeclined || signal.aborted) throw new HandoffCancelled();
     console.error("GitTerm cloud return failed while", step, error);
@@ -129,13 +117,13 @@ export async function returnSession(
 export async function askWorkspaceEnd(
   local: OpenCodeClient,
   gitterm: GittermClient,
-  record: HandoffRecord,
+  record: MoveRecord,
   signal: AbortSignal,
 ): Promise<WorkspaceEnd> {
   const ask = async (question: string, yes: string, no: string) => {
     const answer = await askForm(
       local,
-      record.sessionID,
+      record.localRef,
       "Bring this session back",
       [
         {
@@ -154,7 +142,7 @@ export async function askWorkspaceEnd(
     return answer.end === "yes";
   };
   const snapshot = await gitterm.workspaces
-    .projectSnapshot(record.workspaceID!)
+    .projectSnapshot(record.workspaceId)
     .catch(() => undefined);
   if (!snapshot?.available)
     return (await ask(
@@ -199,12 +187,12 @@ export async function endWorkspace(gitterm: GittermClient, workspaceID: string, 
  */
 export async function confirmLocalPrompt(
   local: OpenCodeClient,
-  record: HandoffRecord,
+  record: MoveRecord,
   signal: AbortSignal,
 ) {
   const answer = await askForm(
     local,
-    record.sessionID,
+    record.localRef,
     "This session is in the cloud. Send this message here anyway?",
     [
       {
@@ -212,7 +200,7 @@ export async function confirmLocalPrompt(
         type: "boolean",
         title: "Send this message here anyway?",
         required: true,
-        description: `The conversation moved to cloud workspace ${record.workspaceID}. A message sent here is not seen there, and /cloud-return will ask before replacing it. Run /cloud to open the cloud session, or /cloud-return to bring it back.\n\nYes sends it here. No leaves it unsent.`,
+        description: `The conversation moved to cloud workspace ${record.workspaceId}. A message sent here is not seen there, and /cloud-return will ask before replacing it. Run /cloud to open the cloud session, or /cloud-return to bring it back.\n\nYes sends it here. No leaves it unsent.`,
       },
     ],
     signal,

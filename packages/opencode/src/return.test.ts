@@ -4,10 +4,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OpenCodeClient } from "@opencode/client";
 import { GittermError, type GittermClient } from "@gitterm/sdk";
-import type { HandoffRecord } from "./handoff";
 import { askWorkspaceEnd, confirmLocalPrompt, endWorkspace, returnSession } from "./return";
 import { checkoutRoot, git } from "@gitterm/move/checkout/snapshot";
-import { saveRecord, type MoveRecord } from "@gitterm/move/records";
+import { loadRecords, saveRecord, type MoveRecord } from "@gitterm/move/records";
 
 let root: string;
 const home = process.env.HOME;
@@ -31,31 +30,21 @@ afterEach(async () => {
   process.env.HOME = home;
 });
 
-/** What the shared move flow recorded when the session moved. */
-const moved = (changes: Partial<MoveRecord> = {}) =>
-  saveRecord({
-    workspaceId: "workspace-test",
-    agent: "opencode",
-    localRef: "ses_test",
-    localMark: 0,
-    localCwd: root,
-    root,
-    head: "0".repeat(40),
-    state: "state",
-    cloudRef: "ses_test",
-    cloudCwd: "/workspace",
-    cloudDirectory: "/workspace",
-    movedAt: "2026-01-01T00:00:00.000Z",
-    ...changes,
-  });
-
-const record = (): HandoffRecord => ({
-  attemptID: "1111-aaaa",
-  sessionID: "ses_test",
-  phase: "ready",
-  workspaceID: "workspace-test",
-  sourceDirectory: root,
-  createdAt: "2026-01-01T00:00:00.000Z",
+/** What the shared move flow records when the session moves. */
+const record = (changes: Partial<MoveRecord> = {}): MoveRecord => ({
+  workspaceId: "workspace-test",
+  agent: "opencode",
+  localRef: "ses_test",
+  localMark: 0,
+  localCwd: root,
+  root,
+  head: "0".repeat(40),
+  state: "state",
+  cloudRef: "ses_test",
+  cloudCwd: "/workspace",
+  cloudDirectory: "/workspace",
+  movedAt: "2026-01-01T00:00:00.000Z",
+  ...changes,
 });
 
 /** A local OpenCode whose forms are answered with `answer`, or dismissed when it is undefined. */
@@ -98,22 +87,14 @@ test("a message in a cloud session is sent only when the user says so", async ()
   );
 });
 
-test("only a session that is in the cloud can be brought back", async () => {
+test("a session is brought back only into the checkout it moved from", async () => {
   const deps = {
     local: localWith(undefined).client,
     gitterm: {} as GittermClient,
     signal: AbortSignal.timeout(5_000),
-    save: async () => {},
     progress: async () => {},
   };
-  await expect(returnSession({ ...record(), phase: "returned" }, deps)).rejects.toThrow(
-    "This session is not in a cloud workspace.",
-  );
-  await expect(returnSession(record(), deps)).rejects.toThrow(
-    "GitTerm has no record of how this session moved",
-  );
-  await moved({ root: "/elsewhere" });
-  await expect(returnSession(record(), deps)).rejects.toThrow(
+  await expect(returnSession(record({ root: "/elsewhere" }), deps)).rejects.toThrow(
     "no longer in the checkout it was moved from",
   );
 });
@@ -135,8 +116,7 @@ test("a cloud session that is still working is left alone, and nothing is captur
       return new Response("not found", { status: 404 });
     },
   });
-  await moved();
-  const saved: HandoffRecord[] = [];
+  await saveRecord(record());
   const failure = returnSession(record(), {
     local: localWith({ end: "yes" }).client,
     gitterm: {
@@ -151,14 +131,12 @@ test("a cloud session that is still working is left alone, and nothing is captur
       },
     } as unknown as GittermClient,
     signal: AbortSignal.timeout(5_000),
-    save: async (item) => {
-      saved.push(item);
-    },
     progress: async () => {},
   });
   await expect(failure).rejects.toThrow("The session is still working.");
   expect(requests).not.toContain("POST /api/shell");
-  expect(saved).toEqual([]);
+  // The move stays open.
+  expect((await loadRecords())[0]?.returnedAt).toBeUndefined();
 });
 
 /** A GitTerm whose workspace may or may not be kept as a snapshot; records what was asked of it. */

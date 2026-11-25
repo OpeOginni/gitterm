@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -11,6 +10,7 @@ import { opencodeAgent, opencodeMachine } from "@gitterm/move/agents/opencode";
 import { moveToCloud } from "@gitterm/move/flows";
 import { gittermCloud } from "@gitterm/move/gitterm";
 import { runtimeClient } from "@gitterm/move/agents/opencode-session";
+import type { MoveRecord } from "@gitterm/move/records";
 
 export type HandoffOptions = {
   serverUrl?: string;
@@ -25,31 +25,12 @@ export type HandoffOptions = {
   envFiles?: string[];
 };
 
-export type HandoffRecord = {
-  attemptID: string;
-  sessionID: string;
-  /**
-   * `moving`: /cloud is under way, or stopped without cleaning up (OpenCode was closed), and
-   * the next /cloud deletes what it left. `ready`: the session lives in the cloud.
-   * `returned`: it was brought back with /cloud-return. Older versions stored other phases;
-   * they count as `moving`.
-   */
-  phase: "moving" | "ready" | "returned";
-  workspaceID?: string;
-  /** The checkout it moved from; how it moved is in GitTerm's move records. */
-  sourceDirectory: string;
-  createdAt: string;
-};
-
 type FormFields = Parameters<OpenCodeClient["session"]["form"]["create"]>[0]["fields"];
 export type HandoffDependencies = {
   local: OpenCodeClient;
   gitterm: GittermClient;
   options: HandoffOptions;
   signal: AbortSignal;
-  save(record: HandoffRecord): Promise<void>;
-  /** Forgets the record of a /cloud that did not finish. */
-  discard(record: HandoffRecord): Promise<void>;
   progress(text: string): Promise<void>;
 };
 
@@ -167,16 +148,15 @@ export async function setSessionMetadata(
 
 /**
  * Moves a session to a new GitTerm workspace through the shared move flow
- * (`@gitterm/move/flows`): its checkout and its conversation, which continues there. This
- * plugin only asks what to bring, keeps its record for /cloud-return and the status, and
- * says what failed. If anything fails, the workspace is deleted and a stopped agent
- * continues here, as if /cloud never ran.
+ * (`@gitterm/move/flows`), which records the move for /cloud-return, the CLI and the status.
+ * This plugin only asks what to bring and says what failed. If anything fails, the workspace
+ * is deleted and a stopped agent continues here, as if /cloud never ran.
  */
 export async function handoffSession(
   sessionID: string,
   deps: HandoffDependencies,
   message = "",
-): Promise<{ record: HandoffRecord }> {
+): Promise<{ workspaceID: string }> {
   const { local, gitterm, options, signal } = deps;
   await assertMovable(local, sessionID, signal);
   const sourceDirectory = await realpath(
@@ -220,13 +200,7 @@ export async function handoffSession(
     includeChanges = choice.changes === "yes";
   }
 
-  const record: HandoffRecord = {
-    attemptID: randomUUID(),
-    sessionID,
-    phase: "moving",
-    sourceDirectory: root,
-    createdAt: new Date().toISOString(),
-  };
+  let workspaceID: string | undefined;
   let step = "copying the session";
   try {
     const moved = await moveToCloud(
@@ -253,22 +227,17 @@ export async function handoffSession(
         fromSession: false,
         stopIfBusy: true,
         name: options.name,
-        // Recorded first, so the next /cloud deletes it if OpenCode closes before this ends.
-        created: async (workspaceID) => {
-          record.workspaceID = workspaceID;
-          await deps.save(record);
+        created: async (id) => {
+          workspaceID = id;
         },
       },
     );
-    Object.assign(record, { phase: "ready", workspaceID: moved.workspaceId });
-    await deps.save(record);
     await markCloudSession(local, sessionID, { workspaceID: moved.workspaceId }, signal).catch(
       () => {},
     );
-    return { record };
+    return { workspaceID: moved.workspaceId };
   } catch (error) {
-    // The flow deleted any workspace it created; forget the record of this attempt.
-    await deps.discard(record).catch(() => {});
+    // The flow deleted any workspace it created.
     if (signal.aborted) throw new HandoffCancelled();
     // Responses may echo credentials or snapshots; show only GitTerm's redacted reason.
     console.error("GitTerm cloud handoff failed while", step, error);
@@ -278,7 +247,7 @@ export async function handoffSession(
         : error instanceof Error && !/https?:\/\//.test(error.message)
           ? ` ${error.message}`
           : "";
-    const deleted = record.workspaceID ? " The cloud workspace was deleted." : "";
+    const deleted = workspaceID ? " The cloud workspace was deleted." : "";
     throw new Error(
       `Moving to the cloud failed while ${step}.${reason}${deleted} Local files and sessions are unchanged; run /cloud to try again.`,
     );
@@ -288,23 +257,27 @@ export async function handoffSession(
 /** Sends a message to the session in its cloud workspace, as if typed there. */
 export async function sendToCloud(
   gitterm: GittermClient,
-  record: HandoffRecord,
+  record: MoveRecord,
   text: string,
   signal: AbortSignal,
 ) {
-  const remote = runtimeClient(await gitterm.workspaces.getRuntimeAccess(record.workspaceID!));
-  await remote.session.prompt({ sessionID: record.sessionID, text }, { signal });
+  const remote = runtimeClient(await gitterm.workspaces.getRuntimeAccess(record.workspaceId));
+  await remote.session.prompt({ sessionID: record.cloudRef, text }, { signal });
 }
 
-/** `working`: the cloud agent was just given something to do. */
+/**
+ * Shows the link to the cloud session in the local session `sessionID`. `working`: the cloud
+ * agent was just given something to do.
+ */
 export async function showConnection(
   local: OpenCodeClient,
   gitterm: GittermClient,
-  record: HandoffRecord,
+  sessionID: string,
+  workspaceID: string,
   signal: AbortSignal,
   working = false,
 ) {
-  const runtime = await gitterm.workspaces.getRuntimeAccess(record.workspaceID!);
+  const runtime = await gitterm.workspaces.getRuntimeAccess(workspaceID);
   const remote = runtimeClient(runtime);
   let connection = runtime.url!;
   let paired = false;
@@ -320,7 +293,7 @@ export async function showConnection(
   // Pairing codes live only in the user's form, never in durable chat history or storage.
   await askForm(
     local,
-    record.sessionID,
+    sessionID,
     working ? "The agent is working in the cloud" : "Your cloud session is ready",
     [
       {
@@ -337,7 +310,7 @@ export async function showConnection(
         type: "boolean",
         title: "Done",
         default: true,
-        description: `Open session ${record.sessionID}. Workspace: ${record.workspaceID}. Run /cloud for a fresh connection to this same workspace. Later local changes are not synced. Local work is unchanged.`,
+        description: `Open session ${sessionID}. Workspace: ${workspaceID}. Run /cloud for a fresh connection to this same workspace. Later local changes are not synced. Local work is unchanged.`,
         required: true,
       },
     ],

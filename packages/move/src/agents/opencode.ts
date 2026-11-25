@@ -128,7 +128,10 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
       };
     },
 
-    /** OpenCode keeps a session's id when it imports one; a replaced session is kept as a fork. */
+    /**
+     * OpenCode keeps a session's id when it imports one, and refuses an id it has, so a replaced
+     * session is removed first and put back if the import fails. It is kept as a fork too.
+     */
     async import({ payload, cwd, ref }) {
       const opencode = await client();
       const exported = payload as unknown as Exported;
@@ -136,17 +139,25 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
       const keepModel = model
         ? await offersModel(opencode, cwd, model, signal()).catch(() => false)
         : false;
-      if (ref) {
-        // A copy is kept only of a session with messages the incoming one lacks.
-        const current = await opencode.session.export({ sessionID: ref }, { signal: signal() });
-        if (!continues(current.messages, exported.messages))
-          await opencode.session.fork({ sessionID: ref }, { signal: signal() });
-        await opencode.session.remove({ sessionID: ref }, { signal: signal() });
+      const write = () =>
+        opencode.session.import(importPayload(exported, cwd, { keepModel }), { signal: signal() });
+      if (!ref) return { ref: (await write()).id };
+      // A copy is kept only of a session with messages the incoming one lacks.
+      const current = await opencode.session.export({ sessionID: ref }, { signal: signal() });
+      if (!continues(current.messages, exported.messages))
+        await opencode.session.fork({ sessionID: ref }, { signal: signal() });
+      await opencode.session.remove({ sessionID: ref }, { signal: signal() });
+      try {
+        return { ref: (await write()).id };
+      } catch (error) {
+        await opencode.session.import(
+          { ...current, location: current.info.location } as Parameters<
+            OpenCodeClient["session"]["import"]
+          >[0],
+          { signal: signal() },
+        );
+        throw error;
       }
-      const imported = await opencode.session.import(importPayload(exported, cwd, { keepModel }), {
-        signal: signal(),
-      });
-      return { ref: imported.id };
     },
 
     /** The notice becomes a session instruction (it outlasts compaction); its last line starts the turn. */

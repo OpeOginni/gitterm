@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { HandoffRecord } from "./handoff";
 import { GittermPlugin, type GittermPluginOptions } from "./index";
 import { checkoutRoot, git } from "@gitterm/move/checkout/snapshot";
+import { saveRecord, type MoveRecord } from "@gitterm/move/records";
 
 let root: string;
 let home: string;
@@ -17,7 +17,7 @@ beforeEach(async () => {
   root = await mkdtemp(path.join(tmpdir(), "gitterm-plugin-test-"));
   await git(root, ["init", "-b", "main"]);
   root = await checkoutRoot(root);
-  // Signed out: the GitTerm login of whoever runs the tests is not seen.
+  // Signed out, and move records in this HOME: nothing of whoever runs the tests is seen.
   home = await mkdtemp(path.join(tmpdir(), "gitterm-plugin-home-"));
   process.env.HOME = home;
   delete process.env.GITTERM_API_TOKEN;
@@ -37,8 +37,8 @@ type Context = Parameters<typeof GittermPlugin.setup>[0];
 type Transform = Context["command"]["transform"];
 type ToolTransform = Context["tool"]["transform"];
 
-/** Sets the plugin up over `stored` records; returns the commands, hooks and tools it adds. */
-async function setup(stored: HandoffRecord[], options: GittermPluginOptions = {}) {
+/** Sets the plugin up over GitTerm's move records; returns the commands, hooks and tools it adds. */
+async function setup(options: GittermPluginOptions = {}) {
   const commands: string[] = [];
   const hooks: string[] = [];
   const rpc: string[] = [];
@@ -46,11 +46,6 @@ async function setup(stored: HandoffRecord[], options: GittermPluginOptions = {}
   const context = {
     options,
     location: { directory: root },
-    storage: {
-      scan: async () => ({
-        entries: stored.map((value) => ({ key: `handoff/session/${value.sessionID}`, value })),
-      }),
-    },
     command: {
       transform: async (transform: Parameters<Transform>[0]) => {
         transform({
@@ -87,17 +82,26 @@ async function setup(stored: HandoffRecord[], options: GittermPluginOptions = {}
   return { commands, hooks, rpc, tools };
 }
 
-const record = (phase: HandoffRecord["phase"], sourceDirectory: string): HandoffRecord => ({
-  attemptID: "1111-aaaa",
-  sessionID: "ses_test",
-  phase,
-  workspaceID: "workspace-test",
-  sourceDirectory,
-  createdAt: "2026-01-01T00:00:00.000Z",
-});
+/** A move recorded by @gitterm/move, from /cloud or from the CLI alike. */
+const moved = (changes: Partial<MoveRecord>) =>
+  saveRecord({
+    workspaceId: "workspace-test",
+    agent: "opencode",
+    localRef: "ses_test",
+    localMark: 0,
+    localCwd: root,
+    root,
+    head: "0".repeat(40),
+    state: "state",
+    cloudRef: "ses_test",
+    cloudCwd: "/w",
+    cloudDirectory: "/w",
+    movedAt: "2026-01-01T00:00:00.000Z",
+    ...changes,
+  });
 
 test("signed out, no sandbox account: /cloud (it signs in), its hooks and channel, no tools", async () => {
-  expect(await setup([])).toEqual({
+  expect(await setup()).toEqual({
     commands: ["cloud"],
     hooks: ["prompt", "fork"],
     rpc: ["gitterm.cloud: cancel"],
@@ -108,7 +112,7 @@ test("signed out, no sandbox account: /cloud (it signs in), its hooks and channe
 const SANDBOX_TOOLS = ["sandbox_create", "sandbox_list", "sandbox_sync", "sandbox_exec"];
 
 test("a provider key and no GitTerm login: sandbox tools, and no /cloud", async () => {
-  const result = await setup([], {
+  const result = await setup({
     sandbox: { provider: "e2b", apiKey: "{env:GITTERM_TEST_UNSET_KEY}" },
   });
   expect(result.tools).toEqual(expect.arrayContaining(SANDBOX_TOOLS));
@@ -118,16 +122,19 @@ test("a provider key and no GitTerm login: sandbox tools, and no /cloud", async 
 
 test("signed in to GitTerm: sandbox tools through that account, and /cloud", async () => {
   // A server that refuses at once: nothing here needs it to answer.
-  const result = await setup([], { serverUrl: "http://127.0.0.1:9", token: "test-token" });
+  const result = await setup({ serverUrl: "http://127.0.0.1:9", token: "test-token" });
   expect(result.tools).toEqual(expect.arrayContaining(SANDBOX_TOOLS));
   expect(result.commands).toEqual(["cloud"]);
 });
 
 test("offers /cloud-return only while a session of this checkout is in the cloud", async () => {
-  expect((await setup([record("ready", root)])).commands).toEqual(["cloud", "cloud-return"]);
-  // A session that came back, and one that belongs to another checkout, do not count.
-  expect((await setup([record("returned", root)])).commands).toEqual(["cloud"]);
-  expect((await setup([record("ready", "/another/checkout")])).commands).toEqual(["cloud"]);
+  // A session that came back, one of another checkout, and one of another agent do not count.
+  await moved({ workspaceId: "w-back", returnedAt: "2026-01-02T00:00:00.000Z" });
+  await moved({ workspaceId: "w-other", root: "/another/checkout" });
+  await moved({ workspaceId: "w-pi", agent: "pi" });
+  expect((await setup()).commands).toEqual(["cloud"]);
+  await moved({ workspaceId: "w-1" });
+  expect((await setup()).commands).toEqual(["cloud", "cloud-return"]);
 });
 
 test("a project turned off on this machine gets no sandbox tools and no /cloud", async () => {

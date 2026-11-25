@@ -57,7 +57,6 @@ and deletes, snapshots or pauses the workspace.
 | `ctx.command.transform` / `reload`                | `/cloud` always, `/cloud-return` only while a session is in the cloud    |
 | `ctx.session.hook("prompt")`                      | Asks before a local message forks a conversation that lives in the cloud |
 | `ctx.session.hook("fork")`                        | Strips our cloud marker from forks                                       |
-| `ctx.storage`                                     | One small record per moved session                                       |
 | `session.instructions.entry.put`                  | "You moved machines", which survives compaction                          |
 | `session.synthetic({ resume })`                   | Restarting a stopped agent with a note                                   |
 | `session.export` / `import`                       | Moving the conversation, keeping the ID                                  |

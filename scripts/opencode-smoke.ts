@@ -545,8 +545,6 @@ try {
         gitterm: {} as never,
         options: {},
         signal,
-        save: async () => {},
-        discard: async () => {},
         progress: async () => {},
       });
     } catch (error) {

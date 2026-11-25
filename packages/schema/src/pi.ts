@@ -52,12 +52,14 @@ export function piServeCommand(port: number): string {
  *   session is in the cloud, a question before a message is sent here instead, and delivery of
  *   the notices `gitterm move` and `gitterm return` leave for a session (in
  *   `~/.pi/agent/gitterm/inbox/<session id>.txt`) when that session opens.
+ * - While Pi works in a session, `~/.pi/agent/gitterm/busy/<session id>` holds Pi's process
+ *   id, so GitTerm doesn't copy the session mid-turn.
  * Pi's settings can turn either off, or give the sandbox account, under "gitterm" (globally, or
  * in a project's .pi/settings.json), and `gitterm project disable` can for a project on this
  * machine.
  * The work itself is the `gitterm` CLI's; the extension asks the questions and shows the outcome.
  */
-export const PI_EXTENSION = String.raw`import { existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
+export const PI_EXTENSION = String.raw`import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -66,7 +68,8 @@ import { Type } from "typebox";
 const home = process.env.HOME || homedir();
 const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(home, ".pi", "agent");
 const inbox = (id) => path.join(agentDir, "gitterm", "inbox", id + ".txt");
-const records = path.join(home, ".config", "gitterm", "moves.json");
+const busy = (ctx) => path.join(agentDir, "gitterm", "busy", ctx.sessionManager.getSessionId());
+const records = path.join(home, ".config", "gitterm", "moves");
 /** The sandbox account the gitterm CLI uses: a provider key, or a GitTerm account. */
 const sandboxSettings =
   process.env.GITTERM_SANDBOX_CONFIG || path.join(home, ".config", "gitterm", "sandbox.json");
@@ -125,8 +128,18 @@ function piSettings(dir) {
 /** The move that took this session to the cloud and has not come back, from gitterm's records. */
 function movedTo(id) {
   try {
-    const all = JSON.parse(readFileSync(records, "utf8"));
-    return all.findLast((record) => record.agent === "pi" && record.localRef === id && !record.returnedAt);
+    return readdirSync(records)
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => {
+        try {
+          return JSON.parse(readFileSync(path.join(records, name), "utf8"));
+        } catch {
+          return undefined;
+        }
+      })
+      .filter((record) => record && record.agent === "pi" && record.localRef === id && !record.returnedAt)
+      .sort((a, b) => a.movedAt.localeCompare(b.movedAt))
+      .at(-1);
   } catch {
     return undefined;
   }
@@ -224,6 +237,13 @@ export default function (pi) {
       deliver(ctx.sessionManager.getSessionId(), (text) => pi.sendUserMessage(text));
     if (sandboxesOn) void resumeWatches(ctx.sessionManager.getSessionId());
   });
+
+  pi.on("agent_start", async (_event, ctx) => {
+    mkdirSync(path.dirname(busy(ctx)), { recursive: true });
+    writeFileSync(busy(ctx), String(process.pid));
+  });
+  // Settled: Pi won't continue by itself (no retry, compaction or queued message is left).
+  pi.on("agent_settled", async (_event, ctx) => rmSync(busy(ctx), { force: true }));
 
   if (cloudOn) {
     // While a session is in the cloud, a message sent here starts a second conversation.
