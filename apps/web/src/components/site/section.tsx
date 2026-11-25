@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Mark } from "@/components/site/mark";
 
-/** Content width used across marketing pages (Workbench: 1240px, 24px gutters, 16px on phones). */
+/** Shared public-site width, with 24px gutters (16px on phones). */
 export function Wrap({
   children,
   className,
@@ -10,14 +10,14 @@ export function Wrap({
 }: {
   children: ReactNode;
   className?: string;
-  /** 1400px, for demos that need room (hero demo, chapters). */
+  /** Extra room for docs and demos. */
   wide?: boolean;
 }) {
   return (
     <div
       className={cn(
         "mx-auto w-full px-4 sm:px-6",
-        wide ? "max-w-[1400px]" : "max-w-[1240px]",
+        wide ? "max-w-[1480px]" : "max-w-[1360px]",
         className,
       )}
     >

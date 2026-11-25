@@ -9,20 +9,31 @@ import { Logo } from "./logo";
 
 /**
  * `icon` marks a square app icon, which gets rounded corners; the other marks are drawn shapes.
- * `float` places its tile beside the headline on wide screens (1200px and up): `x` is the side
- * (negative is left), `y` how far down the hero, `gap` extra pixels out from the headline.
+ * `float` places each tile on wide screens, with an inset from the content edge.
  */
 const AGENTS = [
-  { logo: "/opencode.svg", name: "OpenCode", float: { x: -1, y: "20%", gap: 30, delay: 0 } },
-  { logo: "/pi.svg", name: "Pi", float: { x: -1, y: "58%", gap: 90, delay: 1.2 } },
+  {
+    logo: "/opencode.svg",
+    name: "OpenCode",
+    float: { side: "left", y: "20%", inset: 60, delay: 0 },
+  },
+  { logo: "/pi.svg", name: "Pi", float: { side: "left", y: "58%", inset: 0, delay: 1.2 } },
   {
     logo: T3_LOGO,
     name: "T3 Code",
     icon: true,
-    float: { x: 1, y: "16%", gap: 50, delay: 0.6 },
+    float: { side: "right", y: "16%", inset: 40, delay: 0.6 },
   },
-  { logo: "/openai-codex.svg", name: "Codex", float: { x: 1, y: "50%", gap: 90, delay: 1.8 } },
-  { logo: "/claude.svg", name: "Claude Code", float: { x: 1, y: "78%", gap: 0, delay: 0.9 } },
+  {
+    logo: "/openai-codex.svg",
+    name: "Codex",
+    float: { side: "right", y: "50%", inset: 0, delay: 1.8 },
+  },
+  {
+    logo: "/claude.svg",
+    name: "Claude Code",
+    float: { side: "right", y: "78%", inset: 72, delay: 0.9 },
+  },
 ];
 /** The headline's last line: "your agents", each agent, then "your agents" again to roll back to. */
 const LINES = [undefined, ...AGENTS, undefined];
@@ -100,28 +111,26 @@ export function AgentRoll() {
           </span>
         </span>
       </h1>
-      {/* Wide screens: the agents float in the space around the headline, and the one it names
-          glows with its name under it. The hero section is their positioning box. */}
-      <ul className="agent-float m-0 hidden list-none p-0 min-[1200px]:block">
+      <ul
+        aria-hidden
+        className="agent-float pointer-events-none absolute inset-x-6 inset-y-0 m-0 hidden list-none p-0 min-[1200px]:block"
+      >
         {AGENTS.map((agent) => {
           const named = current === agent;
-          const { x, y, gap, delay } = agent.float;
+          const { side, y, inset, delay } = agent.float;
           return (
             <li
               key={agent.name}
               className={cn(!current && "lit", named && "named")}
               style={{
                 top: y,
-                // Clear of the headline (at most 380px either side of the centre), moving out
-                // as the screen widens so wide screens use their space and 1200px still fits.
-                [x < 0 ? "right" : "left"]: `calc(50% + ${380 + gap}px + (100vw - 1200px) * 0.35)`,
+                [side]: inset,
                 animationDelay: `-${delay}s`,
               }}
             >
               <span className="tile">
                 <Logo src={agent.logo} className={cn(agent.icon && "rounded-[9px]")} />
               </span>
-              <span className="name">{agent.name}</span>
             </li>
           );
         })}
