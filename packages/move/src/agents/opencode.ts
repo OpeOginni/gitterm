@@ -114,7 +114,8 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
 
     /**
      * OpenCode keeps a session's id when it imports one, and refuses an id it has, so a replaced
-     * session is removed first and put back if the import fails. It is kept as a fork too.
+     * session is removed first. A fork of it stays until the import is read back whole (and for
+     * good when it has messages the incoming one lacks); a failed import puts it back as it was.
      */
     async import({ payload, cwd, ref }) {
       const opencode = await client();
@@ -123,25 +124,64 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
       const keepModel = model
         ? await offersModel(opencode, cwd, model, signal()).catch(() => false)
         : false;
-      const write = () =>
-        opencode.session.import(importPayload(exported, cwd, { keepModel }), { signal: signal() });
-      if (!ref) return { ref: (await write()).id };
-      // A copy is kept only of a session with messages the incoming one lacks.
+      const write = async () =>
+        (
+          await opencode.session.import(importPayload(exported, cwd, { keepModel }), {
+            signal: signal(),
+          })
+        ).id;
+      if (!ref) return { ref: await write() };
+      // Read back before the session it replaces is let go.
+      const writeWhole = async () => {
+        const id = await write();
+        const back = await opencode.session.export({ sessionID: id }, { signal: signal() });
+        if (!continues(exported.messages, back.messages))
+          throw new Error("OpenCode did not import the whole conversation.");
+        return id;
+      };
       const current = await opencode.session.export({ sessionID: ref }, { signal: signal() });
-      if (!continues(current.messages, exported.messages))
-        await opencode.session.fork({ sessionID: ref }, { signal: signal() });
+      // OpenCode refuses to fork an empty session, which has nothing to lose anyway.
+      const copy = current.messages.length
+        ? await opencode.session.fork({ sessionID: ref }, { signal: signal() })
+        : undefined;
+      const dropCopy = async () => {
+        if (copy)
+          await opencode.session
+            .remove({ sessionID: copy.id }, { signal: signal() })
+            .catch(() => {});
+      };
+      const keepCopy = !continues(current.messages, exported.messages);
       await opencode.session.remove({ sessionID: ref }, { signal: signal() });
+      let id: string;
       try {
-        return { ref: (await write()).id };
+        id = await writeWhole();
       } catch (error) {
-        await opencode.session.import(
-          { ...current, location: current.info.location } as Parameters<
-            OpenCodeClient["session"]["import"]
-          >[0],
-          { signal: signal() },
+        const restored = await opencode.session
+          .remove({ sessionID: ref }, { signal: signal() })
+          .catch(() => {})
+          .then(() =>
+            opencode.session.import(
+              { ...current, location: current.info.location } as Parameters<
+                OpenCodeClient["session"]["import"]
+              >[0],
+              { signal: signal() },
+            ),
+          )
+          .then(
+            () => true,
+            () => false,
+          );
+        if (restored && !keepCopy) await dropCopy();
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          restored || !copy
+            ? reason
+            : `${reason} The session it was replacing is kept as ${copy.id} ("${copy.title ?? ""}").`,
+          { cause: error },
         );
-        throw error;
       }
+      if (!keepCopy) await dropCopy();
+      return { ref: id };
     },
 
     /** The notice becomes a session instruction (it outlasts compaction); its last line starts the turn. */

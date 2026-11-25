@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,35 +17,74 @@ test("only a user message after the move counts as local work", () => {
   expect(opencodeAgent.currentSession({ OPENCODE_SESSION_ID: "ses_1" })).toBe("ses_1");
 });
 
-test("a failed import puts back the session it was replacing", async () => {
-  const original = {
-    info: { id: "ses_1", location: { directory: "/repo" } },
-    messages: [{ type: "user" }],
+describe("replacing a local session", () => {
+  type Stored = { info: { id: string; title?: string }; messages: { type: string }[] };
+  const said = (text: string, type = "user") => ({ type, text });
+  const original: Stored = {
+    info: { id: "ses_1", title: "Fix the build" },
+    messages: [said("hi")],
   };
-  const sessions = new Map<string, unknown>([["ses_1", original]]);
-  let failNext = true;
-  const opencode = {
-    session: {
-      export: async ({ sessionID }: { sessionID: string }) => sessions.get(sessionID),
-      fork: async () => {},
-      remove: async ({ sessionID }: { sessionID: string }) => sessions.delete(sessionID),
-      import: async (input: { info: { id: string } }) => {
-        if (failNext) {
-          failNext = false;
-          throw new Error("import failed");
-        }
-        sessions.set(input.info.id, input);
-        return { id: input.info.id };
+  const incoming = { info: { id: "ses_1" }, messages: [said("hi"), said("done", "assistant")] };
+  /** A stand-in OpenCode whose imports fail as told: "throw", "short" (a message lost) or "ok". */
+  const fake = (imports: Array<"throw" | "short" | "ok">) => {
+    const sessions = new Map<string, Stored>([["ses_1", structuredClone(original)]]);
+    const opencode = {
+      session: {
+        export: async ({ sessionID }: { sessionID: string }) => {
+          const found = sessions.get(sessionID);
+          if (!found) throw new Error("not found");
+          return structuredClone(found);
+        },
+        fork: async ({ sessionID }: { sessionID: string }) => {
+          const info = { ...sessions.get(sessionID)!.info, id: "ses_fork" };
+          sessions.set("ses_fork", { ...structuredClone(sessions.get(sessionID)!), info });
+          return info;
+        },
+        remove: async ({ sessionID }: { sessionID: string }) => {
+          if (!sessions.delete(sessionID)) throw new Error("not found");
+        },
+        import: async (input: Stored) => {
+          const how = imports.shift() ?? "ok";
+          if (how === "throw") throw new Error("import failed");
+          if (sessions.has(input.info.id)) throw new Error("exists");
+          const messages = how === "short" ? input.messages.slice(0, -1) : input.messages;
+          sessions.set(input.info.id, { info: input.info, messages });
+          return { id: input.info.id };
+        },
       },
-    },
-  } as unknown as OpenCodeClient;
-  const incoming = { info: { id: "ses_1" }, messages: [{ type: "user" }, { type: "assistant" }] };
-  await expect(
-    opencodeAgent
-      .session(opencodeMachine(opencode))
-      .import({ payload: incoming, cwd: "/repo", ref: "ses_1" }),
-  ).rejects.toThrow("import failed");
-  expect(sessions.get("ses_1")).toMatchObject(original);
+    } as unknown as OpenCodeClient;
+    const run = () =>
+      opencodeAgent
+        .session(opencodeMachine(opencode))
+        .import({ payload: incoming, cwd: "/repo", ref: "ses_1" });
+    return { sessions, run };
+  };
+
+  test("a whole import replaces it and leaves no copy", async () => {
+    const { sessions, run } = fake(["ok"]);
+    await run();
+    expect(sessions.get("ses_1")?.messages).toHaveLength(2);
+    expect([...sessions.keys()]).toEqual(["ses_1"]);
+  });
+
+  test("a failed import puts it back", async () => {
+    const { sessions, run } = fake(["throw"]);
+    await expect(run()).rejects.toThrow("import failed");
+    expect(sessions.get("ses_1")).toMatchObject(original);
+    expect([...sessions.keys()]).toEqual(["ses_1"]);
+  });
+
+  test("an import that comes back short counts as failed", async () => {
+    const { sessions, run } = fake(["short"]);
+    await expect(run()).rejects.toThrow("did not import the whole conversation");
+    expect(sessions.get("ses_1")).toMatchObject(original);
+  });
+
+  test("when it can't be put back, its copy stays and the error names it", async () => {
+    const { sessions, run } = fake(["throw", "throw"]);
+    await expect(run()).rejects.toThrow('kept as ses_fork ("Fix the build")');
+    expect(sessions.get("ses_fork")?.messages).toEqual(original.messages);
+  });
 });
 
 /**
