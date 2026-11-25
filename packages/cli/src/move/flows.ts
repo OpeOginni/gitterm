@@ -275,6 +275,14 @@ export async function returnFromCloud(
   };
   let snapshot = await capture(record.head);
   const summary = snapshotSummary(snapshot);
+  // A turn that ran while the checkout was copied would be missing from the conversation.
+  const after = await remote.agent<ExportedSession>(agent.script, "export", {
+    ref: record.cloudRef,
+  });
+  if (after.mark !== cloudSession.mark)
+    throw new Error(
+      `The cloud ${agent.label} session went on while it was being copied. Try again once it is done.`,
+    );
 
   progress("Restoring it here");
   const restoreHere = async (force: boolean) => {
@@ -315,21 +323,36 @@ export async function returnFromCloud(
     payload: cloudSession.payload,
     cwd: record.localCwd,
   });
-  await local.agent(agent.script, "notify", {
-    ref: record.localRef,
-    where: "local",
-    message: [
-      `[GitTerm] This session is back on the user's machine (checkout ${record.root}) from a GitTerm cloud workspace.`,
-      `Messages since it moved ran in the cloud under ${record.cloudDirectory}; what they say about that machine was true there. The cloud's commits and uncommitted changes are now in this checkout; processes it started are not running here.`,
-      "",
-      options.message?.trim() ||
-        "Briefly summarize what was done in the cloud and what is left, then wait.",
-    ].join("\n"),
-  });
+  // The checkout and conversation are back, so the return is done: run again, it would find
+  // the cloud's messages here and refuse. The steps after this report a failure instead.
+  await saveRecord({ ...record, returnedAt: new Date().toISOString() });
+  const warnings: string[] = [];
+  const warn = (what: string) => (error: unknown) => {
+    warnings.push(`${what}: ${error instanceof Error ? error.message : String(error)}`);
+  };
+  await local
+    .agent(agent.script, "notify", {
+      ref: record.localRef,
+      where: "local",
+      message: [
+        `[GitTerm] This session is back on the user's machine (checkout ${record.root}) from a GitTerm cloud workspace.`,
+        `Messages since it moved ran in the cloud under ${record.cloudDirectory}; what they say about that machine was true there. The cloud's commits and uncommitted changes are now in this checkout; processes it started are not running here.`,
+        "",
+        options.message?.trim() ||
+          "Briefly summarize what was done in the cloud and what is left, then wait.",
+      ].join("\n"),
+    })
+    .catch(warn("Could not start the session here"));
 
   if (record.connection && agent.disconnect)
     await agent.disconnect(record.connection).catch(() => {});
-  if (options.end !== "keep") await cloud.end(record.workspaceId, options.end);
-  await saveRecord({ ...record, returnedAt: new Date().toISOString() });
-  return { ref: record.localRef, link: await agent.link?.(local, record.localRef) };
+  if (options.end !== "keep")
+    await cloud
+      .end(record.workspaceId, options.end)
+      .catch(
+        warn(
+          `Could not ${options.end} workspace ${record.workspaceId} (run gitterm ws ${options.end === "pause" ? "pause" : "terminate"} ${record.workspaceId})`,
+        ),
+      );
+  return { ref: record.localRef, link: await agent.link?.(local, record.localRef), warnings };
 }
