@@ -3,7 +3,6 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { Context } from "../context";
 import { SandboxProviderError } from "@gitterm/agent-runtime/sandbox/types";
 import { PREPARE_PROJECT_SNAPSHOT_COMMAND } from "../providers/project-snapshot";
-import { encryptWorkspacePassword } from "../utils/workspace-password";
 
 /**
  * Managed sandboxes against a disposable local database, with the E2B transport faked.
@@ -41,6 +40,7 @@ const { Hono } = await import("hono");
 const { auth } = await import("@gitterm/auth");
 const { getWorkspaceRouteAccess } = await import("../service/workspace-route-access");
 const { holdWorkspaceOperation } = await import("../service/workspace-operation");
+const { encryptWorkspacePassword } = await import("../utils/workspace-password");
 /** Providers this suite enabled, disabled again afterwards. */
 let enabledForTest: string[] = [];
 /** The deployment's preferred providers before the suite made E2B preferred. */
