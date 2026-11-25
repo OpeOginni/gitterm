@@ -126,6 +126,7 @@ import {
   resolveProjectDirectory,
 } from "../../service/workspace-runtime";
 import { getWorkspaceRouteAccess } from "../../service/workspace-route-access";
+import { recordWorkspaceActivity } from "../../service/workspace-activity";
 import { holdWorkspaceOperation, operationLease } from "../../service/workspace-operation";
 import { PASSIVE_REQUEST_HEADER } from "@gitterm/agent-runtime";
 import {
@@ -1266,6 +1267,47 @@ export const workspaceRouter = router({
 
       ctx.honoContext.header("Cache-Control", "no-store, private");
       return { success: true, credential };
+    }),
+
+  /**
+   * Run a shell command in the owner's running workspace, as the agent's user, and return
+   * its exit code and output. Owners can already do anything there through the agent, so
+   * this adds no access; it is how the CLI moves agent sessions in and out.
+   */
+  execCommand: accountProcedure("workspace:access")
+    .input(z.object({ workspaceId: z.uuid(), command: z.string().min(1).max(120_000) }))
+    .mutation(async ({ ctx, input }) => {
+      const workspaceRecord = await db.query.workspace.findFirst({
+        where: and(eq(workspace.id, input.workspaceId), eq(workspace.userId, ctx.session.user.id)),
+        columns: { status: true, cloudProviderId: true, externalInstanceId: true },
+      });
+      if (!workspaceRecord) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Workspace not found" });
+      }
+      if (workspaceRecord.status !== "running") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Workspace must be running" });
+      }
+      const [provider] = await db
+        .select()
+        .from(cloudProvider)
+        .where(eq(cloudProvider.id, workspaceRecord.cloudProviderId));
+      if (!provider) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Cloud provider not found" });
+      }
+      const computeProvider = await getProviderByCloudProviderId(provider.providerKey, provider.id);
+      if (!computeProvider.execCommand) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `${provider.name} workspaces can't run commands from GitTerm`,
+        });
+      }
+      await recordWorkspaceActivity(input.workspaceId);
+      const result = await computeProvider.execCommand(
+        workspaceRecord.externalInstanceId,
+        input.command,
+      );
+      ctx.honoContext.header("Cache-Control", "no-store, private");
+      return { exitCode: result.exitCode, stdout: result.stdout };
     }),
 
   getWorkspaceSSHAccess: protectedProcedure

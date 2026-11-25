@@ -88,6 +88,29 @@ capability declaration as well. Unknown keys fail closed.
 
 The provider side of the same standard is in [sandbox-standard.md](sandbox-standard.md).
 
+## Moving sessions
+
+Moving a session to a workspace and back works the same for every agent. The flows
+(`packages/cli/src/move/flows.ts`) copy the checkout, create a workspace running the same
+agent, and hand the conversation over. Only an adapter (`packages/cli/src/move/agents/`)
+knows the agent. An adapter is a small Node script that runs on both machines (locally, and
+in the workspace through `workspace.execCommand`) and provides five operations:
+
+| Operation | Does                                                                           |
+| --------- | ------------------------------------------------------------------------------ |
+| `info`    | Returns the agent's version, to warn when the machines differ.                 |
+| `export`  | Returns a session's directory, title, size and native files.                   |
+| `import`  | Writes those files for another directory, as a new session or in place of one. |
+| `notify`  | Starts the agent on a message without waiting.                                 |
+| `status`  | Says whether the session is working.                                           |
+
+The adapter also says which session the calling process belongs to (from the agent's
+environment, e.g. `T3CODE_THREAD_ID`), and whether a user message was added after a size
+(so a return doesn't replace local work). It can add steps after a move: T3 links the
+workspace to the local T3 Code, so the cloud thread opens from there. Agents run the CLI
+through one `gitterm-cloud` skill, which `gitterm setup` installs in every agent's skills
+folder. OpenCode keeps its native `/cloud` plugin.
+
 To add an agent, register its key and capabilities, implement the provisioner,
 configure provider runtime images/setup, and extend the conformance tests. Do not
 add agent-name branches to individual compute providers.

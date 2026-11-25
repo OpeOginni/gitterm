@@ -6,7 +6,7 @@ description: Use /cloud to continue a local OpenCode session in a cloud workspac
 
 `/cloud` moves one local OpenCode session into a cloud workspace: the conversation and your checkout. Use it to hand off work you already started, so the agent keeps going while you are away and you can check in from another device. When you are done, [`/cloud-return`](/docs/workspaces/return-a-session) brings the session and the cloud's work back.
 
-While the session is in the cloud, nothing syncs: later local edits are not uploaded, and cloud changes reach your checkout only when you return the session. Only OpenCode sessions move. T3 Code sessions (Codex, Claude Code) don't; to use those agents in the cloud, create a [T3 Code workspace](/docs/workspaces/agents) and start a new thread there.
+While the session is in the cloud, nothing syncs: later local edits are not uploaded, and cloud changes reach your checkout only when you return the session. This page covers OpenCode. Other agents move with the `gitterm` CLI; see [Other agents](#other-agents).
 
 ## Before you start
 
@@ -127,3 +127,18 @@ Every option is listed in the [Cloud plugin reference](/docs/reference/cloud-plu
 - [Cloud plugin reference](/docs/reference/cloud-plugin)
 - [Lifecycle](/docs/workspaces/lifecycle)
 - [Connections](/docs/integrations/connections)
+
+## Other agents
+
+T3 Code threads that run Claude Code move with the `gitterm` CLI and the `gitterm-cloud` skill. Codex threads don't move yet.
+
+1. Install the skill for your agents, once:
+
+   ```sh
+   gitterm setup
+   ```
+
+2. In the thread, ask the agent to move to the cloud. It runs `gitterm move "<what to do next>"`, which copies the checkout and the conversation into a new T3 Code workspace and prints a link to the cloud thread. Your T3 Code is linked to the workspace, so the link opens there.
+3. To bring it back, ask the same thread to return. It runs `gitterm return`, which waits until its reply ends, then brings the cloud's commits, changes and conversation back into that thread.
+
+`gitterm moves` lists sessions that are in the cloud. To hand tasks to a cloud machine instead of moving a thread, `gitterm t3 link` creates a workspace linked to your T3 Code for `delegate_task`, and `gitterm t3 unlink <workspaceId>` deletes it.
