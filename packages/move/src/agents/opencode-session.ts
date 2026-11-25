@@ -94,6 +94,24 @@ export async function sessionBusy(
 }
 
 /**
+ * The session's position in OpenCode's event log. It rises with everything that happens to the
+ * session: messages, notes, metadata, and input queued for later. Read from past its end, the
+ * log sends only that position.
+ */
+export async function sessionRevision(
+  client: OpenCodeClient,
+  sessionID: string,
+  signal: AbortSignal,
+): Promise<number> {
+  const log = client.experimental.session.log(
+    { sessionID, after: Number.MAX_SAFE_INTEGER },
+    { signal },
+  );
+  for await (const item of log) if (item.type === "log.synced") return item.seq ?? 0;
+  throw new Error("OpenCode's session log ended without its position.");
+}
+
+/**
  * Stops the session's agent and its subagents, and waits until they stay stopped: a stopped
  * subagent reports back, which wakes its parent once more. Returns whether anything ran.
  */

@@ -391,11 +391,15 @@ export async function returnFromCloud(
   const there = agent.session(remote);
   // Where the agent can be stopped, nothing changes the session after this read.
   await there.hold?.({ ref: record.cloudRef });
+  // Read before the export, so a change while it is read counts too.
+  const revision = await there.revision?.({ ref: record.cloudRef }).catch(() => undefined);
   const cloudSession = await there.export({ ref: record.cloudRef });
   /** Whether the cloud session is still as it was read; anything it gained would go with the workspace. */
   const cloudUnchanged = async () =>
-    (await there.export({ ref: record.cloudRef, allowBusy: true }).catch(() => undefined))?.mark ===
-    cloudSession.mark;
+    revision === undefined
+      ? (await there.export({ ref: record.cloudRef, allowBusy: true }).catch(() => undefined))
+          ?.mark === cloudSession.mark
+      : (await there.revision!({ ref: record.cloudRef }).catch(() => undefined)) === revision;
 
   await progress("Copying the cloud checkout");
   const stage = `.gitterm-handoff-${randomUUID()}`;
@@ -418,8 +422,11 @@ export async function returnFromCloud(
   let snapshot = await capture(record.head);
   const summary = snapshotSummary(snapshot);
   // A turn that ran while the checkout was copied would be missing from the conversation.
-  const after = await agent.session(remote).export({ ref: record.cloudRef });
-  if (after.mark !== cloudSession.mark)
+  const wentOn =
+    revision === undefined
+      ? (await there.export({ ref: record.cloudRef })).mark !== cloudSession.mark
+      : !(await cloudUnchanged());
+  if (wentOn)
     throw new Error(
       `The cloud ${agent.label} session went on while it was being copied. Try again once it is done.`,
     );
