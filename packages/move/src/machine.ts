@@ -91,7 +91,8 @@ export function localMachine(env: NodeJS.ProcessEnv = {}): Machine {
 const quote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
 const EXIT_MARKER = "__GITTERM_EXIT__";
 /** Under the API's 120 000 character limit and Linux's 128 KiB limit on one argument. */
-const UPLOAD_CHUNK = 96_000;
+// exe.dev limits the whole command to 64 KB, including the shell wrapper.
+const UPLOAD_CHUNK = 60_000;
 const DOWNLOAD_CHUNK = 3 << 20;
 
 /**
