@@ -21,9 +21,9 @@ bun benchmarks/handoff/bench-handoff.ts # all three sections
 | `scale`  | Origins with 5 to 60 MiB of history and untracked files of 1 to 24 MiB.                                                                                             |
 | `repo`   | Capture and restore of this checkout, or `--repo`, including uncommitted changes. The source checkout is not modified.                                              |
 
-This does not measure workspace creation, network uploads, or conversation import. For the
-OpenCode HTTP compatibility check, use `scripts/opencode-handoff-smoke.ts` with
-`OPENCODE_HANDOFF_SMOKE_BINARY` pointing to a local OpenCode executable.
+This does not measure workspace creation, network uploads, or conversation import. For a
+move and return between two real OpenCode servers, run `GITTERM_OPENCODE_TESTS=1 bun test
+./src/agents/opencode.test.ts` in `packages/move` with `opencode` installed.
 
 ## Compare runs
 

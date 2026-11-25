@@ -33,10 +33,15 @@ export function repositoryCheckoutCommand(
 ): string {
   const ref = repo.checkoutRef || repo.branch || "";
   const clone = `GIT_TERMINAL_PROMPT=0 git clone${cloneArguments ? ` ${cloneArguments}` : ""}${ref ? ` --branch ${shellQuote(ref)}` : ""} ${shellQuote(url)} .`;
+  // A pinned commit is checked out last, fetched by its SHA when no branch brought it.
+  const sha = repo.baseCommit ? shellQuote(repo.baseCommit) : "";
+  const pin = sha
+    ? `{ git cat-file -e ${sha}^{commit} 2>/dev/null || GIT_TERMINAL_PROMPT=0 git fetch -q origin ${sha}; }; git checkout -q -f --detach ${sha}`
+    : "true";
   return [
     "set -e",
     // Not a checkout (a fresh machine, or a snapshot without one): clone as usual.
-    `if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then ${clone}; exit 0; fi`,
+    `if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then ${clone}; ${pin}; exit 0; fi`,
     `git remote set-url origin ${shellQuote(url)}`,
     "GIT_TERMINAL_PROMPT=0 git fetch --prune origin",
     "git remote set-head origin --auto >/dev/null 2>&1 || true",
@@ -44,6 +49,7 @@ export function repositoryCheckoutCommand(
     `if [ -z "$ref" ]; then ref=$(git symbolic-ref --short refs/remotes/origin/HEAD); ref=\${ref#origin/}; fi`,
     // A branch follows origin; anything else (a tag, a commit) is checked out as it is.
     `git checkout -q -f -B "$ref" "origin/$ref" 2>/dev/null || git checkout -q -f --detach "$ref"`,
+    pin,
     "git reset -q --hard",
     // Without -x: untracked leftovers go, ignored files stay.
     "git clean -q -fd",
@@ -54,18 +60,20 @@ export function repositoryCheckoutCommand(
 
 /**
  * Shell run in a workspace just before its disk is saved as a project snapshot. The
- * workspace is deleted afterwards, so nothing in it has to keep working. It stops the agent
- * and removes what must not be kept: credentials GitTerm wrote, and the agent's own data,
- * which holds the conversations of the session that is ending. Every step is best effort.
+ * workspace is deleted afterwards, so nothing in it has to keep working. It removes what
+ * must not be kept: credentials GitTerm wrote, and OpenCode's data, which holds the
+ * conversations of the session that is ending. It covers OpenCode only, so only OpenCode
+ * workspaces are saved. Any step that fails fails the command, and the snapshot is not taken.
  */
 export const SCRUB_WORKSPACE_COMMAND = [
-  "rm -rf /tmp/gitterm-repository-auth /tmp/gitterm-git-askpass /tmp/agent-server.log 2>/dev/null || true",
-  "(rm -rf /run/gitterm 2>/dev/null || sudo -n rm -rf /run/gitterm 2>/dev/null) || true",
-  'rm -f "$HOME/.gitterm/opencode/credentials.json" "$HOME/.gitterm/github/config.json" "$HOME/.gitterm/callback.env" 2>/dev/null || true',
-  'rm -rf "${XDG_STATE_HOME:-$HOME/.local/state}/opencode" "${OPENCODE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/opencode}" 2>/dev/null || true',
-  "git config --global --unset-all credential.helper 2>/dev/null || true",
-  "sync 2>/dev/null || true",
-].join("; ");
+  "rm -rf /tmp/gitterm-repository-auth /tmp/gitterm-git-askpass /tmp/agent-server.log",
+  "{ rm -rf /run/gitterm 2>/dev/null || sudo -n rm -rf /run/gitterm; }",
+  'rm -f "$HOME/.gitterm/opencode/credentials.json" "$HOME/.gitterm/github/config.json" "$HOME/.gitterm/callback.env"',
+  'rm -rf "${XDG_STATE_HOME:-$HOME/.local/state}/opencode" "${OPENCODE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/opencode}"',
+  // Exit 5: there was no helper to remove.
+  "{ git config --global --unset-all credential.helper || [ $? -eq 5 ]; }",
+  "sync",
+].join(" && ");
 export const PREPARE_PROJECT_SNAPSHOT_COMMAND = [
   "pkill -f 'opencode serve' 2>/dev/null || true",
   "sleep 1",

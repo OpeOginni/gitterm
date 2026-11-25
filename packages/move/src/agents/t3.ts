@@ -323,10 +323,11 @@ export async function unlinkEnvironment(environmentId: string) {
 export const threadLink = (environmentId: string, threadId: string) =>
   `t3-thread://v2/${environmentId}/${encodeURIComponent(threadId)}`;
 
-/** Whether a real user message was added to a Claude Code session after `bytes`. */
+/** Whether a real user message was added to a Claude Code session after its first `bytes` (UTF-8). */
 export function sentSince(session: string, bytes: number): boolean {
-  return session
-    .slice(bytes)
+  return Buffer.from(session)
+    .subarray(bytes)
+    .toString("utf8")
     .split("\n")
     .some((line) => {
       try {
