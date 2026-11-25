@@ -63,10 +63,8 @@ export type ReturnConfirmations = {
   checkout?(): Promise<boolean>;
 };
 
-/** A return the user declined: nothing here changed. */
-/** Why a returned session's workspace was left running. */
 export const cloudWentOn = (workspaceId: string) =>
-  `The cloud session went on after it was copied, so workspace ${workspaceId} was kept running with what it did since. Open it there, or end it with: gitterm ws terminate ${workspaceId}`;
+  `The cloud session or checkout may have changed after it was copied, so workspace ${workspaceId} was kept running. Check it before ending it with: gitterm ws terminate ${workspaceId}`;
 
 export class ReturnDeclined extends Error {
   /** How the CLI reports it (`--json`), so a caller can ask and run again with --force. */
@@ -394,8 +392,7 @@ export async function returnFromCloud(
   // Read before the export, so a change while it is read counts too.
   const revision = await there.revision?.({ ref: record.cloudRef }).catch(() => undefined);
   const cloudSession = await there.export({ ref: record.cloudRef });
-  /** Whether the cloud session is still as it was read; anything it gained would go with the workspace. */
-  const cloudUnchanged = async () =>
+  const sessionUnchanged = async () =>
     revision === undefined
       ? (await there.export({ ref: record.cloudRef, allowBusy: true }).catch(() => undefined))
           ?.mark === cloudSession.mark
@@ -421,11 +418,20 @@ export async function returnFromCloud(
   };
   let snapshot = await capture(record.head);
   const summary = snapshotSummary(snapshot);
+  const cloudUnchanged = async () => {
+    const checkout = await remote
+      .script(directory, CAPTURE_SCRIPT, [
+        stage,
+        JSON.stringify({ changes: true, verify: { state: summary.state, branch: summary.branch } }),
+      ])
+      .catch(() => undefined);
+    return checkout?.exit === 0 && (await sessionUnchanged());
+  };
   // A turn that ran while the checkout was copied would be missing from the conversation.
   const wentOn =
     revision === undefined
       ? (await there.export({ ref: record.cloudRef })).mark !== cloudSession.mark
-      : !(await cloudUnchanged());
+      : !(await sessionUnchanged());
   if (wentOn)
     throw new Error(
       `The cloud ${agent.label} session went on while it was being copied. Try again once it is done.`,

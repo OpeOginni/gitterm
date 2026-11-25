@@ -7,12 +7,6 @@ import {
   type SandboxTransport,
 } from "./types";
 
-/**
- * Agent workspaces on any sandbox transport: the steps that turn a plain sandbox into a
- * running agent with a checkout. The Gitterm server's workspace provider and the SDK's
- * direct workspaces both use them, so a provider only implements its transport.
- */
-
 /** A file the agent needs. `~/` is the sandbox user's `$HOME`. */
 export type WorkspaceFile = {
   path: string;
@@ -23,7 +17,6 @@ export type WorkspaceFile = {
 };
 
 export type WorkspacePlan = {
-  /** Creates the sandbox. The resume command is added here. */
   create: Omit<SandboxCreateInput, "resumeCommand">;
   /** Use this existing sandbox instead of creating one; it is never deleted on failure. */
   existingId?: string;
@@ -75,14 +68,12 @@ export type WorkspaceSetupHooks = {
 
 export type ProvisionedWorkspace = {
   id: string;
-  /** The checkout, where the agent runs. */
   directory: string;
   preview: SandboxPreviewAccess;
   accessCredential?: string;
   startedAt: string | null;
 };
 
-/** The agent's start command, kept in the sandbox user's home for resumes. */
 const RESUME_SCRIPT = '"$HOME/.gitterm/resume.sh"';
 /** Process group of the running agent, so a workspace on a borrowed sandbox can stop it. */
 const AGENT_PID = '"$HOME/.gitterm/agent.pid"';
@@ -95,7 +86,6 @@ export const AGENT_PORT_LABEL = "gitterm_agent_port";
  */
 const withLocalBin = (command: string) => `export PATH="$HOME/.local/bin:$PATH"; ${command}`;
 
-/** The directory that holds a provider's checkouts. */
 export function workspaceDirectory(transport: SandboxTransport, name: string): string {
   return `${SANDBOX_PROVIDER_PROFILES[transport.provider].workspaceRoot}/${name}`;
 }
@@ -109,7 +99,6 @@ export function lastLines(text: string): string {
 export function startAgentCommand(serve: { command: string; port: number }, directory: string) {
   const answers = `bash -c ${shellQuote(`exec 3<>/dev/tcp/127.0.0.1/${serve.port}`)} 2>/dev/null`;
   const start = `nohup setsid bash -lc ${shellQuote(withLocalBin(serve.command))} > /tmp/agent-server.log 2>&1 </dev/null & echo $! > ${AGENT_PID}`;
-  // Running means the agent answers, so wait for its port (resume runs this as well).
   const wait = `i=0; until ${answers}; do i=$((i+1)); [ $i -lt 50 ] || { echo "The agent did not open port ${serve.port}; see /tmp/agent-server.log" >&2; exit 1; }; sleep 1; done`;
   return `cd ${shellQuote(directory)} && mkdir -p "$HOME/.gitterm" && { ${answers} || { ${start}; }; } && { ${wait}; }`;
 }
@@ -250,6 +239,7 @@ async function writeFiles(
   directory: string,
   home: string,
 ) {
+  const prepared = new Set<string>();
   for (const file of files) {
     const path = file.relativeToRepo
       ? `${directory}/${file.path}`
@@ -269,7 +259,10 @@ async function writeFiles(
       );
       continue;
     }
-    await must(transport, id, "create", `mkdir -p ${shellQuote(dir)}`);
+    if (!prepared.has(dir)) {
+      await must(transport, id, "create", `mkdir -p ${shellQuote(dir)}`);
+      prepared.add(dir);
+    }
     await transport.writeFile(id, path, Buffer.from(file.contentBase64, "base64"));
     if (chmod) await must(transport, id, "create", chmod);
   }

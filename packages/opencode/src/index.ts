@@ -95,16 +95,13 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
   const busy = new Set<string>();
   const gitterm = () => createGittermClient({ serverUrl: options.serverUrl, token: options.token });
 
-  // The sessions of this checkout that live in the cloud: what their cloud side is doing is
-  // kept on the session.
   const here = await checkoutRoot(ctx.location.directory).catch(() => undefined);
   const movedHere = async () =>
     (await openMoves()).filter((record) => here !== undefined && record.root === here);
   let inCloud = await movedHere();
 
   let watching = false;
-  // Ends the watcher's wait early, so a session that just moved to the cloud is looked at
-  // straight away.
+  // Wake the status watcher immediately after a move.
   let wake = () => {};
   const watch = () => {
     wake();
@@ -133,8 +130,7 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
         watching = false;
       });
   };
-  // Read again after each command and before each prompt, so a move made from the CLI is
-  // watched too.
+  // Refresh so CLI moves appear without reloading the plugin.
   const refresh = async () => {
     inCloud = await movedHere();
     watch();
@@ -207,7 +203,6 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
               "/cloud can't reach the OpenCode server holding this session (opencode --standalone uses a private one). Run `opencode serve --port 4096`, open it with `opencode --server http://127.0.0.1:4096`, and set the plugin's localServerUrl to that address.",
             );
           }
-          // Signs the user in first if they are not, before anything is captured or billed.
           const client = await signedIn(local, sessionID, options, controller.signal);
           const message = prompt.text.trim();
           const previous = await moveOf(sessionID);
@@ -240,7 +235,6 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
           );
           if (moved === CANCELLED) return;
           await refresh();
-          // The cloud agent carries on with the task (or the text after /cloud) once it is there.
           await showConnection(
             local,
             client,
@@ -256,8 +250,7 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
         }
       },
     });
-    // Always offered: commands are listed once per project, and a session may move (from the
-    // CLI too) after that. The move is looked up when it runs.
+    // Commands are listed once per project; a CLI move may happen later.
     editor.add({
       name: "cloud-return",
       description: "Bring this session and its changes back from its GitTerm cloud workspace",
@@ -274,8 +267,7 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
           const local = await localClient(options);
           await assertSupported(local, controller.signal);
           const client = await signedIn(local, sessionID, options, controller.signal);
-          // Once the checkout is being replaced, stopping halfway would leave it and the
-          // conversation out of step, so Esc only hides the dialog.
+          // Esc hides the dialog without interrupting the restore.
           await withProgress(
             sessionID,
             { title: "Bringing it back from the cloud", cancellable: false },
@@ -286,8 +278,6 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
                 signal,
                 progress,
               });
-              // Ending it now would take anything the cloud session did since it was copied.
-              if (!(await cloudUnchanged())) throw new Error(cloudWentOn(previous.workspaceId));
               await progress(
                 end === "pause"
                   ? "Pausing the cloud workspace"
@@ -295,6 +285,7 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
                     ? "Saving the snapshot and deleting the cloud workspace"
                     : "Deleting the cloud workspace",
               );
+              if (!(await cloudUnchanged())) throw new Error(cloudWentOn(previous.workspaceId));
               await endWorkspace(client, previous.workspaceId, end);
             },
           );

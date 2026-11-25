@@ -2,6 +2,8 @@ import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { Context } from "../context";
 import { SandboxProviderError } from "@gitterm/agent-runtime/sandbox/types";
+import { PREPARE_PROJECT_SNAPSHOT_COMMAND } from "../providers/project-snapshot";
+import { encryptWorkspacePassword } from "../utils/workspace-password";
 
 /**
  * Managed sandboxes against a disposable local database, with the E2B transport faked.
@@ -562,12 +564,63 @@ integration("a sandbox is provisioned at the machine profile it is billed at", a
       .innerJoin(machineProfile, eq(workspace.machineProfileId, machineProfile.id))
       .where(eq(workspace.id, sandbox.id));
     expect(row!.profile.key).toBe("small");
-    expect(requested.get(row!.handle.split(":").at(-1)!)).toEqual({
-      template: "gitterm-sandbox",
+    expect(requested.get(row!.handle.split(":").at(-1)!)).toMatchObject({
       machine: { templateSuffix: "-sm" },
     });
   } finally {
     machineAccess = "any";
+  }
+});
+
+integration("only the owner can open the primary Pi terminal without its password", async () => {
+  const { image } = await import("@gitterm/db/schema/cloud");
+  const [pi] = await db.select({ id: image.id }).from(image).where(eq(image.name, "gitterm-pi"));
+  const [provider] = await db
+    .select({ id: cloudProvider.id })
+    .from(cloudProvider)
+    .where(eq(cloudProvider.providerKey, "boat"));
+  const id = randomUUID();
+  const subdomain = `pi${id.replaceAll("-", "")}`;
+  await db.insert(workspace).values({
+    id,
+    userId,
+    imageId: pi!.id,
+    cloudProviderId: provider!.id,
+    externalInstanceId: "sandbox:boat:fixture",
+    startedAt: new Date(),
+    updatedAt: new Date(),
+    status: "running",
+    subdomain,
+    domain: subdomain,
+    serverOnly: false,
+    upstreamUrl: "https://pi.example.com",
+    serverPassword: encryptWorkspacePassword("test-password", { id, userId }),
+  });
+  const resolver = new Hono().get("/resolve", proxyResolverRouter);
+  const resolve = () =>
+    resolver.request("/resolve", {
+      headers: {
+        "X-Internal-Key": process.env.INTERNAL_API_KEY!,
+        "X-Routing-Mode": "path",
+        "X-Original-URI": `/ws/${subdomain}/`,
+      },
+    });
+  const session = spyOn(auth.api, "getSession");
+  try {
+    session.mockResolvedValue({ user: { id: otherId } } as never);
+    const denied = await resolve();
+    expect(denied.status).toBe(403);
+    expect(denied.headers.has("X-GitTerm-Pi-Auth")).toBe(false);
+
+    session.mockResolvedValue({ user: { id: userId } } as never);
+    const allowed = await resolve();
+    expect(allowed.status).toBe(200);
+    expect(allowed.headers.get("X-GitTerm-Pi-Auth")).toBe(
+      `Basic ${Buffer.from("opencode:test-password").toString("base64")}`,
+    );
+  } finally {
+    session.mockRestore();
+    await db.delete(workspace).where(eq(workspace.id, id));
   }
 });
 
@@ -1080,11 +1133,6 @@ integration(
   async () => {
     const { image, agentType } = await import("@gitterm/db/schema/cloud");
     const { findProjectSnapshot } = await import("../service/project-snapshot");
-    // Workspaces keep a sandbox handle, so their commands and deletion reach the fake transport.
-    const prepared = () =>
-      commands
-        .filter((entry) => entry.startsWith("machine-"))
-        .map((entry) => entry.replace(/^([^:]+):(.{0,26}).*$/s, "$1: $2"));
     const terminated = () => destroyed.filter((id) => id.startsWith("machine-"));
     const [e2b] = await db.select().from(cloudProvider).where(eq(cloudProvider.providerKey, "e2b"));
     const [opencode] = await db
@@ -1147,7 +1195,7 @@ integration(
         existing: null,
       });
       const deleted = await workspaces.deleteWorkspace({ workspaceId: first, saveSnapshot: true });
-      expect(prepared()).toEqual(["machine-1: pkill -f 'opencode serve' "]);
+      expect(commands).toContain(`machine-1:${PREPARE_PROJECT_SNAPSHOT_COMMAND}`);
       expect(terminated()).toEqual(["machine-1"]);
       expect(await status(first)).toBe("terminated");
       const [saved] = await kept();

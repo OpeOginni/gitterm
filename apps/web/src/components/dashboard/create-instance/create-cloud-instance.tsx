@@ -31,7 +31,6 @@ import {
   formatHourlyPrice,
   formatMachineSize,
   getIcon,
-  type AgentType,
   type CloudProvider,
   type Region,
   type CreateInstanceResult,
@@ -79,11 +78,9 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   // Editor (SSH) access is no longer offered here; every workspace uses the standard profile.
   const workspaceProfile: WorkspaceProfile = "standard";
 
-  // Data fetching -- staleTime keeps the prefetched cache from refetching on
-  // open so the dialog renders fully populated without a flicker or resize.
   const STALE_TIME = 5 * 60 * 1000;
-  const { data: agentTypesData, isLoading: isLoadingAgentTypes } = useQuery({
-    ...trpc.workspace.listAgentTypes.queryOptions(),
+  const { data: catalog, isLoading: isLoadingAgentTypes } = useQuery({
+    ...trpc.workspace.getWorkspaceCatalog.queryOptions(),
     staleTime: STALE_TIME,
   });
   const { data: cloudProvidersData, isLoading: isLoadingCloudProviders } = useQuery({
@@ -333,16 +330,11 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
   ].filter(Boolean);
   const wideCell = halfCells.length % 2 ? halfCells.at(-1) : null;
 
-  const availableAgents = useMemo((): AgentType[] => {
-    const agents = agentTypesData?.agentTypes ?? [];
-    if (!selectedCloudProvider) return agents;
-    if ((selectedCloudProvider as any).supportServerOnly) {
-      return agents.filter((agent) => agent.serverOnly);
-    }
-    return agents;
-  }, [selectedCloudProvider, agentTypesData?.agentTypes]);
-
-  const selectedAgentTypeId = userAgentTypeId ?? availableAgents[0]?.id ?? "";
+  const agentKeys = catalog?.providers.find(({ id }) => id === selectedCloudProviderId)?.agentKeys;
+  const availableAgents = catalog?.agents.filter(({ key }) => agentKeys?.includes(key)) ?? [];
+  const selectedAgent =
+    availableAgents.find(({ id }) => id === userAgentTypeId) ?? availableAgents[0];
+  const selectedAgentTypeId = selectedAgent?.id ?? "";
 
   const selectedRegion = useMemo(() => {
     if (isAwsGroup) {
@@ -362,7 +354,6 @@ export function CreateCloudInstance({ onSuccess, onCancel }: CreateCloudInstance
     return availableRegions[0]?.id ?? "";
   }, [isAwsGroup, awsProviders, userRegionId, availableRegions]);
 
-  const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentTypeId);
   const supportsMcp =
     getAgentCapabilities(selectedAgent?.provisionerKey ?? "")?.mcpConnections === true;
   const selectedIntegrations =

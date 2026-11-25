@@ -281,6 +281,13 @@ try {
     }
   }
   const before = read();
+  const branch = has("symbolic-ref", "-q", "HEAD") ? text("symbolic-ref", "--short", "HEAD") : null;
+  const checkoutState = digest({ ...before, changedPaths: [] });
+  if (options.verify) {
+    if (checkoutState !== options.verify.state || branch !== options.verify.branch)
+      throw fail(${CAPTURE_BUSY}, "busy");
+    process.exit(0);
+  }
   const parts = [Buffer.alloc(0), Buffer.from(before.staged, "base64"), Buffer.from(before.unstaged, "base64"), ...before.files.map(file => Buffer.from(file.data, "base64"))];
   if (options.screen) {
     if (privateKey.test(parts[1].toString() + parts[2].toString())) throw fail(${CAPTURE_SECRET}, "private-key");
@@ -303,10 +310,9 @@ try {
   const manifest = Buffer.from(JSON.stringify({
     version: 2,
     head: before.head,
-    branch: has("symbolic-ref", "-q", "HEAD") ? text("symbolic-ref", "--short", "HEAD") : null,
+    branch,
     digest: snapshotDigest,
-    // The same state without the list of changed paths: what a restore compares a checkout with.
-    state: digest({ ...before, changedPaths: [] }),
+    state: checkoutState,
     changedPaths: before.changedPaths,
     bundle: parts[0].length,
     staged: parts[1].length,

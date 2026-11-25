@@ -27,6 +27,7 @@ import {
 import { recordWorkspaceActivity } from "../../service/workspace-activity";
 import { extractWorkspaceSubdomain } from "../../utils/routing";
 import { getPortVisibility } from "@gitterm/schema/workspace-ports";
+import { decryptWorkspacePassword } from "../../utils/workspace-password";
 
 const DEBUG_PROXY_RESOLVE = process.env.DEBUG_PROXY_RESOLVE === "true";
 
@@ -190,6 +191,7 @@ export const proxyResolverRouter = async (c: Context) => {
           hostingType: workspace.hostingType,
           status: workspace.status,
           serverOnly: workspace.serverOnly,
+          serverPassword: workspace.serverPassword,
           agentTypeName: agentType.name,
           agentProvisionerKey: agentType.provisionerKey,
           exposedPorts: workspace.exposedPorts,
@@ -338,6 +340,11 @@ export const proxyResolverRouter = async (c: Context) => {
 
     const upstreamUrl = new URL(target);
     const port = upstreamUrl.port || (upstreamUrl.protocol === "https:" ? "443" : "80");
+    // Pi's browser terminal uses Basic auth behind the owner's GitTerm session.
+    const piAuth =
+      !extractedPort && agentKey === "pi" && ws.serverPassword
+        ? `Basic ${Buffer.from(`opencode:${decryptWorkspacePassword(ws.serverPassword, ws)}`).toString("base64")}`
+        : undefined;
 
     debugProxyResolve("[PROXY-RESOLVE] Cloud workspace routing:", {
       upstreamUrl: ws.upstreamUrl,
@@ -361,6 +368,7 @@ export const proxyResolverRouter = async (c: Context) => {
           "X-Container-Protocol": upstreamUrl.protocol.replace(":", ""),
           "X-User-ID": userId,
           "X-Hosting-Type": ws.hostingType,
+          ...(piAuth ? { "X-GitTerm-Pi-Auth": piAuth } : {}),
         },
         upstreamAccessHeaders,
       ),

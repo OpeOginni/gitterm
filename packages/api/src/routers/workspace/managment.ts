@@ -1017,6 +1017,7 @@ export const workspaceRouter = router({
       agents: agents.map((agent) => ({
         id: agent.id,
         key: agent.key,
+        provisionerKey: agent.provisionerKey,
         name: agent.name,
         description: agent.description,
         serverOnly: agent.serverOnly,
@@ -2712,7 +2713,10 @@ export const workspaceRouter = router({
         let serverPassword: string | undefined;
         let encryptedServerPassword: string | undefined;
 
-        if (agentTypeRecord.serverOnly && agent.capabilities.access === "server-password") {
+        if (
+          (agentTypeRecord.serverOnly || agent.key === "pi") &&
+          agent.capabilities.access === "server-password"
+        ) {
           const passwordData = generateAndEncryptPassword({ id: workspaceId, userId });
           serverPassword = passwordData.password;
           encryptedServerPassword = passwordData.encryptedPassword;
