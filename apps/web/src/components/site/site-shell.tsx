@@ -16,7 +16,7 @@ export function SiteShell({
   children: ReactNode;
   className?: string;
   footer?: boolean;
-  /** 1400px header and footer, for pages whose content uses the wide container (docs). */
+  /** Match a page that uses the wide container, such as docs. */
   wide?: boolean;
 }) {
   return (

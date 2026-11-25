@@ -10,6 +10,7 @@ import { GitHub } from "@/components/logos/Github";
 import { Mark } from "@/components/site/mark";
 import { GITHUB_URL } from "@/lib/site/providers";
 import { cn } from "@/lib/utils";
+import { Wrap } from "./section";
 
 /** The gold Notch mark and the lowercase wordmark. */
 export function Brand({ className }: { className?: string }) {
@@ -44,25 +45,15 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
   if (isSelfHosted())
     return (
       <header className="border-b border-line">
-        <div
-          className={cn(
-            "mx-auto flex h-16 items-center px-4 sm:px-6",
-            wide ? "max-w-[1400px]" : "max-w-[1240px]",
-          )}
-        >
+        <Wrap wide={wide} className="flex h-16 items-center">
           <Brand />
-        </div>
+        </Wrap>
       </header>
     );
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-background/80 backdrop-blur-xl">
-      <div
-        className={cn(
-          "mx-auto flex h-16 items-center justify-between gap-6 px-4 sm:px-6",
-          wide ? "max-w-[1400px]" : "max-w-[1240px]",
-        )}
-      >
+      <Wrap wide={wide} className="flex h-16 items-center justify-between gap-6">
         <Link
           href="/"
           className="rounded-md transition-opacity hover:opacity-85"
@@ -116,16 +107,11 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
             {open ? <X className="size-[18px]" /> : <Menu className="size-[18px]" />}
           </button>
         </div>
-      </div>
+      </Wrap>
 
       {open && (
         <nav aria-label="Main" className="border-t border-line bg-background/95 min-[900px]:hidden">
-          <div
-            className={cn(
-              "mx-auto flex flex-col px-4 py-2 sm:px-6",
-              wide ? "max-w-[1400px]" : "max-w-[1240px]",
-            )}
-          >
+          <Wrap wide={wide} className="flex flex-col py-2">
             {items.map((n) => (
               <Link
                 key={n.label}
@@ -145,7 +131,7 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
                 Sign in
               </Link>
             )}
-          </div>
+          </Wrap>
         </nav>
       )}
     </header>

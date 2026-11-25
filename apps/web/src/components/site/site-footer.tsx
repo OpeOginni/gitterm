@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { GITHUB_URL } from "@/lib/site/providers";
-import { cn } from "@/lib/utils";
+import { Wrap } from "./section";
 import { Brand } from "./site-header";
 
 const LINKS: { label: string; href: string; external?: boolean }[] = [
@@ -17,11 +17,9 @@ const LINKS: { label: string; href: string; external?: boolean }[] = [
 export function SiteFooter({ wide = false }: { wide?: boolean }) {
   return (
     <footer className="border-t border-line py-9">
-      <div
-        className={cn(
-          "mx-auto flex flex-col gap-5 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6",
-          wide ? "max-w-[1400px]" : "max-w-[1240px]",
-        )}
+      <Wrap
+        wide={wide}
+        className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
           <Brand className="text-[16px]" />
@@ -50,7 +48,7 @@ export function SiteFooter({ wide = false }: { wide?: boolean }) {
             ),
           )}
         </nav>
-      </div>
+      </Wrap>
     </footer>
   );
 }
