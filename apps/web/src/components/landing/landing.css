@@ -1246,9 +1246,10 @@
     display: none;
   }
   .lp .stage {
+    --stage-height: min(560px, 72svh);
     position: sticky;
-    top: 14svh;
-    height: min(560px, 72svh);
+    top: max(72px, (100svh - var(--stage-height)) / 2);
+    height: var(--stage-height);
     display: flex;
     flex-direction: column;
     gap: 14px;
