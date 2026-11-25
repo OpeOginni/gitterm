@@ -10,6 +10,7 @@ import { npmInstallCommand } from "@gitterm/schema/agent-install";
 import { opencodeProvisioner } from "../service/agents/opencode";
 import * as transportModule from "../service/sandbox-transport";
 import * as timeouts from "../service/workspace-timeouts";
+import { PREPARE_PROJECT_SNAPSHOT_COMMAND } from "./project-snapshot";
 import { withSandboxHandles } from "./sandbox-handles";
 import { TransportWorkspaceProvider } from "./transport-workspace";
 
@@ -90,6 +91,14 @@ test.skipIf(!enabled)(
     await provider.resumeWorkspace(info.externalServiceId);
     const resumed = await transport.preview(id, 4096);
     expect(await answers(resumed.url, password)).toBe(200);
+
+    // Run the whole preparation command in the workspace, where it can safely stop OpenCode.
+    const fixture = '"$HOME/.gitterm/opencode/credentials.json"';
+    expect(
+      (await transport.run(id, `mkdir -p "$HOME/.gitterm/opencode" && touch ${fixture}`)).exitCode,
+    ).toBe(0);
+    expect((await transport.run(id, PREPARE_PROJECT_SNAPSHOT_COMMAND)).exitCode).toBe(0);
+    expect((await transport.run(id, `test ! -e ${fixture}`)).exitCode).toBe(0);
 
     await provider.terminateWorkspace(info.externalServiceId);
     expect((await transport.info(id)).state).toBe("terminated");
