@@ -142,9 +142,10 @@ test("a claim left by a process that died does not hold the session", async () =
   const dead = spawnSync("true").pid!;
   const moves = path.join(process.env.HOME!, ".config", "gitterm", "moves");
   await mkdir(moves, { recursive: true });
-  await writeFile(path.join(moves, `${encodeURIComponent("fake:s1")}.lock`), String(dead));
+  const stale = `${encodeURIComponent("fake:s1")}.0.lock`;
+  await writeFile(path.join(moves, stale), String(dead));
   await moveToCloud(deps, { ref: "s1", changes: true, fromSession: false });
   expect(state.created).toBe(1);
-  // Released once the move is recorded.
-  expect((await readdir(moves)).filter((name) => name.endsWith(".lock"))).toEqual([]);
+  // Released once the move is recorded; the dead claim stays and holds nothing.
+  expect((await readdir(moves)).filter((name) => name.endsWith(".lock"))).toEqual([stale]);
 });
