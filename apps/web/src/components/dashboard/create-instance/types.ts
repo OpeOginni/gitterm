@@ -124,6 +124,7 @@ export interface ResolvedGitHubRepository {
 export const ICON_MAP: Record<string, string> = {
   t3code: "/t3-nightly.svg",
   opencode: "/opencode.svg",
+  pi: "/pi.svg",
   shuvcode: "/opencode.svg",
   railway: "/railway.svg",
   cloudflare: "/cloudflare.svg",
@@ -143,7 +144,7 @@ const ICON_ENTRIES = Object.entries(ICON_MAP).sort((a, b) => b[0].length - a[0].
 export const getIcon = (name: string): string => {
   const key = name.toLowerCase();
   for (const [k, v] of ICON_ENTRIES) {
-    if (key.includes(k)) return v;
+    if (key === k || (k !== "pi" && key.includes(k))) return v;
   }
   return "/opencode.svg";
 };
