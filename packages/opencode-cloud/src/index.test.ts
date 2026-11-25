@@ -26,16 +26,19 @@ type Transform = Context["command"]["transform"];
 /** Sets the plugin up over GitTerm's move records and returns what it registers. */
 async function setup() {
   const commands: string[] = [];
+  const run: Record<string, (input: { sessionID: string }) => Promise<void>> = {};
   const hooks: string[] = [];
   const rpc: string[] = [];
   const context = {
-    options: {},
+    // Nothing reaches an OpenCode server: this port is closed.
+    options: { localServerUrl: "http://127.0.0.1:9" },
     location: { directory: root },
     command: {
       transform: async (transform: Parameters<Transform>[0]) => {
         transform({
           add: (definition) => {
             commands.push(definition.name);
+            run[definition.name] = definition.execute as (typeof run)[string];
           },
         } as Parameters<Parameters<Transform>[0]>[0]);
       },
@@ -59,7 +62,7 @@ async function setup() {
   } as unknown as Context;
   const cleanup = await GittermCloudPlugin.setup(context);
   if (cleanup) await cleanup();
-  return { commands, hooks, rpc };
+  return { commands, hooks, rpc, run };
 }
 
 /** A move recorded by @gitterm/move, from /cloud or from the CLI alike. */
@@ -80,20 +83,27 @@ const moved = (changes: Partial<MoveRecord>) =>
     ...changes,
   });
 
-test("registers /cloud, the prompt check, the fork cleanup and the terminal channel, and no tools", async () => {
-  expect(await setup()).toEqual({
-    commands: ["cloud"],
+test("registers /cloud, /cloud-return, the prompt check, the fork cleanup and the terminal channel, and no tools", async () => {
+  expect(await setup()).toMatchObject({
+    commands: ["cloud", "cloud-return"],
     hooks: ["prompt", "fork"],
     rpc: ["gitterm.cloud: cancel"],
   });
 });
 
-test("offers /cloud-return only while a session of this checkout is in the cloud", async () => {
-  // A session that came back, one of another checkout, and one of another agent do not count.
+test("/cloud-return finds a move made after the plugin started, from the CLI too", async () => {
+  const { run } = await setup();
+  await expect(run["cloud-return"]!({ sessionID: "ses_test" })).rejects.toThrow(
+    "not in a cloud workspace",
+  );
+  // A session that came back, one of another agent: nothing to return.
   await moved({ workspaceId: "w-back", returnedAt: "2026-01-02T00:00:00.000Z" });
-  await moved({ workspaceId: "w-other", root: "/another/checkout" });
   await moved({ workspaceId: "w-pi", agent: "pi" });
-  expect((await setup()).commands).toEqual(["cloud"]);
+  await expect(run["cloud-return"]!({ sessionID: "ses_test" })).rejects.toThrow(
+    "not in a cloud workspace",
+  );
+  // Moved now: the return goes on, to the (closed) OpenCode server.
   await moved({ workspaceId: "w-1" });
-  expect((await setup()).commands).toEqual(["cloud", "cloud-return"]);
+  const error = await run["cloud-return"]!({ sessionID: "ses_test" }).catch((e: Error) => e);
+  expect(String(error)).not.toContain("not in a cloud workspace");
 });

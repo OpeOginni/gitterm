@@ -68,12 +68,26 @@ test("a Pi session comes back only with its last turn, and the workspace stays u
   mkdirSync(directory);
   const notices: string[] = [];
   let beforeCapture = () => {};
+  // Each read of the cloud session, after it is done.
+  let afterCloudExport = (_count: number) => {};
+  let cloudExports = 0;
+  const holds: string[] = [];
   const machine = (agentDir: string): Machine => {
-    const base = localMachine({ PI_CODING_AGENT_DIR: agentDir, GITTERM_PI_BIN: fakePi });
+    const base = localMachine({
+      PI_CODING_AGENT_DIR: agentDir,
+      GITTERM_PI_BIN: fakePi,
+      // hold stops this tmux session, never one of the user's.
+      GITTERM_PI_TMUX: `gitterm-pi-test-${process.pid}`,
+    });
     return {
       ...base,
       agent: async (script, op, input) => {
-        if (op !== "notify") return base.agent(script, op, input);
+        if (op === "hold") holds.push(String(input?.ref));
+        if (op !== "notify") {
+          const result = await base.agent(script, op, input);
+          if (op === "export" && agentDir === thereAgent) afterCloudExport(++cloudExports);
+          return result as never;
+        }
         notices.push(String(input?.message));
         return { started: false } as never;
       },
@@ -89,6 +103,7 @@ test("a Pi session comes back only with its last turn, and the workspace stays u
     ready: async () => ({ url: "https://ws1.example", directory, canExec: true }),
     machine: () => machine(thereAgent),
     end: async (_id, how) => void ended.push(how),
+    gone: async () => false,
   };
   const deps = { cloud, local: machine(hereAgent), agent: piAgent, progress: () => {} };
 
@@ -127,10 +142,20 @@ test("a Pi session comes back only with its last turn, and the workspace stays u
   expect(existsSync(path.join(repo, "cloud.txt"))).toBe(false);
   expect(readFileSync(localFile, "utf8")).not.toContain("Create cloud.txt.");
 
-  // Once the cloud is done, everything comes back and the workspace goes.
-  await returnFromCloud(deps, record!, { force: false, end: "delete" });
+  // A turn that lands after the last read, while the conversation is brought back: everything
+  // up to it comes back, and the workspace, which has the turn, is kept.
+  cloudExports = 0;
+  afterCloudExport = (count) => {
+    if (count === 2) appendFileSync(cloudFile!, entry("e", "d", "user", "A late turn."));
+  };
+  const result = await returnFromCloud(deps, record!, { force: false, end: "delete" });
   expect(readFileSync(path.join(repo, "cloud.txt"), "utf8")).toBe("from the cloud\n");
   expect(readFileSync(localFile, "utf8")).toContain("One more thing.");
-  expect(ended).toEqual(["delete"]);
+  expect(readFileSync(localFile, "utf8")).not.toContain("A late turn.");
+  expect(readFileSync(cloudFile!, "utf8")).toContain("A late turn.");
+  expect(ended).toEqual([]);
+  expect(result.warnings).toEqual([expect.stringContaining("workspace ws1 was kept running")]);
+  // Every return stopped the workspace's Pi before reading.
+  expect(holds).toEqual([record!.cloudRef, record!.cloudRef, record!.cloudRef]);
   expect(notices).toHaveLength(2);
 }, 60_000);

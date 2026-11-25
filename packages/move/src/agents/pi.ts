@@ -16,7 +16,8 @@ import { runs, type AgentAdapter, type ExportedSession } from "./types.js";
  * `<agent dir>/gitterm/inbox/<id>.txt`, which GitTerm's Pi extension sends when the session
  * opens; in a workspace, `notify` also opens it in the tmux session the terminal attaches to.
  * While Pi works in a session, the extension keeps Pi's process id in
- * `<agent dir>/gitterm/busy/<id>`, which `status` reads.
+ * `<agent dir>/gitterm/busy/<id>`, which `status` reads. A return stops the workspace's Pi
+ * (`hold`) before it reads the session.
  */
 const PI_SCRIPT = agentScript(String.raw`
 const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(home, ".pi", "agent");
@@ -24,6 +25,8 @@ const sessionsDir = process.env.PI_CODING_AGENT_SESSION_DIR || path.join(agentDi
 // Workspaces install Pi in ~/.local/bin, which a command's PATH may lack.
 const localPi = path.join(home, ".local", "bin", "pi");
 const piBin = process.env.GITTERM_PI_BIN || (fs.existsSync(localPi) ? localPi : "pi");
+// The tmux session the workspace's terminal attaches to (tests name their own).
+const tmuxSession = process.env.GITTERM_PI_TMUX || "${PI_TMUX_SESSION}";
 const encode = (cwd) => "--" + cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-") + "--";
 const has = (command) => { try { cp.execFileSync("sh", ["-c", "command -v " + command], { stdio: "ignore" }); return true; } catch { return false; } };
 
@@ -112,14 +115,21 @@ const ops = {
     if (input.where !== "cloud" || !has("tmux")) return { started: false };
     const file = sessionFile(input.ref);
     const cwd = entries(fs.readFileSync(file, "utf8"))[0].cwd;
-    try { cp.execFileSync("tmux", ["kill-session", "-t", "${PI_TMUX_SESSION}"], { stdio: "ignore" }); } catch {}
+    try { cp.execFileSync("tmux", ["kill-session", "-t", tmuxSession], { stdio: "ignore" }); } catch {}
     const pathEnv = path.join(home, ".local", "bin") + ":" + process.env.PATH;
-    cp.execFileSync("tmux", ["new-session", "-d", "-s", "${PI_TMUX_SESSION}", "-c", cwd, "env", "PATH=" + pathEnv, piBin, "--session", file], { stdio: "ignore" });
+    cp.execFileSync("tmux", ["new-session", "-d", "-s", tmuxSession, "-c", cwd, "env", "PATH=" + pathEnv, piBin, "--session", file], { stdio: "ignore" });
     return { started: true };
   },
 
   async status() {
     return { busy: busy(input.ref) };
+  },
+
+  /** Stops the workspace's Pi, which nothing restarts until someone opens its terminal. */
+  async hold() {
+    if (busy(input.ref)) fail("Pi is still working in this session. Let it finish or stop it, then try again.");
+    try { cp.execFileSync("tmux", ["kill-session", "-t", tmuxSession], { stdio: "ignore" }); } catch {}
+    return {};
   },
 };
 `);
@@ -146,7 +156,10 @@ export const piAgent: AgentAdapter = {
   installed: () => runs("pi", ["--version"]),
   howToMove: "Type /cloud in a session; /cloud-return brings it back.",
   script: PI_SCRIPT,
-  session: scriptSession(PI_SCRIPT),
+  session: (machine) => ({
+    ...scriptSession(PI_SCRIPT)(machine),
+    hold: async (input) => void (await machine.agent(PI_SCRIPT, "hold", input)),
+  }),
   // Pi gives its bash tool the session it runs in.
   currentSession: (env) => env.PI_SESSION_ID,
   sentSince: (exported: ExportedSession, mark) =>
