@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -24,22 +25,30 @@ export type MoveRecord = {
   returnedAt?: string;
 };
 
+// One file per record, so moves and returns of different sessions never write the same file.
 // `process.env.HOME` first: Bun's homedir() ignores a HOME changed at runtime (tests do).
-const recordsFile = () =>
-  path.join(process.env.HOME || homedir(), ".config", "gitterm", "moves.json");
+const recordsDir = () => path.join(process.env.HOME || homedir(), ".config", "gitterm", "moves");
 
 export async function loadRecords(): Promise<MoveRecord[]> {
-  try {
-    return JSON.parse(await readFile(recordsFile(), "utf8")) as MoveRecord[];
-  } catch {
-    return [];
-  }
+  const names = await readdir(recordsDir()).catch(() => []);
+  const records = await Promise.all(
+    names
+      .filter((name) => name.endsWith(".json"))
+      .map((name) =>
+        readFile(path.join(recordsDir(), name), "utf8")
+          .then((text) => JSON.parse(text) as MoveRecord)
+          .catch(() => undefined),
+      ),
+  );
+  return records
+    .filter((record) => record !== undefined)
+    .sort((a, b) => a.movedAt.localeCompare(b.movedAt));
 }
 
 export async function saveRecord(record: MoveRecord) {
-  const records = (await loadRecords()).filter((item) => item.workspaceId !== record.workspaceId);
-  records.push(record);
-  await mkdir(path.dirname(recordsFile()), { recursive: true, mode: 0o700 });
-  await writeFile(`${recordsFile()}.tmp`, `${JSON.stringify(records, null, 2)}\n`, { mode: 0o600 });
-  await rename(`${recordsFile()}.tmp`, recordsFile());
+  const file = path.join(recordsDir(), `${encodeURIComponent(record.workspaceId)}.json`);
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  await mkdir(recordsDir(), { recursive: true, mode: 0o700 });
+  await writeFile(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 });
+  await rename(temporary, file);
 }

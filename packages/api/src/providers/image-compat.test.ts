@@ -16,6 +16,16 @@ describe("imageSupportsProvider", () => {
     ).toBe(true);
   });
 
+  test("an admin's prebuilt snapshot alone makes an image available", () => {
+    expect(
+      getSupportedImageProviders({
+        e2b: { snapshot: "s" },
+        vercel: { snapshot: "s" },
+        boat: { snapshot: "s" },
+      }),
+    ).toEqual(["e2b", "vercel", "boat"]);
+  });
+
   test("reports provider support using the same rules as image selection", () => {
     expect(
       getSupportedImageProviders({
