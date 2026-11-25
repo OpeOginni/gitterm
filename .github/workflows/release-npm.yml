@@ -1,0 +1,145 @@
+name: Release npm packages
+run-name: Release npm packages from ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full SHA of the reviewed release commit at the tip of main
+        type: string
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: gitterm-npm-release
+  cancel-in-progress: false
+
+jobs:
+  pack:
+    if: github.repository == 'OpeOginni/gitterm' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      packages: ${{ steps.plan.outputs.packages }}
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Verify the selected source
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          if [[ "$RELEASE_SHA" != "$GITHUB_SHA" ]]; then
+            echo "::error::The reviewed release commit must match the selected main revision."
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Select packages
+        id: plan
+        run: node scripts/plan-npm-release.mjs
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        if: steps.plan.outputs.packages != '[]'
+        with:
+          bun-version-file: package.json
+      - name: Build and pack
+        if: steps.plan.outputs.packages != '[]'
+        env:
+          PACKAGES: ${{ steps.plan.outputs.packages }}
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          mkdir "$RUNNER_TEMP/npm-release"
+          for entry in $(jq -r '.[] | .package' <<< "$PACKAGES"); do
+            bun run "build:$entry"
+            npm pack "./packages/$entry" --ignore-scripts --pack-destination "$RUNNER_TEMP/npm-release"
+          done
+      - name: Smoke-test the packed CLI
+        if: contains(fromJSON(steps.plan.outputs.packages).*.package, 'cli')
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/cli-smoke"
+          cd "$RUNNER_TEMP/cli-smoke"
+          npm install --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP"/npm-release/gitterm-cli-*.tgz
+          ./node_modules/.bin/gitterm setup --help
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        id: upload
+        if: steps.plan.outputs.packages != '[]'
+        with:
+          name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/npm-release/*.tgz
+          if-no-files-found: error
+          retention-days: 14
+
+  candidate:
+    needs: pack
+    if: needs.pack.outputs.packages != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm-candidate
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          artifact-ids: ${{ needs.pack.outputs.artifact }}
+          path: ${{ runner.temp }}/npm-release
+      - name: Publish exact tarballs under candidate
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+          PACKAGES: ${{ needs.pack.outputs.packages }}
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts --no-audit --no-fund npm@11.21.0
+          while IFS=$'\t' read -r name version exists; do
+            spec="@gitterm/$name@$version"
+            file="$RUNNER_TEMP/npm-release/gitterm-$name-$version.tgz"
+            integrity="sha512-$(openssl dgst -sha512 -binary "$file" | openssl base64 -A)"
+            if [[ "$exists" == false ]] && [[ -z "$(npm view "$spec" dist.integrity 2>/dev/null || true)" ]]; then
+              npm publish "$file" --ignore-scripts --access public --tag candidate --provenance
+            fi
+            test "$(npm view --prefer-online "$spec" dist.integrity)" = "$integrity"
+            test "$(npm view --prefer-online "@gitterm/$name@candidate" version)" = "$version"
+            echo "- \`$spec\` (\`$integrity\`)" >> "$GITHUB_STEP_SUMMARY"
+          done < <(jq -r '.[] | [.package, .version, .exists] | @tsv' <<< "$PACKAGES")
+
+  promote:
+    needs: [pack, candidate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm-production
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Move latest to the verified versions
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+          PACKAGES: ${{ needs.pack.outputs.packages }}
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts --no-audit --no-fund npm@11.21.0
+          while IFS=$'\t' read -r name version previous; do
+            tags=$(npm view --prefer-online "@gitterm/$name@$version" dist-tags --json)
+            test "$(jq -r '.candidate // ""' <<< "$tags")" = "$version"
+            latest=$(jq -r '.latest // "-"' <<< "$tags")
+            [[ "$latest" == "$previous" || "$latest" == "$version" ]]
+          done < <(jq -r '.[] | [.package, .version, (.latest // "-")] | @tsv' <<< "$PACKAGES")
+          while IFS=$'\t' read -r name version; do
+            npm dist-tag add "@gitterm/$name@$version" latest
+            test "$(npm view --prefer-online "@gitterm/$name@latest" version)" = "$version"
+            echo "- \`@gitterm/$name@$version\` is latest." >> "$GITHUB_STEP_SUMMARY"
+          done < <(jq -r '.[] | [.package, .version] | @tsv' <<< "$PACKAGES")

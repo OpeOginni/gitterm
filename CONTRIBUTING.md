@@ -2,6 +2,11 @@
 
 Thanks for your interest in contributing! This guide covers local setup, development workflow, and expectations for pull requests.
 
+If a change needs a new npm version of the CLI, SDK, agent runtime, or OpenCode
+plugin, run `bun run changeset` and commit the generated note with your PR.
+Include any affected packages that bundle the changed code. See the
+[release runbook](docs/releases.md) for the maintainer steps.
+
 ## Development Setup
 
 ### Prerequisites
