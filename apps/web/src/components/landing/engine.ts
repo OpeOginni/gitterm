@@ -61,7 +61,6 @@ const PROVIDERS = Object.fromEntries(SANDBOX_PROVIDERS.map((p) => [p.id, p])) as
   SandboxProviderId,
   SandboxProvider
 >;
-const ORDER = SANDBOX_PROVIDERS.map((p) => p.id);
 
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
@@ -541,6 +540,9 @@ export function startLanding(root: HTMLElement): () => void {
   const wins = Object.fromEntries(
     all(".fw[data-win]", stage).map((w) => [w.dataset.win, w]),
   ) as Record<Slot, HTMLElement>;
+  const strip = need("[data-prov-strip]");
+  // The demo moves through the providers in the strip's order.
+  const order = all("[data-prov]", strip).map((b) => b.dataset.prov as SandboxProviderId);
   const alerts = Object.fromEntries(
     all(".fw[data-alert]", stage).map((w) => [w.dataset.alert, w]),
   ) as Record<Slot, HTMLElement>;
@@ -1686,6 +1688,8 @@ export function startLanding(root: HTMLElement): () => void {
   function setProvider(id: SandboxProviderId) {
     prov = id;
     const P = PROVIDERS[id];
+    for (const b of all("[data-prov]", strip))
+      b.setAttribute("aria-pressed", String(b.dataset.prov === id));
     syncStatus();
     for (const i of all<HTMLImageElement>("img[data-plogo]")) {
       i.removeAttribute("srcset");
@@ -1729,15 +1733,38 @@ export function startLanding(root: HTMLElement): () => void {
     on,
   );
 
-  // The demo moves on to the next provider every few seconds while it is on screen. It holds
-  // still while someone is pointing at it or has a window open.
+  // Picking a provider swaps it in place (no restart) and holds that choice for a while
+  let pickedUntil = 0;
+  for (const b of all("[data-prov]", strip))
+    b.addEventListener(
+      "click",
+      () => {
+        pickedUntil = Date.now() + 15000;
+        setProvider(b.dataset.prov as SandboxProviderId);
+      },
+      on,
+    );
+
+  // The demo moves on to the next provider every few seconds while it or the strip is on screen.
+  // It holds still while someone is pointing at either, has a window open, or just picked one.
+  let stripVisible = false;
   function cycleTick() {
     later(cycleTick, 4000);
-    if (reduce || document.hidden || !benchVisible) return;
-    if (stage.querySelector(".fw.open:not([data-auto]), .fw.peek") || stage.matches(":hover"))
+    if (reduce || document.hidden || !(benchVisible || stripVisible) || Date.now() < pickedUntil)
       return;
-    setProvider(ORDER[(ORDER.indexOf(prov) + 1) % ORDER.length] ?? "e2b");
+    if (
+      stage.querySelector(".fw.open:not([data-auto]), .fw.peek") ||
+      stage.matches(":hover") ||
+      strip.matches(":hover")
+    )
+      return;
+    setProvider(order[(order.indexOf(prov) + 1) % order.length] ?? "e2b");
   }
+  observe(
+    new IntersectionObserver((es) => (stripVisible = es.some((e) => e.isIntersecting)), {
+      threshold: 0.5,
+    }),
+  ).observe(strip);
 
   setProvider(prov);
   showScene(0);

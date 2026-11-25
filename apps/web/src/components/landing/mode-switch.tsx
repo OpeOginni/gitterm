@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Seg } from "@/components/site/seg";
 import { cn } from "@/lib/utils";
 import { MODE_EVENT, type DemoMode } from "./engine";
 
@@ -10,18 +9,20 @@ const CAPTION: Record<DemoMode, string> = {
   without: "OpenCode on its own. Everything runs on your laptop.",
 };
 
-function Dot({ on, tone }: { on: boolean; tone: "warn" | "gold" }) {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "size-[7px] rounded-full bg-fg-4 transition-[background-color,box-shadow] duration-250",
-        on && tone === "warn" && "bg-[#fb923c] shadow-[0_0_0_3px_rgba(251,146,60,0.15)]",
-        on && tone === "gold" && "bg-primary shadow-[0_0_0_3px_rgba(211,173,85,0.16)]",
-      )}
-    />
-  );
-}
+const TABS: { value: DemoMode; label: string; line: string }[] = [
+  {
+    value: "without",
+    label: "Without Gitterm",
+    // Grows from and shrinks to its right end, the middle of the rule.
+    line: "after:origin-right after:bg-[#fb923c] after:shadow-[0_0_12px_1px_rgba(251,146,60,0.6)]",
+  },
+  {
+    value: "with",
+    label: "With Gitterm",
+    // Grows from and shrinks to its left end, the middle of the rule.
+    line: "after:origin-left after:bg-primary after:shadow-[0_0_12px_1px_rgba(211,173,85,0.65)]",
+  },
+];
 
 /** "Without Gitterm / With Gitterm": tells the demo engine to replay the session in that mode. */
 export function ModeSwitch() {
@@ -40,20 +41,30 @@ export function ModeSwitch() {
   }, []);
   return (
     <div ref={ref} className="mt-12 mb-[30px] flex flex-col items-center gap-3">
-      <Seg
-        ariaLabel="Compare the session"
-        value={mode}
-        onChange={pick}
-        className="max-[560px]:flex max-[560px]:w-full max-[560px]:[&>button]:min-h-11 max-[560px]:[&>button]:min-w-0 max-[560px]:[&>button]:flex-1 max-[560px]:[&>button]:px-2 max-[560px]:[&>button]:text-[14px]"
-        options={[
-          {
-            value: "without",
-            label: "Without Gitterm",
-            icon: <Dot on={mode === "without"} tone="warn" />,
-          },
-          { value: "with", label: "With Gitterm", icon: <Dot on={mode === "with"} tone="gold" /> },
-        ]}
-      />
+      {/* Two tabs over a faint rule; the picked one's stretch of it lights up and glows. Switching
+          runs the light across the middle: the old stretch drains into it, then the new one fills
+          out from it. */}
+      <div
+        role="group"
+        aria-label="Compare the session"
+        className="flex border-b border-line max-[560px]:w-full"
+      >
+        {TABS.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            aria-pressed={mode === t.value}
+            onClick={() => pick(t.value)}
+            className={cn(
+              "relative -mb-px cursor-pointer px-6 select-none pt-1 pb-3 text-[15px] font-medium text-fg-4 transition-colors duration-300 hover:text-fg-2 aria-pressed:text-fg max-[560px]:flex-1 max-[560px]:px-2",
+              "after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:scale-x-0 after:rounded-full after:transition-transform after:duration-[260ms] after:ease-in aria-pressed:after:scale-x-100 aria-pressed:after:delay-[260ms] aria-pressed:after:duration-[380ms] aria-pressed:after:ease-[cubic-bezier(0.22,1,0.36,1)]",
+              t.line,
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
       <p className="m-0 text-center text-[15px] text-fg-3" aria-live="polite">
         {CAPTION[mode]}
       </p>

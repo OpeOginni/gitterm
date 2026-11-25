@@ -1604,15 +1604,11 @@
   }
   /* It turns gold through Tailwind classes on the button (see sections.tsx and hero.tsx); this adds the
      shine passing over it as it does */
-  .lp .prompt-strip:hover .prompt-copy::before,
-  .lp .prompt-strip:focus-within .prompt-copy::before,
   .lp .setup-cmd:hover .prompt-copy::before,
   .lp .setup-cmd:focus-within .prompt-copy::before {
     animation: lp-whoosh 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
   }
   @media (prefers-reduced-motion: reduce) {
-    .lp .prompt-strip:hover .prompt-copy::before,
-    .lp .prompt-strip:focus-within .prompt-copy::before,
     .lp .setup-cmd:hover .prompt-copy::before,
     .lp .setup-cmd:focus-within .prompt-copy::before {
       animation: none;
@@ -3453,54 +3449,71 @@
     border-block: 1px solid #50545e;
   }
 
-  /* The hero's providers: one line that scrolls slowly and fades at both ends. */
-  .lp .ro-marquee {
+  /* The hero's agents on wide screens: tiles that float beside the headline. Grey until the
+     headline names one (it glows gold, its name shows) or says "your agents" (all in colour). */
+  .lp .agent-float li {
+    position: absolute;
     display: flex;
-    max-width: 640px;
-    margin: 0 auto;
-    overflow: hidden;
-    mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
-  }
-  .lp .ro-track {
-    display: flex;
-    flex-shrink: 0;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    animation: ro-scroll 45s linear infinite;
-  }
-  .lp .ro-marquee:hover .ro-track {
-    animation-play-state: paused;
-  }
-  .lp .ro-track li {
-    display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 8px;
-    padding: 4px 18px;
-    color: var(--fg-3);
-    font-size: 14.5px;
-    font-weight: 500;
-    white-space: nowrap;
+    gap: 12px;
+    animation: lp-bob 7s ease-in-out infinite;
   }
-  @keyframes ro-scroll {
-    to {
-      transform: translateX(-100%);
+  .lp .agent-float .tile {
+    display: grid;
+    place-items: center;
+    width: clamp(68px, 4.6vw, 88px);
+    aspect-ratio: 1;
+    border-radius: 22px;
+    background: var(--fill);
+    box-shadow: inset 0 0 0 1px var(--line);
+    transition:
+      box-shadow 0.5s,
+      background-color 0.5s;
+  }
+  .lp .agent-float .tile img {
+    width: 54%;
+    height: 54%;
+    object-fit: contain;
+    opacity: 0.4;
+    filter: grayscale(1);
+    transition:
+      opacity 0.5s,
+      filter 0.5s;
+  }
+  .lp .agent-float .lit .tile img,
+  .lp .agent-float .named .tile img {
+    opacity: 1;
+    filter: none;
+  }
+  .lp .agent-float .named .tile {
+    background: color-mix(in oklab, var(--gold) 7%, transparent);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--gold) 50%, transparent),
+      0 0 44px -6px color-mix(in oklab, var(--gold) 50%, transparent);
+  }
+  .lp .agent-float .name {
+    color: var(--fg-2);
+    font-size: 14px;
+    white-space: nowrap;
+    opacity: 0;
+    translate: 0 -4px;
+    transition:
+      opacity 0.5s,
+      translate 0.5s;
+  }
+  .lp .agent-float .named .name {
+    opacity: 1;
+    translate: 0;
+  }
+  @keyframes lp-bob {
+    50% {
+      transform: translateY(-10px);
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .lp .ro-marquee {
-      flex-wrap: wrap;
-      justify-content: center;
-      mask-image: none;
-    }
-    .lp .ro-track {
-      flex-wrap: wrap;
-      justify-content: center;
-      flex-shrink: 1;
+    .lp .agent-float li {
       animation: none;
-    }
-    .lp .ro-track[aria-hidden] {
-      display: none;
     }
   }
 }
