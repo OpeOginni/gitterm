@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -89,6 +89,21 @@ test("a requested branch or tag is checked out from the refreshed clone", async 
   expect(await git(machine, "rev-parse", "HEAD")).toBe(await git(origin, "rev-parse", "v1"));
 });
 
+test("a pinned commit is checked out on a fresh machine and on a snapshot's clone", async () => {
+  const pinned = await git(origin, "rev-parse", "HEAD");
+  await writeFile(path.join(origin, "app.txt"), "two\n");
+  await git(origin, "commit", "-qam", "two");
+
+  await checkout({ branch: "main", baseCommit: pinned });
+  expect(await git(machine, "rev-parse", "HEAD")).toBe(pinned);
+
+  // The snapshot's clone was left on a later commit.
+  await git(machine, "checkout", "-q", "main");
+  await checkout({ branch: "main", baseCommit: pinned });
+  expect(await git(machine, "rev-parse", "HEAD")).toBe(pinned);
+  expect(await readFile(path.join(machine, "app.txt"), "utf8")).toBe("one\n");
+});
+
 test("a refresh that cannot reach the repository fails instead of leaving stale code", async () => {
   await checkout();
   await rm(origin, { recursive: true, force: true });
@@ -120,14 +135,23 @@ test("preparing a workspace for a snapshot removes credentials and the agent's d
   }
   // Only the scrub: the full command also stops the agent, which on a developer's machine
   // would stop their own OpenCode. Its own HOME and Git config keep it away from theirs.
-  await execute("bash", ["-c", SCRUB_WORKSPACE_COMMAND], {
-    env: {
-      PATH: process.env.PATH,
-      HOME: home,
-      GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"),
-    } as unknown as NodeJS.ProcessEnv,
-  });
+  const env = {
+    PATH: process.env.PATH,
+    HOME: home,
+    GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"),
+  } as unknown as NodeJS.ProcessEnv;
+  await execute("bash", ["-c", SCRUB_WORKSPACE_COMMAND], { env });
   for (const file of files)
     expect(await readFile(path.join(home, file), "utf8").catch(() => "gone")).toBe("gone");
   expect(await readFile(path.join(home, "project/keep.txt"), "utf8")).toBe("x");
+
+  // A credential that cannot be removed fails the scrub, so no snapshot is taken.
+  await mkdir(path.join(home, ".gitterm/github"), { recursive: true });
+  await writeFile(path.join(home, ".gitterm/github/config.json"), "x");
+  await chmod(path.join(home, ".gitterm/github"), 0o500);
+  try {
+    await expect(execute("bash", ["-c", SCRUB_WORKSPACE_COMMAND], { env })).rejects.toThrow();
+  } finally {
+    await chmod(path.join(home, ".gitterm/github"), 0o700);
+  }
 });

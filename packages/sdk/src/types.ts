@@ -371,8 +371,12 @@ export type WorkspaceTerminateOptions = {
 /** Whether a workspace can be kept as its repository's snapshot, and what that replaces. */
 export type ProjectSnapshotStatus = {
   available: boolean;
-  /** Why not: the provider has no snapshots, the plan allows none, no repository, or not running. */
-  reason?: "provider" | "plan" | "repository" | "not_running";
+  /**
+   * Why not: the provider has no snapshots, the agent is not OpenCode (the only one whose
+   * credentials and conversations are removed first), the plan allows none, no repository,
+   * or not running.
+   */
+  reason?: "provider" | "agent" | "plan" | "repository" | "not_running";
   /** The snapshot already kept for this repository on this provider. */
   existing: { id: string; createdAt: string } | null;
 };

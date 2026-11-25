@@ -258,8 +258,18 @@ export interface CloudProvidersshAccessSupport {
   requiresLocalBinaries?: string[];
 }
 
-export interface DaytonaImageProviderMetadata {
+/**
+ * Every provider with snapshots takes `snapshot`: a prebuilt snapshot that already has the
+ * agent, chosen by an admin. The workspace starts from it and skips `setupCommands`.
+ */
+interface PrebuiltSnapshot {
+  snapshot?: string;
+}
+
+export interface DaytonaImageProviderMetadata extends PrebuiltSnapshot {
   image?: string;
+  /** Commands that install the agent on `image` when it has none. */
+  setupCommands?: string[];
   resources?: { cpu?: number; memory?: number; disk?: number };
   editorResources?: { cpu?: number; memory?: number; disk?: number };
 }
@@ -275,7 +285,7 @@ export interface AwsImageProviderMetadata {
   architecture?: "X86_64" | "ARM64";
 }
 
-export interface VercelImageProviderMetadata {
+export interface VercelImageProviderMetadata extends PrebuiltSnapshot {
   /** Vercel Container Registry image that includes the selected coding agent. */
   image?: string;
   /** Vercel runtime for images that install the agent during startup. */
@@ -286,7 +296,7 @@ export interface VercelImageProviderMetadata {
   vcpus?: number;
 }
 
-export interface BoatImageProviderMetadata {
+export interface BoatImageProviderMetadata extends PrebuiltSnapshot {
   size?: "small" | "default" | "large";
   /** Commands to run before starting the agent in the Box. */
   setupCommands?: string[];
@@ -303,9 +313,12 @@ export interface ExeDevImageProviderMetadata {
 
 export interface ImageProviderMetadata {
   isDefault?: boolean;
-  e2b?: {
+  e2b?: PrebuiltSnapshot & {
+    /** A template that already has the agent (E2B's prebuilt), chosen by an admin. */
     templateId?: string;
     sshTemplateId?: string;
+    /** Commands that install the agent on E2B's base template. */
+    setupCommands?: string[];
     /** Size variant suffix set by a machine profile, appended to the template name. */
     templateSuffix?: string;
   };

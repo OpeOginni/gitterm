@@ -6,6 +6,7 @@ import {
   machineProfile,
   region,
   type CloudProvidersshAccessSupport,
+  type ImageProviderMetadata,
   type ProviderSettlement,
 } from "./schema/cloud";
 import { modelProvider } from "./schema/model-credentials";
@@ -15,6 +16,7 @@ import { MODEL_PROVIDERS } from "@gitterm/schema/model-providers";
 import { removeRetiredImageProviders, RETIRED_IMAGE_PROVIDERS } from "./seed-image-cleanup";
 import { RUNTIME_IMAGE_MAJOR } from "./runtime-image";
 import cliPackage from "../../cli/package.json" with { type: "json" };
+import { npmInstallCommand } from "@gitterm/schema/agent-install";
 import { PI_INSTALL_COMMAND } from "@gitterm/schema/pi";
 
 /**
@@ -228,8 +230,49 @@ const seedAgentTypes = [
 const [cliMajor = 0, cliMinor = 0] = cliPackage.version.split(".").map(Number);
 const GITTERM_CLI = `'@gitterm/cli@<${cliMajor === 0 ? `0.${cliMinor + 1}` : cliMajor + 1}.0'`;
 
-/** Built with the workspace templates; public, so any E2B account can start it. */
-const SANDBOX_E2B_TEMPLATE = `brightoginni123/gitterm-sandbox:${RUNTIME_IMAGE_MAJOR}`;
+/**
+ * How each agent installs on a provider without a prebuilt image: the default everywhere.
+ * An admin can set a prebuilt `snapshot` (or an E2B `templateId`) per image instead.
+ */
+const INSTALL_OPENCODE = npmInstallCommand(["@opencode/cli@2", GITTERM_CLI]);
+const INSTALL_T3CODE = npmInstallCommand([
+  "t3",
+  "@anthropic-ai/claude-code",
+  "@openai/codex",
+  "@opencode/cli@2",
+  GITTERM_CLI,
+]);
+
+/**
+ * E2B fixes a machine's size per template, so E2B starts from GitTerm's public templates, one
+ * per agent and size (built by the runtime release). An admin can set their own instead.
+ */
+const E2B_TEMPLATE_OWNER = "brightoginni123";
+const SANDBOX_E2B_TEMPLATE = `${E2B_TEMPLATE_OWNER}/gitterm-sandbox:${RUNTIME_IMAGE_MAJOR}`;
+const SEEDED_E2B_TEMPLATE = /^brightoginni123\/gitterm-/;
+
+/**
+ * The seed owns an image's provider settings, except the prebuilt an admin chose: a
+ * `snapshot`, or an E2B `templateId` other than GitTerm's.
+ */
+function keepPrebuilt(
+  existing: ImageProviderMetadata | null | undefined,
+  seeded: ImageProviderMetadata,
+): ImageProviderMetadata {
+  const merged: Record<string, Record<string, unknown>> = { ...seeded } as never;
+  for (const [provider, options] of Object.entries(existing ?? {})) {
+    if (!options || typeof options !== "object") continue;
+    const { snapshot, templateId } = options as { snapshot?: unknown; templateId?: unknown };
+    const kept = {
+      ...(typeof snapshot === "string" && snapshot ? { snapshot } : {}),
+      ...(typeof templateId === "string" && templateId && !SEEDED_E2B_TEMPLATE.test(templateId)
+        ? { templateId }
+        : {}),
+    };
+    if (Object.keys(kept).length) merged[provider] = { ...merged[provider], ...kept };
+  }
+  return merged as ImageProviderMetadata;
+}
 
 /** E2B-only 4 vCPU template, superseded by the `-sm`/`-lg` size templates. */
 const RETIRED_IMAGE_NAMES = ["gitterm-opencode-server-lg"];
@@ -261,10 +304,9 @@ const seedImages = [
     providerMetadata: {
       railway: {},
       e2b: {
-        // Use public, owner-qualified aliases so machine profiles can append -sm/-lg.
-        // Raw template IDs are not aliases and cannot have size suffixes appended.
-        templateId: `brightoginni123/gitterm-opencode-server:${RUNTIME_IMAGE_MAJOR}`,
-        sshTemplateId: `brightoginni123/gitterm-opencode-server-with-ssh:${RUNTIME_IMAGE_MAJOR}`,
+        // Owner-qualified aliases, so machine profiles can append -sm/-lg.
+        templateId: `${E2B_TEMPLATE_OWNER}/gitterm-opencode-server:${RUNTIME_IMAGE_MAJOR}`,
+        setupCommands: [INSTALL_OPENCODE],
       },
       daytona: {
         image: `opeoginni/gitterm-opencode-server:${RUNTIME_IMAGE_MAJOR}`,
@@ -279,11 +321,11 @@ const seedImages = [
       },
       vercel: {
         runtime: "node22" as const,
-        setupCommands: [`npm install -g @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`],
+        setupCommands: [INSTALL_OPENCODE],
         vcpus: 2,
       },
       boat: {
-        setupCommands: [`npm install -g @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`],
+        setupCommands: [INSTALL_OPENCODE],
       },
     },
   },
@@ -293,9 +335,9 @@ const seedImages = [
     agentTypeName: "T3Code",
     providerMetadata: {
       railway: {},
-      // Built by the E2B template job in Release GitTerm.
       e2b: {
-        templateId: `brightoginni123/gitterm-t3code-server:${RUNTIME_IMAGE_MAJOR}`,
+        templateId: `${E2B_TEMPLATE_OWNER}/gitterm-t3code-server:${RUNTIME_IMAGE_MAJOR}`,
+        setupCommands: [INSTALL_T3CODE],
       },
       daytona: {
         image: `opeoginni/gitterm-t3code-server:${RUNTIME_IMAGE_MAJOR}`,
@@ -310,20 +352,14 @@ const seedImages = [
       },
       vercel: {
         runtime: "node22" as const,
-        setupCommands: [
-          `npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`,
-        ],
+        setupCommands: [INSTALL_T3CODE],
         vcpus: 2,
       },
       boat: {
-        setupCommands: [
-          `npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`,
-        ],
+        setupCommands: [INSTALL_T3CODE],
       },
       exedev: {
-        setupCommands: [
-          `npm install -g t3 @anthropic-ai/claude-code @openai/codex @opencode/cli@2 ${GITTERM_CLI} --no-audit --fund=false`,
-        ],
+        setupCommands: [INSTALL_T3CODE],
       },
     },
   },
@@ -801,7 +837,7 @@ export async function seedDatabase(): Promise<void> {
         .set({
           imageId: img.imageId,
           agentTypeId,
-          providerMetadata: img.providerMetadata ?? {},
+          providerMetadata: keepPrebuilt(existing.providerMetadata, img.providerMetadata ?? {}),
           isEnabled: true,
           updatedAt: new Date(),
         })

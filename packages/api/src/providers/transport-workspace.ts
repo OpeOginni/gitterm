@@ -15,6 +15,7 @@ import type {
   WorkspaceInfo,
   WorkspaceStatusResult,
 } from "./compute";
+import { imageSupportsProvider } from "./image-compat";
 import { repositoryCheckoutCommand } from "./project-snapshot";
 import { inlineGitAuthCommands } from "./git-auth";
 import { createProvisionLogger } from "./provision-logger";
@@ -74,9 +75,11 @@ export type TransportWorkspaceOptions = {
  * Adding a provider's transport is all a provider needs for workspaces.
  *
  * The image's provider metadata (`imageProviderMetadata[provider]`, with the machine
- * profile's options merged in) gives `image` (or `template`, `templateId`), the transport's
- * template; `setupCommands`, run before the checkout to install the agent on a plain image;
- * and the rest, passed on as the transport's `machine` options.
+ * profile's options merged in) gives `image` (or `template`), the transport's template;
+ * `setupCommands`, run before the checkout to install the agent on a plain image; and the
+ * rest, passed on as the transport's `machine` options. An admin can start the image from a
+ * prebuilt instead: `snapshot` (any provider with snapshots) or E2B's `templateId`. Then the
+ * setup commands are skipped.
  *
  * A resume starts the agent again: through `resumeCommand` where the transport runs one,
  * otherwise through `~/.gitterm/resume.sh`, which `withSandboxHandles` runs.
@@ -115,17 +118,21 @@ export class TransportWorkspaceProvider implements ComputeProvider {
           image?: string;
           template?: string;
           templateId?: string;
+          /** A prebuilt snapshot with the agent, chosen by an admin. */
+          snapshot?: string;
           setupCommands?: string[];
           // SSH variants, which these workspaces don't offer.
           sshTemplateId?: string;
           editorResources?: unknown;
         } & Record<string, unknown>)
       | undefined;
-    if (!metadata) throw new Error(`This image is not available on ${label}.`);
+    if (!metadata || !imageSupportsProvider(this.name, config.imageProviderMetadata))
+      throw new Error(`This image is not available on ${label}.`);
     const {
       image,
       template,
       templateId,
+      snapshot,
       setupCommands,
       sshTemplateId: _ssh,
       editorResources: _editor,
@@ -148,9 +155,11 @@ export class TransportWorkspaceProvider implements ComputeProvider {
             ([name, value]) => !ENTRYPOINT_ONLY_ENV.has(name) && value !== undefined,
           ),
         ) as Record<string, string>,
-        ...(config.snapshot ? { snapshot: config.snapshot } : {}),
+        // A project snapshot (the user's saved workspace) first, else the admin's prebuilt one.
+        ...((config.snapshot ?? snapshot) ? { snapshot: config.snapshot ?? snapshot } : {}),
       },
-      setupCommands,
+      // A prebuilt snapshot or E2B template already has the agent.
+      setupCommands: snapshot || templateId ? [] : setupCommands,
       name: repo?.name ?? "workspace",
       ...(repo ? { checkout: checkout(repo, ref, config.snapshot) } : {}),
       files: spec?.agent.files ?? [],

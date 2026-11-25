@@ -6,9 +6,11 @@ import {
   dockerTestsEnabled,
   removeDockerRun,
 } from "@gitterm/agent-runtime/sandbox/docker.test-helper";
+import { npmInstallCommand } from "@gitterm/schema/agent-install";
 import { opencodeProvisioner } from "../service/agents/opencode";
 import * as transportModule from "../service/sandbox-transport";
 import * as timeouts from "../service/workspace-timeouts";
+import { PREPARE_PROJECT_SNAPSHOT_COMMAND } from "./project-snapshot";
 import { withSandboxHandles } from "./sandbox-handles";
 import { TransportWorkspaceProvider } from "./transport-workspace";
 
@@ -90,8 +92,60 @@ test.skipIf(!enabled)(
     const resumed = await transport.preview(id, 4096);
     expect(await answers(resumed.url, password)).toBe(200);
 
+    // Run the whole preparation command in the workspace, where it can safely stop OpenCode.
+    const fixture = '"$HOME/.gitterm/opencode/credentials.json"';
+    expect(
+      (await transport.run(id, `mkdir -p "$HOME/.gitterm/opencode" && touch ${fixture}`)).exitCode,
+    ).toBe(0);
+    expect((await transport.run(id, PREPARE_PROJECT_SNAPSHOT_COMMAND)).exitCode).toBe(0);
+    expect((await transport.run(id, `test ! -e ${fixture}`)).exitCode).toBe(0);
+
     await provider.terminateWorkspace(info.externalServiceId);
     expect((await transport.info(id)).state).toBe("terminated");
   },
   600_000,
+);
+
+test.skipIf(!enabled)(
+  "a plain image without Node gets the agent from its setup commands, as E2B's base does",
+  async () => {
+    const password = randomBytes(12).toString("hex");
+    const provider = withSandboxHandles(
+      new TransportWorkspaceProvider("daytona", { label: "Docker" }),
+    );
+    const info = await provider.createWorkspace({
+      workspaceId: "ws2",
+      userId: "u1",
+      imageId: "image",
+      subdomain: "ws2",
+      imageProviderMetadata: {
+        daytona: {
+          image: "buildpack-deps:bookworm-scm",
+          setupCommands: [npmInstallCommand(["@opencode/cli@2"])],
+        },
+      },
+      provisioningSpec: {
+        agent: opencodeProvisioner.provision({
+          userId: "u1",
+          userDisplayName: "Test",
+          workspaceHostname: "ws2.localhost",
+          agentTypeName: "OpenCode",
+          serverOnly: true,
+          serverPassword: password,
+          credentials: [],
+        }),
+        repo: { url: "https://github.com/octocat/Hello-World", name: "hello" },
+        workspaceProfile: "standard",
+        editorAccessEnabled: false,
+      },
+    });
+    expect(await answers(info.upstreamUrl, password)).toBe(200);
+    const id = info.externalServiceId.replace("sandbox:daytona:", "");
+    // Node and the agent went to ~/.local; the resume finds them there too.
+    await provider.pauseWorkspace(info.externalServiceId);
+    await provider.resumeWorkspace(info.externalServiceId);
+    expect(await answers((await transport.preview(id, 4096)).url, password)).toBe(200);
+    await provider.terminateWorkspace(info.externalServiceId);
+  },
+  900_000,
 );

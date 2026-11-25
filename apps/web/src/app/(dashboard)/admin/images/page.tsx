@@ -42,7 +42,6 @@ const PROVIDER_LABELS: Record<string, string> = {
   vercel: "Vercel",
   boat: "Boat",
   exedev: "exe.dev",
-  railway: "Railway",
 };
 
 const PROVIDER_DEFINITIONS = [
@@ -55,13 +54,15 @@ const PROVIDER_DEFINITIONS = [
   {
     key: "e2b",
     label: "E2B",
-    description: "Template IDs built for this agent.",
-    initial: { templateId: "", sshTemplateId: "" },
+    description:
+      "templateId: a template that has the agent (sizes append -sm/-lg). Without one, setupCommands install it on base.",
+    initial: { templateId: "", setupCommands: [] },
   },
   {
     key: "daytona",
     label: "Daytona",
-    description: "Container image and workspace resources.",
+    description:
+      "Container image and resources, or snapshot: a prebuilt snapshot that has the agent.",
     initial: {
       image: "",
       resources: { cpu: 2, memory: 4 },
@@ -71,13 +72,14 @@ const PROVIDER_DEFINITIONS = [
   {
     key: "vercel",
     label: "Vercel",
-    description: "Registry image or managed runtime configuration.",
-    initial: { image: "", vcpus: 2 },
+    description:
+      "Runtime and install commands, a registry image, or snapshot: a prebuilt snapshot.",
+    initial: { runtime: "node24", setupCommands: [], vcpus: 2 },
   },
   {
     key: "boat",
     label: "Boat",
-    description: "Box size and agent installation commands.",
+    description: "Box size and install commands, or snapshot: a prebuilt snapshot.",
     initial: { size: "default", setupCommands: [] },
   },
   {
@@ -85,12 +87,6 @@ const PROVIDER_DEFINITIONS = [
     label: "exe.dev",
     description: "Base image and machine sizing.",
     initial: { image: "exeuntu", cpu: 2, memory: "8GB", disk: "25GB" },
-  },
-  {
-    key: "railway",
-    label: "Railway",
-    description: "Use this image directly on Railway.",
-    initial: {},
   },
 ] as const;
 

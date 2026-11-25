@@ -32,8 +32,13 @@ Subscribe to at least these events:
 E2B fixes a sandbox's size per template, so every machine size is its own template
 (`<name>`, `<name>-sm`, `<name>-lg`). The **Release GitTerm** action builds them with the
 `runtimes` or `both` target, including the `gitterm-sandbox` templates. Published templates
-are public so self-hosted installs can start them. To build into your own account instead, run
-`E2B_API_KEY=... bun run e2b:build` in `packages/api` (`--agent opencode|t3code|sandbox` for one).
+are public so self-hosted installs can start them, and the seed uses them by default.
+
+To use your own instead, run `E2B_API_KEY=... bun run e2b:build` in `packages/api`
+(`--agent opencode|t3code|sandbox` for one; `E2B_TEMPLATE_OWNER` for `--verify` and
+`--promote`), then set the image's E2B `templateId` in the admin panel. The seed keeps a template
+you set. With no `templateId`, a workspace starts from E2B's `base` template and installs the
+agent with the image's `setupCommands`.
 
 ## Reference
 

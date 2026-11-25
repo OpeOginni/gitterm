@@ -4,7 +4,10 @@ Workspaces run on runtime images (`opeoginni/gitterm-opencode-server`, `gitterm-
 `gitterm-t3code-server`, `gitterm-opencode-server-aws` on Docker Hub) and on the matching E2B
 templates, including the `gitterm-sandbox` template managed E2B sandboxes start from. These are
 versioned separately from the platform (`v1.x` server, web, proxy). The E2B templates are public,
-so self-hosted installs can start them from their own E2B account.
+so self-hosted installs can start them from their own E2B account. E2B gets templates because it
+fixes a machine's size per template; other providers install the agent when a workspace starts.
+An admin can replace any of them with their own prebuilt (see
+[sandbox-standard.md](sandbox-standard.md#prebuilt-snapshots)).
 
 ## Run a release
 

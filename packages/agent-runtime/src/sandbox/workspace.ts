@@ -89,6 +89,12 @@ const AGENT_PID = '"$HOME/.gitterm/agent.pid"';
 /** The label that keeps the agent's port, to find its new URL after a resume. */
 export const AGENT_PORT_LABEL = "gitterm_agent_port";
 
+/**
+ * Agents installed by setup commands live in `~/.local/bin` (see `npmInstallCommand` in
+ * `@gitterm/schema/agent-install`), so every agent command runs with it first on PATH.
+ */
+const withLocalBin = (command: string) => `export PATH="$HOME/.local/bin:$PATH"; ${command}`;
+
 /** The directory that holds a provider's checkouts. */
 export function workspaceDirectory(transport: SandboxTransport, name: string): string {
   return `${SANDBOX_PROVIDER_PROFILES[transport.provider].workspaceRoot}/${name}`;
@@ -102,7 +108,7 @@ export function lastLines(text: string): string {
 /** Starts the agent once: a resume runs this again, so it does nothing when the port answers. */
 export function startAgentCommand(serve: { command: string; port: number }, directory: string) {
   const answers = `bash -c ${shellQuote(`exec 3<>/dev/tcp/127.0.0.1/${serve.port}`)} 2>/dev/null`;
-  const start = `nohup setsid bash -lc ${shellQuote(serve.command)} > /tmp/agent-server.log 2>&1 </dev/null & echo $! > ${AGENT_PID}`;
+  const start = `nohup setsid bash -lc ${shellQuote(withLocalBin(serve.command))} > /tmp/agent-server.log 2>&1 </dev/null & echo $! > ${AGENT_PID}`;
   // Running means the agent answers, so wait for its port (resume runs this as well).
   const wait = `i=0; until ${answers}; do i=$((i+1)); [ $i -lt 50 ] || { echo "The agent did not open port ${serve.port}; see /tmp/agent-server.log" >&2; exit 1; }; sleep 1; done`;
   return `cd ${shellQuote(directory)} && mkdir -p "$HOME/.gitterm" && { ${answers} || { ${start}; }; } && { ${wait}; }`;
@@ -167,7 +173,7 @@ export async function provisionWorkspace(
     if (!plan.create.snapshot) {
       for (const command of plan.setupCommands ?? [])
         await step("install-agent", () =>
-          must(transport, sandbox, "install", command, { timeoutMs: 600_000 }),
+          must(transport, sandbox, "install", withLocalBin(command), { timeoutMs: 600_000 }),
         );
     }
     await step("create-workspace-directory", () =>
@@ -196,7 +202,7 @@ export async function provisionWorkspace(
     if (plan.beforeAgent) {
       const command = plan.beforeAgent;
       await step("before-agent-setup", () =>
-        must(transport, sandbox, "before-agent", command, {
+        must(transport, sandbox, "before-agent", withLocalBin(command), {
           cwd: directory,
           timeoutMs: 600_000,
         }),
@@ -221,7 +227,7 @@ export async function provisionWorkspace(
       await step("run-post-start-command", () =>
         transport.run(
           sandbox,
-          `nohup setsid bash -lc ${shellQuote(command)} > /tmp/agent-post-start.log 2>&1 </dev/null &`,
+          `nohup setsid bash -lc ${shellQuote(withLocalBin(command))} > /tmp/agent-post-start.log 2>&1 </dev/null &`,
           { cwd: directory },
         ),
       );
@@ -276,7 +282,9 @@ async function captureCredential(
   command: string,
   directory: string,
 ): Promise<string> {
-  const result = await transport.run(id, command, { cwd: directory }).catch(() => null);
+  const result = await transport
+    .run(id, withLocalBin(command), { cwd: directory })
+    .catch(() => null);
   const credential = result?.exitCode === 0 ? result.stdout.trim() : "";
   if (!credential) throw new WorkspaceSetupError("credential", "");
   return credential;
