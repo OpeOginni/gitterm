@@ -44,8 +44,8 @@ Keep keys out of config files: use {env:VAR} references. When you're done, show 
 export function Hero() {
   return (
     // Fills the first screen under the 64px header, less a strip where the next section peeks in.
-    <section className="relative flex min-h-[calc(100svh-64px-220px)] flex-col justify-center py-12 text-center">
-      <Wrap>
+    <section className="flex min-h-[calc(100svh-64px-220px)] flex-col text-center">
+      <Wrap className="relative flex-1 content-center py-12">
         <AgentRoll />
         <SetupCommand location="hero" className="mx-auto mt-10 max-w-[480px]" />
         {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow. */}
