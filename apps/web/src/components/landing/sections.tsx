@@ -172,9 +172,9 @@ const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }
     body: (
       <>
         Run <code>{INSTALL_SETUP}</code> once, then type <code>/cloud</code>. The conversation, your
-        unpublished commits and, if you choose, uncommitted changes move to a cloud workspace. Pi
-        works the same way, and other agents move when you ask them. Your laptop copy stays as it
-        was until you bring the session back with <code>/cloud-return</code>.
+        unpublished commits and, if you choose, uncommitted changes move to a cloud workspace.
+        OpenCode and Pi both support <code>/cloud</code> and <code>/cloud-return</code>. Your laptop
+        copy stays as it was until you bring the session back.
       </>
     ),
   },
