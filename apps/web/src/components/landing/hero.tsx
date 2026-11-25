@@ -111,9 +111,10 @@ export function AgentRoll() {
           </span>
         </span>
       </h1>
-      {/* Wide screens: the agents float in the space around the headline, and the one it names
-          glows with its name under it. */}
-      <ul className="agent-float pointer-events-none absolute inset-x-6 inset-y-0 m-0 hidden list-none p-0 min-[1200px]:block">
+      <ul
+        aria-hidden
+        className="agent-float pointer-events-none absolute inset-x-6 inset-y-0 m-0 hidden list-none p-0 min-[1200px]:block"
+      >
         {AGENTS.map((agent) => {
           const named = current === agent;
           const { side, y, inset, delay } = agent.float;
@@ -130,7 +131,6 @@ export function AgentRoll() {
               <span className="tile">
                 <Logo src={agent.logo} className={cn(agent.icon && "rounded-[9px]")} />
               </span>
-              <span className="name">{agent.name}</span>
             </li>
           );
         })}
