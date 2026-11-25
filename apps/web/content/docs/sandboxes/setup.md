@@ -153,7 +153,7 @@ OpenCode and Pi can do this in their own project settings: see [Turn a part off]
 gitterm project disable sandbox   # or: cloud, all
 ```
 
-It applies to the whole checkout, on this machine only: nothing is written to the repository. It is saved in `~/.config/gitterm/projects.json`. In that project the OpenCode plugin and Pi's extension don't offer the sandbox tools (or `/cloud`), and the `gitterm` commands refuse, so agents using the skills stop too. Restart your agents after changing it. `gitterm project` shows what the project allows, and `gitterm project enable sandbox` turns it back on.
+It applies to the whole checkout, on this machine only: nothing is written to the repository. It is saved in `~/.config/gitterm/projects.json`. In that project the OpenCode plugin and Pi's extension don't offer the sandbox tools (or `/cloud`), and the `gitterm` commands that create, sync, run or resume a sandbox refuse, so agents using the skills stop too. `list`, `pause` and `destroy` still work there, so you can clean up. Restart your agents after changing it. `gitterm project` shows what the project allows, and `gitterm project enable sandbox` turns it back on.
 
 ## Several accounts
 
@@ -245,7 +245,7 @@ The `publicPreviews` option skips the public-previews prompt, so a `deny` rule f
 
 ### Pi
 
-Pi asks before creating a sandbox: **Yes**, **Always in this project**, or **No**. After **Always**, it stops asking in that checkout. Passing a secret with `secretEnv` and making a preview public ask every time. Everything else runs as Pi's own tools do, without asking. A Pi run without a terminal (print or RPC mode) asks nothing.
+Pi asks the questions the `gitterm` CLI asks. Creating, syncing and applying ask once per project: **Yes**, **Always in this project**, or **No**. After **Always**, they stop asking in that checkout. Passing a secret with `secretEnv` and making a preview public ask every time. A Pi run that can't show a question (print mode) does none of these steps until the project is approved, and the agent is told why.
 
 ### Codex, Claude Code and other agents
 

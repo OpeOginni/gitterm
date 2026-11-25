@@ -457,6 +457,7 @@ if (workspaceEnvironment) {
                 offset: { type: "number" },
                 limit: { type: "number" },
                 wait: { type: "number", description: "Seconds to wait for completion" },
+                ...checkoutOption,
               }),
           (argv) => runSandboxJob(argv),
         )
@@ -466,7 +467,8 @@ if (workspaceEnvironment) {
           (b) =>
             b
               .positional("sandboxId", { type: "string", demandOption: true })
-              .positional("jobId", { type: "string", demandOption: true }),
+              .positional("jobId", { type: "string", demandOption: true })
+              .options(checkoutOption),
           (argv) => runSandboxCancel(argv),
         )
         .command(
@@ -500,7 +502,8 @@ if (workspaceEnvironment) {
             b
               .positional("sandboxId", { type: "string", demandOption: true })
               .positional("jobId", { type: "string", demandOption: true })
-              .positional("path", { type: "string", demandOption: true }),
+              .positional("path", { type: "string", demandOption: true })
+              .options(checkoutOption),
           (argv) => runSandboxArtifact(argv),
         )
         .command(
@@ -517,7 +520,10 @@ if (workspaceEnvironment) {
         .command(
           "resume <sandboxId>",
           "Resume a managed sandbox paused for inactivity",
-          (b) => b.positional("sandboxId", { type: "string", demandOption: true }),
+          (b) =>
+            b
+              .positional("sandboxId", { type: "string", demandOption: true })
+              .options(checkoutOption),
           (argv) => runSandboxResume(argv),
         )
         .command(

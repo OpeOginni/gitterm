@@ -118,7 +118,9 @@ async function guarded<T>(
  * Asks before a step that costs money or shares the checkout. Routine steps (create, sync,
  * apply) don't ask in a project the user approved with "Always in this project"; secrets and
  * public previews ask every time. `--yes` approves once; `--always` also approves the project.
- * Without a terminal, a step that needs asking fails with NEEDS_APPROVAL, so an agent asks.
+ * Without a terminal, a step that needs asking fails with NEEDS_APPROVAL, carrying the question,
+ * so an agent or plugin asks the user. A command asks at most one question, so `--yes` answers
+ * only what was asked.
  */
 async function approve(
   args: Common & { yes?: boolean; always?: boolean; dir?: string },
@@ -133,7 +135,7 @@ async function approve(
       new Error(
         `Needs the user's approval: ${question} Ask them, then run again with --yes${routine ? ", or with --always to stop asking in this project" : ""}.`,
       ),
-      { code: "NEEDS_APPROVAL" },
+      { code: "NEEDS_APPROVAL", details: { question, always: routine } },
     );
   const answer = routine
     ? await choose(question, ["Yes", "Always in this project", "No"])
@@ -200,18 +202,18 @@ export async function runSandboxCreate(
     allowed(args.dir);
     const { client, settings, account } = await clientFor(args);
     const summary = describeSandboxAccount(account);
-    await approve(args, `Create a billable sandbox charged to ${summary.chargedTo}?`);
     // Where previews are always private there is nothing to approve.
     const publicPreviews =
       (args.public ?? settings.publicPreviews) === true &&
       client.capabilities.previews !== "private" &&
       client.capabilities.previews !== "none";
-    if (args.public && publicPreviews && !settings.publicPreviews)
-      await approve(
-        args,
-        "Make every preview of this sandbox public to anyone with its URL?",
-        false,
-      );
+    // Public previews ask every time, so that question replaces the routine one.
+    const askPublic = args.public === true && publicPreviews && !settings.publicPreviews;
+    await approve(
+      args,
+      `Create a billable sandbox charged to ${summary.chargedTo}${askPublic ? ", with every preview public to anyone with its URL" : ""}?`,
+      !askPublic,
+    );
     const project = await checkout(args.dir);
     // A sandbox starts from the newest setup snapshot saved for this checkout, unless told
     // which one, or `none`.
@@ -379,12 +381,15 @@ export async function runSandboxJob(
     offset?: number;
     limit?: number;
     wait?: number;
+    dir?: string;
   },
 ) {
   await guarded(
     args,
     "Reading job...",
     async () => {
+      // Reading a job resumes a paused sandbox.
+      allowed(args.dir);
       const { client } = await clientFor(args);
       const ref = refOf(client, args.sandboxId);
       return exitWithJob(
@@ -397,11 +402,15 @@ export async function runSandboxJob(
   );
 }
 
-export async function runSandboxCancel(args: Common & { sandboxId: string; jobId: string }) {
+export async function runSandboxCancel(
+  args: Common & { sandboxId: string; jobId: string; dir?: string },
+) {
   await guarded(
     args,
     "Cancelling...",
     async () => {
+      // Cancelling resumes a paused sandbox; destroying it needs no resume.
+      allowed(args.dir);
       const { client } = await clientFor(args);
       return client.cancel(refOf(client, args.sandboxId), args.jobId);
     },
@@ -459,12 +468,13 @@ export async function runSandboxPreview(
 }
 
 export async function runSandboxArtifact(
-  args: Common & { sandboxId: string; jobId: string; path: string },
+  args: Common & { sandboxId: string; jobId: string; path: string; dir?: string },
 ) {
   await guarded(
     args,
     "Downloading...",
     async () => {
+      allowed(args.dir);
       const { client } = await clientFor(args);
       return client.fetchArtifact(refOf(client, args.sandboxId), args.path, { jobId: args.jobId });
     },
@@ -494,8 +504,14 @@ export async function runSandboxApply(
         client.applyArtifact(refOf(client, args.sandboxId), {
           localPath: args.artifact,
           target: args.target,
-          beforeWrite: (plan) =>
-            approve(args, `Write ${plan.target} in ${plan.root} (from job ${plan.jobId})?`),
+          // The checkout written to is the one that decides.
+          beforeWrite: async (plan) => {
+            allowed(plan.root);
+            await approve(
+              { ...args, dir: plan.root },
+              `Write ${plan.target} in ${plan.root} (from job ${plan.jobId})?`,
+            );
+          },
         }),
       (applied) => success(`Applied ${applied.path} from job ${applied.jobId}`),
     );
@@ -504,11 +520,12 @@ export async function runSandboxApply(
   }
 }
 
-export async function runSandboxResume(args: Common & { sandboxId: string }) {
+export async function runSandboxResume(args: Common & { sandboxId: string; dir?: string }) {
   await guarded(
     args,
     "Resuming...",
     async () => {
+      allowed(args.dir);
       const { client } = await clientFor(args);
       const record = await client.resume(refOf(client, args.sandboxId));
       return { ...record, filesKept: client.capabilities.pause === "stateful" };

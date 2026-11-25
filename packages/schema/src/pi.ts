@@ -70,7 +70,6 @@ const records = path.join(home, ".config", "gitterm", "moves.json");
 /** The sandbox account the gitterm CLI uses: a provider key, or a GitTerm account. */
 const sandboxSettings =
   process.env.GITTERM_SANDBOX_CONFIG || path.join(home, ".config", "gitterm", "sandbox.json");
-
 /** Signed in to a GitTerm server (gitterm.dev or self-hosted), with gitterm login or a token. */
 function signedIn() {
   if (process.env.GITTERM_API_TOKEN?.trim()) return true;
@@ -84,7 +83,7 @@ function signedIn() {
 /**
  * What this machine allows in the project Pi runs in ("gitterm project disable"), from
  * ~/.config/gitterm/projects.json: the entry for the directory or the nearest one above it.
- * A broken file turns both off until it is fixed.
+ * A broken file turns both off until it is fixed. It only hides the tools: the CLI enforces it.
  */
 function projectAllows(dir) {
   let saved;
@@ -102,7 +101,7 @@ function projectAllows(dir) {
   }
   for (; ; at = path.dirname(at)) {
     const entry = saved[at];
-    if (entry) return { sandbox: entry.sandbox !== false, cloud: entry.cloud !== false, approved: entry.approved === true };
+    if (entry) return { sandbox: entry.sandbox !== false, cloud: entry.cloud !== false };
     if (path.dirname(at) === at) return { sandbox: true, cloud: true };
   }
 }
@@ -331,25 +330,23 @@ export default function (pi) {
     watched.clear();
   });
 
-  async function sandbox(args, signal) {
-    const result = await gitterm(["sandbox", ...args], { signal });
+  /**
+   * Runs a gitterm sandbox command. The CLI decides what needs the user's approval: when it
+   * answers NEEDS_APPROVAL, Pi asks its question and runs the command again with the answer.
+   * Without a UI nobody can be asked, so the step is not done.
+   */
+  async function sandbox(args, signal, ctx) {
+    let result = await gitterm(["sandbox", ...args], { signal });
+    if (result.error?.code === "NEEDS_APPROVAL") {
+      const { question, always } = result.error;
+      if (!ctx?.hasUI)
+        throw new Error("Needs the user's approval: " + question + " This Pi run cannot ask them, so it was not done.");
+      const choice = await ctx.ui.select(question, always ? ["Yes", "Always in this project", "No"] : ["Yes", "No"]);
+      if (!choice || choice === "No") throw new Error("The user did not approve this.");
+      result = await gitterm(["sandbox", ...args, choice === "Yes" ? "--yes" : "--always"], { signal });
+    }
     if (result.error) throw new Error(result.error.message);
     return result.ok;
-  }
-  /** Asks the user. A run with no UI was started by the user, and runs as Pi's own tools do. */
-  async function approve(ctx, title, message) {
-    if (!ctx.hasUI) return;
-    if (!(await ctx.ui.confirm(title, message))) throw new Error("The user did not approve this.");
-  }
-  /**
-   * Creating a sandbox asks once per project: "Always in this project" is saved on this
-   * machine (by the CLI, with --always), and later sandboxes there don't ask. Returns the flag.
-   */
-  async function approveCreate(ctx, message) {
-    if (!ctx.hasUI || projectAllows(ctx.cwd).approved) return "--yes";
-    const choice = await ctx.ui.select("Create a sandbox? " + message, ["Yes", "Always in this project", "No"]);
-    if (!choice || choice === "No") throw new Error("The user did not approve this.");
-    return choice === "Yes" ? "--yes" : "--always";
   }
   const unwatch = (prefix) => {
     for (const key of watched) if (key === prefix || key.startsWith(prefix + ":")) watched.delete(key);
@@ -432,13 +429,9 @@ export default function (pi) {
       snapshot: Type.Optional(Type.String({ description: "A setup snapshot id to start from, or 'none'. Defaults to the newest for this checkout." })),
     }),
     async execute(_id, params, signal, _onUpdate, ctx) {
-      const account = await sandbox(["account"], signal);
-      const approval = await approveCreate(ctx, "A remote sandbox billed to " + account.chargedTo + ". This checkout is uploaded to it when the agent syncs.");
-      if (params.publicPreviews)
-        await approve(ctx, "Public previews?", "Every port of this sandbox will be reachable by anyone with its URL.");
       const record = await sandbox(
         [
-          "create", approval, "--dir", ctx.cwd, "--session", ctx.sessionManager.getSessionId(),
+          "create", "--dir", ctx.cwd, "--session", ctx.sessionManager.getSessionId(),
           "--name", params.name || "Pi sandbox",
           ...(params.purpose ? ["--purpose", params.purpose] : []),
           ...(params.lifetimeMinutes ? ["--lifetime", String(params.lifetimeMinutes)] : []),
@@ -446,6 +439,7 @@ export default function (pi) {
           ...(params.snapshot ? ["--snapshot", params.snapshot] : []),
         ],
         signal,
+        ctx,
       );
       return reply(
         [
@@ -492,7 +486,7 @@ export default function (pi) {
       "Upload this checkout's working tree (uncommitted changes and non-ignored untracked files included; deletions applied) to a sandbox. Secret-like files and submodules are excluded. Local files are not changed.",
     parameters: Type.Object({ sandboxId }),
     async execute(_id, params, signal, _onUpdate, ctx) {
-      const result = await sandbox(["sync", params.sandboxId, "--yes", "--dir", ctx.cwd], signal);
+      const result = await sandbox(["sync", params.sandboxId, "--dir", ctx.cwd], signal, ctx);
       return reply("Synced snapshot " + result.snapshot.id + " to " + params.sandboxId + "; verified in the sandbox: " + result.verified + ".");
     },
   });
@@ -513,11 +507,9 @@ export default function (pi) {
     }),
     async execute(_id, params, signal, _onUpdate, ctx) {
       const names = params.secretEnv ?? [];
-      if (names.length)
-        await approve(ctx, "Pass secrets to the sandbox?", "Pass " + names.join(", ") + " from this machine to sandbox " + params.sandboxId + ".");
       const view = await sandbox(
         [
-          "exec", params.sandboxId, params.command, "--yes", "--dir", ctx.cwd, "--session", ctx.sessionManager.getSessionId(),
+          "exec", params.sandboxId, params.command, "--dir", ctx.cwd, "--session", ctx.sessionManager.getSessionId(),
           ...(params.cwd ? ["--cwd", params.cwd] : []),
           ...(params.timeoutMinutes ? ["--timeout", String(params.timeoutMinutes)] : []),
           ...(params.waitSeconds !== undefined ? ["--wait", String(params.waitSeconds)] : []),
@@ -525,6 +517,7 @@ export default function (pi) {
           ...names.flatMap((name) => ["--secret-env", name]),
         ],
         signal,
+        ctx,
       );
       const running = view.state.status === "running";
       if (running) watch(params.sandboxId, view.job.id);
@@ -547,12 +540,12 @@ export default function (pi) {
       waitSeconds: Type.Optional(Type.Integer({ minimum: 0, maximum: 300 })),
       cancel: Type.Optional(Type.Boolean()),
     }),
-    async execute(_id, params, signal) {
+    async execute(_id, params, signal, _onUpdate, ctx) {
       const view = params.cancel
-        ? await sandbox(["cancel", params.sandboxId, params.jobId], signal)
+        ? await sandbox(["cancel", params.sandboxId, params.jobId, "--dir", ctx.cwd], signal)
         : await sandbox(
             [
-              "job", params.sandboxId, params.jobId,
+              "job", params.sandboxId, params.jobId, "--dir", ctx.cwd,
               ...(params.offset !== undefined ? ["--offset", String(params.offset)] : []),
               ...(params.limit ? ["--limit", String(params.limit)] : []),
               ...(params.waitSeconds ? ["--wait", String(params.waitSeconds)] : []),
@@ -578,16 +571,15 @@ export default function (pi) {
       public: Type.Optional(Type.Boolean({ description: "true makes this port's URL open to anyone (needs the user's approval); false makes it private again" })),
     }),
     async execute(_id, params, signal, _onUpdate, ctx) {
-      if (params.public === true)
-        await approve(ctx, "Make the preview public?", "Port " + params.port + " of this sandbox will be reachable by anyone with its URL.");
       const preview = await sandbox(
         [
-          "preview", params.sandboxId, String(params.port), "--yes", "--dir", ctx.cwd,
+          "preview", params.sandboxId, String(params.port), "--dir", ctx.cwd,
           ...(params.command ? ["--command", params.command] : []),
           ...(params.cwd ? ["--cwd", params.cwd] : []),
           ...(params.public === true ? ["--public"] : params.public === false ? ["--no-public"] : []),
         ],
         signal,
+        ctx,
       );
       return reply(
         [
@@ -608,8 +600,8 @@ export default function (pi) {
       jobId: Type.String({ description: "The job that produced the file" }),
       path: Type.String({ description: "Relative to the synced project directory, or absolute" }),
     }),
-    async execute(_id, params, signal) {
-      const artifact = await sandbox(["artifact", params.sandboxId, params.jobId, params.path], signal);
+    async execute(_id, params, signal, _onUpdate, ctx) {
+      const artifact = await sandbox(["artifact", params.sandboxId, params.jobId, params.path, "--dir", ctx.cwd], signal);
       return reply("Fetched " + artifact.remotePath + " from job " + artifact.jobId + " (" + artifact.bytes + " bytes, sha256 " + artifact.sha256 + ") to " + artifact.localPath);
     },
   });
@@ -623,8 +615,8 @@ export default function (pi) {
       artifactPath: Type.String({ description: "localPath from sandbox_artifact" }),
       target: Type.String({ description: "Relative path in the checkout" }),
     }),
-    async execute(_id, params, signal) {
-      const applied = await sandbox(["apply", params.sandboxId, params.artifactPath, params.target, "--yes"], signal);
+    async execute(_id, params, signal, _onUpdate, ctx) {
+      const applied = await sandbox(["apply", params.sandboxId, params.artifactPath, params.target], signal, ctx);
       return reply("Applied the artifact from job " + applied.jobId + " to " + applied.path + ".");
     },
   });
