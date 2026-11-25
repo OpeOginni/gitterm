@@ -415,10 +415,8 @@ function scenesFor(P: SandboxProvider, id: SandboxProviderId) {
       text("Tests pass and the checkout preview is up. Review the snapshot with `git diff`."),
     user(TRAIN) +
       user("/cloud") +
-      `<div class="t-block"><div class="hd"># Cloud handoff</div><div class="o">Conversation         <span style="color:var(--t-text)">41 messages</span>\nUnpublished commits  <span style="color:var(--t-text)">2 on checkout-coupons</span>\nUncommitted changes  <span style="color:var(--t-text)">3 files, approved</span>\n\n<span class="hl">→ ${esc(P.name)} workspace ready on checkout-coupons</span>\nPair your phone      <span class="url">gitterm.dev/pair/7QK-4M2</span></div></div>` +
-      text(
-        `This session now continues in a cloud workspace on ${P.name}. Your laptop copy is unchanged.`,
-      ),
+      `<div class="t-block"><div class="hd"># Cloud handoff</div><div class="o">Conversation         <span style="color:var(--t-text)">41 messages</span>\nUnpublished commits  <span style="color:var(--t-text)">2 on checkout-coupons</span>\nUncommitted changes  <span style="color:var(--t-text)">3 files, approved</span>\n\n<span class="hl">→ Vercel workspace ready on checkout-coupons</span>\nOpen workspace       <span class="url">gitterm.dev/dashboard</span></div></div>` +
+      text("This session now continues in the Vercel workspace. Your laptop copy is unchanged."),
   ];
 }
 

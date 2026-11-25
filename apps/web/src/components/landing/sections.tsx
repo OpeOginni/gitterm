@@ -36,7 +36,7 @@ const SETUP_PROMPT = `Set up Gitterm for me. Read ${SITE_URL}/llms.txt first and
 
 Before you change anything, ask me which of these I want:
 1. Moving my agents' sessions to a cloud workspace and back. Run \`${INSTALL_SETUP}\`: it asks which agents to set up (OpenCode, Pi, T3 Code), adds a skill for other agents, and signs me in.
-2. Remote sandboxes for my agents on this machine, for builds, tests and previews. The same setup command adds them. Ask whether I'll use a Gitterm plan or my own provider key, and if mine, which provider (E2B, Daytona, Vercel, Boat, exe.dev or AWS). \`gitterm sandbox setup\` asks the same.
+2. Remote sandboxes for my agents on this machine, for builds, tests and previews. The same setup command adds them. Ask whether I'll use a Gitterm plan or my own provider key. If I want to use my own key, offer only providers that support it. \`gitterm sandbox setup\` asks the same.
 3. A cloud workspace that runs OpenCode, Pi, or T3 Code with Codex or Claude Code, started from ${SITE_URL}/dashboard.
 
 Keep keys out of config files: use {env:VAR} references. When you're done, show me how to check that it works.`;
@@ -346,7 +346,7 @@ export function Keys() {
               <h3 className={cn(h3, "mb-1.5")}>{k.title}</h3>
               <p className={cn(cellText, "mb-[18px]")}>{k.body}</p>
               <div className="flex min-w-0 items-center gap-3 self-end rounded-[10px] border border-line bg-[#0b0b0e] py-2 pr-2 pl-4">
-                <code className="min-w-0 flex-1 truncate font-mono text-[13px] text-fg max-[640px]:text-[12px]">
+                <code className="min-w-0 flex-1 break-words font-mono text-[13px] text-fg max-[640px]:text-[12px]">
                   <span className="text-primary">$ </span>
                   {k.command}
                 </code>

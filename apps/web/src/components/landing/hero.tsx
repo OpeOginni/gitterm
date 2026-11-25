@@ -172,7 +172,7 @@ export function SetupCommand({
         className,
       )}
     >
-      <code className="min-w-0 flex-1 truncate font-mono text-[15px] text-fg">
+      <code className="min-w-0 flex-1 break-words font-mono text-[15px] text-fg">
         <span className="text-primary">$ </span>
         {INSTALL_SETUP}
       </code>
