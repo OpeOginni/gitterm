@@ -133,8 +133,16 @@ test("a Pi session moves to another directory and comes back into the same sessi
 
 test("only a user message after the move counts as local work", () => {
   const before = `${user("a", null, "move this")}\n`;
-  expect(piSentSince(`${before}${assistant("b", "a", "Moved.")}\n`, before.length)).toBe(false);
-  expect(piSentSince(`${before}${user("c", "a", "more")}\n`, before.length)).toBe(true);
+  const mark = Buffer.byteLength(before);
+  expect(piSentSince(`${before}${assistant("b", "a", "Moved.")}\n`, mark)).toBe(false);
+  expect(piSentSince(`${before}${user("c", "a", "more")}\n`, mark)).toBe(true);
+});
+
+test("the session's mark counts bytes, so non-ASCII history doesn't hide a new message", () => {
+  const before = `${user("a", null, `Grüße 🚀 ${"ü".repeat(200)}`)}\n`;
+  const mark = Buffer.byteLength(before);
+  expect(piSentSince(`${before}${assistant("b", "a", "Moved.")}\n`, mark)).toBe(false);
+  expect(piSentSince(`${before}${user("c", "a", "more")}\n`, mark)).toBe(true);
 });
 
 test("returning a Pi session from inside Pi is refused with what to do instead", () => {

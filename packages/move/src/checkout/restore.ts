@@ -161,7 +161,11 @@ try {
     // Keep post-handoff work after verification; discard backups of our own earlier restore.
     const keep = Boolean(expected) && !untouched;
     const tip = before.target || (before.branch ? null : before.sha);
-    if (keep && unique(tip)) {
+    // Coming back to an untouched checkout, the branch the cloud's work lands on may still be
+    // another one here, with commits of its own: that is local work too.
+    const other = Boolean(expected) && untouched && tip !== before.sha && unique(tip);
+    if (other && !force) throw Object.assign(new Error("Local branch changed since the handoff"), { needsConfirmation: true });
+    if ((keep || other) && unique(tip)) {
       kept.branch = "gitterm/before-return-" + id;
       git("branch", "-f", kept.branch, tip);
     }
