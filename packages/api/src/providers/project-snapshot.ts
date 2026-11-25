@@ -75,7 +75,8 @@ export const SCRUB_WORKSPACE_COMMAND = [
   "sync",
 ].join(" && ");
 export const PREPARE_PROJECT_SNAPSHOT_COMMAND = [
-  "pkill -f 'opencode serve' 2>/dev/null || true",
+  // Don't match the shell whose command line contains the pattern.
+  "pkill -f '[o]pencode serve' 2>/dev/null || true",
   "sleep 1",
   SCRUB_WORKSPACE_COMMAND,
 ].join("; ");
