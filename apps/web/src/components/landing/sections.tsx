@@ -334,7 +334,7 @@ export function Keys() {
               title: "Use your own Gitterm",
               body: "Replace the example URL with your server's API URL, then pick from the providers it offers.",
               logos: [{ src: "/gitterm.svg" }, { src: "/E2B.svg", demo: true }],
-              command: "gitterm login --server https://gitterm.acme.dev/api",
+              command: "gitterm login -s https://acme.dev/api",
             },
           ].map((k) => (
             // A subgrid, so logos, titles, text and commands line up across the cards.
@@ -345,8 +345,8 @@ export function Keys() {
               <LogoStack logos={k.logos} />
               <h3 className={cn(h3, "mb-1.5")}>{k.title}</h3>
               <p className={cn(cellText, "mb-[18px]")}>{k.body}</p>
-              <div className="flex min-w-0 items-center gap-3 self-end rounded-[10px] border border-line bg-[#0b0b0e] py-2 pr-2 pl-4">
-                <code className="min-w-0 flex-1 break-words font-mono text-[13px] text-fg max-[640px]:text-[12px]">
+              <div className="flex min-w-0 items-center gap-2 self-end rounded-[10px] border border-line bg-[#0b0b0e] py-2 pr-2 pl-3">
+                <code className="min-w-0 flex-1 overflow-x-auto font-mono text-[13px] whitespace-nowrap text-fg max-[640px]:text-[12px]">
                   <span className="text-primary">$ </span>
                   {k.command}
                 </code>
