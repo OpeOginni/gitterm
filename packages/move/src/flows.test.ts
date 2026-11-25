@@ -136,6 +136,24 @@ test("a cloud session that changed in a way its export doesn't show keeps its wo
   expect(ended).toEqual([]);
 });
 
+test("a cloud checkout edited after capture keeps its workspace", async () => {
+  const { deps, source, cloudDirectory, ended, record } = await withRevision("never");
+  await returnFromCloud(
+    {
+      ...deps,
+      progress: async (step) => {
+        if (step === "Bringing the conversation back")
+          await writeFile(path.join(cloudDirectory, "hello.txt"), "late cloud edit\n");
+      },
+    },
+    record,
+    { force: false, end: "delete" },
+  );
+  expect(ended).toEqual([]);
+  expect(await readFile(path.join(source, "hello.txt"), "utf8")).toBe("initial\n");
+  expect(await readFile(path.join(cloudDirectory, "hello.txt"), "utf8")).toBe("late cloud edit\n");
+});
+
 test("a cloud session that changed while its checkout was copied is not brought back", async () => {
   const { deps, ended, record } = await withRevision("Copying the cloud checkout");
   await expect(returnFromCloud(deps, record, { force: false, end: "delete" })).rejects.toThrow(

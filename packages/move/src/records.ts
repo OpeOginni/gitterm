@@ -3,18 +3,15 @@ import { link, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/p
 import { homedir } from "node:os";
 import path from "node:path";
 
-/** A session moved to the cloud: what is needed to bring it back. */
 export type MoveRecord = {
   workspaceId: string;
-  /** The adapter's key: which agent the session belongs to. */
   agent: string;
-  /** The local session, its size when copied, and the checkout it ran in. */
   localRef: string;
   localMark: number;
   localCwd: string;
   root: string;
   head: string;
-  /** Digest of the checkout's state when it moved, to tell whether it changed here since. */
+  /** Checkout digest at the time of the move. */
   state: string;
   cloudRef: string;
   cloudCwd: string;
@@ -25,7 +22,6 @@ export type MoveRecord = {
   returnedAt?: string;
 };
 
-// One file per record, so moves and returns of different sessions never write the same file.
 // `process.env.HOME` first: Bun's homedir() ignores a HOME changed at runtime (tests do).
 const recordsDir = () => path.join(process.env.HOME || homedir(), ".config", "gitterm", "moves");
 
@@ -64,16 +60,7 @@ const alive = (pid: number) => {
   }
 };
 
-/**
- * Claims the move of one session until the returned function releases it, so a second move of
- * it from any process on this machine (the CLI, /cloud, Pi) is refused while the first runs.
- *
- * Claims are numbered files holding the claimer's process id; only the highest counts. One
- * left by a process that died is never deleted (no one can tell, atomically, that it is still
- * the dead one): the next claim takes the number after it, which an atomic link gives to one
- * caller only. A release removes only its own file, so numbers never go back and a slow caller
- * can't claim one below a live holder.
- */
+/** Keep dead claims so concurrent recovery attempts contend for the same next number. */
 export async function claimMove(agent: string, ref: string): Promise<() => Promise<void>> {
   const key = encodeURIComponent(`${agent}:${ref}`);
   const claim = (n: number) => path.join(recordsDir(), `${key}.${n}.lock`);

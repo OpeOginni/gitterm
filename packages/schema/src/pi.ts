@@ -340,6 +340,7 @@ export default function (pi) {
         await ctx.switchSession(file, {
           withSession: async (next) => deliver(id, (text) => next.sendUserMessage(text)),
         });
+        for (const warning of result.ok?.warnings ?? []) show(warning);
       },
     });
   }
