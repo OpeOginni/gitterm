@@ -9,6 +9,7 @@ import {
   offersModel,
   runtimeClient,
   sessionBusy,
+  sessionRevision,
   stopSession,
   tellMoved,
 } from "./opencode-session.js";
@@ -220,6 +221,10 @@ function sessionOps(machine: OpenCodeMachine): SessionOps {
 
     async stop({ ref }) {
       return stopSession(await client(), ref, AbortSignal.timeout(30_000));
+    },
+
+    async revision({ ref }) {
+      return sessionRevision(await client(), ref, signal());
     },
   };
 }

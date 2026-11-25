@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { git } from "./checkout/snapshot.js";
 import type { AgentAdapter } from "./agents/types.js";
-import { moveToCloud, returnFromCloud, type Cloud } from "./flows.js";
+import { cloudWentOn, moveToCloud, returnFromCloud, type Cloud } from "./flows.js";
 import { localMachine } from "./machine.js";
 import { loadRecords } from "./records.js";
 import { agentScript, scriptSession } from "./script.js";
@@ -104,6 +104,45 @@ test("a return whose workspace cannot be ended is still done, and says so", asyn
   expect(session.messages[0]).toBe("hello");
   expect(session.messages.at(-1)).toContain("This session is back");
   expect((await loadRecords())[0]!.returnedAt).toBeDefined();
+});
+
+/** The fixture with an agent whose sessions report a revision, which `bump` changes at a step. */
+async function withRevision(bumpAt: string) {
+  const f = await fixture();
+  let revision = 1;
+  const ended: string[] = [];
+  const agent: AgentAdapter = {
+    ...fakeAgent,
+    session: (machine) => ({ ...fakeAgent.session(machine), revision: async () => revision }),
+  };
+  const deps = {
+    ...f.deps,
+    agent,
+    cloud: { ...f.deps.cloud, end: async (id: string) => void ended.push(id) },
+    // Something the export doesn't show, such as a message queued in the cloud.
+    progress: async (step: string) => {
+      if (step === bumpAt) revision++;
+    },
+  };
+  await moveToCloud(deps, { ref: "s1", changes: true, fromSession: false });
+  const [record] = await loadRecords();
+  return { ...f, deps, ended, record: record! };
+}
+
+test("a cloud session that changed in a way its export doesn't show keeps its workspace", async () => {
+  const { deps, ended, record } = await withRevision("Bringing the conversation back");
+  const result = await returnFromCloud(deps, record, { force: false, end: "delete" });
+  expect(result.warnings).toEqual([cloudWentOn("ws-1")]);
+  expect(ended).toEqual([]);
+});
+
+test("a cloud session that changed while its checkout was copied is not brought back", async () => {
+  const { deps, ended, record } = await withRevision("Copying the cloud checkout");
+  await expect(returnFromCloud(deps, record, { force: false, end: "delete" })).rejects.toThrow(
+    "went on while it was being copied",
+  );
+  expect(ended).toEqual([]);
+  expect((await loadRecords())[0]!.returnedAt).toBeUndefined();
 });
 
 test("a session already in the cloud is not moved again until its workspace is gone", async () => {
