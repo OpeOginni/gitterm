@@ -42,6 +42,7 @@ test("a checkout keeps several setup snapshots that go stale, are replaced, and 
     },
     get: async (id) => info(id),
     list: async () => [],
+    check: async () => {},
     destroy: async () => {},
     run: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
     writeFile: async () => {},

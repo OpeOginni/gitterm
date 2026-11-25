@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import path from "node:path";
 import { createSandboxTransport } from "@gitterm/agent-runtime/sandbox/index";
 import { SANDBOX_PROVIDER_PROFILES } from "@gitterm/agent-runtime/sandbox/types";
 import { createGittermClient, type GittermClient } from "../client.js";
@@ -186,7 +187,8 @@ const usesCliLogin = (config: SandboxAccountConfig) =>
   (CLI_LOGIN_PROVIDERS as readonly unknown[]).includes(config.provider) &&
   !["serverUrl", "token", "size"].some((key) => key in config);
 
-const isOwnKey = (config: SandboxAccountConfig): config is OwnKeyAccountConfig =>
+/** Whether an account uses the user's own provider credential rather than a Gitterm plan. */
+export const isOwnKey = (config: SandboxAccountConfig): config is OwnKeyAccountConfig =>
   "apiKey" in config || "apiKeyEnv" in config || usesCliLogin(config);
 
 function selected(settings: SandboxSettings, accountName?: string) {
@@ -283,6 +285,49 @@ export async function resolveSandboxAccount(
 
 /** `{env:VAR}` or `{file:path}`, the reference syntax of OpenCode config. */
 export const CREDENTIAL_REFERENCE = /^\{(env|file):([^}]+)\}$/;
+
+/**
+ * Where the gitterm CLI keeps sandbox settings, shared with Pi's extension, the skills and the
+ * OpenCode plugin when its own `sandbox` option is not set.
+ */
+export function sandboxSettingsPath(): string {
+  return (
+    process.env.GITTERM_SANDBOX_CONFIG ??
+    path.join(process.env.HOME || homedir(), ".config", "gitterm", "sandbox.json")
+  );
+}
+
+/**
+ * The sandbox settings: from `GITTERM_SANDBOX_SETTINGS` (JSON, which an agent's own settings
+ * pass to the CLI, as Pi's extension does), else the settings file, else undefined. Keys must be
+ * `{env:VAR}` or `{file:path}` references: a literal key or `token` is refused.
+ */
+export function loadSandboxSettingsFile(): SandboxSettings | undefined {
+  const inline = process.env.GITTERM_SANDBOX_SETTINGS?.trim();
+  if (inline)
+    return checkCredentials(JSON.parse(inline) as SandboxSettings, "GITTERM_SANDBOX_SETTINGS");
+  const file = sandboxSettingsPath();
+  let text: string;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+  return checkCredentials(JSON.parse(text) as SandboxSettings, file);
+}
+
+function checkCredentials(settings: SandboxSettings, where: string): SandboxSettings {
+  const accounts = settings.accounts ?? { [settings.provider ?? "gitterm"]: settings };
+  for (const [name, account] of Object.entries(accounts)) {
+    const key = "apiKey" in account ? account.apiKey : undefined;
+    if ((key !== undefined && !CREDENTIAL_REFERENCE.test(key.trim())) || "token" in account)
+      throw new Error(
+        `Sandbox account ${name} in ${where} contains a credential. Store it in an environment variable or a file and use "apiKey": "{env:VAR}" or "{file:path}", or run \`gitterm sandbox setup\`.`,
+      );
+  }
+  return settings;
+}
 
 function directCredential(config: OwnKey) {
   const [, kind, name = ""] = CREDENTIAL_REFERENCE.exec(config.apiKey?.trim() ?? "") ?? [];

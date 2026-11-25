@@ -38,7 +38,7 @@ const SETUP_PROMPT = `Set up Gitterm for me. Read ${SITE_URL}/llms.txt first and
 
 Before you change anything, ask me which of these I want:
 1. Moving my agents' sessions to a cloud workspace and back. Run \`${INSTALL_SETUP}\`: it asks which agents to set up (OpenCode, Pi, T3 Code), adds a skill for other agents, and signs me in.
-2. Remote sandboxes for the OpenCode agent on this machine (@gitterm/opencode-sandbox). Ask which provider (E2B, Daytona, Vercel, Boat, exe.dev, Railway or AWS) and whether I'll use my own provider key or a Gitterm plan.
+2. Remote sandboxes for my agents on this machine, for builds, tests and previews. The same setup command adds them. Ask whether I'll use a Gitterm plan or my own provider key, and if mine, which provider (E2B, Daytona, Vercel, Boat, exe.dev, Railway or AWS).
 3. A cloud workspace that runs OpenCode, Pi, or T3 Code with Codex or Claude Code, started from ${SITE_URL}/dashboard.
 
 Keep keys out of config files: use {env:VAR} references. When you're done, show me how to check that it works.`;
@@ -156,7 +156,7 @@ export function ProvidersStrip() {
 const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }[] = [
   {
     title: "Your agent stays on your laptop",
-    body: "Add the plugin and OpenCode gets sandbox tools. The conversation and your model keys stay on your machine.",
+    body: "Run the setup command and your agent gets sandbox tools: OpenCode and Pi as tools, Codex and Claude Code through the CLI. The conversation and your model keys stay on your machine.",
   },
   {
     title: "It borrows a machine when it needs one",
@@ -261,10 +261,10 @@ export function HowItWorks() {
 /** Code boxes fill their row, so all three are the same height. */
 const keyCode =
   "h-full [&_pre]:h-full max-[640px]:[&_pre]:text-[12px] max-[640px]:[&_pre]:[overflow-wrap:anywhere] max-[640px]:[&_pre]:whitespace-pre-wrap";
-const PLAN = `"options": {
+const PLAN = `"sandbox": {
   "size": "medium"
 }`;
-const SELF_HOSTED = `"options": {
+const SELF_HOSTED = `"sandbox": {
   "serverUrl": "https://git.acme.dev"
 }`;
 
@@ -273,8 +273,8 @@ export function Keys() {
     <Band>
       <Wrap>
         <SectionHead title="Your key, our plan, or your server">
-          Set one account in the plugin options. Add <code>limits</code> to any of them, so a busy
-          agent cannot run up a surprise bill.
+          Set one account in your sandbox settings. Add <code>limits</code> to any of them, so a
+          busy agent cannot run up a surprise bill.
         </SectionHead>
         <div className={cn(cells, "grid-cols-3 max-[1100px]:grid-cols-1")}>
           {[

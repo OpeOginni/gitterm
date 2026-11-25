@@ -186,6 +186,26 @@ test.skipIf(!withOpencode)(
 );
 
 test.skipIf(!withOpencode)(
+  "a session's revision rises with a message queued for later, which its export doesn't show",
+  async () => {
+    const server = await serve("revision", 47945);
+    const session = await server.client.session.create({
+      location: { directory: server.repo },
+      title: "revision",
+    });
+    const ops = opencodeAgent.session(opencodeMachine(server.client));
+    const before = await ops.revision!({ ref: session.id });
+    const exported = await ops.export({ ref: session.id });
+    expect(await ops.revision!({ ref: session.id })).toBe(before);
+
+    await server.client.session.prompt({ sessionID: session.id, text: "later", resume: false });
+    expect((await ops.export({ ref: session.id, allowBusy: true })).mark).toBe(exported.mark);
+    expect(await ops.revision!({ ref: session.id })).toBeGreaterThan(before);
+  },
+  120_000,
+);
+
+test.skipIf(!withOpencode)(
   "a session goes to a workspace and comes back with what was done there",
   async () => {
     const local = await serve("from", 47943);

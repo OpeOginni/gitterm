@@ -57,5 +57,5 @@ There is one project snapshot per repository. Keeping another replaces the older
 ## Related
 
 - [Move a session](/docs/workspaces/move-a-session)
-- [Cloud plugin reference](/docs/reference/cloud-plugin)
+- [OpenCode plugin reference](/docs/reference/opencode-plugin)
 - [Lifecycle](/docs/workspaces/lifecycle)

@@ -141,6 +141,21 @@ test("a workspace started from a project snapshot refreshes its clone instead of
   expect(commands.some((entry) => entry.command.includes("opencode serve --port 4096"))).toBe(true);
 });
 
+test("agent files that share a directory only prepare it once", async () => {
+  const input = config();
+  input.provisioningSpec!.agent.files.push({
+    path: "~/.config/second.json",
+    contentBase64: Buffer.from("second").toString("base64"),
+    mode: 0o600,
+  });
+  const start = commands.length;
+  await gittermProvider.createWorkspace(input);
+  const ran = commands.slice(start).map(({ command }) => command);
+  expect(ran.filter((command) => command === "mkdir -p '/home/user/.config'")).toHaveLength(1);
+  expect(files.get("/home/user/.config/second.json")).toBe("second");
+  expect(ran).toContain("chmod 600 '/home/user/.config/second.json'");
+});
+
 test("a failed clone says why and removes the sandbox", async () => {
   failOn = "git clone";
   try {

@@ -3,7 +3,7 @@ title: Quickstart
 description: Run your first command in a remote sandbox, or start a cloud workspace.
 ---
 
-This page has two short paths. Path 1 gives your local OpenCode agent a remote sandbox. Path 2 runs an agent in a cloud workspace. They are independent; pick the one you need. For how they differ, see [Concepts](/docs/concepts).
+This page has two short paths. Path 1 gives your local agent a remote sandbox, shown here with OpenCode. Path 2 runs an agent in a cloud workspace. They are independent; pick the one you need. For how they differ, see [Concepts](/docs/concepts).
 
 ## Path 1: run a command in a sandbox
 
@@ -16,10 +16,10 @@ Your agent and your files stay local. The agent runs one command in a remote san
 
 ### Steps
 
-1. Install the sandbox plugin:
+1. Install Gitterm's OpenCode plugin:
 
    ```sh
-   opencode plugin add @gitterm/opencode-sandbox
+   opencode plugin add @gitterm/opencode
    ```
 
 2. Put your key in an environment variable, in the shell you start OpenCode from. Replace `<your-e2b-key>` with your key:
@@ -28,15 +28,15 @@ Your agent and your files stay local. The agent runs one command in a remote san
    export E2B_API_KEY=<your-e2b-key>
    ```
 
-3. In your OpenCode config, replace the `@gitterm/opencode-sandbox` entry with this object. OpenCode replaces `{env:E2B_API_KEY}` with the variable's value when it loads the config, so the key never sits in the file.
+3. In your OpenCode config, replace the `@gitterm/opencode` entry with this object. OpenCode replaces `{env:E2B_API_KEY}` with the variable's value when it loads the config, so the key never sits in the file.
 
    ```jsonc
    {
      "$schema": "https://opencode.ai/config.json",
      "plugins": [
        {
-         "package": "@gitterm/opencode-sandbox",
-         "options": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
+         "package": "@gitterm/opencode",
+         "options": { "sandbox": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" } },
        },
      ],
    }
@@ -55,6 +55,8 @@ Your agent and your files stay local. The agent runs one command in a remote san
 5. Ask the agent to destroy the sandbox.
 
    You should see `Sandbox <id> is terminated (confirmed with the provider).`
+
+Using Pi, Codex or Claude Code? Run `npx @gitterm/cli setup`, and put the account in `~/.config/gitterm/sandbox.json` instead: `{ "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" }`. See [Setup](/docs/sandboxes/setup).
 
 > [!WARNING]
 > Your E2B account is billed while the sandbox exists. E2B deletes it at the end of its lifetime (30 minutes by default), but destroying it yourself stops charges sooner.
@@ -84,4 +86,4 @@ A cloud workspace runs the agent itself in the cloud.
 
 ### Or move a local OpenCode session
 
-To continue a session you already started, install `@gitterm/opencode-cloud` and run `/cloud` in OpenCode. It moves the conversation and checkout into a cloud workspace, and `/cloud-return` brings them back when you're done. See [Move a session](/docs/workspaces/move-a-session) for the steps.
+To continue a session you already started, run `npx @gitterm/cli setup` and then `/cloud` in OpenCode or Pi. It moves the conversation and checkout into a cloud workspace, and `/cloud-return` brings them back when you're done. See [Move a session](/docs/workspaces/move-a-session) for the steps.

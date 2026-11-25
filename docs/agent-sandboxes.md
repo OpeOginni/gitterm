@@ -239,28 +239,33 @@ failure, are never treated as a deletion.
 
 ## Configuration
 
-Options for the `@gitterm/opencode-sandbox` OpenCode plugin:
+The sandbox settings are the same for every agent. In OpenCode they go under `sandbox` in the
+`@gitterm/opencode` plugin options; Pi's extension and the `gitterm sandbox` CLI (which the
+`gitterm-sandbox` skill teaches Codex and Claude Code) read them from
+`~/.config/gitterm/sandbox.json`. With no settings, sandboxes use the Gitterm login.
 
 ```jsonc
 {
   "plugins": [
     {
-      "package": "@gitterm/opencode-sandbox",
+      "package": "@gitterm/opencode",
       "options": {
-        // A single account can also sit here directly: "provider": "e2b", "apiKey": "...".
-        "account": "e2b",
-        "accounts": {
-          "e2b": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
-          "gitterm": { "size": "medium" },
+        "sandbox": {
+          // A single account can also sit here directly: "provider": "e2b", "apiKey": "...".
+          "account": "e2b",
+          "accounts": {
+            "e2b": { "provider": "e2b", "apiKey": "{env:E2B_API_KEY}" },
+            "gitterm": { "size": "medium" },
+          },
+          "limits": {
+            "maxSandboxes": 2,
+            "maxLifetimeMinutes": 60,
+            "defaultLifetimeMinutes": 30,
+            "maxJobMinutes": 30,
+          },
+          "exclude": ["fixtures/large/**"],
+          "publicPreviews": false,
         },
-        "limits": {
-          "maxSandboxes": 2,
-          "maxLifetimeMinutes": 60,
-          "defaultLifetimeMinutes": 30,
-          "maxJobMinutes": 30,
-        },
-        "exclude": ["fixtures/large/**"],
-        "publicPreviews": false,
       },
     },
   ],

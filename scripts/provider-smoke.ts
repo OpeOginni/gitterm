@@ -14,6 +14,7 @@ import { createSmokeMcp, getSmokeMcp, runSmokeMcp, smokeMcpConnectionId } from "
 dotenv.config({ path: join(import.meta.dir, ".env") });
 
 const PROVIDERS = [
+  "gitterm",
   "aws",
   "e2b",
   "daytona",
@@ -76,7 +77,7 @@ function selectedProviders(): ProviderKey[] {
     .map((provider) => provider.trim())
     .filter(Boolean);
   const unknown = providers.filter(
-    (provider): provider is string => !PROVIDERS.includes(provider as ProviderKey),
+    (provider) => !(PROVIDERS as readonly string[]).includes(provider),
   );
   if (unknown.length > 0) throw new Error(`Unknown providers: ${unknown.join(", ")}`);
   if (providers.length === 0) throw new Error("At least one provider is required");

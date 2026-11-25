@@ -63,6 +63,8 @@ export interface SandboxBackend {
   /** Returns `terminated` for a sandbox that no longer exists in this account. */
   get(id: string): Promise<SandboxInfo>;
   list(): Promise<SandboxInfo[]>;
+  /** Confirms the account's credential works, without changing anything in the account. */
+  check(): Promise<void>;
   destroy(id: string): Promise<void>;
   /** Managed sandboxes also pause when idle; direct ones only on request. */
   pause?(id: string): Promise<void>;
@@ -201,6 +203,10 @@ export function createDirectSandboxBackend(options: {
       const items = await transport.list({ [ACCOUNT_LABEL]: account, [WORKLOAD_LABEL]: "sandbox" });
       return Promise.all(items.map(async (info) => toInfo(await expire(info))));
     },
+    // list without expire: that destroys paused sandboxes past their lifetime.
+    async check() {
+      await transport.list({ [ACCOUNT_LABEL]: account, [WORKLOAD_LABEL]: "sandbox" });
+    },
     async destroy(id) {
       await owned(id);
       await transport.destroy(id);
@@ -324,6 +330,9 @@ export function createManagedSandboxBackend(options: {
       return (await client.sandboxes.list())
         .filter((sandbox) => sandbox.provider === provider)
         .map(toInfo);
+    },
+    async check() {
+      await client.sandboxes.providers();
     },
     destroy: (id) => client.sandboxes.terminate(id),
     pause: (id) => client.sandboxes.pause(id),

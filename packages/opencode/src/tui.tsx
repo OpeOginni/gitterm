@@ -14,6 +14,7 @@ import {
   type CloudProgress,
   type CloudStatus,
 } from "./marker";
+import { SandboxSidebar } from "./sandbox-sidebar";
 
 type Theme = {
   text: { base: RGBA; muted: RGBA; feedback: Record<"success" | "warning", { base: RGBA }> };
@@ -193,11 +194,16 @@ function CloudBanner(props: { sessionID: string }) {
 }
 
 export default Plugin.define({
-  id: "gitterm.cloud",
+  id: "gitterm",
   setup(context) {
     const sidebar = context.ui.slot({
       append: "sidebar.content",
       render: (input) => <CloudSidebar sessionID={input.sessionID} />,
+    });
+    // This checkout's sandboxes, from the records the sandbox tools keep.
+    const sandboxes = context.ui.slot({
+      append: "sidebar.content",
+      render: (input) => <SandboxSidebar sessionID={input.sessionID} />,
     });
     const banner = context.ui.slot({
       append: "session.composer.top",
@@ -385,6 +391,7 @@ export default Plugin.define({
       formCancelled();
       commands();
       sidebar();
+      sandboxes();
       banner();
     };
   },

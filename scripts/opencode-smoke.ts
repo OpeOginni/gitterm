@@ -14,7 +14,7 @@ import { createDirectGittermClient } from "../packages/sdk/src/direct/client";
 import type { DirectProviderAdapter } from "../packages/sdk/src/direct/types";
 import runtimePackage from "../packages/agent-runtime/package.json";
 import { validateOpenCodeConfig } from "../packages/schema/src/agent-config";
-import { handoffSession, HandoffRefused } from "../packages/opencode-cloud/src/handoff";
+import { handoffSession, HandoffRefused } from "../packages/opencode/src/handoff";
 
 const binary = process.env.OPENCODE_SMOKE_BINARY;
 if (!binary) throw new Error("Set OPENCODE_SMOKE_BINARY to an OpenCode 2 executable");

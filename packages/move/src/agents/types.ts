@@ -41,6 +41,11 @@ export interface SessionOps {
    * workspace ends; refuses while it works. A return holds the cloud session first.
    */
   hold?(input: { ref: string }): Promise<void>;
+  /**
+   * A number that changes whenever anything happens to the session, including input queued for
+   * later, which an export doesn't show. A return compares it instead of exporting again.
+   */
+  revision?(input: { ref: string }): Promise<number>;
 }
 
 /** How to reach a workspace's agent: its public URL and credentials, and its checkout. */
@@ -90,8 +95,11 @@ export interface AgentAdapter {
   installed(): Promise<boolean>;
   /** How the user moves a session once `gitterm setup` ran, for its closing summary. */
   howToMove: string;
-  /** Optional setup on this machine, run by `gitterm setup`. Returns what changed. */
-  setup?(local: Machine): Promise<string[]>;
+  /**
+   * Optional setup on this machine, run by `gitterm setup`. Returns what changed, and what the
+   * user still has to do by hand.
+   */
+  setup?(local: Machine): Promise<{ changes: string[]; warnings?: string[] }>;
   /** Optional link between the workspace and this machine's agent, after a move. */
   connect?(input: {
     local: Machine;

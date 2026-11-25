@@ -124,7 +124,7 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 		forward_auth {$SERVER_URL} {
 			uri /api/internal/proxy-resolve
 
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key X-GitTerm-Boat-Token X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key X-GitTerm-Boat-Token X-GitTerm-Pi-Auth X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning
 
 			header_up Host {host}
 			header_up X-Internal-Key {$INTERNAL_API_KEY}
@@ -142,6 +142,9 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 		# Cloud workspaces: strip /ws/{subdomain} prefix and proxy to container
 		@cloud_workspace header X-Hosting-Type cloud
 		route @cloud_workspace {
+			@pi_terminal header X-GitTerm-Pi-Auth *
+			request_header @pi_terminal Authorization {header.X-GitTerm-Pi-Auth}
+			request_header -X-GitTerm-Pi-Auth
 			# boat private ports authenticate with the _port_auth cookie. A ?_token= query
 			# is only exchanged for that cookie via a redirect, which proxied API calls can't follow.
 			@boat_private header X-GitTerm-Boat-Token *
@@ -226,7 +229,7 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 		forward_auth {$SERVER_URL} {
 			uri /api/internal/proxy-resolve
 
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key X-GitTerm-Boat-Token X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Upstream-URL X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key X-GitTerm-Boat-Token X-GitTerm-Pi-Auth X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning
 
 			header_up Host {host}
 			header_up X-Internal-Key {$INTERNAL_API_KEY}
@@ -248,6 +251,9 @@ http://compute.{$BASE_DOMAIN:gitterm.dev} {
 			header X-Container-Protocol https
 		}
 		route @cloud_workspace {
+			@pi_terminal header X-GitTerm-Pi-Auth *
+			request_header @pi_terminal Authorization {header.X-GitTerm-Pi-Auth}
+			request_header -X-GitTerm-Pi-Auth
 			# boat private ports authenticate with the _port_auth cookie. A ?_token= query
 			# is only exchanged for that cookie via a redirect, which proxied API calls can't follow.
 			@boat_private header X-GitTerm-Boat-Token *

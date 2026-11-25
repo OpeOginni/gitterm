@@ -9,6 +9,16 @@ export {
 } from "./config.js";
 export type { CliConfig } from "./config.js";
 export { loginWithDeviceCode } from "./device-login.js";
+export {
+  approveProject,
+  assertProjectAllows,
+  projectSettings,
+  resetProject,
+  projectsFilePath,
+  setProjectFeatures,
+  type ProjectFeature,
+  type ProjectSettings,
+} from "./project.js";
 export type { DeviceCodeInfo, LoginWithDeviceCodeOptions } from "./device-login.js";
 export { AgentRunError, GittermError, WorkspaceLifecycleError } from "./errors.js";
 export { PASSIVE_REQUEST_HEADER } from "@gitterm/agent-runtime";

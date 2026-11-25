@@ -2,7 +2,13 @@
 /**
  * Live end-to-end smoke test for agent sandboxes. Creates real, billable sandboxes.
  *
- *   GITTERM_SANDBOX_CONFIG=./sandbox.json bun run scripts/sandbox-smoke.ts --account <name> [--crash]
+ *   GITTERM_SANDBOX_CONFIG=./sandbox.json bun run scripts/sandbox-smoke.ts --account <name> [--crash] [--snapshots] [--cli]
+ *
+ * --crash       a killed caller's sandbox is deleted by the provider at its lifetime.
+ * --snapshots   save a setup snapshot, start a sandbox from it, then delete it (stored in the
+ *               provider account until then).
+ * --cli         the same core path through the real `gitterm sandbox` CLI, as Pi's tools and the
+ *               gitterm-sandbox skill run it.
  *
  * The settings file uses the CLI shape (keys only as `"apiKey": "{env:VAR}"`). Each run uses an
  * isolated fixture repository and a unique label; every sandbox carrying that label is
@@ -17,6 +23,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import {
   captureSource,
+  createFileSetupSnapshotStore,
   createSandboxBackend,
   createSandboxClient,
   createFileSandboxStore,
@@ -96,6 +103,7 @@ console.log(
 const client = createSandboxClient({
   backend: createSandboxBackend(account),
   store,
+  setupSnapshots: createFileSetupSnapshotStore(path.join(work, "setup-snapshots")),
   limits: { maxSandboxes: 5, maxLifetimeMinutes: 15, maxJobMinutes: 10 },
 });
 let sandbox: SandboxRecord | undefined;
@@ -103,6 +111,56 @@ let sandbox: SandboxRecord | undefined;
 const createdIds = new Set<string>();
 
 const git = (...gitArgs: string[]) => execFileSync("git", gitArgs, { cwd: repo, stdio: "pipe" });
+
+/**
+ * The core path through the real CLI, as Pi's tools and the gitterm-sandbox skill run it: the
+ * account goes in GITTERM_SANDBOX_SETTINGS, and records stay in this run's folder.
+ */
+async function cliSmoke() {
+  const cliEnv = {
+    ...process.env,
+    GITTERM_SANDBOX_SETTINGS: JSON.stringify(settings),
+    XDG_STATE_HOME: path.join(work, "cli-state"),
+  };
+  const cliPath = path.join(import.meta.dir, "../packages/cli/src/index.ts");
+  const cli = (...cliArgs: string[]) => {
+    try {
+      const out = execFileSync(
+        process.execPath,
+        [cliPath, "sandbox", ...cliArgs, "--account", account.name, "--json"],
+        { cwd: repo, env: cliEnv, stdio: "pipe", timeout: 10 * 60_000 },
+      );
+      return JSON.parse(out.toString());
+    } catch (error) {
+      const failed = error as { stdout?: Buffer; stderr?: Buffer };
+      // A failed job still prints its JSON, with a failing exit code.
+      if (failed.stdout?.length) return JSON.parse(failed.stdout.toString());
+      throw new Error(`gitterm sandbox ${cliArgs[0]}: ${failed.stderr?.toString().trim()}`, {
+        cause: error,
+      });
+    }
+  };
+  const created = cli("create", "--yes", "--purpose", `${runId}-cli`, "--lifetime", "15");
+  createdIds.add(created.id);
+  check("cli: create", created.state === "running", created.id);
+  const synced = cli("sync", created.id, "--yes");
+  check("cli: sync", synced.verified === true);
+  const started = cli("exec", created.id, "node test.js", "--background");
+  const finished = cli("job", created.id, started.job.id, "--wait", "180");
+  check(
+    "cli: background job, then job --wait",
+    started.state.status === "running" &&
+      finished.state.status === "succeeded" &&
+      finished.log.text.includes("answer 42"),
+    `${started.state.status} then ${finished.state.status}`,
+  );
+  if (client.canPause) {
+    const paused = cli("pause", created.id);
+    check("cli: pause", paused.state === "paused", paused.state);
+  }
+  const destroyed = cli("destroy", created.id);
+  check("cli: destroy", destroyed.state === "terminated");
+}
 
 try {
   // Fixture: committed test fails; the uncommitted edit makes it pass.
@@ -295,12 +353,76 @@ try {
     secret.log.text.includes("token=[redacted]") && !secret.log.text.includes(SENTINEL),
   );
 
+  // A background job returns at once; waiting for it later sees it finish.
+  const background = await client.exec(sandbox, { command: "sleep 5; echo bg-done", waitMs: 0 });
+  const waited = await client.wait(sandbox, background.job.id, 120_000);
+  check(
+    "background job returns at once, then finishes",
+    background.state.status === "running" &&
+      waited.state.status === "succeeded" &&
+      waited.log.text.includes("bg-done"),
+    `${background.state.status} then ${waited.state.status}`,
+  );
+
+  // Pausing stops billing and keeps the files; the next command resumes the sandbox.
+  if (client.canPause) {
+    const paused = await client.pause(sandbox);
+    const resumed = await client.exec(sandbox, { command: "cat answer.js", waitMs: 180_000 });
+    check(
+      "pause, then the next command resumes it with files kept",
+      paused.state === "paused" &&
+        resumed.state.status === "succeeded" &&
+        resumed.log.text.includes("42"),
+      `${paused.state}, then ${resumed.state.status}`,
+    );
+  } else check("pause", true, `skipped: ${summary.provider} can't pause with files kept`);
+
   const localAfter = execFileSync("git", ["status", "--porcelain"], { cwd: repo }).toString();
   check("local checkout unchanged", localBefore === localAfter);
+
+  if (flag("snapshots") && !client.snapshotEffect) {
+    check("setup snapshot", true, `skipped: ${summary.provider} can't save setup snapshots`);
+  } else if (flag("snapshots")) {
+    // A set-up sandbox saved as a snapshot: a new sandbox from it already has the setup.
+    await client.exec(sandbox, { command: "echo installed > .setup-marker", waitMs: 60_000 });
+    const snap = await client.saveSetupSnapshot(sandbox, {
+      label: `smoke ${runId}`,
+      project: repo,
+    });
+    const listed = await client.setupSnapshots(repo);
+    const fromSnapshot = await client.create({
+      name: `smoke ${runId} from snapshot`,
+      purpose: `${runId}-snapshot`,
+      project: repo,
+      lifetimeMinutes: 15,
+      snapshot: snap.record.snapshotId,
+    });
+    createdIds.add(fromSnapshot.id);
+    const marker = await client.exec(fromSnapshot, {
+      command: "cat .setup-marker",
+      waitMs: 120_000,
+    });
+    check(
+      "setup snapshot: a sandbox started from it has the setup",
+      listed.some((item) => item.record.snapshotId === snap.record.snapshotId) &&
+        marker.log.text.includes("installed"),
+      `${snap.record.snapshotId}${client.snapshotEffect === "stops" ? " (saving stopped the original)" : ""}`,
+    );
+    await client.destroy(fromSnapshot);
+    const deleted = await client.deleteSetupSnapshot(snap.record.snapshotId);
+    check(
+      "setup snapshot deleted",
+      !(await client.setupSnapshots(repo)).some(
+        (item) => item.record.snapshotId === deleted.snapshotId,
+      ),
+    );
+  }
 
   const destroyed = await client.destroy(sandbox);
   check("destroy confirmed by provider", destroyed.state === "terminated");
   sandbox = undefined;
+
+  if (flag("cli")) await cliSmoke();
 
   if (flag("crash") && client.capabilities.expiry === "none") {
     check("caller crash", true, `skipped: ${summary.provider} never deletes sandboxes on its own`);

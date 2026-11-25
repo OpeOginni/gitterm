@@ -2,25 +2,7 @@ import "dotenv/config";
 import { getInternalClient } from "@gitterm/api/client/internal";
 import env from "@gitterm/env/worker";
 
-/**
- * Idle Reaper Worker
- *
- * This worker pauses idle/quota-exhausted workspaces, then permanently removes
- * paused workspaces after their plan's retention window expires.
- *
- * Two modes (controlled by REAP_INTERVAL_MINUTES):
- * - "0" (default): run once and exit. For Railway Cron, which handles
- *   scheduling via `cronSchedule` in railway.config.json. This is the cheapest
- *   option on usage-billed platforms (pay per execution, not per uptime).
- * - ">0": loop forever, sleeping that many minutes between passes. For
- *   self-hosted Docker Compose, where the container stays up and there is no
- *   external cron. Idle CPU/RAM cost is negligible (~0 while sleeping).
- *
- * Feature flags (controlled via environment):
- * - ENABLE_IDLE_REAPING: Controls idle workspace reaping (default: true)
- * - REAP_INTERVAL_MINUTES: Minutes between passes, 0 = run once (default: 0)
- */
-
+// Railway cron runs one pass. Compose sets an interval to keep the worker running.
 const REAP_INTERVAL_MINUTES = (() => {
   const raw = process.env.REAP_INTERVAL_MINUTES;
   if (raw === undefined || raw.trim() === "") return 0;

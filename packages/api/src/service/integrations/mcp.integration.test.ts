@@ -6,6 +6,7 @@ import { agentType, cloudProvider, image } from "@gitterm/db/schema/cloud";
 import { integrationSettings } from "@gitterm/db/schema/integrations";
 import { mcpConnection, workspaceMcpConnection } from "@gitterm/db/schema/mcp";
 import { workspace } from "@gitterm/db/schema/workspace";
+import { getRedisClient, RedisKeys } from "@gitterm/redis";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -226,6 +227,10 @@ describe.skipIf(!testDatabase)("direct MCP integration (isolated PostgreSQL)", (
       codemode: false,
       authentication: { type: "headers", headers: { Authorization: "Bearer upstream-secret" } },
     });
+    await expect(testMcpConnection(owner, result.connection.id)).rejects.toMatchObject({
+      code: "TOO_MANY_REQUESTS",
+    });
+    await getRedisClient().del(RedisKeys.mcpTestCooldown(result.connection.id));
     expect((await testMcpConnection(owner, result.connection.id)).status).toBe("connected");
     expect(
       (await resolveWorkspaceConnections(owner, [result.connection.id])).mcp[0]!.codemode,

@@ -177,6 +177,6 @@ export const piAgent: AgentAdapter = {
     const file = path.join(dir, PI_EXTENSION_PATH);
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, PI_EXTENSION);
-    return [`Installed GitTerm's Pi extension: ${file}`];
+    return { changes: [`Installed GitTerm's Pi extension: ${file}`] };
   },
 };

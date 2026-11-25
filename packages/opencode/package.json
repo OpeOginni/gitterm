@@ -1,12 +1,16 @@
 {
-  "name": "@gitterm/opencode-cloud",
-  "version": "0.3.6",
-  "description": "Continue OpenCode sessions and local checkout changes in GitTerm cloud workspaces with /cloud",
+  "name": "@gitterm/opencode",
+  "version": "0.1.0",
+  "description": "GitTerm for OpenCode: run builds, tests and previews in remote sandboxes, and move sessions to cloud workspaces with /cloud",
   "keywords": [
+    "e2b",
     "gitterm",
     "opencode",
     "opencode-plugin",
     "remote-development",
+    "remote-execution",
+    "sandbox",
+    "tui",
     "workspace"
   ],
   "homepage": "https://gitterm.dev",
@@ -15,7 +19,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/OpeOginni/gitterm.git",
-    "directory": "packages/opencode-cloud"
+    "directory": "packages/opencode"
   },
   "files": [
     "dist",

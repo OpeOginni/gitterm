@@ -70,7 +70,7 @@ http://compute.gitterm.dev {
 			uri /api/internal/proxy-resolve
 
 			# Copy headers from auth response into request including some for specific providers
-			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key X-GitTerm-Boat-Token X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning
+			copy_headers X-Hosting-Type X-Workspace-ID X-User-ID X-Subdomain X-Container-Host X-Container-Port X-Container-Protocol X-GitTerm-Aws-Routing-Key X-GitTerm-Boat-Token X-GitTerm-Pi-Auth X-Exedev-Authorization e2b-traffic-access-token x-daytona-preview-token X-Daytona-Skip-Preview-Warning
 
 			# Copy original headers
 			header_up Host {host}
@@ -97,6 +97,9 @@ http://compute.gitterm.dev {
 
 		# Cloud workspaces: route to containers using dynamic host/port from headers
 		route @cloud_workspace {
+			@pi_terminal header X-GitTerm-Pi-Auth *
+			request_header @pi_terminal Authorization {header.X-GitTerm-Pi-Auth}
+			request_header -X-GitTerm-Pi-Auth
 			# boat private ports authenticate with the _port_auth cookie. A ?_token= query
 			# is only exchanged for that cookie via a redirect, which proxied API calls can't follow.
 			@boat_private header X-GitTerm-Boat-Token *

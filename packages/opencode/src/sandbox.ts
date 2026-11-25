@@ -446,12 +446,13 @@ export async function registerSandboxTools(
             maxSandboxes: current.limits.maxSandboxes,
           },
         );
-        // `publicPreviews` in the plugin options is the user's standing approval. Where previews
-        // are always private there is nothing to approve.
+        // `publicPreviews` in the plugin options is the user's standing approval and the default;
+        // an explicit false asks for a private sandbox. Where previews are always private there
+        // is nothing to approve.
         const publicPreviews =
           current.capabilities.previews !== "private" &&
           current.capabilities.previews !== "none" &&
-          (settings!.publicPreviews === true || args.publicPreviews === true);
+          (args.publicPreviews ?? settings!.publicPreviews) === true;
         if (publicPreviews && !settings!.publicPreviews)
           await assert(context, "gitterm.sandbox.public", [`${account}`], [], {
             warning: "Every port of this sandbox will be reachable by anyone with its URL.",
