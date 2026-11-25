@@ -28,7 +28,7 @@ export type WorkspaceEnd = "delete" | "pause" | "snapshot";
 export async function returnSession(
   moved: MoveRecord,
   deps: ReturnDependencies,
-): Promise<{ end: WorkspaceEnd }> {
+): Promise<{ end: WorkspaceEnd; cloudUnchanged(): Promise<boolean> }> {
   const { local, gitterm, signal } = deps;
   const { localRef: sessionID, workspaceId: workspaceID } = moved;
   const session = await local.session.get({ sessionID }, { signal });
@@ -62,7 +62,7 @@ export async function returnSession(
 
   let step = "connecting to the cloud workspace";
   try {
-    await returnFromCloud(
+    const { cloudUnchanged } = await returnFromCloud(
       {
         cloud: gittermCloud(gitterm),
         local: opencodeMachine(local),
@@ -93,7 +93,7 @@ export async function returnSession(
       },
     );
     await markCloudSession(local, sessionID, undefined, signal).catch(() => {});
-    return { end };
+    return { end, cloudUnchanged };
   } catch (error) {
     if (error instanceof ReturnDeclined || signal.aborted) throw new HandoffCancelled();
     console.error("GitTerm cloud return failed while", step, error);

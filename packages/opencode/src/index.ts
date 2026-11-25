@@ -17,6 +17,7 @@ import { confirmLocalPrompt, endWorkspace, returnSession } from "./return";
 import { suggestModels, signedIn } from "./signin";
 import { opencodeAgent } from "@gitterm/move/agents/opencode";
 import { checkoutRoot } from "@gitterm/move/checkout/snapshot";
+import { cloudWentOn } from "@gitterm/move/flows";
 import { loadRecords, saveRecord, type MoveRecord } from "@gitterm/move/records";
 import { watchCloudSessions, workspaceGone } from "./status";
 import { registerSandboxTools } from "./sandbox";
@@ -94,8 +95,8 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
   const busy = new Set<string>();
   const gitterm = () => createGittermClient({ serverUrl: options.serverUrl, token: options.token });
 
-  // The sessions of this checkout that live in the cloud. /cloud-return is only offered
-  // while there is one, and what their cloud side is doing is kept on the session.
+  // The sessions of this checkout that live in the cloud: what their cloud side is doing is
+  // kept on the session.
   const here = await checkoutRoot(ctx.location.directory).catch(() => undefined);
   const movedHere = async () =>
     (await openMoves()).filter((record) => here !== undefined && record.root === here);
@@ -132,13 +133,10 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
         watching = false;
       });
   };
-  // Read again after each command and before each prompt, so a move made from the CLI shows
-  // here too.
+  // Read again after each command and before each prompt, so a move made from the CLI is
+  // watched too.
   const refresh = async () => {
-    const offered = inCloud.length > 0;
     inCloud = await movedHere();
-    // OpenCode lists commands per project, not per session.
-    if (inCloud.length > 0 !== offered) await ctx.command.reload().catch(() => {});
     watch();
   };
 
@@ -258,7 +256,8 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
         }
       },
     });
-    if (inCloud.length === 0) return;
+    // Always offered: commands are listed once per project, and a session may move (from the
+    // CLI too) after that. The move is looked up when it runs.
     editor.add({
       name: "cloud-return",
       description: "Bring this session and its changes back from its GitTerm cloud workspace",
@@ -281,12 +280,14 @@ async function registerCloud(ctx: Plugin.Context, options: HandoffOptions) {
             sessionID,
             { title: "Bringing it back from the cloud", cancellable: false },
             async (progress, signal) => {
-              const { end } = await returnSession(previous, {
+              const { end, cloudUnchanged } = await returnSession(previous, {
                 local,
                 gitterm: client,
                 signal,
                 progress,
               });
+              // Ending it now would take anything the cloud session did since it was copied.
+              if (!(await cloudUnchanged())) throw new Error(cloudWentOn(previous.workspaceId));
               await progress(
                 end === "pause"
                   ? "Pausing the cloud workspace"

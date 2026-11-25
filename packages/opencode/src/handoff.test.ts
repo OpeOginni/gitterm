@@ -104,6 +104,7 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
         return { workspace: { id: "workspace-test", status: "running" } };
       },
       ensureRunning: async () => {},
+      get: async () => ({ id: "workspace-test", status: "running" }),
       getRuntimeAccess: async () => ({
         url: `http://127.0.0.1:${server!.port}`,
         password: "password",
@@ -425,6 +426,8 @@ test("starts from the project snapshot, and fresh when that snapshot no longer s
   const run = async (outcome: "starts" | "fails" | "terminated") => {
     const attempts: Array<{ fresh: boolean; snapshot: boolean | undefined }> = [];
     const f = fixture([]);
+    // The workspace of the run before was deleted, so the session moves again.
+    f.gitterm.workspaces.get = (async () => ({ status: "terminated" })) as never;
     f.gitterm.workspaces.create = (async (input: {
       idempotencyKey: string;
       useProjectSnapshot?: boolean;

@@ -35,6 +35,7 @@ export {
   createSandboxBackend,
   CREDENTIAL_REFERENCE,
   describeSandboxAccount,
+  isOwnKey,
   loadSandboxSettingsFile,
   resolveSandboxAccount,
   sandboxSettingsPath,

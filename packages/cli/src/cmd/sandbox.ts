@@ -16,6 +16,7 @@ import {
   createSandboxBackend,
   createSandboxClient,
   describeSandboxAccount,
+  isOwnKey,
   loadSandboxSettingsFile,
   sandboxSettingsPath,
   projectDir,
@@ -676,9 +677,10 @@ const OPTION_KEYS = [
 
 /**
  * The settings file's contents with `account` as the selected account, keeping the settings
- * and any other accounts already there.
+ * and any other accounts already there. `account` holds the fields setup asked about (an
+ * undefined one is cleared); the rest of an account of the same kind under `name` stays.
  */
-function withAccount(name: string, account: SandboxAccountConfig) {
+function withAccount(name: string, account: Partial<Record<string, unknown>>) {
   const current = (loadSandboxSettingsFile() ?? {}) as Record<string, unknown>;
   const options = Object.fromEntries(
     Object.entries(current).filter(([key]) => OPTION_KEYS.includes(key)),
@@ -691,7 +693,17 @@ function withAccount(name: string, account: SandboxAccountConfig) {
     ) as SandboxAccountConfig;
     if (Object.keys(inline).length) accounts[inline.provider ?? "gitterm"] = inline;
   }
-  accounts[name] = account;
+  const changed = Object.fromEntries(
+    Object.entries(account).filter(([, value]) => value !== undefined),
+  ) as SandboxAccountConfig;
+  const before = accounts[name];
+  accounts[name] = (
+    before && isOwnKey(before) === isOwnKey(changed)
+      ? Object.fromEntries(
+          Object.entries({ ...before, ...account }).filter(([, value]) => value !== undefined),
+        )
+      : changed
+  ) as SandboxAccountConfig;
   return { ...options, account: name, accounts };
 }
 
@@ -699,22 +711,19 @@ function withAccount(name: string, account: SandboxAccountConfig) {
  * Checks the account with GitTerm or the provider, then saves it (and a pasted `key`) as the
  * selected account. A failed check writes nothing, so the account that worked before stays.
  */
-async function saveAccount(name: string, account: SandboxAccountConfig, key?: string) {
-  const settings = withAccount(
-    name,
-    key ? ({ ...account, apiKey: key } as SandboxAccountConfig) : account,
-  );
+async function saveAccount(name: string, account: Record<string, unknown>, key?: string) {
+  const settings = withAccount(name, key ? { ...account, apiKey: key } : account);
   const resolved = await resolveSandboxAccount(settings, name);
   const summary = describeSandboxAccount(resolved);
   if (summary.credentialPresent) {
     const spin = startSpinner("Checking the account...");
     await createSandboxBackend(resolved)
-      .list()
+      .check()
       .finally(() => spin?.stop());
   }
   if (key)
     settings.accounts[name] = {
-      ...account,
+      ...settings.accounts[name],
       apiKey: `{file:${await saveKey(name, key)}}`,
     } as SandboxAccountConfig;
   const file = sandboxSettingsPath();
@@ -739,7 +748,7 @@ async function saveKey(name: string, key: string): Promise<string> {
 }
 
 /** Sandboxes on the user's GitTerm plan: signs in if needed, then the provider and size. */
-async function gittermAccount(): Promise<{ name: string; account: SandboxAccountConfig }> {
+async function gittermAccount(): Promise<{ name: string; account: Record<string, unknown> }> {
   // With no login at all, creating the client throws: that is "not signed in" too.
   if (
     !(await Promise.resolve()
@@ -785,19 +794,20 @@ async function gittermAccount(): Promise<{ name: string; account: SandboxAccount
   const size = await ask("Machine size, such as small or medium (Enter for your plan's default):");
   return {
     name: "gitterm",
+    // What was asked; undefined clears it (the server's default provider, the plan's size).
     account: {
       // The server marks it a GitTerm account: { provider: "e2b" } alone is E2B's CLI login.
       serverUrl: client.serverUrl,
-      ...(provider ? { provider } : {}),
-      ...(size ? { size } : {}),
-    } as SandboxAccountConfig,
+      provider,
+      size: size || undefined,
+    },
   };
 }
 
 /** Sandboxes on the user's own provider account: its CLI login, a pasted key, or a variable. */
 async function directAccount(): Promise<{
   name: string;
-  account: SandboxAccountConfig;
+  account: Record<string, unknown>;
   key?: string;
 }> {
   const { provider, name, env } =
@@ -807,7 +817,8 @@ async function directAccount(): Promise<{
         DIRECT.map((item) => item.name),
       )
     ]!;
-  const account: Record<string, unknown> = { provider };
+  // The credential is always asked about: none set means the provider CLI's login.
+  const account: Record<string, unknown> = { provider, apiKey: undefined, apiKeyEnv: undefined };
   let key: string | undefined;
   const login = (CLI_LOGIN_PROVIDERS as readonly string[]).includes(provider)
     ? await cliLogin(provider)
@@ -844,7 +855,7 @@ async function directAccount(): Promise<{
       throw new Error("exe.dev sandboxes need that accepted.");
     account.allowUnboundedLifetime = true;
   }
-  return { name: provider, account: account as SandboxAccountConfig, key };
+  return { name: provider, account, key };
 }
 
 /** Sets up the user's own provider account. Used by `gitterm setup` too. */
