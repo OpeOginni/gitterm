@@ -10,15 +10,31 @@ import {
   sendToCloud,
   showConnection,
   type HandoffOptions,
-  type HandoffRecord,
 } from "./handoff";
 import { CLOUD_KEY, CLOUD_RPC, type CloudProgress } from "./marker";
 import { confirmLocalPrompt, endWorkspace, returnSession } from "./return";
 import { suggestModels, signedIn } from "./signin";
+import { opencodeAgent } from "@gitterm/move/agents/opencode";
 import { checkoutRoot } from "@gitterm/move/checkout/snapshot";
-import { deleteLeftover, watchCloudSessions, workspaceGone } from "./status";
+import { loadRecords, saveRecord, type MoveRecord } from "@gitterm/move/records";
+import { watchCloudSessions, workspaceGone } from "./status";
 
-const sessionKey = (sessionID: string) => `handoff/session/${sessionID}`;
+/**
+ * The OpenCode sessions in the cloud, from GitTerm's move records: the same ones the CLI reads
+ * and writes, so a session moved either way is known to both.
+ */
+const openMoves = async () =>
+  (await loadRecords()).filter(
+    (record) => record.agent === opencodeAgent.key && !record.returnedAt,
+  );
+
+/** The session's move, the latest if there are several. */
+const moveOf = async (sessionID: string) =>
+  (await openMoves()).findLast((record) => record.localRef === sessionID);
+
+/** Closes the record of a move whose workspace was deleted: there is nothing to return. */
+const closeMove = (record: MoveRecord) =>
+  saveRecord({ ...record, returnedAt: new Date().toISOString() });
 
 async function localClient(options: HandoffOptions): Promise<OpenCodeClient> {
   const explicit = options.localServerUrl ?? process.env.GITTERM_OPENCODE_LOCAL_SERVER_URL;
@@ -76,25 +92,15 @@ export const GittermCloudPlugin = Plugin.define({
     const options = ctx.options as HandoffOptions;
     const controller = new AbortController();
     const busy = new Set<string>();
-    const load = async (sessionID: string) =>
-      (await ctx.storage.get(sessionKey(sessionID))) as HandoffRecord | undefined;
     const gitterm = () =>
       createGittermClient({ serverUrl: options.serverUrl, token: options.token });
 
     // The sessions of this checkout that live in the cloud. /cloud-return is only offered
     // while there is one, and what their cloud side is doing is kept on the session.
     const here = await checkoutRoot(ctx.location.directory).catch(() => undefined);
-    const inCloud = new Map<string, HandoffRecord>();
-    let after: string | undefined;
-    do {
-      const page = await ctx.storage.scan({ prefix: sessionKey(""), after });
-      for (const { value } of page.entries) {
-        const record = value as HandoffRecord;
-        if (record.phase === "ready" && record.sourceDirectory === here)
-          inCloud.set(record.sessionID, record);
-      }
-      after = page.next;
-    } while (after);
+    const movedHere = async () =>
+      (await openMoves()).filter((record) => here !== undefined && record.root === here);
+    let inCloud = await movedHere();
 
     let watching = false;
     // Ends the watcher's wait early, so a session that just moved to the cloud is looked at
@@ -102,15 +108,15 @@ export const GittermCloudPlugin = Plugin.define({
     let wake = () => {};
     const watch = () => {
       wake();
-      if (watching || inCloud.size === 0) return;
+      if (watching || inCloud.length === 0) return;
       watching = true;
       void watchCloudSessions({
         gitterm,
         local: () => localClient(options),
-        sessions: () => [...inCloud.values()],
+        sessions: () => inCloud,
         busy: (sessionID) => busy.has(sessionID),
         // Nothing is left to return from: the session is no longer in the cloud.
-        gone: (record) => save({ ...record, phase: "returned" }),
+        gone: (record) => closeMove(record).then(refresh),
         signal: controller.signal,
         pause: (milliseconds) =>
           new Promise((resolve) => {
@@ -127,19 +133,15 @@ export const GittermCloudPlugin = Plugin.define({
           watching = false;
         });
     };
-    const save = async (record: HandoffRecord) => {
-      // Snapshot contents and access credentials never enter plugin storage.
-      await ctx.storage.set(sessionKey(record.sessionID), { ...record });
-      const offered = inCloud.size > 0;
-      if (record.phase === "ready" && record.sourceDirectory === here)
-        inCloud.set(record.sessionID, record);
-      else inCloud.delete(record.sessionID);
+    // Read again after each command and before each prompt, so a move made from the CLI shows
+    // here too.
+    const refresh = async () => {
+      const offered = inCloud.length > 0;
+      inCloud = await movedHere();
       // OpenCode lists commands per project, not per session.
-      if (inCloud.size > 0 !== offered) await ctx.command.reload().catch(() => {});
+      if (inCloud.length > 0 !== offered) await ctx.command.reload().catch(() => {});
       watch();
     };
-
-    const discard = (record: HandoffRecord) => ctx.storage.remove(sessionKey(record.sessionID));
 
     // The terminal plugin shows each step of a run and can cancel it, through this channel.
     const runs = new Map<string, AbortController>();
@@ -211,35 +213,45 @@ export const GittermCloudPlugin = Plugin.define({
             // Signs the user in first if they are not, before anything is captured or billed.
             const client = await signedIn(local, sessionID, options, controller.signal);
             const message = prompt.text.trim();
-            const previous = await load(sessionID);
-            if (
-              previous?.phase === "ready" &&
-              !(await workspaceGone(client, previous.workspaceID!))
-            ) {
+            const previous = await moveOf(sessionID);
+            if (previous && !(await workspaceGone(client, previous.workspaceId))) {
               const woken = await withProgress(sessionID, TO_CLOUD, (progress, signal) =>
                 progress("Starting the cloud workspace").then(async () => {
-                  await client.workspaces.ensureRunning(previous.workspaceID!, { signal });
+                  await client.workspaces.ensureRunning(previous.workspaceId, { signal });
                   if (message) await sendToCloud(client, previous, message, signal);
                 }),
               );
               if (woken === CANCELLED) return;
-              await showConnection(local, client, previous, controller.signal, Boolean(message));
+              await showConnection(
+                local,
+                client,
+                sessionID,
+                previous.workspaceId,
+                controller.signal,
+                Boolean(message),
+              );
               return;
             }
-            // OpenCode closed during an earlier /cloud: delete what it left before starting over.
-            if (previous && previous.phase !== "ready" && previous.phase !== "returned")
-              await deleteLeftover(client, previous);
+            if (previous) await closeMove(previous);
             await suggestModels(local, client, sessionID, controller.signal);
             const moved = await withProgress(sessionID, TO_CLOUD, (progress, signal) =>
               handoffSession(
                 sessionID,
-                { local, gitterm: client, options, signal, save, discard, progress },
+                { local, gitterm: client, options, signal, progress },
                 message,
               ),
             );
             if (moved === CANCELLED) return;
+            await refresh();
             // The cloud agent carries on with the task (or the text after /cloud) once it is there.
-            await showConnection(local, client, moved.record, controller.signal, true);
+            await showConnection(
+              local,
+              client,
+              sessionID,
+              moved.workspaceID,
+              controller.signal,
+              true,
+            );
           } catch (error) {
             if (!(error instanceof HandoffCancelled)) throw error;
           } finally {
@@ -247,7 +259,7 @@ export const GittermCloudPlugin = Plugin.define({
           }
         },
       });
-      if (inCloud.size === 0) return;
+      if (inCloud.length === 0) return;
       editor.add({
         name: "cloud-return",
         description: "Bring this session and its changes back from its GitTerm cloud workspace",
@@ -256,8 +268,8 @@ export const GittermCloudPlugin = Plugin.define({
             throw new Error("A cloud handoff is already in progress for this session.");
           busy.add(sessionID);
           try {
-            const previous = await load(sessionID);
-            if (previous?.phase !== "ready")
+            const previous = await moveOf(sessionID);
+            if (!previous)
               throw new Error(
                 "This session is not in a cloud workspace. Run /cloud to move it there.",
               );
@@ -270,11 +282,10 @@ export const GittermCloudPlugin = Plugin.define({
               sessionID,
               { title: "Bringing it back from the cloud", cancellable: false },
               async (progress, signal) => {
-                const { record, end } = await returnSession(previous, {
+                const { end } = await returnSession(previous, {
                   local,
                   gitterm: client,
                   signal,
-                  save,
                   progress,
                 });
                 await progress(
@@ -284,13 +295,14 @@ export const GittermCloudPlugin = Plugin.define({
                       ? "Saving the snapshot and deleting the cloud workspace"
                       : "Deleting the cloud workspace",
                 );
-                await endWorkspace(client, record.workspaceID!, end);
+                await endWorkspace(client, previous.workspaceId, end);
               },
             );
           } catch (error) {
             if (!(error instanceof HandoffCancelled)) throw error;
           } finally {
             busy.delete(sessionID);
+            await refresh().catch(() => {});
           }
         },
       });
@@ -299,8 +311,9 @@ export const GittermCloudPlugin = Plugin.define({
     // While a session lives in the cloud, a message sent here would fork the conversation.
     // Ask first. /cloud and /cloud-return are commands and do not pass through this hook.
     await ctx.session.hook("prompt", async ({ sessionID }) => {
-      const record = await load(sessionID).catch(() => undefined);
-      if (record?.phase !== "ready" || busy.has(sessionID)) return;
+      await refresh().catch(() => {});
+      const record = await moveOf(sessionID).catch(() => undefined);
+      if (!record || busy.has(sessionID)) return;
       // If the question cannot be asked, let the message through rather than lock the session.
       const local = await localClient(options).catch(() => undefined);
       if (!local) return;

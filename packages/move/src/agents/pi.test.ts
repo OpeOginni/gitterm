@@ -236,7 +236,7 @@ test.skipIf(!withPi)(
     mkdirSync(path.dirname(path.join(here.agentDir, PI_EXTENSION_PATH)), { recursive: true });
     writeFileSync(path.join(here.agentDir, PI_EXTENSION_PATH), PI_EXTENSION);
     // `move` records the session as moved; `return` wants --force, then marks it returned.
-    const records = path.join(home, ".config", "gitterm", "moves.json");
+    const records = path.join(home, ".config", "gitterm", "moves", "ws-1.json");
     writeFileSync(
       path.join(bin, "gitterm"),
       `#!/bin/sh
@@ -244,12 +244,12 @@ echo "$*" >> ${JSON.stringify(calls)}
 mkdir -p ${JSON.stringify(path.dirname(records))}
 case "$1" in
   move)
-    echo '[{"agent":"pi","localRef":"${ID}","workspaceId":"ws-1"}]' > ${JSON.stringify(records)}
+    echo '{"agent":"pi","localRef":"${ID}","workspaceId":"ws-1","movedAt":"1"}' > ${JSON.stringify(records)}
     echo '{"workspaceId":"ws-1","links":{"Pi":"https://ws-1.example"},"warnings":[]}' ;;
   return)
     case "$*" in
       *--force*)
-        echo '[{"agent":"pi","localRef":"${ID}","workspaceId":"ws-1","returnedAt":"now"}]' > ${JSON.stringify(records)}
+        echo '{"agent":"pi","localRef":"${ID}","workspaceId":"ws-1","movedAt":"1","returnedAt":"now"}' > ${JSON.stringify(records)}
         echo '{"ref":"${ID}"}' ;;
       *) echo '{"error":{"code":"NEEDS_CONFIRMATION","message":"Run again with --force."}}' >&2; exit 1 ;;
     esac ;;

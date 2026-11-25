@@ -239,6 +239,7 @@ export async function runReturn(
     if (args.json) return printJson(result);
     success("Back from the cloud: the checkout and conversation are here again.");
     if (result.link) console.log(`Session: ${result.link}`);
+    for (const warning of result.warnings) console.log(chalk.yellow(`Warning: ${warning}`));
   } catch (err) {
     reporter.stop();
     handleError(err, args.json);

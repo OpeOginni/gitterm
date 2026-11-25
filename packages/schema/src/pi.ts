@@ -46,22 +46,35 @@ export function piServeCommand(port: number): string {
  * Pi's GitTerm extension: `/cloud` and `/cloud-return`, a footer status while a session is in
  * the cloud, a question before a message is sent here instead, and delivery of the notices
  * `gitterm move` and `gitterm return` leave for a session (in
- * `~/.pi/agent/gitterm/inbox/<session id>.txt`) when that session opens. The work itself is
- * the `gitterm` CLI's; the extension asks the questions and shows the outcome.
+ * `~/.pi/agent/gitterm/inbox/<session id>.txt`) when that session opens. While Pi works in a
+ * session, `~/.pi/agent/gitterm/busy/<session id>` holds Pi's process id, so GitTerm doesn't
+ * copy the session mid-turn. The work itself is the `gitterm` CLI's; the extension asks the
+ * questions and shows the outcome.
  */
-export const PI_EXTENSION = String.raw`import { existsSync, readFileSync, rmSync } from "node:fs";
+export const PI_EXTENSION = String.raw`import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
 const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(homedir(), ".pi", "agent");
 const inbox = (id) => path.join(agentDir, "gitterm", "inbox", id + ".txt");
-const records = path.join(process.env.HOME || homedir(), ".config", "gitterm", "moves.json");
+const busy = (ctx) => path.join(agentDir, "gitterm", "busy", ctx.sessionManager.getSessionId());
+const records = path.join(process.env.HOME || homedir(), ".config", "gitterm", "moves");
 
 /** The move that took this session to the cloud and has not come back, from gitterm's records. */
 function movedTo(id) {
   try {
-    const all = JSON.parse(readFileSync(records, "utf8"));
-    return all.findLast((record) => record.agent === "pi" && record.localRef === id && !record.returnedAt);
+    return readdirSync(records)
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => {
+        try {
+          return JSON.parse(readFileSync(path.join(records, name), "utf8"));
+        } catch {
+          return undefined;
+        }
+      })
+      .filter((record) => record && record.agent === "pi" && record.localRef === id && !record.returnedAt)
+      .sort((a, b) => a.movedAt.localeCompare(b.movedAt))
+      .at(-1);
   } catch {
     return undefined;
   }
@@ -123,6 +136,13 @@ export default function (pi) {
     ctx.ui.notify("Not sent. Run /cloud-return to bring the session back.", "info");
     return { action: "handled" };
   });
+
+  pi.on("agent_start", async (_event, ctx) => {
+    mkdirSync(path.dirname(busy(ctx)), { recursive: true });
+    writeFileSync(busy(ctx), String(process.pid));
+  });
+  // Settled: Pi won't continue by itself (no retry, compaction or queued message is left).
+  pi.on("agent_settled", async (_event, ctx) => rmSync(busy(ctx), { force: true }));
 
   pi.registerCommand("cloud", {
     description: "Move this session and its checkout to a GitTerm cloud workspace",

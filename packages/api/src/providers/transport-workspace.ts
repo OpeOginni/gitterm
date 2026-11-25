@@ -15,6 +15,7 @@ import type {
   WorkspaceInfo,
   WorkspaceStatusResult,
 } from "./compute";
+import { imageSupportsProvider } from "./image-compat";
 import { repositoryCheckoutCommand } from "./project-snapshot";
 import { inlineGitAuthCommands } from "./git-auth";
 import { createProvisionLogger } from "./provision-logger";
@@ -125,7 +126,8 @@ export class TransportWorkspaceProvider implements ComputeProvider {
           editorResources?: unknown;
         } & Record<string, unknown>)
       | undefined;
-    if (!metadata) throw new Error(`This image is not available on ${label}.`);
+    if (!metadata || !imageSupportsProvider(this.name, config.imageProviderMetadata))
+      throw new Error(`This image is not available on ${label}.`);
     const {
       image,
       template,
