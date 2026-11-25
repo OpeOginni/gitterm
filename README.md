@@ -74,6 +74,10 @@ Open `PUBLIC_URL` (default `http://localhost:8888`) and sign in with `ADMIN_EMAI
 
 ### Database migrations and seeding
 
+Before upgrading from the old workspace providers, back up Postgres and terminate any
+Cloudflare workspaces or workspaces still using old provider handles. Migration `0052` removes
+those records but does not delete the remote machines.
+
 The `server` image prepares the database itself on every start (`apps/server/docker-entrypoint.sh`), in order:
 
 1. **Migrations**: applies the committed SQL in `packages/db/src/migrations` and records progress in `drizzle.__drizzle_migrations`.
@@ -85,8 +89,8 @@ Every step waits for Postgres to accept connections and holds a Postgres advisor
 To run these steps yourself instead (for example as a release job before rolling the fleet), set `SKIP_MIGRATIONS=true`, `SKIP_SEED=true` and/or `SKIP_ADMIN_SEED=true` on the `server` service and run the same commands from the image or a checkout with `DATABASE_URL` set:
 
 ```bash
-docker compose -f docker-compose.selfhost.yml run --rm --no-deps server \
-  sh -c 'bun run dist/scripts/migrate.mjs --prod && bun run dist/scripts/seed.mjs --prod'
+docker compose -f docker-compose.selfhost.yml run --rm --no-deps --entrypoint sh server \
+  -c 'bun run dist/scripts/migrate.mjs --prod && bun run dist/scripts/seed.mjs --prod'
 ```
 
 From a checkout, the equivalents are `bun run db:migrate:prod` and `bun run db:seed:prod`.
