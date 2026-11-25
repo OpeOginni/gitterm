@@ -1403,21 +1403,6 @@
     margin-left: 3px;
     filter: none;
   }
-  /* Agents that can take the setup prompt: the same stack, spreading out in colour on hover */
-  .lp .stack.fan > span {
-    width: 24px;
-    height: 24px;
-  }
-  .lp .stack.fan:hover > span,
-  .lp .prompt-strip:hover .stack.fan > span,
-  .lp .prompt-strip:focus-within .stack.fan > span {
-    margin-left: 4px;
-    filter: none;
-  }
-  .lp .prompt-strip:hover .stack.fan > span:first-child,
-  .lp .prompt-strip:focus-within .stack.fan > span:first-child {
-    margin-left: 0;
-  }
   /* The setup prompt's copy button: hovering anywhere on the strip sweeps a band of the accent
      across it, then leaves it lit, so it reads as the thing to press */
   .lp .prompt-copy {
@@ -1617,19 +1602,19 @@
       animation: none;
     }
   }
-  /* It turns gold through Tailwind classes on the button (see sections.tsx); this adds the
+  /* It turns gold through Tailwind classes on the button (see sections.tsx and hero.tsx); this adds the
      shine passing over it as it does */
   .lp .prompt-strip:hover .prompt-copy::before,
   .lp .prompt-strip:focus-within .prompt-copy::before,
-  .lp .lane:hover .prompt-copy::before,
-  .lp .lane:focus-within .prompt-copy::before {
+  .lp .setup-cmd:hover .prompt-copy::before,
+  .lp .setup-cmd:focus-within .prompt-copy::before {
     animation: lp-whoosh 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
   }
   @media (prefers-reduced-motion: reduce) {
     .lp .prompt-strip:hover .prompt-copy::before,
     .lp .prompt-strip:focus-within .prompt-copy::before,
-    .lp .lane:hover .prompt-copy::before,
-    .lp .lane:focus-within .prompt-copy::before {
+    .lp .setup-cmd:hover .prompt-copy::before,
+    .lp .setup-cmd:focus-within .prompt-copy::before {
       animation: none;
     }
   }
