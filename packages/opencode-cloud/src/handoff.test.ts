@@ -1,30 +1,31 @@
+import {
+  importPayload,
+  offersModel,
+  runtimeClient,
+  sessionBusy,
+} from "@gitterm/move/agents/opencode-session";
+import { withoutGithub } from "@gitterm/move/gitterm";
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OpenCodeClient } from "@opencode/client";
 import { GittermError, type GittermClient } from "@gitterm/sdk";
-import {
-  changePrompt,
-  CONTINUE_TEXT,
-  handoffSession,
-  HandoffCancelled,
-  sessionBusy,
-  cloudHasModel,
-  importPayload,
-  offersModel,
-  runtimeClient,
-  showConnection,
-  withoutGithub,
-  type HandoffRecord,
-} from "./handoff";
-import { git } from "./snapshot";
+import { changePrompt, handoffSession, HandoffCancelled, showConnection } from "./handoff";
+import { git } from "@gitterm/move/checkout/snapshot";
+import { loadRecords } from "@gitterm/move/records";
 
 let root: string;
+/** The cloud workspace's checkout. */
+let cloudRoot: string;
+const home = process.env.HOME;
 let server: ReturnType<typeof Bun.serve> | undefined;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(tmpdir(), "gitterm-orchestration-test-"));
+  root = await realpath(await mkdtemp(path.join(tmpdir(), "gitterm-orchestration-test-")));
+  cloudRoot = await realpath(await mkdtemp(path.join(tmpdir(), "gitterm-cloud-test-")));
+  // Move records go to this HOME, not the user's.
+  process.env.HOME = cloudRoot + "-home";
   await git(root, ["init", "-b", "main"]);
   await git(root, ["config", "user.name", "Test"]);
   await git(root, ["config", "user.email", "test@example.com"]);
@@ -37,6 +38,9 @@ afterEach(async () => {
   server?.stop(true);
   server = undefined;
   await rm(root, { recursive: true, force: true });
+  await rm(cloudRoot, { recursive: true, force: true });
+  await rm(cloudRoot + "-home", { recursive: true, force: true });
+  process.env.HOME = home;
 });
 
 type Inbox = Awaited<ReturnType<OpenCodeClient["session"]["inbox"]["list"]>>;
@@ -56,6 +60,7 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
   /** Notes sent to the local session, such as "continue where you left off". */
   const notes: Array<{ text: string; resume?: boolean | null }> = [];
   const local = {
+    server: { info: async () => ({ version: "2.3.0" }) },
     experimental: { job: { list: async (): Promise<Jobs> => [] } },
     session: {
       active: async () => ({}),
@@ -83,21 +88,27 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
       },
     },
   } as unknown as OpenCodeClient;
-  const records: HandoffRecord[] = [];
-  const discarded: HandoffRecord[] = [];
   let creates = 0;
   let terminates = 0;
   const gitterm = {
+    catalog: {
+      workspaceOptions: async () => ({
+        providers: [{ id: "p1", type: "e2b", agentKeys: ["opencode"], isDefault: true }],
+      }),
+    },
     workspaces: {
-      create: async () => {
+      // GitTerm clones the repository into the workspace.
+      create: async (input: { repo?: string }) => {
         creates++;
-        return { workspace: { id: "workspace-test" } };
+        if (input.repo) await git(cloudRoot, ["clone", "--quiet", root, "."]);
+        return { workspace: { id: "workspace-test", status: "running" } };
       },
       ensureRunning: async () => {},
+      get: async () => ({ id: "workspace-test", status: "running" }),
       getRuntimeAccess: async () => ({
         url: `http://127.0.0.1:${server!.port}`,
         password: "password",
-        directory: root,
+        directory: cloudRoot,
       }),
       models: async () => ({ providers: [] }),
       terminate: async () => {
@@ -110,8 +121,6 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
     gitterm,
     forms,
     notes,
-    records,
-    discarded,
     creates: () => creates,
     terminates: () => terminates,
     deps: {
@@ -119,52 +128,56 @@ function fixture(answers: Array<Record<string, boolean | string> | "cancelled">)
       gitterm,
       options: {},
       signal: AbortSignal.timeout(10_000),
-      save: async (record: HandoffRecord) => {
-        records.push({ ...record });
-      },
-      discard: async (record: HandoffRecord) => {
-        discarded.push({ ...record });
-      },
       progress: async (_step: string) => {},
     },
   };
 }
 
-/** A cloud OpenCode: records what it is sent. `restoreExits` are the restore script's exit codes. */
-function cloudServer(restoreExits: number[] = []) {
+/**
+ * A cloud OpenCode whose workspace is `cloudRoot` on this machine: it runs the commands it is
+ * sent there, and records what else it is sent.
+ */
+function cloudServer() {
   const cloud = {
-    requests: [] as string[],
-    uploads: [] as Buffer[],
+    commands: [] as string[],
     prompts: [] as Array<{ text: string }>,
     notes: [] as Array<{ text: string; resume?: boolean; metadata?: unknown }>,
     entry: undefined as string | undefined,
   };
+  const shells = new Map<string, string>();
   server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     async fetch(request) {
       const route = new URL(request.url).pathname;
-      cloud.requests.push(route);
       expect(request.headers.get("authorization")).toBe(
         `Basic ${Buffer.from("opencode:password").toString("base64")}`,
       );
       if (route === "/api/info") return Response.json({ version: "2.3.0" });
-      if (route === "/api/shell") {
-        const { command } = (await request.json()) as { command: string };
-        // The restore script is the only command that reads the uploaded snapshot.
-        const exit = command.includes("snapshot.bin") ? (restoreExits.shift() ?? 0) : 0;
+      if (route === "/api/shell" && request.method === "POST") {
+        const { command, cwd } = (await request.json()) as { command: string; cwd: string };
+        cloud.commands.push(command);
+        const run = Bun.spawn(["sh", "-c", command], { cwd, stdout: "pipe", stderr: "pipe" });
+        const output = await new Response(run.stdout).text();
+        const id = `shell-${shells.size}`;
+        shells.set(id, output);
         return Response.json({
-          location: { directory: root },
-          data: { id: "shell", status: "exited", exit },
+          location: { directory: cloudRoot },
+          data: { id, status: "exited", exit: await run.exited },
         });
       }
-      if (route === "/api/experimental/fs/write") {
-        cloud.uploads.push(Buffer.from(await request.arrayBuffer()));
-        return Response.json({ location: { directory: root }, data: {} });
+      const shell = /^\/api\/shell\/([^/]+)(\/output)?$/.exec(route);
+      if (shell && request.method === "DELETE") return new Response(null, { status: 204 });
+      if (shell?.[2]) {
+        const output = shells.get(shell[1]!) ?? "";
+        return Response.json({
+          location: { directory: cloudRoot },
+          data: { output, cursor: output.length, size: output.length },
+        });
       }
       if (route === "/api/experimental/session/import") {
         const input = (await request.json()) as { info: { id: string } };
-        return Response.json({ data: { ...input.info, location: { directory: root } } });
+        return Response.json({ data: { ...input.info, location: { directory: cloudRoot } } });
       }
       if (route.endsWith("/instructions/entries/gitterm-moved")) {
         cloud.entry = ((await request.json()) as { value: string }).value;
@@ -184,11 +197,11 @@ function cloudServer(restoreExits: number[] = []) {
   return cloud;
 }
 
-const manifest = (upload: Buffer) =>
-  JSON.parse(upload.subarray(4, 4 + upload.readUInt32BE(0)).toString()) as {
-    bundle: number;
-    digest: string;
-  };
+/** How many times the checkout snapshot was sent to the workspace. */
+const uploads = (cloud: ReturnType<typeof cloudServer>) =>
+  cloud.commands.filter((command) => /snapshot\.bin'? && chmod/.test(command)).length;
+
+const head = (directory: string) => git(directory, ["rev-parse", "HEAD"]);
 
 test("prompts differ only by shared-checkout warning", () => {
   expect(changePrompt(0)).toBeUndefined();
@@ -199,43 +212,43 @@ test("prompts differ only by shared-checkout warning", () => {
 test("a clean checkout moves without a question and stores no credentials", async () => {
   const cloud = cloudServer();
   const f = fixture([]);
-  const { record, continuing } = await handoffSession("ses_test", f.deps);
-  expect(record.phase).toBe("ready");
-  expect(continuing).toBe(false);
+  expect(await handoffSession("ses_test", f.deps)).toEqual({ workspaceID: "workspace-test" });
   expect(f.forms).toEqual([]);
-  expect(f.records.map((item) => [item.phase, item.workspaceID])).toEqual([
-    ["moving", undefined],
-    ["moving", "workspace-test"],
-    ["ready", "workspace-test"],
+  // The move is in GitTerm's records, where the CLI and /cloud-return find it.
+  const records = await loadRecords();
+  expect(records.map((item) => [item.agent, item.localRef, item.workspaceId])).toEqual([
+    ["opencode", "ses_test", "workspace-test"],
   ]);
-  expect(cloud.requests.indexOf("/api/experimental/fs/write")).toBeLessThan(
-    cloud.requests.indexOf("/api/experimental/session/import"),
-  );
-  expect(cloud.entry).toContain(`(local checkout ${await realpath(root)})`);
-  // The same words sit in the conversation where the move happened, without starting the agent.
+  expect((await head(cloudRoot)).toString()).toBe((await head(root)).toString());
+  expect(cloud.entry).toContain(`(checkout ${root})`);
+  // The same words sit in the conversation where the move happened; then the agent carries on.
   expect(cloud.notes).toEqual([
     {
       text: `<session-moved source="gitterm">\nA notice from GitTerm, not a message from the user.\n${cloud.entry}\n</session-moved>`,
       resume: false,
       metadata: { source: "gitterm" },
     },
+    expect.objectContaining({
+      text: "Continue the task you were working on. If it is done, say so briefly and wait.",
+      resume: true,
+    }),
   ]);
   expect(cloud.prompts).toEqual([]);
-  expect(JSON.stringify(f.records)).not.toContain("password");
+  expect(JSON.stringify(records)).not.toContain("password");
   expect(f.terminates()).toBe(0);
 });
 
 test("uncommitted changes are asked about and go along when the user says so", async () => {
   await writeFile(path.join(root, "file.txt"), "local edit\n");
-  const cloud = cloudServer();
+  cloudServer();
   const f = fixture([{ changes: "yes" }]);
-  expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+  expect((await handoffSession("ses_test", f.deps)).workspaceID).toBe("workspace-test");
   expect(f.forms.map((form) => (form.fields[0] as { title?: string }).title)).toEqual([
     "Bring your uncommitted changes to the cloud?",
   ]);
   expect(JSON.stringify(f.forms)).not.toContain('"default"');
-  expect(cloud.uploads[0]!.toString("latin1")).toContain("local edit");
-  expect(JSON.stringify(f.records)).not.toContain("local edit");
+  expect(await readFile(path.join(cloudRoot, "file.txt"), "utf8")).toBe("local edit\n");
+  expect(JSON.stringify(await loadRecords())).not.toContain("local edit");
 });
 
 test("cancelling the question never provisions compute", async () => {
@@ -243,7 +256,7 @@ test("cancelling the question never provisions compute", async () => {
   const f = fixture(["cancelled"]);
   await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
   expect(f.creates()).toBe(0);
-  expect(f.records).toEqual([]);
+  expect(await loadRecords()).toEqual([]);
 });
 
 test("a running agent and its subagent are stopped here and continue in the cloud", async () => {
@@ -278,14 +291,15 @@ test("a running agent and its subagent are stopped here and continue in the clou
   f.deps.progress = async (step) => {
     steps.push(step);
   };
-  const { record, continuing } = await handoffSession("ses_test", f.deps);
-  expect(record.phase).toBe("ready");
-  expect(continuing).toBe(true);
+  expect((await handoffSession("ses_test", f.deps)).workspaceID).toBe("workspace-test");
   expect(steps[0]).toBe("Stopping the agent here");
   expect(interrupted.toSorted()).toEqual(["ses_child", "ses_test", "ses_test"]);
   expect(cloud.notes).toEqual([
     expect.objectContaining({ text: expect.stringContaining(cloud.entry!), resume: false }),
-    expect.objectContaining({ text: CONTINUE_TEXT, resume: true }),
+    expect.objectContaining({
+      text: "Continue the task you were working on. If it is done, say so briefly and wait.",
+      resume: true,
+    }),
   ]);
   expect(f.notes).toEqual([]);
 });
@@ -293,11 +307,10 @@ test("a running agent and its subagent are stopped here and continue in the clou
 test("text after /cloud is sent to the cloud agent", async () => {
   const cloud = cloudServer();
   const f = fixture([]);
-  const moved = await handoffSession("ses_test", f.deps, "finish the migration");
-  expect(moved.continuing).toBe(true);
-  expect(cloud.prompts).toEqual([expect.objectContaining({ text: "finish the migration" })]);
+  await handoffSession("ses_test", f.deps, "finish the migration");
   expect(cloud.notes).toEqual([
     expect.objectContaining({ text: expect.stringContaining(cloud.entry!), resume: false }),
+    expect.objectContaining({ text: "finish the migration", resume: true }),
   ]);
 });
 
@@ -333,13 +346,16 @@ test("sends the whole history when the cloud clone lacks the commits a smaller u
   // HEAD is on origin's default branch, so the first upload carries no commits.
   await git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
   await git(root, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
-  const cloud = cloudServer([3]);
+  const cloud = cloudServer();
   const f = fixture([]);
-  expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
-  const uploads = cloud.uploads.map(manifest);
-  expect(uploads.map((upload) => upload.bundle === 0)).toEqual([true, false]);
-  expect(uploads[1]!.digest).toBe(uploads[0]!.digest);
-  expect(f.creates()).toBe(1);
+  // A workspace whose clone has none of this repository's commits.
+  f.gitterm.workspaces.create = (async () => {
+    await git(cloudRoot, ["init", "--quiet", "-b", "main"]);
+    return { workspace: { id: "workspace-test", status: "running" } };
+  }) as unknown as typeof f.gitterm.workspaces.create;
+  expect((await handoffSession("ses_test", f.deps)).workspaceID).toBe("workspace-test");
+  expect(uploads(cloud)).toBe(2);
+  expect((await head(cloudRoot)).toString()).toBe((await head(root)).toString());
 });
 
 test("a repository GitTerm can't reach goes with its whole history instead", async () => {
@@ -359,15 +375,16 @@ test("a repository GitTerm can't reach goes with its whole history instead", asy
       );
     return { workspace: { id: "workspace-test", status: "running" } };
   }) as unknown as typeof f.gitterm.workspaces.create;
-  expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+  expect((await handoffSession("ses_test", f.deps)).workspaceID).toBe("workspace-test");
   expect(attempts.map((attempt) => [attempt.repo, attempt.connections])).toEqual([
     ["https://github.com/example/repo.git", ["github", "mcp"]],
     [undefined, ["mcp"]],
   ]);
   expect(new Set(attempts.map((attempt) => attempt.idempotencyKey)).size).toBe(2);
   // One upload, and it carries the commits.
-  expect(cloud.uploads.map((upload) => manifest(upload).bundle > 0)).toEqual([true]);
-  expect(cloud.entry).toContain("copied without one");
+  expect(uploads(cloud)).toBe(1);
+  expect((await head(cloudRoot)).toString()).toBe((await head(root)).toString());
+  expect(cloud.entry).toContain("could not reach the repository's remote");
 });
 
 test("when the history is too big to send instead, both reasons and the fix are shown", async () => {
@@ -389,7 +406,7 @@ test("when the history is too big to send instead, both reasons and the fix are 
   const failure = await handoffSession("ses_test", f.deps).catch((error: Error) => error);
   expect(String(failure)).toContain("GitTerm can't access this repository");
   expect(String(failure)).toContain("25 MiB");
-  expect(String(failure)).toContain("https://gitterm.dev/dashboard/integrations");
+  expect(String(failure)).toContain("Integrations");
 });
 
 test("other refusals are not retried without the repository", async () => {
@@ -409,6 +426,8 @@ test("starts from the project snapshot, and fresh when that snapshot no longer s
   const run = async (outcome: "starts" | "fails" | "terminated") => {
     const attempts: Array<{ fresh: boolean; snapshot: boolean | undefined }> = [];
     const f = fixture([]);
+    // The workspace of the run before was deleted, so the session moves again.
+    f.gitterm.workspaces.get = (async () => ({ status: "terminated" })) as never;
     f.gitterm.workspaces.create = (async (input: {
       idempotencyKey: string;
       useProjectSnapshot?: boolean;
@@ -425,7 +444,7 @@ test("starts from the project snapshot, and fresh when that snapshot no longer s
       const terminated = input.useProjectSnapshot && outcome === "terminated";
       return { workspace: { id: "workspace-test", status: terminated ? "terminated" : "running" } };
     }) as unknown as typeof f.gitterm.workspaces.create;
-    expect((await handoffSession("ses_test", f.deps)).record.phase).toBe("ready");
+    expect((await handoffSession("ses_test", f.deps)).workspaceID).toBe("workspace-test");
     return attempts;
   };
   expect(await run("starts")).toEqual([{ fresh: false, snapshot: true }]);
@@ -453,7 +472,7 @@ test("warns about another active session in a subdirectory of the same checkout"
   expect(f.forms[0]?.fields[0]?.description).toContain("1 other active session(s)");
 });
 
-test("a failed create says why, and the attempt is forgotten", async () => {
+test("a failed create says why, and nothing is recorded", async () => {
   const f = fixture([]);
   f.gitterm.workspaces.create = async () => {
     throw new GittermError(
@@ -466,7 +485,7 @@ test("a failed create says why, and the attempt is forgotten", async () => {
     "Moving to the cloud failed while creating the cloud workspace. Gitterm couldn't start a small machine. Reference: ws1 Local files",
   );
   expect(f.terminates()).toBe(0);
-  expect(f.discarded.length).toBe(1);
+  expect(await loadRecords()).toEqual([]);
 });
 
 test("a failure part way deletes the workspace and lets a stopped agent continue here", async () => {
@@ -485,11 +504,11 @@ test("a failure part way deletes the workspace and lets a stopped agent continue
   }) as typeof f.local.session.interrupt;
   const failure = handoffSession("ses_test", f.deps);
   await expect(failure).rejects.toThrow(
-    "Moving to the cloud failed while connecting to the cloud workspace. The cloud workspace was deleted.",
+    "Moving to the cloud failed while copying your code. UnexpectedStatus: 500 The cloud workspace was deleted.",
   );
   await expect(failure).rejects.not.toThrow("secret upstream body");
   expect(f.terminates()).toBe(1);
-  expect(f.discarded.map((record) => record.workspaceID)).toEqual(["workspace-test"]);
+  expect(await loadRecords()).toEqual([]);
   expect(f.notes).toEqual([expect.objectContaining({ resume: true })]);
 });
 
@@ -503,7 +522,7 @@ test("cancelling part way deletes the workspace", async () => {
   };
   await expect(handoffSession("ses_test", f.deps)).rejects.toBeInstanceOf(HandoffCancelled);
   expect(f.terminates()).toBe(1);
-  expect(f.discarded.length).toBe(1);
+  expect(await loadRecords()).toEqual([]);
 });
 
 test("import detaches parent/fork, local revert state, and local permission grants", () => {
@@ -547,22 +566,12 @@ test("reconnect offers a fresh pairing link without creating compute or saving t
     },
   });
   const f = fixture([{ done: true }]);
-  const record: HandoffRecord = {
-    attemptID: "attempt",
-    sessionID: "ses_test",
-    phase: "ready",
-    workspaceID: "workspace-test",
-    sourceDirectory: root,
-    head: "head",
-    includeChanges: true,
-    createdAt: "now",
-  };
-  await showConnection(f.local, f.gitterm, record, f.deps.signal);
+  await showConnection(f.local, f.gitterm, "ses_test", "workspace-test", f.deps.signal);
   expect((f.forms[0]?.fields[0] as { url: string } | undefined)?.url).toContain(
     "/auth/connect/one-time-code",
   );
   expect(f.creates()).toBe(0);
-  expect(f.records).toEqual([]);
+  expect(await loadRecords()).toEqual([]);
 });
 
 test("a model is kept when the cloud offers it, waiting for a catalog that is still loading", async () => {
@@ -594,62 +603,6 @@ test("a model is kept when the cloud offers it, waiting for a catalog that is st
   } as unknown as Parameters<typeof importPayload>[0];
   expect(importPayload(exported, "/w").info).toHaveProperty("model");
   expect(importPayload(exported, "/w", { keepModel: false }).info).not.toHaveProperty("model");
-});
-
-test("a provider GitTerm gave the workspace credentials for keeps its model at once", async () => {
-  const model = { providerID: "openai", id: "gpt-5.2" };
-  let looks = 0;
-  // A cloud whose catalog has not loaded anything yet.
-  const remote = {
-    model: {
-      list: async () => {
-        looks++;
-        return { data: [] };
-      },
-    },
-  } as unknown as OpenCodeClient;
-  const gitterm = (providers: Array<{ provider: string; active: boolean }> | Error) =>
-    ({
-      workspaces: {
-        models: async () => {
-          if (providers instanceof Error) throw providers;
-          return { providers };
-        },
-      },
-    }) as unknown as GittermClient;
-  const signal = AbortSignal.timeout(5_000);
-
-  expect(
-    await cloudHasModel(
-      gitterm([{ provider: "openai", active: true }]),
-      "w",
-      remote,
-      "/w",
-      model,
-      signal,
-    ),
-  ).toBe(true);
-  expect(looks).toBe(0);
-  // No session model: nothing to check.
-  expect(await cloudHasModel(gitterm([]), "w", remote, "/w", undefined, signal)).toBe(true);
-
-  // A disabled credential, or an older GitTerm, falls back to the catalog.
-  const catalog = {
-    model: { list: async () => ({ data: [{ providerID: "openai", id: "gpt-5.2" }] }) },
-  } as unknown as OpenCodeClient;
-  expect(
-    await cloudHasModel(
-      gitterm([{ provider: "openai", active: false }]),
-      "w",
-      catalog,
-      "/w",
-      model,
-      signal,
-    ),
-  ).toBe(true);
-  expect(
-    await cloudHasModel(gitterm(new Error("old server")), "w", catalog, "/w", model, signal),
-  ).toBe(true);
 });
 
 test("a workspace without a repository drops every reference to a GitHub connection", async () => {

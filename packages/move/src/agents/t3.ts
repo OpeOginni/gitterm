@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
-import { accessSync, constants, statSync } from "node:fs";
+import { accessSync, constants, existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
-import { agentScript } from "../script.js";
+import { agentScript, scriptSession } from "../script.js";
 import type { AgentAdapter, ExportedSession } from "./types.js";
 
 /**
@@ -357,7 +357,13 @@ const sessionText = (exported: ExportedSession) =>
 export const t3Agent: AgentAdapter = {
   key: "t3code",
   label: "T3 Code",
+  /** Its server keeps its state in `~/.t3` (T3CODE_HOME). */
+  installed: async () =>
+    existsSync(process.env.T3CODE_HOME || path.join(process.env.HOME || homedir(), ".t3")),
+  howToMove:
+    "Ask the agent in a thread to move its session to the cloud (the gitterm-cloud skill).",
   script: T3_SCRIPT,
+  session: scriptSession(T3_SCRIPT),
   currentSession: (env) => env.T3CODE_THREAD_ID,
   sentSince: (exported, mark) => sentSince(sessionText(exported), mark),
 

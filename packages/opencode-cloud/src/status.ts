@@ -1,6 +1,8 @@
 import type { OpenCodeClient } from "@opencode/client";
 import { GittermError, type GittermClient } from "@gitterm/sdk";
-import { markCloudSession, runtimeClient, type HandoffRecord } from "./handoff";
+import { runtimeClient } from "@gitterm/move/agents/opencode-session";
+import type { MoveRecord } from "@gitterm/move/records";
+import { markCloudSession } from "./handoff";
 import type { CloudStatus } from "./marker";
 
 /**
@@ -22,49 +24,22 @@ export async function workspaceGone(gitterm: GittermClient, workspaceID: string)
 }
 
 /**
- * Deletes the workspace a /cloud that never finished left behind (OpenCode was closed
- * meanwhile). One that failed before GitTerm answered has no workspace ID; its workspace, if
- * any, carries the attempt in its metadata.
- */
-export async function deleteLeftover(
-  gitterm: GittermClient,
-  record: Pick<HandoffRecord, "attemptID" | "workspaceID">,
-) {
-  const ids = record.workspaceID
-    ? [record.workspaceID]
-    : (
-        await gitterm.workspaces.list({
-          status: "active",
-          metadata: { "opencode.handoff": record.attemptID },
-          limit: 5,
-        })
-      ).workspaces.map((workspace) => workspace.id);
-  for (const id of ids)
-    await gitterm.workspaces.terminate(id).catch((error: unknown) => {
-      if (error instanceof GittermError && error.code === "NOT_FOUND") return;
-      throw new Error(
-        `An earlier /cloud left workspace ${id}, and it could not be deleted. Delete it in GitTerm, then run /cloud again.`,
-      );
-    });
-}
-
-/**
  * What the cloud side of a session is doing right now. Every request to the workspace is
  * marked passive, and a workspace that is not running is never woken, so asking does not
  * cost anything or keep the workspace from pausing.
  */
 export async function cloudStatus(
   gitterm: GittermClient,
-  record: HandoffRecord,
+  record: MoveRecord,
   signal: AbortSignal,
 ): Promise<CloudStatus> {
-  const workspace = await gitterm.workspaces.get(record.workspaceID!);
+  const workspace = await gitterm.workspaces.get(record.workspaceId);
   if (workspace.status === "terminated") return "gone";
   if (workspace.status !== "running") return "paused";
   const remote = runtimeClient(await gitterm.workspaces.getRuntimeAccess(workspace.id), {
     passive: true,
   });
-  const { sessionID } = record;
+  const sessionID = record.cloudRef;
   const [active, permissions, forms] = await Promise.all([
     remote.session.active({ signal }),
     remote.permission.list({ sessionID }, { signal }),
@@ -83,11 +58,11 @@ export async function cloudStatus(
 export async function watchCloudSessions(deps: {
   gitterm(): GittermClient;
   local(): Promise<OpenCodeClient>;
-  sessions(): HandoffRecord[];
+  sessions(): MoveRecord[];
   /** Whether a command is working on the session right now; it is left alone meanwhile. */
   busy(sessionID: string): boolean;
   /** Called once when a session's workspace turns out to be deleted. */
-  gone(record: HandoffRecord): Promise<void>;
+  gone(record: MoveRecord): Promise<void>;
   signal: AbortSignal;
   /** Waits between rounds; it may return early, for instance when a session is added. */
   pause(milliseconds: number): Promise<void>;
@@ -96,31 +71,28 @@ export async function watchCloudSessions(deps: {
   const known = new Map<string, CloudStatus>();
   while (!signal.aborted && deps.sessions().length > 0) {
     for (const record of deps.sessions()) {
-      if (deps.busy(record.sessionID)) continue;
+      const sessionID = record.localRef;
+      if (deps.busy(sessionID)) continue;
       // A failed look (offline, GitTerm unreachable) changes nothing; the next round retries.
       const status = await cloudStatus(deps.gitterm(), record, signal).catch(() => undefined);
-      if (!status || status === known.get(record.sessionID)) continue;
+      if (!status || status === known.get(sessionID)) continue;
       // The session may have come back or moved on while this was in flight.
-      if (!deps.sessions().includes(record) || deps.busy(record.sessionID)) continue;
+      const still = deps.sessions().some((item) => item.workspaceId === record.workspaceId);
+      if (!still || deps.busy(sessionID)) continue;
       const marked = await deps
         .local()
         .then((local) =>
-          markCloudSession(
-            local,
-            record.sessionID,
-            { workspaceID: record.workspaceID!, status },
-            signal,
-          ),
+          markCloudSession(local, sessionID, { workspaceID: record.workspaceId, status }, signal),
         )
         .then(
           () => true,
           () => false,
         );
       if (!marked) continue;
-      known.set(record.sessionID, status);
+      known.set(sessionID, status);
       if (status === "gone") await deps.gone(record).catch(() => {});
     }
-    const statuses = deps.sessions().map((record) => known.get(record.sessionID));
+    const statuses = deps.sessions().map((record) => known.get(record.localRef));
     const wait = statuses.includes(undefined)
       ? FIRST_POLL_MS
       : statuses.includes("working")

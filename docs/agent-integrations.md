@@ -98,27 +98,29 @@ The provider side of the same standard is in [sandbox-standard.md](sandbox-stand
 Moving a session to a workspace and back works the same for every agent. The flows
 (`packages/cli/src/move/flows.ts`) copy the checkout, create a workspace running the same
 agent, and hand the conversation over. Only an adapter (`packages/cli/src/move/agents/`)
-knows the agent. An adapter is a small Node script that runs on both machines (locally, and
-in the workspace through `workspace.execCommand`) and provides five operations:
+knows the agent. It provides five session operations on a machine:
 
-| Operation | Does                                                                           |
-| --------- | ------------------------------------------------------------------------------ |
-| `info`    | Returns the agent's version, to warn when the machines differ.                 |
-| `export`  | Returns a session's directory, title, size and native files.                   |
-| `import`  | Writes those files for another directory, as a new session or in place of one. |
-| `notify`  | Starts the agent on a message without waiting.                                 |
-| `status`  | Says whether the session is working.                                           |
+| Operation | Does                                                                         |
+| --------- | ---------------------------------------------------------------------------- |
+| `info`    | Returns the agent's version, to warn when the machines differ.               |
+| `export`  | Returns a session's directory, title, size and native data.                  |
+| `import`  | Writes that data for another directory, as a new session or in place of one. |
+| `notify`  | Starts the agent on a message without waiting (in the cloud, or locally).    |
+| `status`  | Says whether the session is working.                                         |
 
-The adapter also says which session the calling process belongs to (from the agent's
-environment, e.g. `T3CODE_THREAD_ID`), and whether a user message was added after a size
+T3 Code and Pi implement them as a Node script that runs on each machine (`agentScript`),
+reaching the workspace through GitTerm's `workspace.execCommand`. OpenCode implements them
+with its own server API, and reaches the workspace through that server too (its shell and
+file APIs), so OpenCode sessions move on every provider, AWS included.
+
+An adapter also says which session the calling process belongs to (`T3CODE_THREAD_ID`,
+`PI_SESSION_ID`, `OPENCODE_SESSION_ID`), and whether a user message was added after the move
 (so a return doesn't replace local work). It can add steps after a move: T3 links the
-workspace to the local T3 Code, so the cloud thread opens from there. Agents run the CLI
-through one `gitterm-cloud` skill, which `gitterm setup` installs in every agent's skills
-folder. OpenCode keeps its native `/cloud` plugin.
-
-To add an agent, register its key and capabilities, implement the provisioner,
-configure provider runtime images/setup, and extend the conformance tests. Do not
-add agent-name branches to individual compute providers.
+workspace to the local T3 Code. Agents run the CLI through one `gitterm-cloud` skill, which
+`gitterm setup` installs in every agent's skills folder, with each agent's own extras: the
+OpenCode plugin, the Pi extension, T3 Code's linked environments. Native plugins are a layer
+over the same flows. OpenCode's `/cloud` plugin calls them in-process (`@gitterm/move`); Pi's
+extension runs the CLI. Both only ask questions, show status, and report the outcome.
 
 ## Gaps addressed
 

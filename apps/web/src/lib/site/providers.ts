@@ -78,17 +78,20 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
   },
 ];
 
-export type AgentId = "opencode" | "codex" | "claude";
+export type AgentId = "opencode" | "pi" | "codex" | "claude";
 
 /** Agents a cloud workspace can run. Codex and Claude Code run inside T3 Code. */
 export const AGENTS: { id: AgentId; name: string; logo: string; viaT3: boolean }[] = [
   { id: "opencode", name: "OpenCode", logo: "/opencode.svg", viaT3: false },
+  { id: "pi", name: "Pi", logo: "/pi.svg", viaT3: false },
   { id: "codex", name: "Codex", logo: "/openai-codex.svg", viaT3: true },
   { id: "claude", name: "Claude Code", logo: "/claude.svg", viaT3: true },
 ];
 
 export const T3_LOGO = "/t3-nightly.svg";
 
+/** Sets up every agent on the machine to move sessions to the cloud, and signs in. */
+export const INSTALL_SETUP = "npx @gitterm/cli setup";
 export const INSTALL_SANDBOX = "opencode plugin add @gitterm/opencode-sandbox";
 export const INSTALL_CLOUD = "opencode plugin add @gitterm/opencode-cloud";
 export const GITHUB_URL = "https://github.com/OpeOginni/gitterm";

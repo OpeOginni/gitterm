@@ -423,8 +423,8 @@ function scenesFor(P: SandboxProvider, id: SandboxProviderId) {
   ];
 }
 
-// Part 2. Truthful to what ships: OpenCode sessions move with /cloud (and come back with /cloud-return).
-// Codex and Claude Code don't move; T3 Code starts them in a new cloud workspace.
+// Part 2. Truthful to what ships: OpenCode and Pi sessions move with /cloud (and come back with
+// /cloud-return). Here T3 Code starts Codex and Claude Code in new cloud workspaces.
 type Sess = {
   id: string;
   logo: string;
@@ -449,8 +449,8 @@ const SESS: Sess[] = [
   },
   {
     id: "o2",
-    logo: "/opencode.svg",
-    agent: "OpenCode",
+    logo: "/pi.svg",
+    agent: "Pi",
     title: "Add coupon expiry to the admin",
     prov: ["Vercel", "/vercel.svg"],
     work: "Building the admin form",
@@ -475,7 +475,7 @@ const FRESH: Sess[] = [
     agent: "Claude Code in T3 Code",
     t3: true,
     title: "Review PR #479",
-    prov: ["Railway", "/railway.svg"],
+    prov: ["Boat", "/boat.svg"],
     work: "Reading 14 changed files",
     done: "Review posted with 3 comments.",
   },
@@ -1141,7 +1141,7 @@ export function startLanding(root: HTMLElement): () => void {
     hoCpu(92);
     hoClock("18:40", "Tuesday evening");
     if (!(await hoWait(1200, id))) return;
-    // Each OpenCode session moves with /cloud; the laptop gets lighter every time
+    // Each session moves with /cloud; the laptop gets lighter every time
     const cpu = [48, 10];
     for (const [i, s] of SESS.entries()) {
       setRow(s.id, "moving", "/cloud", '<i class="spin2"></i>Moving');

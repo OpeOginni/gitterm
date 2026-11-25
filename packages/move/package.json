@@ -1,0 +1,28 @@
+{
+  "name": "@gitterm/move",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Moves coding agents' sessions and checkouts between this machine and GitTerm workspaces",
+  "type": "module",
+  "exports": {
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun build $(find src -name '*.ts' ! -name '*.test.ts') --root src --outdir dist --target node --format esm --splitting --packages external && tsc -p tsconfig.build.json",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gitterm/schema": "workspace:*",
+    "@gitterm/sdk": "workspace:*",
+    "@opencode/client": "2.3.0"
+  },
+  "devDependencies": {
+    "@gitterm/agent-runtime": "workspace:*",
+    "@gitterm/config": "workspace:*",
+    "@types/bun": "^1.2.6",
+    "typescript": "catalog:"
+  }
+}

@@ -7,8 +7,8 @@ import { CopyButton } from "@/components/site/copy-button";
 import { Mark } from "@/components/site/mark";
 import {
   GITHUB_URL,
-  INSTALL_CLOUD,
   INSTALL_SANDBOX,
+  INSTALL_SETUP,
   SANDBOX_PROVIDERS,
   T3_LOGO,
 } from "@/lib/site/providers";
@@ -117,14 +117,15 @@ function Lane({
  * A prompt to paste into a coding agent. It sends the agent to llms.txt instead of spelling out
  * setup steps here, so it stays right as the docs change, and it asks the user before acting.
  */
+/** Every agent Gitterm supports, in the order the page names them. */
+const AGENT_LOGOS = ["/opencode.svg", "/pi.svg", T3_LOGO, "/openai-codex.svg", "/claude.svg"];
+
 const SETUP_PROMPT = `Set up Gitterm for me. Read ${SITE_URL}/llms.txt first and follow the docs it links to. Don't guess at commands or config.
 
 Before you change anything, ask me which of these I want:
-1. Remote sandboxes for the OpenCode agent on this machine (@gitterm/opencode-sandbox). Ask which provider (E2B, Daytona, Vercel, Boat, exe.dev, Railway or AWS) and whether I'll use my own provider key or a Gitterm plan.
-2. Moving an OpenCode session to a cloud workspace with /cloud, and back with /cloud-return (@gitterm/opencode-cloud).
-3. A cloud workspace that runs OpenCode, or T3 Code with Codex or Claude Code, started from ${SITE_URL}/dashboard.
-
-Both plugins are for OpenCode. If I use a different agent, only option 3 applies.
+1. Moving my agents' sessions to a cloud workspace and back. Run \`${INSTALL_SETUP}\`: it asks which agents to set up (OpenCode, Pi, T3 Code), adds a skill for other agents, and signs me in.
+2. Remote sandboxes for the OpenCode agent on this machine (@gitterm/opencode-sandbox). Ask which provider (E2B, Daytona, Vercel, Boat, exe.dev, Railway or AWS) and whether I'll use my own provider key or a Gitterm plan.
+3. A cloud workspace that runs OpenCode, Pi, or T3 Code with Codex or Claude Code, started from ${SITE_URL}/dashboard.
 
 Keep keys out of config files: use {env:VAR} references. When you're done, show me how to check that it works.`;
 
@@ -157,16 +158,17 @@ export function Hero() {
           <Lane
             href="/#agents"
             title="Run agents in the cloud"
-            logos={["/opencode.svg", T3_LOGO, "/openai-codex.svg", "/claude.svg"]}
-            command={INSTALL_CLOUD}
+            logos={AGENT_LOGOS}
+            command={INSTALL_SETUP}
             note={
               <>
-                Then <Link href={"/docs/workspaces/move-a-session" as Route}>sign in</Link> and type{" "}
-                <code>/cloud</code>, or <Link href="/dashboard">start one in the browser</Link>.
+                It sets up the agents you have and signs you in. Then type <code>/cloud</code>, or{" "}
+                <Link href="/dashboard">start one in the browser</Link>.
               </>
             }
           >
-            OpenCode, Codex or Claude Code in a cloud workspace. Reach it from your phone or Slack.
+            Move a session from OpenCode, Pi, Codex or Claude Code to a cloud workspace, and back.
+            Reach it from your phone or Slack.
           </Lane>
         </div>
         {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow.
@@ -178,9 +180,9 @@ export function Hero() {
           <span
             className="stack fan shrink-0 max-[480px]:hidden"
             role="img"
-            aria-label="OpenCode, T3 Code, Codex or Claude Code"
+            aria-label="OpenCode, Pi, T3 Code, Codex or Claude Code"
           >
-            {["/opencode.svg", T3_LOGO, "/openai-codex.svg", "/claude.svg"].map((l) => (
+            {AGENT_LOGOS.map((l) => (
               <span key={l}>
                 <Logo src={l} />
               </span>
@@ -292,10 +294,10 @@ const CHAPTERS: { title: string; body: ReactNode; used?: string[]; id?: string }
     title: "Or take the whole session with you",
     body: (
       <>
-        Add the cloud plugin and type <code>/cloud</code>. The conversation, your unpublished
-        commits and, if you choose, uncommitted changes move to a cloud workspace. Pick it up from
-        your phone, a browser or OpenCode desktop. Your laptop copy stays as it was until you bring
-        the session back with <code>/cloud-return</code>.
+        Run <code>{INSTALL_SETUP}</code> once, then type <code>/cloud</code>. The conversation, your
+        unpublished commits and, if you choose, uncommitted changes move to a cloud workspace. Pi
+        works the same way, and other agents move when you ask them. Your laptop copy stays as it
+        was until you bring the session back with <code>/cloud-return</code>.
       </>
     ),
   },
@@ -553,12 +555,12 @@ export function Agents() {
       <Wrap>
         <PartHeading>Run agents in the cloud</PartHeading>
         <SectionHead title="Send sessions to the cloud. Bring them back.">
-          Move an OpenCode session to a cloud workspace with <code>/cloud</code>, or start Codex or
-          Claude Code in a new one from T3 Code. They keep running on their own, and your laptop is
-          free for whatever is next. <code>/cloud-return</code> brings a session back whenever you
-          want it.
+          Set up every agent you have with <code>{INSTALL_SETUP}</code>, then move a session to a
+          cloud workspace with <code>/cloud</code>, or start Codex or Claude Code in a new one from
+          T3 Code. They keep running on their own, and your laptop is free for whatever is next.{" "}
+          <code>/cloud-return</code> brings a session back whenever you want it.
         </SectionHead>
-        {/* Two clients. Codex and Claude Code sit under T3 Code, because T3 Code is what runs them. */}
+        {/* Codex and Claude Code sit under T3 Code, because T3 Code is what runs them. */}
         <div className="-mt-[18px] mb-[26px] flex flex-wrap items-start gap-x-10 gap-y-4">
           <span className="text-[15px] leading-7 text-fg-3 max-sm:basis-full max-sm:-mb-2">
             Works with
@@ -567,12 +569,16 @@ export function Agents() {
             Move a session with <code className="font-mono text-[0.95em] text-fg-2">/cloud</code>,
             back with <code className="font-mono text-[0.95em] text-fg-2">/cloud-return</code>
           </WorksWith>
+          <WorksWith logo="/pi.svg" name="Pi">
+            The same <code className="font-mono text-[0.95em] text-fg-2">/cloud</code> and{" "}
+            <code className="font-mono text-[0.95em] text-fg-2">/cloud-return</code>
+          </WorksWith>
           <WorksWith logo={T3_LOGO} logoClassName="rounded-[5px]" name="T3 Code">
             Runs
             <Logo src="/openai-codex.svg" className="ml-0.5 size-[14px]" />
             Codex and
             <Logo src="/claude.svg" className="ml-0.5 size-[14px]" />
-            Claude Code
+            Claude Code, which moves when you ask
           </WorksWith>
         </div>
 
@@ -765,9 +771,8 @@ function RoundTrip() {
         Take it with you, then bring it back
       </h3>
       <p className="m-0 mb-6 max-w-[40rem] text-[15px] leading-[1.6] text-pretty text-fg-3">
-        Move an OpenCode session to the cloud, keep the agent going on your phone, in a browser or
-        on another computer, then pull the session back to your laptop whenever you like, finished
-        or not.
+        Move a session to the cloud, keep the agent going on your phone, in a browser or on another
+        computer, then pull the session back to your laptop whenever you like, finished or not.
       </p>
       <div
         className={cn(cells, "grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] max-[900px]:grid-cols-1")}
@@ -969,9 +974,12 @@ const FEATURES = [
   ],
   [
     "Attach your terminal",
-    "Open it in your local OpenCode TUI with one command, or in the T3 Code desktop app.",
+    "Open OpenCode in your local TUI with one command, T3 Code in its desktop app, or Pi in a browser terminal.",
   ],
-  ["Connect from any device", "Same workspace in your browser, OpenCode desktop or your phone."],
+  [
+    "Connect from any device",
+    "Same workspace in your browser, your agent's desktop app or your phone.",
+  ],
   ["Set keys once", "Model keys are saved once and reused in every workspace, never pasted again."],
   ["Script it", "Create workspaces with the SDK. Manage them with the CLI or the SDK."],
 ] as const;
@@ -1013,9 +1021,10 @@ export function Cta() {
           Give your agents more computers.
         </h2>
         <p className="mx-auto mt-[18px] max-w-[34rem] text-fg-3">
-          Add the plugin to OpenCode, or start a cloud workspace. Open source and self-hostable.
+          Set up your agents with one command, or start a cloud workspace. Open source and
+          self-hostable.
         </p>
-        <InstallCommand command={INSTALL_SANDBOX} className="mt-[18px]" location="cta" />
+        <InstallCommand command={INSTALL_SETUP} className="mt-[18px]" location="cta" />
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
             href="/dashboard"

@@ -43,19 +43,42 @@ export function piServeCommand(port: number): string {
 }
 
 /**
- * Pi's GitTerm extension: `/cloud` and `/cloud-return`, and delivery of the notices
+ * Pi's GitTerm extension: `/cloud` and `/cloud-return`, a footer status while a session is in
+ * the cloud, a question before a message is sent here instead, and delivery of the notices
  * `gitterm move` and `gitterm return` leave for a session (in
  * `~/.pi/agent/gitterm/inbox/<session id>.txt`) when that session opens. While Pi works in a
  * session, `~/.pi/agent/gitterm/busy/<session id>` holds Pi's process id, so GitTerm doesn't
- * copy the session mid-turn.
+ * copy the session mid-turn. The work itself is the `gitterm` CLI's; the extension asks the
+ * questions and shows the outcome.
  */
-export const PI_EXTENSION = String.raw`import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+export const PI_EXTENSION = String.raw`import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
 const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(homedir(), ".pi", "agent");
 const inbox = (id) => path.join(agentDir, "gitterm", "inbox", id + ".txt");
 const busy = (ctx) => path.join(agentDir, "gitterm", "busy", ctx.sessionManager.getSessionId());
+const records = path.join(process.env.HOME || homedir(), ".config", "gitterm", "moves");
+
+/** The move that took this session to the cloud and has not come back, from gitterm's records. */
+function movedTo(id) {
+  try {
+    return readdirSync(records)
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => {
+        try {
+          return JSON.parse(readFileSync(path.join(records, name), "utf8"));
+        } catch {
+          return undefined;
+        }
+      })
+      .filter((record) => record && record.agent === "pi" && record.localRef === id && !record.returnedAt)
+      .sort((a, b) => a.movedAt.localeCompare(b.movedAt))
+      .at(-1);
+  } catch {
+    return undefined;
+  }
+}
 
 export default function (pi) {
   /** A notice GitTerm left for this session: the agent reads it as the next message. */
@@ -67,13 +90,51 @@ export default function (pi) {
     if (text.trim()) send(text);
   };
   const show = (text) => pi.sendMessage({ customType: "gitterm", content: text, display: true });
-  const gitterm = (args) => pi.exec("gitterm", args, { timeout: 15 * 60_000 });
+  /** Runs the gitterm CLI: its JSON result, or its error ({ code, message }). */
+  const gitterm = async (args) => {
+    let result;
+    try {
+      result = await pi.exec("gitterm", [...args, "--json"], { timeout: 15 * 60_000 });
+    } catch {
+      return { error: { code: "MISSING", message: "The gitterm CLI is not installed: npm install -g @gitterm/cli" } };
+    }
+    if (result.code === 0) return { ok: JSON.parse(result.stdout) };
+    try {
+      return { error: JSON.parse(result.stderr).error };
+    } catch {
+      return { error: { code: "ERROR", message: (result.stderr || result.stdout).trim() || "gitterm failed." } };
+    }
+  };
+  /** Shows in the footer whether this session is in the cloud. */
+  const status = (ctx) => {
+    const moved = movedTo(ctx.sessionManager.getSessionId());
+    ctx.ui.setStatus("gitterm", moved ? "In a GitTerm cloud workspace: /cloud-return brings it back" : undefined);
+    return moved;
+  };
+  const choose = async (ctx, title, options) => (ctx.hasUI ? ctx.ui.select(title, options) : options[0]);
 
-  // A session Pi opens at startup (the cloud's tmux, a terminal). After /cloud-return,
-  // the replacement session delivers its own notice below.
   pi.on("session_start", async (event, ctx) => {
-    if (event.reason !== "startup") return;
-    deliver(ctx.sessionManager.getSessionId(), (text) => pi.sendUserMessage(text));
+    status(ctx);
+    // A session Pi opens at startup (the cloud's tmux, a terminal). After /cloud-return,
+    // the replacement session delivers its own notice below.
+    if (event.reason === "startup")
+      deliver(ctx.sessionManager.getSessionId(), (text) => pi.sendUserMessage(text));
+  });
+
+  // While a session is in the cloud, a message sent here starts a second conversation.
+  pi.on("input", async (event, ctx) => {
+    // Typed, or from an RPC client; not a notice an extension sends (GitTerm's own included).
+    if (event.source === "extension" || !ctx.hasUI) return { action: "continue" };
+    const moved = movedTo(ctx.sessionManager.getSessionId());
+    if (!moved) return { action: "continue" };
+    const send = await ctx.ui.confirm(
+      "This session is in the cloud",
+      "It continues in cloud workspace " + moved.workspaceId + ". A message sent here is not seen there, and /cloud-return asks before replacing it. Send it here anyway?",
+    );
+    if (send) return { action: "continue" };
+    ctx.ui.setEditorText(event.text);
+    ctx.ui.notify("Not sent. Run /cloud-return to bring the session back.", "info");
+    return { action: "handled" };
   });
 
   pi.on("agent_start", async (_event, ctx) => {
@@ -87,10 +148,34 @@ export default function (pi) {
     description: "Move this session and its checkout to a GitTerm cloud workspace",
     handler: async (args, ctx) => {
       await ctx.waitForIdle();
-      show("Moving this session to a GitTerm cloud workspace…");
       const id = ctx.sessionManager.getSessionId();
-      const result = await gitterm(["move", "--agent", "pi", "--session", id, ...(args?.trim() ? [args.trim()] : [])]);
-      show((result.stdout + result.stderr).trim() || (result.code === 0 ? "Moved." : "The move failed."));
+      const moved = status(ctx);
+      if (moved)
+        return show("This session is already in cloud workspace " + moved.workspaceId + ". Run /cloud-return to bring it back.");
+      let changes = true;
+      const git = await pi.exec("git", ["-C", ctx.cwd, "status", "--porcelain"]).catch(() => undefined);
+      if (git?.code === 0 && git.stdout.trim()) {
+        const choice = await choose(ctx, "Bring your uncommitted changes to the cloud?", [
+          "Yes (copies your edited and new files)",
+          "No (starts from your last commit)",
+        ]);
+        if (!choice) return;
+        changes = choice.startsWith("Yes");
+      }
+      ctx.ui.setStatus("gitterm", "Moving to the cloud…");
+      const result = await gitterm([
+        "move", "--agent", "pi", "--session", id,
+        ...(changes ? [] : ["--no-changes"]),
+        ...(args?.trim() ? [args.trim()] : []),
+      ]);
+      status(ctx);
+      if (result.error) return show("Moving to the cloud failed: " + result.error.message);
+      show([
+        "Moved to a GitTerm cloud workspace. The conversation continues there.",
+        ...Object.entries(result.ok.links ?? {}).map(([label, link]) => label + ": " + link),
+        "Workspace: " + result.ok.workspaceId,
+        ...(result.ok.warnings ?? []).map((warning) => "Warning: " + warning),
+      ].join("\n"));
     },
   });
 
@@ -98,11 +183,37 @@ export default function (pi) {
     description: "Bring this session back from its GitTerm cloud workspace",
     handler: async (args, ctx) => {
       await ctx.waitForIdle();
-      show("Bringing this session back from the cloud…");
       const id = ctx.sessionManager.getSessionId();
       const file = ctx.sessionManager.getSessionFile();
-      const result = await gitterm(["return", "--session", id, ...(args?.trim() ? ["--message", args.trim()] : [])]);
-      if (result.code !== 0 || !file) return show((result.stdout + result.stderr).trim() || "The return failed.");
+      const moved = status(ctx);
+      if (!moved || !file) return show("This session is not in the cloud. Run /cloud to move it there.");
+      const choice = await choose(ctx, "Once it's back, the cloud workspace is…", [
+        "Paused",
+        "Deleted (with files Git ignores there, such as .env)",
+        "Kept running",
+      ]);
+      if (!choice) return;
+      const end = choice.startsWith("Deleted") ? "delete" : choice.startsWith("Kept") ? "keep" : "pause";
+      const back = (force) => gitterm([
+        "return", moved.workspaceId, "--session", id, "--end", end,
+        ...(force ? ["--force"] : []),
+        ...(args?.trim() ? ["--message", args.trim()] : []),
+      ]);
+      ctx.ui.setStatus("gitterm", "Bringing it back from the cloud…");
+      let result = await back(false);
+      if (
+        result.error?.code === "NEEDS_CONFIRMATION" &&
+        ctx.hasUI &&
+        (await ctx.ui.confirm(
+          "Replace what changed here since the move?",
+          "Messages sent here or edits to this checkout since the session moved are replaced by the cloud's. Yours are kept: a copy of this session, a Git stash and a gitterm/before-return branch.",
+        ))
+      )
+        result = await back(true);
+      if (result.error) {
+        status(ctx);
+        return show("Bringing it back failed: " + result.error.message);
+      }
       // The session file now holds the cloud's conversation: open it again from disk.
       await ctx.switchSession(file, {
         withSession: async (next) => deliver(id, (text) => next.sendUserMessage(text)),
