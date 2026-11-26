@@ -5,6 +5,7 @@ import { db } from "@gitterm/db";
 import * as schema from "@gitterm/db/schema/auth";
 import { nextCookies } from "better-auth/next-js";
 import { decryptOAuthToken } from "better-auth/oauth2";
+import { githubOAuthDiagnostics } from "./github-oauth-diagnostics";
 import env, {
   isManaged,
   isProduction,
@@ -140,6 +141,7 @@ export const auth = betterAuth({
   },
   plugins: [
     ...billingPlugins,
+    ...(process.env.GITHUB_OAUTH_DIAGNOSTICS === "1" ? [githubOAuthDiagnostics] : []),
     // nextCookies must be last
     nextCookies(),
   ],
