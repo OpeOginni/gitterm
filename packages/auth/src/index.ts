@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@gitterm/db";
 import * as schema from "@gitterm/db/schema/auth";
@@ -74,6 +74,29 @@ const billingPlugins = isManaged()
     ).createBillingAuthPlugins()
   : [];
 
+// A browser can store both variants under the same name. Clear the old one
+// when Better Auth writes or clears the new one, without expiring existing sessions.
+const clearPartitionedSessionCookie = {
+  id: "clear-partitioned-session-cookie",
+  async onResponse(response, context) {
+    const { name, attributes } = context.authCookies.sessionToken;
+    const cookies = response.headers.getSetCookie();
+    if (!cookies.some((cookie) => cookie.startsWith(`${name}=`))) return;
+
+    const headers = new Headers(response.headers);
+    const domain = attributes.domain ? `; Domain=${attributes.domain}` : "";
+    headers.set(
+      "Set-Cookie",
+      `${name}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=None; Partitioned${domain}`,
+    );
+    for (const cookie of cookies) headers.append("Set-Cookie", cookie);
+    return { response: new Response(response.body, { status: response.status, headers }) };
+  },
+} satisfies BetterAuthPlugin;
+
+const useUnpartitionedSession =
+  isManaged() && isProduction() && new URL(inferBaseUrlOrigin()).protocol === "https:";
+
 // ============================================================================
 // Better Auth Configuration
 // ============================================================================
@@ -127,6 +150,11 @@ export const auth = betterAuth({
       // GitHub returns through a top-level GET. Keep the state cookie available
       // on that navigation without changing the session cookie policy.
       state: { attributes: { sameSite: "lax", partitioned: false } },
+      // The managed app and API are same-site. WebKit can omit partitioned
+      // cookies on API fetches even after a successful dashboard navigation.
+      ...(useUnpartitionedSession
+        ? { session_token: { attributes: { sameSite: "lax", partitioned: false } } }
+        : {}),
     },
     defaultCookieAttributes: isProduction()
       ? {
@@ -146,6 +174,7 @@ export const auth = betterAuth({
   },
   plugins: [
     ...billingPlugins,
+    ...(useUnpartitionedSession ? [clearPartitionedSessionCookie] : []),
     ...(process.env.GITHUB_OAUTH_DIAGNOSTICS === "1" ? [githubOAuthDiagnostics] : []),
     // nextCookies must be last
     nextCookies(),
