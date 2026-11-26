@@ -123,6 +123,11 @@ export const auth = betterAuth({
     },
   },
   advanced: {
+    cookies: {
+      // GitHub returns through a top-level GET. Keep the state cookie available
+      // on that navigation without changing the session cookie policy.
+      state: { attributes: { sameSite: "lax", partitioned: false } },
+    },
     defaultCookieAttributes: isProduction()
       ? {
           // Browsers drop Secure cookies sent over plain http (other than localhost),
