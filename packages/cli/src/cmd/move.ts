@@ -72,6 +72,7 @@ export async function runSetup(args: JsonArgs & { yes?: boolean }) {
       };
       agents.push(entry);
       if (!picked.includes(i)) continue;
+      const spin = startSpinner(`Setting up ${agent.label}…`, args.json);
       try {
         const result = await agent.setup?.(local);
         entry.changes = result?.changes ?? [];
@@ -82,6 +83,7 @@ export async function runSetup(args: JsonArgs & { yes?: boolean }) {
           `Could not set up ${agent.label}: ${error instanceof Error ? error.message : String(error)}`,
         ];
       }
+      spin?.stop();
       if (!args.json) {
         for (const change of entry.changes) (entry.setUp ? success : warn)(change);
         for (const warning of entry.warnings) warn(warning);
