@@ -28,5 +28,3 @@ Deploy GitTerm on your own infrastructure with [Docker Compose or Railway](https
 ## License
 
 [MIT](LICENSE). GitTerm is independent of OpenCode and T3 Code.
-
-[![Sponsored by E2B for Startups](https://img.shields.io/badge/SPONSORED%20BY-E2B%20FOR%20STARTUPS-ff8800?style=for-the-badge)](https://e2b.dev/startups)
