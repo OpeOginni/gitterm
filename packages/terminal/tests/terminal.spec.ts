@@ -90,6 +90,116 @@ test("a copy in the terminal reaches the clipboard", async ({ page, context, req
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("copied text");
 });
 
+test("without a clipboard API, a copy can still be selected by hand", async ({ page, request }) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(Navigator.prototype, "clipboard", { get: () => undefined }),
+  );
+  await open(page);
+  await output(request, `\x1b]52;c;${Buffer.from("copied text").toString("base64")}\x07`);
+  await page.getByRole("button", { name: "Tap to copy" }).click();
+  await expect(page.locator(".screen-text pre")).toHaveText("copied text");
+});
+
+test("several lines wait for a prompt that takes them as one paste", async ({ page, request }) => {
+  await open(page);
+  await requiresTouch(page);
+  // The agent exited to a shell, which doesn't ask for bracketed paste.
+  await output(request, "\x1b[?2004l$ ");
+  const composer = page.getByPlaceholder("Message Test agent");
+  await composer.fill("rm -rf build\necho done");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByRole("status")).toContainText("Kept your message");
+  await expect(composer).toHaveValue("rm -rf build\necho done");
+  expect((await state(request)).inputs).toEqual([]);
+  // One line is safe to type.
+  await composer.fill("ls");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(async () => (await state(request)).inputs).toEqual(["ls", "\r"]);
+});
+
+test("Enter that can't follow its paste keeps the message", async ({ page, request }) => {
+  await open(page);
+  await requiresTouch(page);
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now() + 1000);
+  const composer = page.getByPlaceholder("Message Test agent");
+  await composer.fill("fix the bug");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(async () => (await state(request)).inputs).toHaveLength(1);
+  // The connection drops between the paste and its Enter.
+  await request.get("/test/drop");
+  await expect(page.locator(".workspace-shell")).toHaveAttribute("data-connection", "disconnected");
+  await page.clock.runFor(100);
+  await expect(page.getByRole("status").last()).toContainText("kept your message");
+  await expect(composer).toHaveValue("fix the bug");
+  expect((await state(request)).inputs).toEqual(["\x1b[200~fix the bug\x1b[201~"]);
+});
+
+test("every path the terminal couldn't take stays to copy", async ({ page, context, request }) => {
+  test.skip(test.info().project.name !== "chromium", "Dropping files is the desktop's way.");
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await open(page);
+  await request.get("/test/drop");
+  await expect(page.locator(".workspace-shell")).toHaveAttribute("data-connection", "disconnected");
+  const drop = (names: string[]) =>
+    page.evaluate((names) => {
+      const transfer = new DataTransfer();
+      for (const name of names) transfer.items.add(new File([name], name));
+      document
+        .querySelector(".workspace-shell")!
+        .dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true }));
+    }, names);
+  // Two batches, one after the other: the second keeps the first's paths.
+  await drop(["one.png", "two.png"]);
+  await expect(page.getByRole("button", { name: "Copy 2 saved paths" })).toBeVisible();
+  await drop(["three.png"]);
+  await page.getByRole("button", { name: "Copy 3 saved paths" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    ["one.png", "two.png", "three.png"]
+      .map((name) => `/home/u/.gitterm/uploads/1-${name}`)
+      .join(" "),
+  );
+  await expect(page.locator(".unplaced")).toHaveCount(0);
+});
+
+test("a path saved while copying stays to copy", async ({ page, request }) => {
+  test.skip(test.info().project.name !== "chromium", "Dropping files is the desktop's way.");
+  // A clipboard write that finishes only when the test says so.
+  await page.addInitScript(() => {
+    const clipboard = {
+      writes: [] as string[],
+      finish: () => {},
+      writeText(text: string) {
+        clipboard.writes.push(text);
+        return new Promise<void>((resolve) => (clipboard.finish = resolve));
+      },
+    };
+    Object.defineProperty(Navigator.prototype, "clipboard", { get: () => clipboard });
+  });
+  await open(page);
+  await request.get("/test/drop");
+  await expect(page.locator(".workspace-shell")).toHaveAttribute("data-connection", "disconnected");
+  const drop = (name: string) =>
+    page.evaluate((name) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([name], name));
+      document
+        .querySelector(".workspace-shell")!
+        .dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true }));
+    }, name);
+  await drop("one.png");
+  await page.getByRole("button", { name: "Copy the saved path" }).click();
+  await drop("two.png");
+  await expect(page.getByRole("button", { name: "Copy 2 saved paths" })).toBeVisible();
+  await page.evaluate(() => (navigator.clipboard as unknown as { finish(): void }).finish());
+  // The copy held only the first path, so the second stays.
+  await expect(page.getByRole("button", { name: "Copy the saved path" })).toBeVisible();
+  await page.getByRole("button", { name: "Copy the saved path" }).click();
+  expect(
+    await page.evaluate(() => (navigator.clipboard as unknown as { writes: string[] }).writes),
+  ).toEqual(["/home/u/.gitterm/uploads/1-one.png", "/home/u/.gitterm/uploads/1-two.png"]);
+});
+
 test("an attached file uploads and its path goes in the prompt", async ({ page, request }) => {
   await open(page);
   const file = { name: "shot.png", mimeType: "image/png", buffer: Buffer.from("not really a png") };

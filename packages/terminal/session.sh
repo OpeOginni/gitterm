@@ -12,9 +12,10 @@ shift
 
 if [ "${1-}" = upload ]; then
   name=$(printf %s "${2:-file}" | tr -c 'A-Za-z0-9._-' '_')
-  uploads="$HOME/.gitterm/uploads"
-  mkdir -p "$uploads"
-  path="$uploads/$(date +%s)-$name"
+  case $name in "" | . | ..) name=file ;; esac
+  mkdir -p "$HOME/.gitterm/uploads"
+  # A new folder per upload, so files with the same name never overwrite each other.
+  path="$(mktemp -d "$HOME/.gitterm/uploads/XXXXXXXX")/$name"
   stty raw -echo
   printf 'ready\n'
   head -c "${3:?}" | base64 -d > "$path"

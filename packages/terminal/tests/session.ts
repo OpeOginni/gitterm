@@ -105,25 +105,39 @@ try {
   first.send("printf '\\033]52;c;%s\\007' $(printf copied | base64)\r");
   await first.wait(/\]52;[a-z]*;Y29waWVk/);
 
-  // Uploads land in ~/.gitterm/uploads, with a safe name, byte for byte.
-  const bytes = crypto.getRandomValues(new Uint8Array(300_000));
-  const encoded = Buffer.from(bytes).toString("base64");
-  const upload = await attach(
-    `?arg=upload&arg=${encodeURIComponent("../my shot.png")}&arg=${encoded.length}`,
-  );
-  await upload.wait(/ready/);
-  for (let at = 0; at < encoded.length; at += 32_768) upload.send(encoded.slice(at, at + 32_768));
-  const path = (await upload.wait(/saved (\S+)\r?\n/))[1];
-  assert.match(path, /^\/root\/\.gitterm\/uploads\/\d+-\.\._my_shot\.png$/);
-  assert.equal(
-    sh(`sha256sum ${path} | cut -d' ' -f1`),
-    createHash("sha256").update(bytes).digest("hex"),
-  );
+  // Uploads land in ~/.gitterm/uploads, with a safe name, byte for byte, and two files with
+  // the same name don't overwrite each other.
+  async function send(bytes: Uint8Array) {
+    const encoded = Buffer.from(bytes).toString("base64");
+    const upload = await attach(
+      `?arg=upload&arg=${encodeURIComponent("../my shot.png")}&arg=${encoded.length}`,
+    );
+    await upload.wait(/ready/);
+    for (let at = 0; at < encoded.length; at += 32_768) {
+      upload.send(encoded.slice(at, at + 32_768));
+    }
+    const path = (await upload.wait(/saved (\S+)\r?\n/))[1];
+    upload.socket.close();
+    assert.match(path, /^\/root\/\.gitterm\/uploads\/\w{8}\/\.\._my_shot\.png$/);
+    return path;
+  }
+  const uploads = [
+    crypto.getRandomValues(new Uint8Array(300_000)),
+    crypto.getRandomValues(new Uint8Array(1000)),
+  ];
+  const paths = await Promise.all(uploads.map(send));
+  assert.notEqual(paths[0], paths[1]);
+  for (const [i, path] of paths.entries()) {
+    assert.equal(
+      sh(`sha256sum ${path} | cut -d' ' -f1`),
+      createHash("sha256").update(uploads[i]).digest("hex"),
+    );
+  }
   // The upload didn't disturb the shared session.
   first.send("echo STILL=$$\r");
   assert.equal((await first.wait(/STILL=(\d+)/))[1], pid);
 
-  for (const client of [first, second, upload]) client.socket.close();
+  for (const client of [first, second]) client.socket.close();
   console.log("Terminal session test passed");
 } finally {
   try {

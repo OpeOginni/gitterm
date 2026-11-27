@@ -8,6 +8,10 @@ import "./style.css";
 
 type Notice = { text: string; copy?: string };
 
+/** Rejects where the browser has no clipboard API (pages not served over HTTPS). */
+const writeClipboard = (text: string) =>
+  navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject();
+
 /** After this long without output in a hidden tab, the agent is probably done or waiting. */
 const QUIET_MS = 4000;
 
@@ -24,6 +28,9 @@ function App() {
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<Notice>();
   const [screen, setScreen] = useState<string>();
+  const [sending, setSending] = useState(false);
+  /** Uploaded paths the terminal couldn't take, kept until copied or dismissed. */
+  const [unplaced, setUnplaced] = useState<string[]>([]);
   const connected = state === "connected";
 
   useEffect(() => {
@@ -54,7 +61,7 @@ function App() {
       ctrl: setCtrl,
       select: setScreen,
       copy: (text) =>
-        navigator.clipboard.writeText(text).then(
+        writeClipboard(text).then(
           () => setNotice({ text: "Copied" }),
           // Some browsers allow it only in a tap, so offer one.
           () => setNotice({ text: "Tap to copy", copy: text }),
@@ -76,18 +83,42 @@ function App() {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  /** Uploads files and puts their paths where the next message is typed. */
+  /** Copies text, or where the browser can't, shows it to select and copy by hand. */
+  const copy = (text: string) =>
+    writeClipboard(text).then(
+      () => {
+        setNotice({ text: "Copied" });
+        return true;
+      },
+      () => {
+        setNotice(undefined);
+        setScreen(text);
+        return false;
+      },
+    );
+
+  /**
+   * Uploads files and puts their paths where the next message is typed. Paths the terminal
+   * couldn't take (it was disconnected) join `unplaced`, to copy.
+   */
   const attach = async (list: FileList | File[]) => {
-    for (const file of Array.from(list)) {
+    const files = Array.from(list);
+    const failed: string[] = [];
+    for (const file of files) {
       setNotice({ text: `Uploading ${file.name}…` });
       try {
         const path = await upload(file);
         if (touch()) setDraft((text) => `${text}${text && !text.endsWith(" ") ? " " : ""}${path} `);
-        else terminal.current?.paste(`${path} `);
-        setNotice({ text: `Uploaded ${file.name}` });
+        else if (!terminal.current?.paste(`${path} `)) setUnplaced((paths) => [...paths, path]);
       } catch (error) {
-        setNotice({ text: (error as Error).message });
+        failed.push(`${file.name}: ${(error as Error).message}`);
       }
+    }
+    if (failed.length) setNotice({ text: failed.join(" ") });
+    else {
+      setNotice({
+        text: files.length === 1 ? `Uploaded ${files[0].name}` : `Uploaded ${files.length} files`,
+      });
     }
   };
 
@@ -115,8 +146,19 @@ function App() {
     };
   }, []);
 
-  const send = () => {
-    if (terminal.current?.submit(draft)) setDraft("");
+  /** The draft clears only once Enter went out; otherwise it stays, to send again. */
+  const send = async () => {
+    const text = draft;
+    setSending(true);
+    const result = await terminal.current?.submit(text);
+    setSending(false);
+    // Keep anything typed while it was sending.
+    if (result === "sent") setDraft((current) => (current === text ? "" : current));
+    else if (result === "multiline") {
+      setNotice({ text: "Not sent: the agent isn't ready for several lines. Kept your message." });
+    } else {
+      setNotice({ text: "Not sent: the connection dropped. Check the prompt; kept your message." });
+    }
   };
   const key = (label: string, onClick: () => void, name = label) => (
     <button
@@ -170,7 +212,7 @@ function App() {
             placeholder={`Message ${agent.name}`}
             onInput={(event) => setDraft(event.currentTarget.value)}
           />
-          <button class="send" disabled={!connected} onClick={send}>
+          <button class="send" disabled={!connected || sending} onClick={() => void send()}>
             Send
           </button>
           <input
@@ -191,14 +233,29 @@ function App() {
           <pre>{screen}</pre>
         </section>
       )}
+      {unplaced.length > 0 && (
+        <div class="unplaced">
+          <button
+            onClick={() => {
+              // Only the paths in this copy leave the list: more may arrive while it runs.
+              const paths = unplaced;
+              void copy(paths.join(" ")).then(
+                (copied) =>
+                  copied &&
+                  setUnplaced((current) => current.filter((path) => !paths.includes(path))),
+              );
+            }}
+          >
+            Copy {unplaced.length === 1 ? "the saved path" : `${unplaced.length} saved paths`}
+          </button>
+          <button aria-label="Dismiss saved paths" onClick={() => setUnplaced([])}>
+            ×
+          </button>
+        </div>
+      )}
       {notice &&
         (notice.copy ? (
-          <button
-            class="notice"
-            onClick={() =>
-              navigator.clipboard.writeText(notice.copy!).then(() => setNotice({ text: "Copied" }))
-            }
-          >
+          <button class="notice" onClick={() => void copy(notice.copy!)}>
             {notice.text}
           </button>
         ) : (

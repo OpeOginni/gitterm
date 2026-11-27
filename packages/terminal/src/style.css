@@ -171,6 +171,19 @@ button:disabled {
   user-select: text;
   -webkit-user-select: text;
 }
+/* Uploaded paths the terminal couldn't take, until copied or dismissed. */
+.unplaced {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top));
+  left: 8px;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+}
+.unplaced button {
+  border-color: #d6b65c;
+  color: #f0d98d;
+}
 .notice {
   position: absolute;
   left: 50%;

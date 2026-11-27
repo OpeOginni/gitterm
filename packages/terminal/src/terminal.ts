@@ -133,19 +133,28 @@ export class BrowserTerminal {
   }
 
   /**
-   * Types text as one paste, so a multi-line prompt doesn't submit line by line, then Enter
-   * on its own after a moment, as an agent treats an Enter inside a paste as a new line.
+   * Types text as one paste, then Enter on its own after a moment, as an agent treats an Enter
+   * inside a paste as a new line. "sent" only once Enter went out on the connection the paste
+   * did. Several lines need a bracketed paste (the agent's prompt asks for one), or each line
+   * would be sent as it arrives: "multiline" when the prompt didn't ask.
    */
-  submit(text: string): boolean {
-    if (!this.connection.connected) return false;
-    if (text) this.paste(text);
-    setTimeout(() => this.send("\r"), text ? 50 : 0);
-    return true;
+  async submit(text: string): Promise<"sent" | "multiline" | "dropped"> {
+    if (!this.connection.connected) return "dropped";
+    if (text.includes("\n") && !this.terminal.modes.bracketedPasteMode) return "multiline";
+    const id = this.connection.id;
+    if (text) {
+      this.terminal.paste(text);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (this.connection.id !== id) return "dropped";
+    }
+    return this.send("\r") ? "sent" : "dropped";
   }
 
-  /** Pastes as the terminal would: bracketed when the program asked for it. */
-  paste(text: string) {
+  /** Pastes as the terminal would (bracketed when the program asked for it), if connected. */
+  paste(text: string): boolean {
+    if (!this.connection.connected) return false;
     this.terminal.paste(text);
+    return true;
   }
 
   arrow(direction: string) {

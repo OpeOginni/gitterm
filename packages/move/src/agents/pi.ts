@@ -27,10 +27,12 @@ const sessionsDir = process.env.PI_CODING_AGENT_SESSION_DIR || path.join(agentDi
 const localPi = path.join(home, ".local", "bin", "pi");
 const piBin = process.env.GITTERM_PI_BIN || (fs.existsSync(localPi) ? localPi : "pi");
 // The tmux session the workspace's terminal attaches to (tests name their own), with the
-// terminal's settings if this starts the tmux server.
-const tmuxSession = process.env.GITTERM_PI_TMUX || "${TERMINAL_TMUX_SESSION}";
+// terminal's settings if this starts the tmux server. Workspaces made before GitTerm's shared
+// terminal have no tmux.conf, and their terminal attaches to "pi".
 const tmuxConf = path.join(home, ".gitterm", "terminal", "tmux.conf");
-const tmux = (...args) => cp.execFileSync("tmux", fs.existsSync(tmuxConf) ? ["-f", tmuxConf, ...args] : args, { stdio: "ignore" });
+const sharedTerminal = fs.existsSync(tmuxConf);
+const tmuxSession = process.env.GITTERM_PI_TMUX || (sharedTerminal ? "${TERMINAL_TMUX_SESSION}" : "pi");
+const tmux = (...args) => cp.execFileSync("tmux", sharedTerminal ? ["-f", tmuxConf, ...args] : args, { stdio: "ignore" });
 const encode = (cwd) => "--" + cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-") + "--";
 const has = (command) => { try { cp.execFileSync("sh", ["-c", "command -v " + command], { stdio: "ignore" }); return true; } catch { return false; } };
 

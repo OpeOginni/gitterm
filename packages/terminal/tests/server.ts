@@ -16,6 +16,8 @@ const agent = {
 let inputs: string[] = [];
 let uploads: { args: string[]; data: string }[] = [];
 let available = true;
+/** Whether the terminal itself may connect; uploads still can while it can't. */
+let attachable = true;
 const sockets = new Set<Socket>();
 const text = (data: string | Buffer) => (typeof data === "string" ? data : data.toString());
 
@@ -26,6 +28,7 @@ Bun.serve<{ upload?: string[] }>({
     const url = new URL(req.url);
     if (url.pathname === "/ws") {
       const args = url.searchParams.getAll("arg");
+      if (!attachable && args[0] !== "upload") return new Response("Down", { status: 503 });
       if (server.upgrade(req, { data: { upload: args[0] === "upload" ? args : undefined } }))
         return;
       return new Response("Upgrade failed", { status: 400 });
@@ -38,6 +41,12 @@ Bun.serve<{ upload?: string[] }>({
       inputs = [];
       uploads = [];
       available = true;
+      attachable = true;
+      return Response.json({});
+    }
+    if (url.pathname === "/test/drop") {
+      attachable = false;
+      for (const socket of sockets) socket.close();
       return Response.json({});
     }
     if (url.pathname === "/test/disconnect") {
