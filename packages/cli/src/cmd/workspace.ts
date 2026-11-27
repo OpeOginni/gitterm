@@ -16,7 +16,6 @@ import {
 type JsonArgs = { json?: boolean };
 type WorkspaceArgs = JsonArgs & { workspaceId?: string };
 
-/** The workspace a command acts on: the one named, or one picked from yours in a terminal. */
 async function workspaceFor(args: WorkspaceArgs, status?: string): Promise<string> {
   if (args.workspaceId) return args.workspaceId;
   if (args.json || !process.stdin.isTTY)

@@ -823,7 +823,6 @@ async function directAccount(): Promise<{
   const login = (CLI_LOGIN_PROVIDERS as readonly string[]).includes(provider)
     ? await cliLogin(provider)
     : undefined;
-  // Your provider CLI's login, when found, comes first: Enter takes it.
   const how =
     (await choose(`How should Gitterm get your ${name} key?`, [
       ...(login ? [`Use your ${login.source}`] : []),

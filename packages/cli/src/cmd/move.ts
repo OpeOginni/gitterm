@@ -40,12 +40,6 @@ function progressReporter(json?: boolean) {
   };
 }
 
-/**
- * Sets up GitTerm for the agents on this machine: each one's own way to move sessions (the
- * OpenCode plugin, the Pi extension, T3 Code's linked environments), the gitterm-cloud and
- * gitterm-sandbox skills, and a GitTerm account. Asks which agents in one checklist, unless --yes
- * or not in a terminal.
- */
 export async function runSetup(args: JsonArgs & { yes?: boolean }) {
   try {
     const ask = Boolean(process.stdin.isTTY) && !args.json && !args.yes;
@@ -244,7 +238,6 @@ export async function runReturn(
     detached?: boolean;
   },
 ) {
-  // Started after the pick, so the spinner doesn't draw over the question.
   let reporter: ReturnType<typeof progressReporter> | undefined;
   try {
     const record = await pickRecord(await loadRecords(), args);

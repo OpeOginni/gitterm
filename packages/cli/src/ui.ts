@@ -102,10 +102,9 @@ export function printWorkspaceDetails(workspace: Workspace) {
   detailLine("Paused", workspace.pausedAt);
 }
 
-/** Prompts go to stderr so `--json` output on stdout stays parseable. */
+// Keep stdout available for JSON.
 const promptIo = { output: process.stderr };
 
-/** Ctrl-C or Escape in a prompt ends the CLI, as it did before. */
 function answered<T>(value: T): Exclude<T, symbol> {
   if (prompts.isCancel(value)) {
     prompts.cancel("Cancelled.", promptIo);
@@ -138,7 +137,6 @@ export async function ask(
   return answer?.trim() || options.fallback || "";
 }
 
-/** A menu moved through with the arrow keys; returns the index chosen. */
 export async function choose(question: string, choices: string[]): Promise<number> {
   return answered(
     await prompts.select({
@@ -149,7 +147,6 @@ export async function choose(question: string, choices: string[]): Promise<numbe
   );
 }
 
-/** A checklist toggled with Space; returns the indexes picked. Starts with `picked` checked. */
 export async function chooseMany(
   question: string,
   choices: string[],
