@@ -188,9 +188,15 @@ export function HowItWorks() {
           The same session as above, one step at a time. Codex and Claude Code take the same steps
           with <code>gitterm sandbox</code>.
         </SectionHead>
-        {/* The window takes OpenCode's or Pi's look; landing.css switches it on these radios. */}
-        <input type="radio" name="how-agent" id="how-oc" className="sr-only" defaultChecked />
-        <input type="radio" name="how-agent" id="how-pi" className="sr-only" />
+        {/* Fixed positioning keeps radio focus from scrolling the page when switching agents. */}
+        <input
+          type="radio"
+          name="how-agent"
+          id="how-oc"
+          className="sr-only fixed! top-0"
+          defaultChecked
+        />
+        <input type="radio" name="how-agent" id="how-pi" className="sr-only fixed! top-0" />
         <div className="how-agents head" role="group" aria-label="Show the session in">
           <label htmlFor="how-oc">
             <Logo src="/opencode.svg" className="size-4" />
