@@ -22,6 +22,10 @@ on:
         description: T3 Code version (latest or an exact version)
         type: string
         default: latest
+      pi_version:
+        description: Pi version (latest or an exact version)
+        type: string
+        default: latest
 
 concurrency:
   group: gitterm-release
@@ -55,6 +59,7 @@ jobs:
       publish: ${{ inputs.target != 'platform' }}
       opencode_version: ${{ inputs.opencode_version }}
       t3_version: ${{ inputs.t3_version }}
+      pi_version: ${{ inputs.pi_version }}
 
   platform:
     if: ${{ inputs.target != 'runtimes' }}

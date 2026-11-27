@@ -12,6 +12,9 @@ on:
       t3_version:
         type: string
         required: true
+      pi_version:
+        type: string
+        required: true
 
 env:
   DOCKERHUB_NAMESPACE: opeoginni
@@ -26,6 +29,7 @@ jobs:
       images: ${{ steps.plan.outputs.images }}
       opencode: ${{ steps.versions.outputs.opencode }}
       t3: ${{ steps.versions.outputs.t3 }}
+      pi: ${{ steps.versions.outputs.pi }}
       cli: ${{ steps.versions.outputs.cli }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -44,7 +48,7 @@ jobs:
           {
             echo "major=$major"
             echo "build_tag=$major.$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
-            echo 'images=[{"image":"gitterm-opencode","file":"Opencode.Dockerfile"},{"image":"gitterm-opencode-server","file":"Opencode.Server.Dockerfile"},{"image":"gitterm-opencode-server-aws","file":"Opencode.Server.AWS.Dockerfile"},{"image":"gitterm-t3code-server","file":"T3Code.Server.Dockerfile"}]'
+            echo 'images=[{"image":"gitterm-opencode","file":"Opencode.Dockerfile"},{"image":"gitterm-opencode-server","file":"Opencode.Server.Dockerfile"},{"image":"gitterm-opencode-server-aws","file":"Opencode.Server.AWS.Dockerfile"},{"image":"gitterm-t3code-server","file":"T3Code.Server.Dockerfile"},{"image":"gitterm-pi","file":"Pi.Dockerfile"}]'
           } >> "$GITHUB_OUTPUT"
       - name: Resolve package versions once
         if: inputs.publish
@@ -52,6 +56,7 @@ jobs:
         env:
           OPENCODE_VERSION: ${{ inputs.opencode_version }}
           T3_VERSION: ${{ inputs.t3_version }}
+          PI_VERSION: ${{ inputs.pi_version }}
         run: |
           set -euo pipefail
           bun -e '
@@ -61,6 +66,15 @@ jobs:
             const [opencode, t3] = await Promise.all([getLatestOpencodeVersion(), getLatestT3Version()]);
             console.log(`opencode=${opencode}\nt3=${t3}\ncli=${cli.version}`);
           ' >> "$GITHUB_OUTPUT"
+          requested_pi="${PI_VERSION:-latest}"
+          if [[ "$requested_pi" != latest && ! "$requested_pi" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Pi version must be latest or an exact stable version."
+            exit 1
+          fi
+          pi=$(npm view "@earendil-works/pi-coding-agent@$requested_pi" version)
+          [[ "$pi" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$requested_pi" == latest || "$requested_pi" == "$pi" ]]
+          echo "pi=$pi" >> "$GITHUB_OUTPUT"
           cli=$(bun -p 'require("./packages/cli/package.json").version')
           test "$(npm view "@gitterm/cli@$cli" version)" = "$cli"
       - name: Summarize runtime selection
@@ -69,10 +83,11 @@ jobs:
           MAJOR: ${{ steps.plan.outputs.major }}
           OPENCODE: ${{ steps.versions.outputs.opencode }}
           T3: ${{ steps.versions.outputs.t3 }}
+          PI: ${{ steps.versions.outputs.pi }}
           CLI: ${{ steps.versions.outputs.cli }}
         run: |
           if [[ -n "$CLI" ]]; then
-            echo "Runtime candidate \`$BUILD_TAG\` from \`$GITHUB_SHA\`: OpenCode $OPENCODE, T3 Code $T3, GitTerm CLI $CLI." >> "$GITHUB_STEP_SUMMARY"
+            echo "Runtime candidate \`$BUILD_TAG\` from \`$GITHUB_SHA\`: OpenCode $OPENCODE, T3 Code $T3, Pi $PI, GitTerm CLI $CLI." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Checking published runtime line \`$MAJOR\`." >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -117,11 +132,12 @@ jobs:
           build-args: |
             OPENCODE_VERSION=${{ needs.plan.outputs.opencode }}
             T3_VERSION=${{ needs.plan.outputs.t3 }}
+            PI_VERSION=${{ needs.plan.outputs.pi }}
             GITTERM_CLI_VERSION=${{ needs.plan.outputs.cli }}
       - name: Check published image
         run: docker buildx imagetools inspect "$IMAGE:$TAG"
       - name: Smoke-test installed runtime
-        if: inputs.publish
+        if: inputs.publish && matrix.image != 'gitterm-pi'
         env:
           OPENCODE_VERSION: ${{ needs.plan.outputs.opencode }}
           T3_VERSION: ${{ needs.plan.outputs.t3 }}
@@ -147,6 +163,13 @@ jobs:
               test "$(node -p "JSON.parse(process.argv[1]).version" "$info")" = "$1"
             fi
           ' sh "$OPENCODE_VERSION" "$CLI_VERSION" "$IMAGE_NAME" "$T3_VERSION"
+      - name: Smoke-test installed Pi
+        if: inputs.publish && matrix.image == 'gitterm-pi'
+        env:
+          PI_VERSION: ${{ needs.plan.outputs.pi }}
+        run: |
+          test "$(docker run --rm "$IMAGE:$TAG" pi --version)" = "$PI_VERSION"
+          docker run --rm "$IMAGE:$TAG" sh -ec 'ttyd --version && tmux -V'
 
   e2b:
     needs: plan

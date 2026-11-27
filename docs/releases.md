@@ -45,6 +45,10 @@ environment in YAML does not configure approvers or branch restrictions.
    standalone provider images need updating, run **Release GitTerm** on `main`
    with `target=runtimes`. The runtime workflow uses the exact CLI version from
    that commit and requires approval before moving the runtime aliases.
+   Use **Pi version** to build `opeoginni/gitterm-pi` with `latest` or a specific
+   stable version. Publish runtimes before the first platform-only release that
+   checks for this image. Use the image as a Pi prebuilt without the Pi install
+   command; providers that install Pi at startup still use the platform's pin.
 3. Apply only the database migrations or catalog updates the release needs.
    For managed provider catalog changes, run `compute:setup` inside the Gitterm
    Railway service after Compute is healthy and advertises the expected images.
