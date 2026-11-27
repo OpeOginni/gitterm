@@ -22,6 +22,10 @@ on:
         description: T3 Code version (latest or an exact version)
         type: string
         default: latest
+      pi_version:
+        description: Pi version (latest or an exact version)
+        type: string
+        default: latest
 
 concurrency:
   group: gitterm-release
@@ -32,6 +36,7 @@ permissions:
 
 jobs:
   check-ref:
+    if: github.repository == 'OpeOginni/gitterm' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check release source
@@ -54,11 +59,7 @@ jobs:
       publish: ${{ inputs.target != 'platform' }}
       opencode_version: ${{ inputs.opencode_version }}
       t3_version: ${{ inputs.t3_version }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-      E2B_SMOKE_API_KEY: ${{ secrets.E2B_SMOKE_API_KEY }}
+      pi_version: ${{ inputs.pi_version }}
 
   platform:
     if: ${{ inputs.target != 'runtimes' }}

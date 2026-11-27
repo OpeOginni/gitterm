@@ -12,14 +12,8 @@ on:
       t3_version:
         type: string
         required: true
-    secrets:
-      DOCKERHUB_USERNAME:
-        required: false
-      DOCKERHUB_TOKEN:
-        required: false
-      E2B_API_KEY:
-        required: false
-      E2B_SMOKE_API_KEY:
+      pi_version:
+        type: string
         required: true
 
 env:
@@ -27,6 +21,7 @@ env:
 
 jobs:
   plan:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'OpeOginni/gitterm' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       major: ${{ steps.plan.outputs.major }}
@@ -34,10 +29,13 @@ jobs:
       images: ${{ steps.plan.outputs.images }}
       opencode: ${{ steps.versions.outputs.opencode }}
       t3: ${{ steps.versions.outputs.t3 }}
+      pi: ${{ steps.versions.outputs.pi }}
       cli: ${{ steps.versions.outputs.cli }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         if: inputs.publish
         with:
           bun-version-file: package.json
@@ -50,7 +48,7 @@ jobs:
           {
             echo "major=$major"
             echo "build_tag=$major.$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
-            echo 'images=[{"image":"gitterm-opencode","file":"Opencode.Dockerfile"},{"image":"gitterm-opencode-server","file":"Opencode.Server.Dockerfile"},{"image":"gitterm-opencode-server-aws","file":"Opencode.Server.AWS.Dockerfile"},{"image":"gitterm-t3code-server","file":"T3Code.Server.Dockerfile"}]'
+            echo 'images=[{"image":"gitterm-opencode","file":"Opencode.Dockerfile"},{"image":"gitterm-opencode-server","file":"Opencode.Server.Dockerfile"},{"image":"gitterm-opencode-server-aws","file":"Opencode.Server.AWS.Dockerfile"},{"image":"gitterm-t3code-server","file":"T3Code.Server.Dockerfile"},{"image":"gitterm-pi","file":"Pi.Dockerfile"}]'
           } >> "$GITHUB_OUTPUT"
       - name: Resolve package versions once
         if: inputs.publish
@@ -58,6 +56,7 @@ jobs:
         env:
           OPENCODE_VERSION: ${{ inputs.opencode_version }}
           T3_VERSION: ${{ inputs.t3_version }}
+          PI_VERSION: ${{ inputs.pi_version }}
         run: |
           set -euo pipefail
           bun -e '
@@ -67,33 +66,28 @@ jobs:
             const [opencode, t3] = await Promise.all([getLatestOpencodeVersion(), getLatestT3Version()]);
             console.log(`opencode=${opencode}\nt3=${t3}\ncli=${cli.version}`);
           ' >> "$GITHUB_OUTPUT"
+          requested_pi="${PI_VERSION:-latest}"
+          if [[ "$requested_pi" != latest && ! "$requested_pi" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Pi version must be latest or an exact stable version."
+            exit 1
+          fi
+          pi=$(npm view "@earendil-works/pi-coding-agent@$requested_pi" version)
+          [[ "$pi" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$requested_pi" == latest || "$requested_pi" == "$pi" ]]
+          echo "pi=$pi" >> "$GITHUB_OUTPUT"
           cli=$(bun -p 'require("./packages/cli/package.json").version')
           test "$(npm view "@gitterm/cli@$cli" version)" = "$cli"
-      - name: Check release credentials
-        env:
-          PUBLISH: ${{ inputs.publish }}
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          E2B_SMOKE_API_KEY: ${{ secrets.E2B_SMOKE_API_KEY }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          test -n "$E2B_SMOKE_API_KEY" || { echo "::error::Set E2B_SMOKE_API_KEY from a separate E2B team."; exit 1; }
-          if [[ "$PUBLISH" == true ]]; then
-            if [[ -z "$E2B_API_KEY" || "$E2B_API_KEY" == "$E2B_SMOKE_API_KEY" || -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then
-              echo "::error::Set Docker Hub publishing credentials and a distinct E2B publishing key."
-              exit 1
-            fi
-          fi
       - name: Summarize runtime selection
         env:
           BUILD_TAG: ${{ steps.plan.outputs.build_tag }}
           MAJOR: ${{ steps.plan.outputs.major }}
           OPENCODE: ${{ steps.versions.outputs.opencode }}
           T3: ${{ steps.versions.outputs.t3 }}
+          PI: ${{ steps.versions.outputs.pi }}
           CLI: ${{ steps.versions.outputs.cli }}
         run: |
           if [[ -n "$CLI" ]]; then
-            echo "Runtime candidate \`$BUILD_TAG\` from \`$GITHUB_SHA\`: OpenCode $OPENCODE, T3 Code $T3, GitTerm CLI $CLI." >> "$GITHUB_STEP_SUMMARY"
+            echo "Runtime candidate \`$BUILD_TAG\` from \`$GITHUB_SHA\`: OpenCode $OPENCODE, T3 Code $T3, Pi $PI, GitTerm CLI $CLI." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Checking published runtime line \`$MAJOR\`." >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -101,6 +95,7 @@ jobs:
   docker:
     needs: plan
     runs-on: ubuntu-latest
+    environment: runtime-build
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -113,25 +108,27 @@ jobs:
       - name: Protect candidate tags from partial reruns
         if: inputs.publish
         run: test "$GITHUB_RUN_ATTEMPT" = 1
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: inputs.publish
+        with:
+          persist-credentials: false
       # The OpenCode terminal image takes GitTerm's browser terminal from packages/terminal.
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         if: inputs.publish && matrix.image == 'gitterm-opencode'
         with:
           bun-version-file: package.json
       - name: Build the browser terminal
         if: inputs.publish && matrix.image == 'gitterm-opencode'
         run: bun install --frozen-lockfile && bun run --cwd packages/terminal build
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         if: inputs.publish
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Push candidate
         if: inputs.publish
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .docker
           file: .docker/${{ matrix.file }}
@@ -144,11 +141,12 @@ jobs:
           build-args: |
             OPENCODE_VERSION=${{ needs.plan.outputs.opencode }}
             T3_VERSION=${{ needs.plan.outputs.t3 }}
+            PI_VERSION=${{ needs.plan.outputs.pi }}
             GITTERM_CLI_VERSION=${{ needs.plan.outputs.cli }}
       - name: Check published image
         run: docker buildx imagetools inspect "$IMAGE:$TAG"
       - name: Smoke-test installed runtime
-        if: inputs.publish
+        if: inputs.publish && matrix.image != 'gitterm-pi'
         env:
           OPENCODE_VERSION: ${{ needs.plan.outputs.opencode }}
           T3_VERSION: ${{ needs.plan.outputs.t3 }}
@@ -174,17 +172,27 @@ jobs:
               test "$(node -p "JSON.parse(process.argv[1]).version" "$info")" = "$1"
             fi
           ' sh "$OPENCODE_VERSION" "$CLI_VERSION" "$IMAGE_NAME" "$T3_VERSION"
+      - name: Smoke-test installed Pi
+        if: inputs.publish && matrix.image == 'gitterm-pi'
+        env:
+          PI_VERSION: ${{ needs.plan.outputs.pi }}
+        run: |
+          test "$(docker run --rm "$IMAGE:$TAG" pi --version)" = "$PI_VERSION"
+          docker run --rm "$IMAGE:$TAG" sh -ec 'ttyd --version && tmux -V'
 
   e2b:
     needs: plan
     runs-on: ubuntu-latest
+    environment: runtime-build
     timeout-minutes: 90
     steps:
       - name: Protect candidate tags from partial reruns
         if: inputs.publish
         run: test "$GITHUB_RUN_ATTEMPT" = 1
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
@@ -193,10 +201,13 @@ jobs:
         working-directory: packages/api
         env:
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          E2B_SMOKE_API_KEY: ${{ secrets.E2B_SMOKE_API_KEY }}
           OPENCODE_VERSION: ${{ needs.plan.outputs.opencode }}
           T3_VERSION: ${{ needs.plan.outputs.t3 }}
           RUNTIME_BUILD_TAG: ${{ needs.plan.outputs.build_tag }}
-        run: bun run e2b:build
+        run: |
+          test -n "$E2B_API_KEY" && test -n "$E2B_SMOKE_API_KEY" && test "$E2B_API_KEY" != "$E2B_SMOKE_API_KEY"
+          env -u E2B_SMOKE_API_KEY bun run e2b:build
       - name: Start templates from a separate E2B team
         working-directory: packages/api
         env:
@@ -209,19 +220,22 @@ jobs:
     if: inputs.publish
     needs: [plan, docker, e2b]
     runs-on: ubuntu-latest
+    environment: image-production
     env:
       MAJOR: ${{ needs.plan.outputs.major }}
       RUNTIME_BUILD_TAG: ${{ needs.plan.outputs.build_tag }}
     steps:
       - name: Prevent an older run from moving runtime aliases
         run: test "$GITHUB_RUN_ATTEMPT" = 1
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}

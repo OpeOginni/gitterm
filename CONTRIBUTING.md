@@ -52,6 +52,13 @@ bun run check-types
 
 Keep PRs focused. Include reproduction steps for bug fixes and update the docs when behavior changes.
 
+## npm releases
+
+If a change needs a new npm version of the CLI, SDK, agent runtime, or OpenCode
+plugin, run `bun run changeset` and commit the generated note with your PR.
+Include any affected packages that bundle the changed code. See the
+[release runbook](docs/releases.md) for the maintainer steps.
+
 ## Provider and integration setup
 
 - [Provider testing](docs/provider-testing.md) covers cloud smoke tests. When testing against a local server, providers need a public HTTPS URL for callbacks and webhooks.
