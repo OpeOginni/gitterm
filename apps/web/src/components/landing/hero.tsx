@@ -53,7 +53,7 @@ export function AgentRoll() {
     let timer: ReturnType<typeof setInterval> | undefined;
     const io = new IntersectionObserver(([entry]) => {
       clearInterval(timer);
-      // Wraps on the timer, not on transitionend: a tab nobody sees runs no transitions.
+      // Hidden tabs can skip transitionend.
       if (entry?.isIntersecting)
         timer = setInterval(() => setStep((s) => (s + 1) % LINES.length), STEP_MS);
     });
@@ -78,7 +78,7 @@ export function AgentRoll() {
           <span
             className={cn(
               "flex flex-col items-center",
-              // Back to the first line without a roll: it reads the same as the last.
+              // Snap between identical endpoints.
               step > 0 && "transition-transform duration-[650ms] ease-[cubic-bezier(0.7,0,0.3,1)]",
             )}
             style={{ transform: `translateY(-${step * 1.15}em)` }}

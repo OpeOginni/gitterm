@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Mark } from "@/components/site/mark";
 
-/** Shared public-site width, with gutters that grow with the window (16px on phones). */
 export function Wrap({
   children,
   className,
@@ -16,7 +15,6 @@ export function Wrap({
   return (
     <div
       className={cn(
-        // Content is 1312px at most (1432px wide), plus the gutters.
         "mx-auto w-full px-gutter",
         wide ? "max-w-[1544px]" : "max-w-[1424px]",
         className,
