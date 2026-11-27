@@ -144,10 +144,14 @@ gitterm auth status
 | `gitterm logout`                                                                     | Clear saved credentials           |
 | `gitterm auth status [--json]`                                                       | Show the logged-in account        |
 | `gitterm workspace list [--status <active\|all\|terminated>] [--limit <n>] [--json]` | List your workspaces              |
-| `gitterm workspace get <workspaceId> [--json]`                                       | Show details for a workspace      |
-| `gitterm workspace pause <workspaceId> [--json]`                                     | Pause a running workspace         |
-| `gitterm workspace restart <workspaceId> [--json]`                                   | Restart a paused workspace        |
-| `gitterm workspace terminate <workspaceId> [--yes] [--json]`                         | Terminate a workspace permanently |
+| `gitterm workspace get [workspaceId] [--json]`                                       | Show details for a workspace      |
+| `gitterm workspace pause [workspaceId] [--json]`                                     | Pause a running workspace         |
+| `gitterm workspace restart [workspaceId] [--json]`                                   | Restart a paused workspace        |
+| `gitterm workspace terminate [workspaceId] [--yes] [--json]`                         | Terminate a workspace permanently |
+
+In a terminal, leave out `workspaceId` to pick an active workspace. Pass the ID
+when using `--json` or running without a terminal. If more than one session is in
+the cloud and `gitterm return` can't match the current session, it offers a picker.
 
 `ws` works as a shorthand for `workspace`. All read/write commands accept `--json`
 for machine-readable output (errors are emitted as JSON on stderr too), which makes

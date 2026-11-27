@@ -1,4 +1,4 @@
-import { createInterface } from "node:readline/promises";
+import * as prompts from "@clack/prompts";
 import { GittermError } from "@gitterm/sdk";
 import type { Workspace } from "@gitterm/sdk";
 import chalk from "chalk";
@@ -102,18 +102,22 @@ export function printWorkspaceDetails(workspace: Workspace) {
   detailLine("Paused", workspace.pausedAt);
 }
 
+/** Prompts go to stderr so `--json` output on stdout stays parseable. */
+const promptIo = { output: process.stderr };
+
+/** Ctrl-C or Escape in a prompt ends the CLI, as it did before. */
+function answered<T>(value: T): Exclude<T, symbol> {
+  if (prompts.isCancel(value)) {
+    prompts.cancel("Cancelled.", promptIo);
+    process.exit(130);
+  }
+  return value as Exclude<T, symbol>;
+}
+
 /** Asks a yes/no question; Enter takes the default (no, unless `yes`). */
 export async function confirm(question: string, yes = false): Promise<boolean> {
   if (!process.stdin.isTTY) return false;
-  const rl = createInterface({ input: process.stdin, output: process.stderr });
-  try {
-    const answer = (await rl.question(`${question} ${chalk.dim(yes ? "[Y/n]" : "[y/N]")} `))
-      .trim()
-      .toLowerCase();
-    return answer ? answer === "y" || answer === "yes" : yes;
-  } finally {
-    rl.close();
-  }
+  return answered(await prompts.confirm({ ...promptIo, message: question, initialValue: yes }));
 }
 
 /** Asks for a line of text; Enter takes `fallback`. `hidden` keeps a pasted key off the screen. */
@@ -121,60 +125,45 @@ export async function ask(
   question: string,
   options: { fallback?: string; hidden?: boolean } = {},
 ): Promise<string> {
-  const hint = options.fallback ? ` ${chalk.dim(`[${options.fallback}]`)}` : "";
-  const answer = options.hidden
-    ? await readHidden(`${question}${hint} `)
-    : await (async () => {
-        const rl = createInterface({ input: process.stdin, output: process.stderr });
-        try {
-          return await rl.question(`${question}${hint} `);
-        } finally {
-          rl.close();
-        }
-      })();
-  return answer.trim() || options.fallback || "";
-}
-
-/** Reads a line in raw mode, showing nothing of what is typed or pasted. Ctrl-C exits. */
-function readHidden(prompt: string): Promise<string> {
-  process.stderr.write(prompt);
-  const stdin = process.stdin;
-  return new Promise((resolve) => {
-    let value = "";
-    const done = (exit?: boolean) => {
-      stdin.off("data", onData);
-      stdin.setRawMode(false);
-      stdin.pause();
-      process.stderr.write("\n");
-      if (exit) process.exit(130);
-      resolve(value);
-    };
-    const onData = (chunk: Buffer) => {
-      for (const char of chunk.toString("utf8")) {
-        if (char === "\r" || char === "\n") return done();
-        if (char === "\u0003") return done(true);
-        if (char === "\u007f" || char === "\b") value = value.slice(0, -1);
-        else if (char >= " ") value += char;
-      }
-    };
-    stdin.setRawMode(true);
-    stdin.resume();
-    stdin.on("data", onData);
-  });
-}
-
-/** A numbered menu; returns the index chosen. Enter takes the first. */
-export async function choose(question: string, choices: string[]): Promise<number> {
-  process.stderr.write(`${question}\n`);
-  choices.forEach((choice, i) =>
-    process.stderr.write(`  ${chalk.bold(String(i + 1))}. ${choice}\n`),
+  const answer = answered(
+    options.hidden
+      ? await prompts.password({ ...promptIo, message: question })
+      : await prompts.text({
+          ...promptIo,
+          message: question,
+          placeholder: options.fallback,
+          defaultValue: options.fallback,
+        }),
   );
-  for (;;) {
-    const answer = await ask(`Choose 1-${choices.length}:`, { fallback: "1" });
-    const index = Number(answer) - 1;
-    if (Number.isInteger(index) && index >= 0 && index < choices.length) return index;
-    process.stderr.write(chalk.yellow(`Type a number from 1 to ${choices.length}.\n`));
-  }
+  return answer?.trim() || options.fallback || "";
+}
+
+/** A menu moved through with the arrow keys; returns the index chosen. */
+export async function choose(question: string, choices: string[]): Promise<number> {
+  return answered(
+    await prompts.select({
+      ...promptIo,
+      message: question,
+      options: choices.map((label, value) => ({ value, label })),
+    }),
+  );
+}
+
+/** A checklist toggled with Space; returns the indexes picked. Starts with `picked` checked. */
+export async function chooseMany(
+  question: string,
+  choices: string[],
+  picked: number[] = [],
+): Promise<number[]> {
+  return answered(
+    await prompts.multiselect({
+      ...promptIo,
+      message: question,
+      options: choices.map((label, value) => ({ value, label })),
+      initialValues: picked,
+      required: false,
+    }),
+  );
 }
 
 export function handleError(err: unknown, json?: boolean): never {

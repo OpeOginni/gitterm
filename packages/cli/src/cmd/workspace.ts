@@ -1,7 +1,9 @@
 import { createGittermClient } from "@gitterm/sdk";
 import type { WorkspaceListOptions } from "@gitterm/sdk";
 import chalk from "chalk";
+import type { Ora } from "ora";
 import {
+  choose,
   confirm,
   handleError,
   printJson,
@@ -12,6 +14,27 @@ import {
 } from "../ui.js";
 
 type JsonArgs = { json?: boolean };
+type WorkspaceArgs = JsonArgs & { workspaceId?: string };
+
+/** The workspace a command acts on: the one named, or one picked from yours in a terminal. */
+async function workspaceFor(args: WorkspaceArgs, status?: string): Promise<string> {
+  if (args.workspaceId) return args.workspaceId;
+  if (args.json || !process.stdin.isTTY)
+    throw new Error("Name a workspace id: `gitterm workspace list` shows them.");
+  const { workspaces } = await createGittermClient().workspaces.list({ status: "active" });
+  const offered = status
+    ? workspaces.filter((workspace) => workspace.status === status)
+    : workspaces;
+  if (!offered.length) throw new Error(`You have no ${status ?? "active"} workspaces.`);
+  const picked = await choose(
+    "Which workspace?",
+    offered.map(
+      (workspace) =>
+        `${workspace.name ?? workspace.subdomain ?? workspace.id}  ${chalk.dim(`${workspace.status} · ${workspace.agentType?.name ?? "-"} · ${workspace.id}`)}`,
+    ),
+  );
+  return offered[picked]!.id;
+}
 
 export async function runWorkspaceList(args: JsonArgs & { status?: string; limit?: number }) {
   const spin = startSpinner("Fetching workspaces...", args.json);
@@ -45,10 +68,12 @@ export async function runWorkspaceList(args: JsonArgs & { status?: string; limit
   }
 }
 
-export async function runWorkspaceGet(args: JsonArgs & { workspaceId: string }) {
-  const spin = startSpinner("Fetching workspace...", args.json);
+export async function runWorkspaceGet(args: WorkspaceArgs) {
+  let spin: Ora | null = null;
   try {
-    const workspace = await createGittermClient().workspaces.get(args.workspaceId);
+    const workspaceId = await workspaceFor(args);
+    spin = startSpinner("Fetching workspace...", args.json);
+    const workspace = await createGittermClient().workspaces.get(workspaceId);
     spin?.stop();
 
     if (args.json) {
@@ -63,10 +88,12 @@ export async function runWorkspaceGet(args: JsonArgs & { workspaceId: string }) 
   }
 }
 
-export async function runWorkspacePause(args: JsonArgs & { workspaceId: string }) {
-  const spin = startSpinner("Pausing workspace...", args.json);
+export async function runWorkspacePause(args: WorkspaceArgs) {
+  let spin: Ora | null = null;
   try {
-    const result = await createGittermClient().workspaces.pause(args.workspaceId);
+    const workspaceId = await workspaceFor(args, "running");
+    spin = startSpinner("Pausing workspace...", args.json);
+    const result = await createGittermClient().workspaces.pause(workspaceId);
     spin?.stop();
 
     if (args.json) {
@@ -84,10 +111,12 @@ export async function runWorkspacePause(args: JsonArgs & { workspaceId: string }
 /** @deprecated use runWorkspacePause */
 export const runWorkspaceStop = runWorkspacePause;
 
-export async function runWorkspaceRestart(args: JsonArgs & { workspaceId: string }) {
-  const spin = startSpinner("Restarting workspace...", args.json);
+export async function runWorkspaceRestart(args: WorkspaceArgs) {
+  let spin: Ora | null = null;
   try {
-    const result = await createGittermClient().workspaces.restart(args.workspaceId);
+    const workspaceId = await workspaceFor(args, "paused");
+    spin = startSpinner("Restarting workspace...", args.json);
+    const result = await createGittermClient().workspaces.restart(workspaceId);
     spin?.stop();
 
     if (args.json) {
@@ -102,13 +131,12 @@ export async function runWorkspaceRestart(args: JsonArgs & { workspaceId: string
   }
 }
 
-export async function runWorkspaceTerminate(
-  args: JsonArgs & { workspaceId: string; yes?: boolean },
-) {
+export async function runWorkspaceTerminate(args: WorkspaceArgs & { yes?: boolean }) {
   try {
+    const workspaceId = await workspaceFor(args);
     if (!args.yes && !args.json) {
       const confirmed = await confirm(
-        `Terminate workspace ${chalk.bold(args.workspaceId)}? This cannot be undone.`,
+        `Terminate workspace ${chalk.bold(workspaceId)}? This cannot be undone.`,
       );
       if (!confirmed) {
         console.error("Aborted. Pass --yes to skip this prompt.");
@@ -121,7 +149,7 @@ export async function runWorkspaceTerminate(
 
     const spin = startSpinner("Terminating workspace...", args.json);
     try {
-      const result = await createGittermClient().workspaces.terminate(args.workspaceId);
+      const result = await createGittermClient().workspaces.terminate(workspaceId);
       spin?.stop();
 
       if (args.json) {

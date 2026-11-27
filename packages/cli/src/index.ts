@@ -601,55 +601,70 @@ if (workspaceEnvironment) {
           },
         )
         .command(
-          "get <workspaceId>",
+          "get [workspaceId]",
           "Show details for a workspace",
           (builder) =>
             builder
-              .positional("workspaceId", { type: "string", demandOption: true })
+              .positional("workspaceId", {
+                type: "string",
+                description: "Picked from a list when left out",
+              })
               .options(jsonOption),
           async (argv) => {
             await runWorkspaceGet({ json: argv.json, workspaceId: argv.workspaceId });
           },
         )
         .command(
-          "pause <workspaceId>",
+          "pause [workspaceId]",
           "Pause a running workspace",
           (builder) =>
             builder
-              .positional("workspaceId", { type: "string", demandOption: true })
+              .positional("workspaceId", {
+                type: "string",
+                description: "Picked from a list when left out",
+              })
               .options(jsonOption),
           async (argv) => {
             await runWorkspacePause({ json: argv.json, workspaceId: argv.workspaceId });
           },
         )
         .command(
-          "stop <workspaceId>",
+          "stop [workspaceId]",
           "Alias for pause",
           (builder) =>
             builder
-              .positional("workspaceId", { type: "string", demandOption: true })
+              .positional("workspaceId", {
+                type: "string",
+                description: "Picked from a list when left out",
+              })
               .options(jsonOption),
           async (argv) => {
             await runWorkspacePause({ json: argv.json, workspaceId: argv.workspaceId });
           },
         )
         .command(
-          "restart <workspaceId>",
+          "restart [workspaceId]",
           "Restart a paused workspace",
           (builder) =>
             builder
-              .positional("workspaceId", { type: "string", demandOption: true })
+              .positional("workspaceId", {
+                type: "string",
+                description: "Picked from a list when left out",
+              })
               .options(jsonOption),
           async (argv) => {
             await runWorkspaceRestart({ json: argv.json, workspaceId: argv.workspaceId });
           },
         )
         .command(
-          "terminate <workspaceId>",
+          "terminate [workspaceId]",
           "Terminate a workspace permanently",
           (builder) =>
             builder
-              .positional("workspaceId", { type: "string", demandOption: true })
+              .positional("workspaceId", {
+                type: "string",
+                description: "Picked from a list when left out",
+              })
               .options(jsonOption)
               .option("yes", {
                 alias: "y",
