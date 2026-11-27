@@ -2,7 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
-import { PI_EXTENSION, PI_EXTENSION_PATH, PI_TMUX_SESSION } from "@gitterm/schema/pi";
+import { PI_EXTENSION, PI_EXTENSION_PATH } from "@gitterm/schema/pi";
+import { TERMINAL_TMUX_SESSION } from "@gitterm/schema/terminal";
 import { agentScript, scriptSession } from "../script.js";
 import { runs, type AgentAdapter, type ExportedSession } from "./types.js";
 
@@ -25,8 +26,13 @@ const sessionsDir = process.env.PI_CODING_AGENT_SESSION_DIR || path.join(agentDi
 // Workspaces install Pi in ~/.local/bin, which a command's PATH may lack.
 const localPi = path.join(home, ".local", "bin", "pi");
 const piBin = process.env.GITTERM_PI_BIN || (fs.existsSync(localPi) ? localPi : "pi");
-// The tmux session the workspace's terminal attaches to (tests name their own).
-const tmuxSession = process.env.GITTERM_PI_TMUX || "${PI_TMUX_SESSION}";
+// The tmux session the workspace's terminal attaches to (tests name their own), with the
+// terminal's settings if this starts the tmux server. Workspaces made before GitTerm's shared
+// terminal have no tmux.conf, and their terminal attaches to "pi".
+const tmuxConf = path.join(home, ".gitterm", "terminal", "tmux.conf");
+const sharedTerminal = fs.existsSync(tmuxConf);
+const tmuxSession = process.env.GITTERM_PI_TMUX || (sharedTerminal ? "${TERMINAL_TMUX_SESSION}" : "pi");
+const tmux = (...args) => cp.execFileSync("tmux", sharedTerminal ? ["-f", tmuxConf, ...args] : args, { stdio: "ignore" });
 const encode = (cwd) => "--" + cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-") + "--";
 const has = (command) => { try { cp.execFileSync("sh", ["-c", "command -v " + command], { stdio: "ignore" }); return true; } catch { return false; } };
 
@@ -115,9 +121,9 @@ const ops = {
     if (input.where !== "cloud" || !has("tmux")) return { started: false };
     const file = sessionFile(input.ref);
     const cwd = entries(fs.readFileSync(file, "utf8"))[0].cwd;
-    try { cp.execFileSync("tmux", ["kill-session", "-t", tmuxSession], { stdio: "ignore" }); } catch {}
+    try { tmux("kill-session", "-t", tmuxSession); } catch {}
     const pathEnv = path.join(home, ".local", "bin") + ":" + process.env.PATH;
-    cp.execFileSync("tmux", ["new-session", "-d", "-s", tmuxSession, "-c", cwd, "env", "PATH=" + pathEnv, piBin, "--session", file], { stdio: "ignore" });
+    tmux("new-session", "-d", "-s", tmuxSession, "-c", cwd, "env", "PATH=" + pathEnv, piBin, "--session", file);
     return { started: true };
   },
 
@@ -128,7 +134,7 @@ const ops = {
   /** Stops the workspace's Pi, which nothing restarts until someone opens its terminal. */
   async hold() {
     if (busy(input.ref)) fail("Pi is still working in this session. Let it finish or stop it, then try again.");
-    try { cp.execFileSync("tmux", ["kill-session", "-t", tmuxSession], { stdio: "ignore" }); } catch {}
+    try { tmux("kill-session", "-t", tmuxSession); } catch {}
     return {};
   },
 };

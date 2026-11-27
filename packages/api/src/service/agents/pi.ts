@@ -1,4 +1,5 @@
-import { PI_EXTENSION, PI_EXTENSION_PATH, piServeCommand } from "@gitterm/schema/pi";
+import { PI_EXTENSION, PI_EXTENSION_PATH, PI_TERMINAL } from "@gitterm/schema/pi";
+import { terminalFiles, terminalServeCommand, TERMINAL_PASSWORD_ENV } from "../terminal";
 import { AGENT_CAPABILITIES } from "@gitterm/schema/agent-capabilities";
 import type { AgentFile, AgentProvisioning } from "../../providers/compute";
 import { buildGittermInstructions } from "./opencode";
@@ -41,7 +42,7 @@ const file = (path: string, content: string, mode?: 0o600): AgentFile => ({
 });
 
 /**
- * Pi in a browser terminal. Its files are its own: model credentials in `auth.json` (Pi
+ * Pi in GitTerm's browser terminal. Its files are its own: model credentials in `auth.json` (Pi
  * refreshes OAuth tokens and writes them back), GitTerm's instructions in `AGENTS.md`, skills,
  * and the GitTerm extension that delivers a moved session's notice.
  */
@@ -58,15 +59,16 @@ export const piProvisioner: AgentProvisioner = {
       ...(ctx.opencode?.skills ?? []).map((skill) =>
         file(`skills/${skill.name}/SKILL.md`, skill.content),
       ),
+      ...terminalFiles(),
     ];
     return {
       files,
       env: {
-        ...(ctx.serverPassword ? { PI_WEB_PASSWORD: ctx.serverPassword } : {}),
+        ...(ctx.serverPassword ? { [TERMINAL_PASSWORD_ENV]: ctx.serverPassword } : {}),
         PI_TELEMETRY: "0",
         PI_SKIP_VERSION_CHECK: "1",
       },
-      serve: { command: piServeCommand(PI_SERVE_PORT), port: PI_SERVE_PORT },
+      serve: { command: terminalServeCommand(PI_SERVE_PORT, PI_TERMINAL), port: PI_SERVE_PORT },
       usesServerPassword: true,
     };
   },

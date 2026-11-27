@@ -1,46 +1,43 @@
 /**
  * The Pi coding agent (`@earendil-works/pi-coding-agent`, command `pi`). Pi is a terminal
- * agent with no server, so a workspace serves it in a browser terminal (ttyd), inside a tmux
- * session that keeps Pi running when the browser closes and that `gitterm move` starts.
+ * agent with no server, so a workspace serves it in GitTerm's browser terminal (see
+ * `./terminal`), whose tmux session keeps Pi running when the browser closes and which
+ * `gitterm move` starts.
  *
  * Shared by the Gitterm server, which provisions Pi workspaces, and the CLI, which moves Pi
  * sessions and installs the extension below on the user's machine.
  */
 
 import { ENSURE_NODE_COMMAND } from "./agent-install.js";
+import { TERMINAL_INSTALL_COMMAND, type TerminalAgent } from "./terminal.js";
 
 export const PI_PACKAGE = "@earendil-works/pi-coding-agent@1.6.0";
-const TTYD_VERSION = "1.7.7";
-/** The tmux session the workspace's terminal attaches to. */
-export const PI_TMUX_SESSION = "pi";
 /** Pi's global extension folder, below `~/.pi/agent` (or `$PI_CODING_AGENT_DIR`). */
 export const PI_EXTENSION_PATH = "extensions/gitterm.ts";
 
 /**
- * Installs Pi (with Node 22.19 or newer, when the image lacks it), ttyd and, where the package
- * manager allows it, tmux. Everything goes to `~/.local`, so it works without root; tmux needs
- * root or sudo.
+ * Pi in the browser terminal. Its keys are the ones a phone can't type: Shift+Tab, and the
+ * model picker (Ctrl+L), which is worth a key of its own.
+ */
+export const PI_TERMINAL: TerminalAgent = {
+  name: "Pi",
+  command: "pi --continue",
+  keys: [
+    { label: "Thinking", send: "\x1b[Z" },
+    { label: "Model", send: "\x0c" },
+  ],
+};
+
+/**
+ * Installs Pi (with Node 22.19 or newer, when the image lacks it) and the browser terminal.
+ * Pi goes to `~/.local`, so it works without root.
  */
 export const PI_INSTALL_COMMAND = [
   "set -e",
   ENSURE_NODE_COMMAND,
   `npm install -g --prefix "$HOME/.local" --ignore-scripts --no-audit --fund=false ${PI_PACKAGE}`,
-  `[ -x "$HOME/.local/bin/ttyd" ] || { curl -fsSL -o "$HOME/.local/bin/ttyd" "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.$(uname -m)" && chmod +x "$HOME/.local/bin/ttyd"; }`,
-  'SUDO=""; [ "$(id -u)" = 0 ] || SUDO="sudo -n"',
-  "command -v tmux >/dev/null || { command -v apt-get >/dev/null && $SUDO apt-get update -qq && $SUDO apt-get install -y -qq tmux; } || { command -v dnf >/dev/null && $SUDO dnf install -y -q tmux; } || echo 'tmux is not installed: Pi stops when the browser terminal closes.'",
+  TERMINAL_INSTALL_COMMAND,
 ].join("\n");
-
-/**
- * Serves Pi in a browser terminal on `port`, behind HTTP basic auth (`opencode` and the
- * workspace password from `$PI_WEB_PASSWORD`, as GitTerm's clients send for OpenCode).
- * Each browser attaches to the same tmux session; without tmux, each gets its own Pi.
- */
-export function piServeCommand(port: number): string {
-  return [
-    'export PATH="$HOME/.local/bin:$PATH"',
-    `exec ttyd --writable --port ${port} --credential "opencode:$PI_WEB_PASSWORD" bash -lc 'command -v tmux >/dev/null && exec tmux new-session -A -s ${PI_TMUX_SESSION} pi --continue || exec pi --continue'`,
-  ].join("; ");
-}
 
 /**
  * Pi's GitTerm extension. Each part turns on by itself when it can work:

@@ -52,15 +52,21 @@ describe("Pi provisioner", () => {
     });
   });
 
-  test("Pi runs in a password-protected browser terminal with GitTerm's files", () => {
+  test("Pi runs in GitTerm's password-protected browser terminal with its files", () => {
     const provisioned = piProvisioner.provision(
       context([credential("anthropic", { type: "api_key", apiKey: "sk-ant" })]),
     );
     expect(provisioned.usesServerPassword).toBe(true);
-    expect(provisioned.env.PI_WEB_PASSWORD).toBe("secret");
+    expect(provisioned.env.GITTERM_TERMINAL_PASSWORD).toBe("secret");
     expect(provisioned.serve?.port).toBe(4096);
-    expect(provisioned.serve?.command).toContain('--credential "opencode:$PI_WEB_PASSWORD"');
-    expect(provisioned.serve?.command).toContain("tmux new-session -A -s pi pi --continue");
+    expect(provisioned.serve?.command).toContain(
+      '--credential "opencode:$GITTERM_TERMINAL_PASSWORD"',
+    );
+    expect(provisioned.serve?.command).toContain(`session.sh" 'pi --continue'`);
+    expect(provisioned.serve?.command).toContain(`"name":"Pi"`);
+    for (const file of ["index.html", "session.sh", "tmux.conf"]) {
+      expect(decoded(provisioned.files, `~/.gitterm/terminal/${file}`)).not.toBe("");
+    }
     const auth = provisioned.files.find((file) => file.path === "~/.pi/agent/auth.json");
     expect(auth?.mode).toBe(0o600);
     expect(JSON.parse(decoded(provisioned.files, "~/.pi/agent/auth.json"))).toEqual({
