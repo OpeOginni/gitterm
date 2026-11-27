@@ -1,11 +1,5 @@
-# Build the browser independently of ttyd's internal frontend.
-FROM node:22-bookworm-slim AS browser
-WORKDIR /browser
-COPY ./custom/package.json ./custom/package-lock.json ./
-RUN npm ci --no-audit --fund=false
-COPY ./custom/build.mjs ./custom/tsconfig.json ./
-COPY ./custom/src ./src
-RUN npm run check-types && npm run build
+# GitTerm's browser terminal comes from the `terminal` build context: packages/terminal, built
+# first (`bun run build` there), e.g. `--build-context terminal=packages/terminal`.
 
 # Build the pinned, unmodified ttyd backend.
 FROM node:22-bookworm-slim AS builder
@@ -41,16 +35,6 @@ RUN mkdir build && \
     make && \
     make install
 
-# Small integration target: real ttyd/tmux without downloading agent runtimes.
-FROM builder AS terminal-test
-RUN apt-get update && apt-get install -y --no-install-recommends tmux && rm -rf /var/lib/apt/lists/*
-COPY --from=browser /browser/dist/index.html /usr/local/share/gitterm-terminal/index.html
-COPY ./custom/tmux.conf /etc/gitterm-tmux.conf
-COPY ./custom/session.sh /usr/local/bin/gitterm-terminal-session
-RUN chmod +x /usr/local/bin/gitterm-terminal-session
-# Transport fixture intentionally runs a shell; production below requires V2.
-CMD ["ttyd", "--writable", "--port", "7681", "--index", "/usr/local/share/gitterm-terminal/index.html", "tmux", "-u", "-L", "gitterm", "-f", "/etc/gitterm-tmux.conf", "new-session", "-A", "-s", "transport-test", "bash"]
-
 # Create runtime image
 FROM node:22-bookworm-slim
 
@@ -82,10 +66,7 @@ RUN curl -fsSL "https://github.com/aws/aws-sam-cli/releases/${AWS_SAM_CLI_VERSIO
 
 # Copy the built ttyd binary from builder stage
 COPY --from=builder /usr/local/bin/ttyd /usr/bin/ttyd
-COPY --from=browser /browser/dist/index.html /usr/local/share/gitterm-terminal/index.html
-COPY ./custom/tmux.conf /etc/gitterm-tmux.conf
-COPY ./custom/session.sh /usr/local/bin/gitterm-terminal-session
-RUN chmod +x /usr/local/bin/gitterm-terminal-session
+COPY --from=terminal dist/index.html session.sh tmux.conf /usr/local/share/gitterm-terminal/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libwebsockets*.so* /usr/lib/x86_64-linux-gnu/
 
 # Update library cache
@@ -138,7 +119,10 @@ EXPOSE 7681
 ENTRYPOINT ["/entrypoint.sh"]
 
 # Default command
-CMD ["ttyd", "--index", "/usr/local/share/gitterm-terminal/index.html", "--interface", "::", "--ipv6", "--writable", "--port", "7681", "/usr/local/bin/gitterm-terminal-session"]
+# OpenCode in the browser terminal, as @gitterm/schema/terminal serves agents elsewhere: the page
+# learns the agent from -t, and -a carries its uploads to session.sh. Its keys are the ones a
+# phone can't type: Shift+Tab (switch agent) and Ctrl+X m (pick a model).
+CMD ["ttyd", "--index", "/usr/local/share/gitterm-terminal/index.html", "--interface", "::", "--ipv6", "--writable", "--port", "7681", "-a", "-t", "gitterm={\"name\":\"OpenCode\",\"keys\":[{\"label\":\"Agent\",\"send\":\"\\u001b[Z\"},{\"label\":\"Model\",\"send\":\"\\u0018m\"}]}", "sh", "/usr/local/share/gitterm-terminal/session.sh", "/usr/local/bin/opencode"]
 
 # docker build -f ./Opencode.Dockerfile --platform linux/amd64 -t opeoginni/gitterm-opencode:latest .
 

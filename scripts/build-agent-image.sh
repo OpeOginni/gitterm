@@ -35,7 +35,9 @@ build_push() {
 
 case "$name" in
   opencode)
+    bun run --cwd packages/terminal build
     build_push .docker/Opencode.Dockerfile .docker gitterm-opencode "$AGENT_IMAGE_TAG" \
+      --build-context terminal=packages/terminal \
       --build-arg "OPENCODE_VERSION=${OPENCODE_VERSION}" \
       --build-arg "OPENCODE_INSTALL_CACHE_BUST=${CACHE_BUST}"
     ;;

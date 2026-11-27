@@ -1,0 +1,193 @@
+:root {
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  color: #e0e0e0;
+  background: #09090b;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #09090b;
+}
+button,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  min-height: 40px;
+  min-width: 40px;
+  padding: 6px 10px;
+  border: 1px solid #353538;
+  border-radius: 7px;
+  background: #161618;
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button[aria-pressed="true"] {
+  border-color: #d6b65c;
+  color: #f0d98d;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+:focus-visible {
+  outline: 2px solid #d6b65c;
+  outline-offset: 2px;
+}
+.workspace-shell {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+}
+/* The padding is the shell's: xterm sizes its rows to the container's full height. */
+.terminal-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 4px max(4px, env(safe-area-inset-right)) 4px max(4px, env(safe-area-inset-left));
+  overscroll-behavior: contain;
+}
+#terminal-container {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+#terminal-container .xterm {
+  height: 100%;
+}
+.xterm-screen {
+  touch-action: pinch-zoom;
+  /* A long press opens the page's text view, not the system's menu. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.connection-bar {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top));
+  right: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid #353538;
+  border-radius: 8px;
+  background: #19191c;
+  font-size: 12px;
+  color: #aaa;
+}
+/* The key bar and composer are for touch screens; a keyboard types straight into the terminal. */
+.touch-bar {
+  display: none;
+  flex-shrink: 0;
+  padding: 4px max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom))
+    max(6px, env(safe-area-inset-left));
+  border-top: 1px solid #27272b;
+  background: #111113;
+}
+@media (pointer: coarse) {
+  .touch-bar {
+    display: block;
+  }
+}
+.keys {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+/* The keys share the row; an agent with more keys than fit makes it scroll. */
+.keys button {
+  flex: 1 0 auto;
+  padding: 6px;
+}
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+.composer textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  max-height: 30dvh;
+  field-sizing: content;
+  padding: 8px 10px;
+  resize: none;
+  border: 1px solid #353538;
+  border-radius: 7px;
+  background: #09090b;
+  /* 16px keeps iOS from zooming in on focus. */
+  font-size: 16px;
+  line-height: 22px;
+}
+.composer .send {
+  border-color: #d6b65c;
+  background: #d6b65c;
+  color: #16120a;
+}
+.screen-text {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+  background: #09090b;
+}
+.screen-text button {
+  align-self: flex-end;
+}
+.screen-text pre {
+  flex: 1;
+  margin: 0;
+  overflow: auto;
+  font:
+    13px/1.35 ui-monospace,
+    Menlo,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.notice {
+  position: absolute;
+  left: 50%;
+  bottom: 120px;
+  z-index: 7;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid #353538;
+  border-radius: 8px;
+  background: #27272b;
+  font-size: 13px;
+  color: #f0d98d;
+}
+@media (pointer: fine) {
+  .notice {
+    bottom: 16px;
+  }
+}

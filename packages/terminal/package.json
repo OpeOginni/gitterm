@@ -1,0 +1,39 @@
+{
+  "name": "@gitterm/terminal",
+  "version": "0.2.0",
+  "private": true,
+  "description": "The browser terminal every terminal agent runs in: one page served by ttyd, with tmux",
+  "type": "module",
+  "exports": {
+    "./index.html": "./dist/index.html",
+    "./session.sh": {
+      "types": "./text.d.ts",
+      "default": "./session.sh"
+    },
+    "./tmux.conf": {
+      "types": "./text.d.ts",
+      "default": "./tmux.conf"
+    }
+  },
+  "scripts": {
+    "build": "bun build.mjs",
+    "dev": "bun build.mjs --watch",
+    "check-types": "tsc --noEmit",
+    "test": "playwright test",
+    "test:session": "bun tests/session.ts"
+  },
+  "dependencies": {
+    "@xterm/addon-canvas": "0.7.0",
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/addon-unicode11": "0.8.0",
+    "@xterm/addon-web-links": "0.11.0",
+    "@xterm/xterm": "5.5.0",
+    "preact": "10.26.4"
+  },
+  "devDependencies": {
+    "@gitterm/schema": "workspace:*",
+    "@playwright/test": "1.62.1",
+    "esbuild": "0.25.1",
+    "typescript": "catalog:"
+  }
+}

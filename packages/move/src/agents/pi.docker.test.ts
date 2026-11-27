@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { randomBytes } from "node:crypto";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -13,8 +13,14 @@ import {
   PI_EXTENSION,
   PI_EXTENSION_PATH,
   PI_INSTALL_COMMAND,
-  piServeCommand,
+  PI_TERMINAL,
 } from "@gitterm/schema/pi";
+import {
+  TERMINAL_DIR,
+  TERMINAL_PASSWORD_ENV,
+  TERMINAL_TMUX_SESSION,
+  terminalServeCommand,
+} from "@gitterm/schema/terminal";
 import { localMachine, remoteMachine } from "../machine.js";
 import type { ExportedSession } from "./types.js";
 import { piAgent } from "./pi.js";
@@ -49,7 +55,7 @@ test.skipIf(!enabled)(
         timeoutMs: 30 * 60_000,
         onTimeout: "pause",
         template: "node:24-bookworm",
-        env: { PI_WEB_PASSWORD: password, PI_TELEMETRY: "0", PI_SKIP_VERSION_CHECK: "1" },
+        env: { [TERMINAL_PASSWORD_ENV]: password, PI_TELEMETRY: "0", PI_SKIP_VERSION_CHECK: "1" },
       },
       setupCommands: [PI_INSTALL_COMMAND],
       name: "repo",
@@ -58,8 +64,15 @@ test.skipIf(!enabled)(
           path: `~/.pi/agent/${PI_EXTENSION_PATH}`,
           contentBase64: Buffer.from(PI_EXTENSION).toString("base64"),
         },
+        // The browser terminal, as the server writes it (`bun run build` in packages/terminal).
+        ...["dist/index.html", "session.sh", "tmux.conf"].map((file) => ({
+          path: `${TERMINAL_DIR}/${path.basename(file)}`,
+          contentBase64: readFileSync(
+            new URL(`../../../terminal/${file}`, import.meta.url),
+          ).toString("base64"),
+        })),
       ],
-      serve: { command: piServeCommand(4096), port: 4096 },
+      serve: { command: terminalServeCommand(4096, PI_TERMINAL), port: 4096 },
     });
 
     // The terminal needs the workspace password, as GitTerm's clients send it.
@@ -68,6 +81,7 @@ test.skipIf(!enabled)(
       headers: { authorization: `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}` },
     });
     expect(page.status).toBe(200);
+    expect(await page.text()).toContain("<title>Terminal</title>");
 
     // A session from this machine moves in and starts in the tmux the terminal attaches to.
     const agentDir = path.join(local, "agent");
@@ -111,7 +125,9 @@ test.skipIf(!enabled)(
       where: "cloud",
     });
     expect(notified.started).toBe(true);
-    expect((await transport.run(workspace.id, "tmux has-session -t pi")).exitCode).toBe(0);
+    expect(
+      (await transport.run(workspace.id, `tmux has-session -t ${TERMINAL_TMUX_SESSION}`)).exitCode,
+    ).toBe(0);
     // Pi opened the session in tmux and its GitTerm extension took the notice.
     const inbox = `$HOME/.pi/agent/gitterm/inbox/${imported.ref}.txt`;
     let delivered = false;
