@@ -823,22 +823,22 @@ async function directAccount(): Promise<{
   const login = (CLI_LOGIN_PROVIDERS as readonly string[]).includes(provider)
     ? await cliLogin(provider)
     : undefined;
-  if (!login || !(await confirm(`Found your ${login.source}. Use it?`, true))) {
-    const how = await choose(`How should Gitterm get your ${name} key?`, [
+  const how =
+    (await choose(`How should Gitterm get your ${name} key?`, [
+      ...(login ? [`Use your ${login.source}`] : []),
       "Paste it now (saved in a file only you can read)",
       `From an environment variable, such as ${env}`,
-    ]);
-    if (how === 0) {
-      key = await ask(`${name} API key:`, { hidden: true });
-      if (!key) throw new Error("No key was given.");
-    } else {
-      const variable = await ask("Environment variable:", { fallback: env });
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable))
-        throw new Error(`${variable} is not an environment variable name.`);
-      account.apiKey = `{env:${variable}}`;
-      if (!process.env[variable])
-        warn(`${variable} is not set in this shell. Set it where your agents start.`);
-    }
+    ])) - (login ? 1 : 0);
+  if (how === 0) {
+    key = await ask(`${name} API key:`, { hidden: true });
+    if (!key) throw new Error("No key was given.");
+  } else if (how === 1) {
+    const variable = await ask("Environment variable:", { fallback: env });
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable))
+      throw new Error(`${variable} is not an environment variable name.`);
+    account.apiKey = `{env:${variable}}`;
+    if (!process.env[variable])
+      warn(`${variable} is not set in this shell. Set it where your agents start.`);
   }
   if (provider === "vercel") {
     account.teamId = await ask("Vercel team id (team_…):");
