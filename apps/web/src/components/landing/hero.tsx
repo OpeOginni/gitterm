@@ -46,8 +46,6 @@ const STEP_MS = 2200;
 export function AgentRoll() {
   const ref = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState(0);
-  // Set for one frame after the roll reaches the repeated first line, to jump back without a roll.
-  const [snap, setSnap] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -55,7 +53,9 @@ export function AgentRoll() {
     let timer: ReturnType<typeof setInterval> | undefined;
     const io = new IntersectionObserver(([entry]) => {
       clearInterval(timer);
-      if (entry?.isIntersecting) timer = setInterval(() => setStep((s) => s + 1), STEP_MS);
+      // Wraps on the timer, not on transitionend: a tab nobody sees runs no transitions.
+      if (entry?.isIntersecting)
+        timer = setInterval(() => setStep((s) => (s + 1) % LINES.length), STEP_MS);
     });
     io.observe(el);
     return () => {
@@ -63,12 +63,6 @@ export function AgentRoll() {
       clearInterval(timer);
     };
   }, []);
-
-  useEffect(() => {
-    if (!snap) return;
-    const frame = requestAnimationFrame(() => requestAnimationFrame(() => setSnap(false)));
-    return () => cancelAnimationFrame(frame);
-  }, [snap]);
 
   const current = LINES[step];
   return (
@@ -84,15 +78,10 @@ export function AgentRoll() {
           <span
             className={cn(
               "flex flex-col items-center",
-              !snap && "transition-transform duration-[650ms] ease-[cubic-bezier(0.7,0,0.3,1)]",
+              // Back to the first line without a roll: it reads the same as the last.
+              step > 0 && "transition-transform duration-[650ms] ease-[cubic-bezier(0.7,0,0.3,1)]",
             )}
             style={{ transform: `translateY(-${step * 1.15}em)` }}
-            onTransitionEnd={() => {
-              if (step === LINES.length - 1) {
-                setSnap(true);
-                setStep(0);
-              }
-            }}
           >
             {LINES.map((agent, i) => (
               <span
@@ -113,7 +102,7 @@ export function AgentRoll() {
       </h1>
       <ul
         aria-hidden
-        className="agent-float pointer-events-none absolute inset-x-6 inset-y-0 m-0 hidden list-none p-0 min-[1200px]:block"
+        className="agent-float pointer-events-none absolute inset-x-gutter inset-y-0 m-0 hidden list-none p-0 min-[1200px]:block"
       >
         {AGENTS.map((agent) => {
           const named = current === agent;

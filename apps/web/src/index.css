@@ -186,6 +186,8 @@ body {
 }
 
 @theme inline {
+  /* Public-site side gutter: 16px on phones, growing with the window to 56px on desktop. */
+  --spacing-gutter: clamp(1rem, 4vw, 3.5rem);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
