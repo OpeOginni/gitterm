@@ -44,8 +44,8 @@ Keep keys out of config files: use {env:VAR} references. When you're done, show 
 export function Hero() {
   return (
     // Fills the first screen under the 64px header, less a strip where the next section peeks in.
-    <section className="relative flex min-h-[calc(100svh-64px-220px)] flex-col justify-center py-12 text-center">
-      <Wrap>
+    <section className="flex min-h-[calc(100svh-64px-220px)] flex-col text-center">
+      <Wrap className="relative flex-1 content-center py-12">
         <AgentRoll />
         <SetupCommand location="hero" className="mx-auto mt-10 max-w-[480px]" />
         {/* For people who'd rather hand setup to their agent: copy a prompt, no steps to follow. */}
@@ -109,7 +109,7 @@ export function ProvidersStrip() {
           data-prov-strip
           role="group"
           aria-label="Sandbox providers"
-          className="mt-7 flex flex-wrap justify-center gap-x-[clamp(8px,3vw,28px)] gap-y-3"
+          className="mt-7 flex flex-wrap justify-center gap-x-[clamp(8px,3vw,28px)] gap-y-3 lg:gap-x-11"
         >
           {DEMO_PROVIDERS.map((p) => (
             <button
@@ -121,7 +121,7 @@ export function ProvidersStrip() {
             >
               <Logo
                 src={p.logo}
-                className="size-8 object-contain opacity-40 grayscale transition-[filter,opacity,translate] duration-500 group-hover:opacity-80 group-hover:grayscale-0 group-aria-pressed:-translate-y-0.5 group-aria-pressed:opacity-100 group-aria-pressed:grayscale-0 max-[420px]:size-7"
+                className="size-8 object-contain opacity-40 grayscale transition-[filter,opacity,translate] duration-500 group-hover:opacity-80 group-hover:grayscale-0 group-aria-pressed:-translate-y-0.5 group-aria-pressed:opacity-100 group-aria-pressed:grayscale-0 max-[420px]:size-7 lg:size-9"
               />
               {p.name}
             </button>
@@ -188,9 +188,15 @@ export function HowItWorks() {
           The same session as above, one step at a time. Codex and Claude Code take the same steps
           with <code>gitterm sandbox</code>.
         </SectionHead>
-        {/* The window takes OpenCode's or Pi's look; landing.css switches it on these radios. */}
-        <input type="radio" name="how-agent" id="how-oc" className="sr-only" defaultChecked />
-        <input type="radio" name="how-agent" id="how-pi" className="sr-only" />
+        {/* Fixed positioning keeps radio focus from scrolling the page when switching agents. */}
+        <input
+          type="radio"
+          name="how-agent"
+          id="how-oc"
+          className="sr-only fixed! top-0"
+          defaultChecked
+        />
+        <input type="radio" name="how-agent" id="how-pi" className="sr-only fixed! top-0" />
         <div className="how-agents head" role="group" aria-label="Show the session in">
           <label htmlFor="how-oc">
             <Logo src="/opencode.svg" className="size-4" />
@@ -332,9 +338,9 @@ export function Keys() {
             },
             {
               title: "Use your own Gitterm",
-              body: <>Sign in to a self-hosted server, then pick from the providers it offers.</>,
+              body: "Replace the example URL with your server's API URL, then pick from the providers it offers.",
               logos: [{ src: "/gitterm.svg" }, { src: "/E2B.svg", demo: true }],
-              command: "gitterm login --server <url>",
+              command: "gitterm login -s https://acme.dev/api",
             },
           ].map((k) => (
             // A subgrid, so logos, titles, text and commands line up across the cards.
@@ -345,8 +351,8 @@ export function Keys() {
               <LogoStack logos={k.logos} />
               <h3 className={cn(h3, "mb-1.5")}>{k.title}</h3>
               <p className={cn(cellText, "mb-[18px]")}>{k.body}</p>
-              <div className="flex min-w-0 items-center gap-3 self-end rounded-[10px] border border-line bg-[#0b0b0e] py-2 pr-2 pl-4">
-                <code className="min-w-0 flex-1 break-words font-mono text-[13px] text-fg max-[640px]:text-[12px]">
+              <div className="flex min-w-0 items-center gap-2 self-end rounded-[10px] border border-line bg-[#0b0b0e] py-2 pr-2 pl-3">
+                <code className="min-w-0 flex-1 overflow-x-auto font-mono text-[13px] whitespace-nowrap text-fg max-[640px]:text-[12px]">
                   <span className="text-primary">$ </span>
                   {k.command}
                 </code>
@@ -481,10 +487,8 @@ export function Agents() {
       <Wrap>
         <PartHeading>Run agents in the cloud</PartHeading>
         <SectionHead title="Send sessions to the cloud. Bring them back.">
-          Set up every agent you have with <code>{INSTALL_SETUP}</code>, then move a session to a
-          cloud workspace with <code>/cloud</code>, or start Codex or Claude Code in a new one from
-          T3 Code. They keep running on their own, and your laptop is free for whatever is next.{" "}
-          <code>/cloud-return</code> brings a session back whenever you want it.
+          Keep working from your phone, a browser, or another computer while your agent runs in the
+          cloud.
         </SectionHead>
         {/* Codex and Claude Code sit under T3 Code, because T3 Code is what runs them. */}
         <div className="-mt-[18px] mb-[26px] flex flex-wrap items-start gap-x-10 gap-y-4">
@@ -492,19 +496,17 @@ export function Agents() {
             Works with
           </span>
           <WorksWith logo="/opencode.svg" name="OpenCode">
-            Move a session with <code className="font-mono text-[0.95em] text-fg-2">/cloud</code>,
-            back with <code className="font-mono text-[0.95em] text-fg-2">/cloud-return</code>
+            Move existing sessions
           </WorksWith>
           <WorksWith logo="/pi.svg" name="Pi">
-            The same <code className="font-mono text-[0.95em] text-fg-2">/cloud</code> and{" "}
-            <code className="font-mono text-[0.95em] text-fg-2">/cloud-return</code>
+            Move existing sessions
           </WorksWith>
           <WorksWith logo={T3_LOGO} logoClassName="rounded-[5px]" name="T3 Code">
             Runs
             <Logo src="/openai-codex.svg" className="ml-0.5 size-[14px]" />
             Codex and
             <Logo src="/claude.svg" className="ml-0.5 size-[14px]" />
-            Claude Code, which moves when you ask
+            Claude Code
           </WorksWith>
         </div>
 
@@ -565,165 +567,34 @@ export function Agents() {
           <SoundToggle />
           <ReplayButton id="ho-replay" />
         </div>
-        <RoundTrip />
+        <HandoffDetails />
       </Wrap>
     </Band>
   );
 }
 
-// ---------- The way back (a subsection of "Run agents in the cloud") ----------
-
-/** 24-unit line icons for the round trip. */
-const TRIP_ICONS = {
-  laptop: (
-    <>
-      <rect x="4.5" y="5" width="15" height="10.5" rx="1.5" />
-      <path d="M2.5 19h19" />
-    </>
-  ),
-  browser: (
-    <>
-      <rect x="3" y="4.5" width="18" height="15" rx="2" />
-      <path d="M3 9h18M6 6.75h.01M8.5 6.75h.01" />
-    </>
-  ),
-  phone: (
-    <>
-      <rect x="7" y="2.5" width="10" height="19" rx="2.2" />
-      <path d="M11 18.5h2" />
-    </>
-  ),
-  computer: (
-    <>
-      <rect x="3" y="4" width="18" height="12" rx="1.5" />
-      <path d="M12 16v4M8 20h8" />
-    </>
-  ),
-};
-
-const TRIP_NAMES: Record<keyof typeof TRIP_ICONS, string> = {
-  laptop: "Your laptop",
-  browser: "A browser",
-  phone: "Your phone",
-  computer: "Another computer",
-};
-
-function TripIcon({
-  icon,
-  title,
-  className,
-}: {
-  icon: keyof typeof TRIP_ICONS;
-  title: string;
-  className?: string;
-}) {
+function HandoffDetails() {
   return (
-    <span
-      className={cn(
-        "grid size-10 shrink-0 place-items-center rounded-[10px] border border-line-2 bg-card text-fg-2",
-        className,
-      )}
-      title={title}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        className="size-[18px]"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.6}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        {TRIP_ICONS[icon]}
-      </svg>
-    </span>
-  );
-}
-
-/** A stop on the trip: its icon (or icons) above a short label. */
-/** A laptop at either end of the trip. The far one lights up green when the session is home. */
-function TripStop({ label, home = false }: { label: string; home?: boolean }) {
-  return (
-    <li className="flex shrink-0 flex-col items-center gap-2">
-      <TripIcon icon="laptop" title={label} className={cn(home && "rt-home")} />
-      <span className="text-[12.5px] text-fg-3">{label}</span>
-    </li>
-  );
-}
-
-/**
- * The middle of the trip: Gitterm, with the places a session can continue on an arc above it.
- * When the session arrives, the hub glows and the devices bump up one after another.
- */
-function TripHub() {
-  const devices = ["browser", "phone", "computer"] as const;
-  return (
-    <li className="relative flex shrink-0 flex-col items-center gap-2">
-      <span className="rt-arc" aria-hidden>
-        {devices.map((icon, i) => (
-          <span key={icon} className="rt-device" style={{ ["--i" as string]: i }}>
-            <TripIcon icon={icon} title={TRIP_NAMES[icon]} className="size-8 rounded-[8px]" />
-          </span>
-        ))}
-      </span>
-      <span
-        className="rt-hub grid size-10 shrink-0 place-items-center rounded-[10px] border border-[color-mix(in_oklab,var(--primary)_45%,transparent)] bg-card text-primary"
-        title="Gitterm"
-      >
-        <Mark className="size-[17px]" />
-      </span>
-      <span className="text-[12.5px] text-fg-3">Gitterm</span>
-    </li>
-  );
-}
-
-/** The wire between two stops: the command on it, and a dot running along it. */
-function TripLeg({ cmd, tone }: { cmd: string; tone: "out" | "back" }) {
-  return (
-    <li className={cn("rt-leg", tone === "back" && "rt-back")} aria-hidden>
-      <code className="rt-cmd">{cmd}</code>
-      <span className="rt-wire">
-        <i className="rt-dot" />
-      </span>
-    </li>
-  );
-}
-
-function RoundTrip() {
-  return (
-    <div className="mt-[clamp(56px,7vw,88px)]">
-      <h3 className="m-0 mb-2 font-display text-[clamp(1.35rem,2.2vw,1.65rem)] leading-[1.2] font-medium tracking-[-0.02em] text-fg">
-        Take it with you, then bring it back
-      </h3>
-      <p className="m-0 mb-6 max-w-[40rem] text-[15px] leading-[1.6] text-pretty text-fg-3">
-        Move a session to the cloud, keep the agent going on your phone, in a browser or on another
-        computer, then pull the session back to your laptop whenever you like, finished or not.
-      </p>
-      <div
-        className={cn(cells, "grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] max-[900px]:grid-cols-1")}
-      >
-        <div className="flex min-w-0 flex-col justify-center gap-3 px-6 py-6 max-[640px]:px-[18px]">
-          <p className={cn(cellText, "m-0")}>
-            The whole agent session travels: its conversation, and the checkout it works in, with
-            commits and uncommitted changes. Anything you changed on your laptop in the meantime is
-            kept.
-          </p>
-          <p className="m-0 text-[13.5px] leading-[1.55] text-fg-4 [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-fg-3">
-            Keep a snapshot as you return, and the next <code>/cloud</code> starts with the setup
-            done.
-          </p>
-        </div>
-        <ol
-          className="rt-trip m-0 flex min-w-0 list-none flex-wrap content-center items-start justify-center gap-3 px-6 pt-[88px] pb-7 max-[640px]:px-[18px] max-[560px]:hidden"
-          aria-label="Your laptop, then /cloud to Gitterm, which lets you continue in a browser, on your phone or on another computer, then /cloud-return to your laptop again."
-        >
-          <TripStop label="Your laptop" />
-          <TripLeg cmd="/cloud" tone="out" />
-          <TripHub />
-          <TripLeg cmd="/cloud-return" tone="back" />
-          <TripStop label="Your laptop" home />
-        </ol>
+    <div className="mt-10 grid gap-6 border-t border-line pt-6 md:grid-cols-3 md:gap-10">
+      <div>
+        <h3 className={h3}>Move a session</h3>
+        <p className={cellText}>
+          Run <code>{INSTALL_SETUP}</code>, then use <code>/cloud</code> in OpenCode or Pi to move
+          your conversation, commits, and uncommitted changes.
+        </p>
+      </div>
+      <div>
+        <h3 className={h3}>Bring it back</h3>
+        <p className={cellText}>
+          Use <code>/cloud-return</code> to pick up on your laptop without losing local edits. Save
+          a snapshot to reuse the workspace setup next time.
+        </p>
+      </div>
+      <div>
+        <h3 className={h3}>Start fresh</h3>
+        <p className={cellText}>
+          Use T3 Code to start Codex or Claude Code in a new cloud workspace.
+        </p>
       </div>
     </div>
   );

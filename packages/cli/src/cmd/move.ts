@@ -13,7 +13,16 @@ import { gittermCloud } from "@gitterm/move/gitterm";
 import { localMachine } from "@gitterm/move/machine";
 import { loadRecords, type MoveRecord } from "@gitterm/move/records";
 import { installSkill } from "../move/skill.js";
-import { confirm, handleError, printJson, startSpinner, success, warn } from "../ui.js";
+import {
+  choose,
+  chooseMany,
+  confirm,
+  handleError,
+  printJson,
+  startSpinner,
+  success,
+  warn,
+} from "../ui.js";
 import { signIn } from "./auth.js";
 import { setUpOwnProvider } from "./sandbox.js";
 
@@ -31,12 +40,6 @@ function progressReporter(json?: boolean) {
   };
 }
 
-/**
- * Sets up GitTerm for the agents on this machine: each one's own way to move sessions (the
- * OpenCode plugin, the Pi extension, T3 Code's linked environments), the gitterm-cloud and
- * gitterm-sandbox skills, and a GitTerm account. Asks first for each, unless --yes or not in a
- * terminal.
- */
 export async function runSetup(args: JsonArgs & { yes?: boolean }) {
   try {
     const ask = Boolean(process.stdin.isTTY) && !args.json && !args.yes;
@@ -48,8 +51,18 @@ export async function runSetup(args: JsonArgs & { yes?: boolean }) {
       changes: string[];
       warnings: string[];
     }> = [];
-    for (const agent of AGENTS) {
-      if (!(await agent.installed())) continue;
+    const found = [];
+    for (const agent of AGENTS) if (await agent.installed()) found.push(agent);
+    const all = found.map((_, i) => i);
+    const picked =
+      ask && found.length
+        ? await chooseMany(
+            "Which agents should GitTerm set up?",
+            found.map((agent) => agent.label),
+            all,
+          )
+        : all;
+    for (const [i, agent] of found.entries()) {
       const entry = {
         key: agent.key,
         label: agent.label,
@@ -58,7 +71,7 @@ export async function runSetup(args: JsonArgs & { yes?: boolean }) {
         warnings: [] as string[],
       };
       agents.push(entry);
-      if (ask && !(await confirm(`Set up ${agent.label}?`, true))) continue;
+      if (!picked.includes(i)) continue;
       try {
         const result = await agent.setup?.(local);
         entry.changes = result?.changes ?? [];
@@ -188,10 +201,10 @@ export async function runMove(
   }
 }
 
-function pickRecord(
+async function pickRecord(
   records: MoveRecord[],
-  pick: { workspaceId?: string; session?: string },
-): MoveRecord {
+  pick: { workspaceId?: string; session?: string; json?: boolean },
+): Promise<MoveRecord> {
   const open = records.filter((record) => !record.returnedAt);
   const session = pick.session ?? currentSession()?.ref;
   const match = pick.workspaceId
@@ -200,6 +213,16 @@ function pickRecord(
       (!pick.session && open.length === 1 ? open[0] : undefined));
   if (match) return match;
   if (!open.length) throw new Error("No session from this machine is in the cloud.");
+  if (!pick.workspaceId && !pick.session && !pick.json && process.stdin.isTTY)
+    return open[
+      await choose(
+        "Which session should come back?",
+        open.map(
+          (record) =>
+            `${record.agent} ${record.localRef}  ${chalk.dim(`${path.basename(record.root)} · moved ${record.movedAt} · ${record.workspaceId}`)}`,
+        ),
+      )
+    ]!;
   throw new Error(
     `Several sessions are in the cloud; name one: ${open.map((record) => record.workspaceId).join(", ")}`,
   );
@@ -215,9 +238,10 @@ export async function runReturn(
     detached?: boolean;
   },
 ) {
-  const reporter = progressReporter(args.json || args.detached);
+  let reporter: ReturnType<typeof progressReporter> | undefined;
   try {
-    const record = pickRecord(await loadRecords(), args);
+    const record = await pickRecord(await loadRecords(), args);
+    reporter = progressReporter(args.json || args.detached);
     const agent = agentByKey(record.agent);
     const local = localMachine();
     const inside = record.localRef === currentSession()?.ref;
@@ -286,7 +310,7 @@ export async function runReturn(
     if (result.link) console.log(`Session: ${result.link}`);
     for (const warning of result.warnings) console.log(chalk.yellow(`Warning: ${warning}`));
   } catch (err) {
-    reporter.stop();
+    reporter?.stop();
     handleError(err, args.json);
   }
 }

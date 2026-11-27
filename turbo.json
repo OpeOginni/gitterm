@@ -27,6 +27,11 @@
       "cache": false,
       "persistent": true
     },
+    "server#dev": {
+      "dependsOn": ["@gitterm/terminal#build"],
+      "cache": false,
+      "persistent": true
+    },
     "db:push": {
       "cache": false,
       "persistent": true

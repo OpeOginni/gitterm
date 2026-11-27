@@ -58,9 +58,16 @@ test("self-hosted auth does not enable billing even with Polar credentials", asy
 });
 
 test("managed auth retains Polar and keeps nextCookies last", async () => {
-  expect(await authPlugins("managed", true)).toEqual(["polar", "next-cookies"]);
+  expect(await authPlugins("managed", true)).toEqual([
+    "polar",
+    "clear-partitioned-session-cookie",
+    "next-cookies",
+  ]);
 });
 
 test("managed auth starts without Polar when billing is not configured", async () => {
-  expect(await authPlugins("managed")).toEqual(["next-cookies"]);
+  expect(await authPlugins("managed")).toEqual([
+    "clear-partitioned-session-cookie",
+    "next-cookies",
+  ]);
 });

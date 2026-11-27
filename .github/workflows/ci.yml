@@ -34,9 +34,10 @@ jobs:
       - name: Build bot packages and dependencies
         run: bun run build:bots
 
-      # The CLI and the OpenCode plugin resolve @gitterm/move from its built dist.
-      - name: Build move flows
-        run: bunx turbo -F @gitterm/move build
+      # The CLI and the OpenCode plugin resolve @gitterm/move from its built dist, and the
+      # server writes the browser terminal's built page to workspaces.
+      - name: Build move flows and the browser terminal
+        run: bunx turbo -F @gitterm/move -F @gitterm/terminal build
 
       - name: Test
         timeout-minutes: 5

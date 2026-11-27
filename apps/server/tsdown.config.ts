@@ -14,5 +14,5 @@ export default defineConfig({
   outDir: "./dist",
   clean: true,
   noExternal: [/.*/],
-  loader: { ".html": "text" },
+  loader: { ".html": "text", ".sh": "text", ".conf": "text" },
 });

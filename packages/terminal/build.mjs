@@ -9,7 +9,6 @@ async function bundle() {
     write: false,
     outdir: "dist",
     target: ["es2022"],
-    loader: { ".png": "dataurl" },
   });
   const js = result.outputFiles.find((file) => file.path.endsWith(".js")).text;
   const css = result.outputFiles.find((file) => file.path.endsWith(".css")).text;
@@ -18,13 +17,13 @@ async function bundle() {
     "dist/index.html",
     `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<meta name="theme-color" content="#09090b"><title>GitTerm</title>
+<meta name="theme-color" content="#09090b"><title>Terminal</title>
 <style>${css}</style></head><body><div id="app"></div><script>${js.replaceAll("</script", "<\\/script")}</script></body></html>`,
   );
 }
 await bundle();
 if (process.argv.includes("--watch")) {
-  for await (const event of watch("src", { recursive: true })) {
+  for await (const _change of watch("src", { recursive: true })) {
     try {
       await bundle();
     } catch (error) {

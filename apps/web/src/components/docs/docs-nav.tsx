@@ -65,7 +65,7 @@ export function DocsNav({ nav }: { nav: NavData }) {
         </nav>
       </aside>
 
-      <div className="sticky top-16 z-40 -mx-4 border-b border-line bg-background/90 px-4 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:hidden">
+      <div className="sticky top-16 z-40 -mx-gutter border-b border-line bg-background/90 px-gutter backdrop-blur-xl lg:hidden">
         <button
           type="button"
           aria-expanded={open}

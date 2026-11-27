@@ -25,6 +25,11 @@ export class Connection {
     },
   ) {}
 
+  /** Changes with every new connection, so a caller can tell it's still on the same one. */
+  get id() {
+    return this.generation;
+  }
+
   get connected() {
     return this.state === "connected" && this.socket?.readyState === WebSocket.OPEN;
   }
